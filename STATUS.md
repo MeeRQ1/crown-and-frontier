@@ -6,9 +6,10 @@ Last updated at the release-candidate checkpoint (schema 1, version 0.1.0).
 
 | Kind | What was done | Where |
 |---|---|---|
-| Automated tests | 50 Vitest tests: rule boundaries, the combat worked examples, sieges, diplomacy conflicts, elimination, progression, events, victory timing, determinism, save/load equivalence mid-war, replay of player commands, content validation, and 12-year AI campaigns with invariants | `tests/`, `npm test` |
+| Automated tests | 53 Vitest tests: rule boundaries, the combat worked examples, sieges, diplomacy conflicts, separate peace, stranded armies, rival reactions, elimination, progression, events, victory timing, determinism, save/load equivalence mid-war, replay of player commands, content validation, and 12-year AI campaigns with invariants | `tests/`, `npm test` |
 | AI-only campaigns | 30 full 40-year campaigns (seeds 1–10 × easy/normal/hard) through the real simulation | `reports/ai-campaigns.md`, `npm run sim` |
 | Browser verification | 25 automated checks in headless Chromium 141: site root, project sub-path, unpacked ZIP, iframe (resize, wheel isolation), hidden tab, audio gating, keyboard, slot save/load, export/import, damaged import, blocked storage, five laptop/Chromebook sizes and UI scaling, phone touch, performance probe | `reports/web-verification.md`, `npm run verify:web` |
+| Player-style campaign (my own, not a real playtest) | One full 40-year campaign as Calder (normal, seed 2024), played decision by decision through the same command API the UI uses; the second half partly on a simple autopilot. Findings and fixes below | "Player-style campaign" section |
 | Flows I exercised by script (with screenshots reviewed) | New campaign → select capital → start a project → recruit → select army → route preview → right-click move → run time → answer proposals and events → every ledger → phone layout; declare war from Diplomacy → march via "Set destination" → battles → peace builder preview and send | `e2e/playthrough.mjs`, `e2e/war-flow.mjs` |
 | External player feedback | **None yet.** Whether the game is fun, readable and well paced for real players is untested. | — |
 
@@ -86,6 +87,83 @@ Last updated at the release-candidate checkpoint (schema 1, version 0.1.0).
    still concentrated (see below).
 4. **Release candidate.** ✅ Tutorial, settings, reports, persistence hardening, static delivery and
    documentation. 🟡 No external playtest yet; no real-device or cross-browser testing.
+
+## Player-style campaign (own exercised flow)
+
+This is my own play, not external feedback. I played Calder (normal difficulty, seed 2024,
+40 years) through the simulation's command API with a small text harness: I read a digest of
+the realm, chose orders, and advanced until the next decision. The harness stops for events,
+proposals and urgent news, which covers the UI's default auto-pause settings. From 1648 onward a simple autopilot answered events
+and kept construction and research busy, while I made the war, peace and treaty decisions
+myself. I did not play it in the browser.
+
+**What happened.**
+
+1. **Opening, 1640–41.** Four trade agreements doubled net income in two months (9 → 21
+   crowns a month). I spent the money on development and roads rather than troops.
+2. **First war, 1641–42.** Vostmark (expansionist) attacked with 10 regiments against my 8
+   and took Harrowgate. A raid into unfortified Faltrip pulled its army off my besieged
+   capital, but I still had to cede Harrowgate after three lost battles.
+3. **Diplomacy, 1643–58.** With the army capped by manpower at about 9 regiments, I turned to
+   diplomacy: envoys, Diplomatic Corps, Resident Embassies and Concert of Crowns. The race for
+   Diplomatic Leadership was crowded, with Serennes, Fenward, Istrel, Aurel and Tarsk all
+   qualifying at times. Twice (Serennes in 1646, Fenward in 1647) I reset a rival's timer by cancelling my own
+   treaties with it, and gave up my own progress to do it.
+4. **Wars late in the campaign.** Twice Fenward called me to arms against Vostmark.
+   - In 1658 I joined and then made a separate white peace.
+   - In 1666 I stayed in instead: a separate peace would have pushed Fenward's opinion below
+     the diplomatic threshold. I lost the battle at Caldris, but the war ended without
+     Calder losing land.
+   - In 1670 Tarsk, a trade partner reacting to my diplomatic lead, attacked. I ceded Pellin
+     and 200 crowns.
+5. **End, 1680.** I re-qualified and held the diplomatic conditions for 36 of the 60 months
+   before the limit. Aurel won on score. Calder survived in 6th place (165 against 318).
+
+**Did decisions matter?** Yes, in every phase:
+
+- trade versus troops early on;
+- where to give battle (the forecasts were right each time I checked them);
+- raids against unfortified provinces;
+- whose treaties to keep or cut in a victory race;
+- whether to answer a call to arms or leave it.
+
+**Problems found and fixed in this pass:**
+
+- **Separate peace.** The attacker's "war goals are unmet" penalty was applied to a
+  secondary defender who could never meet it. It now applies only to the war's target.
+  Leaving a war early now costs 15 opinion with the allies left fighting, so joining a call
+  to arms and leaving at once is not free.
+- **Rival reaction to a diplomatic leader.** It added alarm, which was shown as "Alarmed by
+  their expansion" and formed a coalition "because of rapid expansion" against a realm that
+  had not expanded. The alarm and coalition reaction is now reserved for territorial and
+  economic leaders. A diplomatic leader faces wariness instead: at most −25 opinion, with
+  its own label. Coalition notices now name the real cause.
+- **No defensive forecast.** The army panel only forecast battles we start. It now shows
+  "Incoming attack", or "If they attack us at …" on an enemy army, from the defender's side.
+- **Counterplay was invisible.** The Victory ledger now tells you how to stop the leading
+  rival on each path. For diplomacy this includes which partners supply its influence.
+- **Unanswerable calls to arms were silent.** When the player could not join an ally's war
+  because of a conflicting treaty, only the ally was told. Now the player is told too.
+- **Stranded armies.** An AI whose armies were cut off from home kept re-issuing the same
+  impossible move every week. That flooded the diagnostics buffer (400 entries) and pushed
+  out useful records. The AI now checks the route first. Armies of either side left in a
+  friend's land with no legal route home now return under safe conduct.
+- **Diplomatic path too hard after the fix above.** With wariness replacing alarm, no AI realm won
+  diplomatically in a 30-campaign batch. Every broken streak was a partner's opinion slipping
+  below 40, so the partner threshold is now 35. My campaign was played at 40.
+- **All research done.** After every technology was researched (about year 32 for rich
+  realms), the UI still demanded a new choice and AI realms kept paying for research. Both
+  are fixed. The research warning now also says correctly that progress banks up to 60
+  points.
+
+**Pacing notes, not changed:**
+
+- The first technology takes about 2 years at default funding. Higher funding is the lever.
+- 60-month truces after the 1641 wars produced a 3-year lull. At the fastest speed that is
+  about 25 seconds of real time, with events and envoys in between.
+- Crowns pile up in peacetime for a small realm whose army is capped by manpower. With both
+  construction slots busy I still ran 400–900 crowns late in the game, and nothing but
+  research funding and more expensive units soaks that up.
 
 ## Known issues and limitations
 
