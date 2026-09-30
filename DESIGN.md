@@ -371,7 +371,7 @@ is, if anything, relatively harder. Region counts scale with the number of regio
 - **Simultaneous winners:** resolved by campaign score (disclosed): 3 × provinces + 0.6 ×
   integrated dev + 3 × technologies + 3 × influence + min(treasury, 2000)/100 +
   per path (20 × timer fraction + 10 × condition progress).
-- **Campaign limit** (25/40/60 years): the highest score wins.
+- **Campaign limit** (the Reach 25/40/60 years, default 40; Aldmere 40/60/80, default 60): the highest score wins.
 - **Defeat** is elimination, or another realm winning. Losing the capital is not fatal. After a
   result you may continue playing; the result stays recorded.
 
