@@ -158,6 +158,8 @@ export const FIXED: FixedProv[] = [
   { id: 'glenardach', name: 'Glen Ardach', x: 652, y: 986, region: 'firths', owner: 'car', terrain: 'mountains', resource: null, dev: 1, pop: 8, fort: 2, claims: ['aur'], pass: true },
   { id: 'frostgate', name: 'Frostgate', x: 3050, y: 540, region: 'morcross', owner: 'mor', terrain: 'mountains', resource: null, dev: 1, pop: 8, fort: 1, integ: 75, pass: true },
   { id: 'irongate', name: 'The Iron Gate', x: 3330, y: 1542, region: 'weststeppe', owner: 'tar', terrain: 'mountains', resource: 'iron', dev: 1, pop: 10, fort: 2, integ: 80, claims: ['mor'], pass: true },
+  // Carrow's fortress facing Vostmark across the glens
+  { id: 'carrickfell', name: 'Carrick Fell', x: 780, y: 700, region: 'glens', owner: 'car', terrain: 'hills', resource: null, dev: 2, pop: 18, fort: 2 },
   // Hrafnmark's fortress on the neck of its peninsula
   { id: 'skjoldheim', name: 'Skjoldheim', x: 1990, y: 330, region: 'hrafn', owner: 'hra', terrain: 'hills', resource: 'iron', dev: 3, pop: 30, fort: 2 },
   // landmarks of the frontier
@@ -195,8 +197,8 @@ export const REGIONS: RegionSpec[] = [
   { id: 'littoral', culture: 'ist', count: 7, wealth: 2.5, anchors: [{ x: 1640, y: 2300, owner: 'ist' }, { x: 1960, y: 2240, owner: 'ist' }], biome: { plains: 3, hills: 2, forest: 1 }, claims: [['ser', 1], ['sol', 1]] },
   { id: 'solmarre', culture: 'sol', count: 12, wealth: 3.2, anchors: [{ x: 2200, y: 2760, owner: 'sol' }, { x: 2270, y: 2500, owner: 'sol' }], biome: { plains: 3, hills: 3, forest: 1 }, claims: [['ist', 1], ['les', 1]] },
   { id: 'upperald', culture: 'les', count: 7, wealth: 2.4, anchors: [{ x: 2560, y: 1120, owner: 'les' }, { x: 2800, y: 1200, owner: 'les' }], biome: { plains: 3, forest: 2, hills: 2 }, claims: [['dre', 1], ['mor', 1]] },
-  { id: 'lessvale', culture: 'les', count: 9, wealth: 3.0, anchors: [{ x: 2620, y: 1680, owner: 'les' }], biome: { plains: 6, forest: 1 } },
-  { id: 'delta', culture: 'les', count: 8, wealth: 2.6, anchors: [{ x: 2720, y: 2360, owner: 'les' }, { x: 2480, y: 2250, owner: 'les' }], biome: { plains: 4, marsh: 3 }, claims: [['sol', 1], ['tar', 1]] },
+  { id: 'lessvale', culture: 'les', count: 9, wealth: 2.7, anchors: [{ x: 2620, y: 1680, owner: 'les' }], biome: { plains: 6, forest: 1 } },
+  { id: 'delta', culture: 'les', count: 8, wealth: 2.4, anchors: [{ x: 2720, y: 2360, owner: 'les' }, { x: 2480, y: 2250, owner: 'les' }], biome: { plains: 4, marsh: 3 }, claims: [['sol', 1], ['tar', 1]] },
   { id: 'hollowvale', culture: 'vale', count: 7, wealth: 2.2, anchors: [{ x: 2800, y: 830, owner: null }], biome: { plains: 3, forest: 1, hills: 1 } },
   // ── east ─────────────────────────────────────────────────────────────────
   { id: 'northwilds', culture: 'wild', count: 14, wealth: 0.8, weight: 0.9, anchors: [{ x: 2880, y: 380, owner: null }, { x: 3280, y: 390, owner: null }, { x: 3700, y: 360, owner: null }, { x: 4150, y: 360, owner: null }], biome: { forest: 4, hills: 2, plains: 1, marsh: 1 } },

@@ -233,12 +233,10 @@ function kmeans(cells: number[], k: number, pinned: Pt[], seed: number): Array<{
   return out;
 }
 
-const regionArea: Record<string, number> = {};
 for (const r of REG) {
   const ri = regIdx.get(r.id)!;
   const cells: number[] = [];
   for (let c = 0; c < cell.length; c++) if (cell[c] === 0 && cellReg[c] === ri) cells.push(c);
-  regionArea[r.id] = cells.length * G * G * K * K;
   const fixedHere = S.FIXED.filter((f) => f.region === r.id);
   const islandHere = S.ISLANDS.filter((i) => i.region === r.id).reduce((a, i) => a + i.count, 0);
   const pinned = fixedHere.filter((f) => !f.pass).map((f) => [f.x, f.y] as Pt);
@@ -780,11 +778,13 @@ mkdirSync(new URL('../reports/', import.meta.url), { recursive: true });
   function nm(id: string) {
     return provincesOut.find((p) => p.id === id)?.name ?? id;
   }
-  lines.push('', '| Region | Provinces | Owners | Area per province |', '|---|---|---|---|');
+  const areaOf = new Map(provIdsTmp.map((t) => [rid(t), M.provinces[t].area]));
+  lines.push('', '| Region | Provinces | Owners | Mean province area |', '|---|---|---|---|');
   for (const r of ALDMERE_REGIONS) {
     const mine = provincesOut.filter((p) => p.region === r.id);
     const ow = [...new Set(mine.map((p) => p.owner ?? '—'))].join(', ');
-    lines.push(`| ${r.name} | ${mine.length} | ${ow} | ${Math.round(regionArea[r.id] / Math.max(1, mine.filter((p) => !S.FIXED.find((f) => f.id === p.id && f.pass)).length))} |`);
+    const ar = mine.map((p) => areaOf.get(p.id) ?? 0);
+    lines.push(`| ${r.name} | ${mine.length} | ${ow} | ${Math.round(ar.reduce((a, b) => a + b, 0) / Math.max(1, ar.length))} |`);
   }
   if (notes.length) lines.push('', '## Notes', '', ...notes.map((w) => `- ${w}`));
   if (warnings.length) lines.push('', '## Warnings', '', ...warnings.map((w) => `- ${w}`));
