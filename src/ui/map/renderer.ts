@@ -65,7 +65,18 @@ interface RealmShape {
   /** full outline including coasts */
   outline: Path2D;
   bbox: [number, number, number, number];
-  label: { x: number; y: number; angle: number; len: number; wid: number; bend: number } | null;
+  label: RealmLabel | null;
+}
+
+interface RealmLabel {
+  x: number;
+  y: number;
+  angle: number;
+  len: number;
+  wid: number;
+  bend: number;
+  /** other good frames, tried in order when this one collides with a larger realm's name */
+  alts: RealmLabel[];
 }
 
 export type Tier = 'far' | 'medium' | 'close';
@@ -88,6 +99,8 @@ export class MapRenderer {
   private riverPath: Path2D | null = null;
   private patternCache = new Map<string, CanvasPattern | null>();
   private placed: Rect[] = [];
+  /** rotated lettering already drawn this frame (geographic and realm names) */
+  private blocked: OBox[] = [];
   private pending = false;
 
   constructor(canvas: HTMLCanvasElement, geometry: MapGeometry, terrainOf: (id: string) => string) {
@@ -349,6 +362,7 @@ export class MapRenderer {
     // screen-space layers
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
     this.placed = [];
+    this.blocked = [];
     this.markers = [];
     this.battleMarkers = [];
     const t = now / 1000;
@@ -485,10 +499,6 @@ export class MapRenderer {
       const v0 = -(p.lx - mx) * sa + (p.ly - my) * ca;
       above += (v0 < 0 ? 1 : -1) * p.area;
     }
-    void lo;
-    void hi;
-    void wlo;
-    void whi;
     // Fit the lettering inside the realm: try lines through several interior
     // points at a few angles; measure how far each runs before leaving the
     // realm, and how thick the realm is across it.
@@ -506,8 +516,10 @@ export class MapRenderer {
       .map((id) => this.geo.provs.get(id)!)
       .sort((p, q) => Math.hypot(p.lx - mx, p.ly - my) - Math.hypot(q.lx - mx, q.ly - my))
       .slice(0, 8);
-    const angles = [...new Set([angle, angle / 2, 0, -0.25, 0.25].map((v) => Math.round(v * 100) / 100))];
-    let bestFit: { x: number; y: number; angle: number; len: number; wid: number; score: number } | null = null;
+    // steeper frames are only worth trying for tall realms
+    const tall = whi - wlo > (hi - lo) * 1.3 || Math.abs(0.5 * Math.atan2(2 * cxy, cxx - cyy)) > 0.9;
+    const angles = [...new Set([angle, angle / 2, 0, -0.25, 0.25, ...(tall ? [-0.6, 0.6] : [])].map((v) => Math.round(v * 100) / 100))];
+    const fits: Array<{ x: number; y: number; angle: number; len: number; wid: number; score: number }> = [];
     const maxRun = this.geo.provScale * 14;
     for (const p of anchors) {
       for (const ang of angles) {
@@ -523,12 +535,25 @@ export class MapRenderer {
         const down = reach(x, y, -sn, c, maxRun / 3);
         const wid = 2 * Math.min(up, down) + stepLen;
         // lettering size is bounded by both length and thickness; prefer level text
-        const score = Math.min(len / 7, wid * 0.42) * (1 - Math.abs(ang) * 0.25);
-        if (!bestFit || score > bestFit.score) bestFit = { x, y, angle: ang, len, wid, score };
+        const score = Math.min(len / 7, wid * 0.42) * (1 - Math.abs(ang) * 0.25) * (Math.abs(ang) > 0.4 ? 0.8 : 1);
+        fits.push({ x, y, angle: ang, len, wid, score });
       }
     }
-    if (!bestFit) return null;
-    return { x: bestFit.x, y: bestFit.y, angle: bestFit.angle, len: bestFit.len * 0.9, wid: bestFit.wid, bend: Math.abs(bestFit.angle) > 0.1 ? Math.sign(above) * Math.min(0.04, (0.5 * Math.abs(above)) / sw) : 0 };
+    if (!fits.length) return null;
+    fits.sort((a, b) => b.score - a.score);
+    // the best frame, then up to three alternatives that differ from it in place or angle
+    const picked: typeof fits = [];
+    for (const f of fits) {
+      if (picked.length >= 4) break;
+      if (f.score < fits[0].score * 0.45) break;
+      if (picked.some((q) => Math.hypot(q.x - f.x, q.y - f.y) < this.geo.provScale * 1.2 && Math.abs(q.angle - f.angle) < 0.3)) continue;
+      picked.push(f);
+    }
+    const bend = Math.sign(above) * Math.min(0.04, (0.5 * Math.abs(above)) / sw);
+    const frame = (f: (typeof fits)[number]): RealmLabel => ({ x: f.x, y: f.y, angle: f.angle, len: f.len * 0.9, wid: f.wid, bend: Math.abs(f.angle) > 0.1 ? bend : 0, alts: [] });
+    const [first, ...rest] = picked.map(frame);
+    first.alts = rest;
+    return first;
   }
 
   private hatchPattern(color: string): CanvasPattern | null {
@@ -668,6 +693,17 @@ export class MapRenderer {
 
   private overlaps(r: Rect): boolean {
     for (const q of this.placed) if (r.x < q.x + q.w && r.x + r.w > q.x && r.y < q.y + q.h && r.y + r.h > q.y) return true;
+    if (this.blocked.length) {
+      const b = orientedBox(r.x + r.w / 2, r.y + r.h / 2, r.w, r.h, 0);
+      for (const q of this.blocked) if (boxesOverlap(b, q)) return true;
+    }
+    return false;
+  }
+
+  /** Whether a rotated box collides with markers, placed names or other lettering. */
+  private overlapsBox(b: OBox, extra: Rect[] = []): boolean {
+    for (const q of [...this.placed, ...extra]) if (boxesOverlap(b, orientedBox(q.x + q.w / 2, q.y + q.h / 2, q.w, q.h, 0))) return true;
+    for (const q of this.blocked) if (boxesOverlap(b, q)) return true;
     return false;
   }
 
@@ -1021,8 +1057,27 @@ export class MapRenderer {
     const z = cam.zoom;
     const ppx = cam.provincePx;
     const density = rs.presentation.labels;
+    const st = sim.state;
+    // No two names overlap at rest. Order of precedence: markers (already placed),
+    // capital names, geographic names, realm names, other province names.
+    const caps = new Set<string>();
+    for (const n of Object.values(st.nations)) if (n.alive && n.capital) caps.add(n.capital);
+    const nameFrame = (v: { id: string; lx: number; ly: number; lr: number }) => {
+      const cap = caps.has(v.id);
+      const name = sim.world.prov[v.id].name;
+      const size = Math.max(11, Math.min(tier === 'close' ? 17 : 14.5, v.lr * z * 0.34)) + (cap ? 1 : 0);
+      const s = cam.toScreen(v.lx, v.ly);
+      const font = cap ? `700 ${size}px 'Alegreya SC', 'Alegreya Variable', serif` : `500 ${size}px 'Alegreya Variable', serif`;
+      ctx.font = font;
+      const w = ctx.measureText(name).width + (cap ? name.length * 0.8 : 0);
+      const y = s.y + (cap ? 37 : 5);
+      const r: Rect = { x: s.x - w / 2 - 2, y: y - size * 0.62, w: w + 4, h: size * 1.2 };
+      return { name, size, font, w, x: s.x, y, r, cap };
+    };
+    const capFrames = tier === 'far' ? [] : visible.filter((v) => caps.has(v.id)).map((v) => ({ v, f: nameFrame(v) }));
+    const capRects = capFrames.map((c) => c.f.r);
 
-    // geographic names: seas, ranges, lakes (behind realm names)
+    // geographic names: seas, ranges, lakes
     for (const l of this.geo.labels) {
       if (l.kind === 'region') continue;
       const s = cam.toScreen(l.x, l.y);
@@ -1030,7 +1085,12 @@ export class MapRenderer {
       const size = Math.max(10, Math.min(l.kind === 'sea' ? 30 : 17, (l.size ?? 40) * z));
       if (size < 10.5 || (l.kind !== 'sea' && tier === 'far' && size < 12)) continue;
       const water = l.kind === 'sea' || l.kind === 'lake';
-      this.letter(l.name.toUpperCase(), s.x, s.y, l.angle ?? 0, size, {
+      const text = l.name.toUpperCase();
+      ctx.font = `italic 500 ${size}px 'Alegreya Variable', serif`;
+      const box = orientedBox(s.x, s.y, ctx.measureText(text).width + size * (water ? 0.3 : 0.18) * (text.length - 1) + 4, size * 1.1, l.angle ?? 0);
+      if (this.overlapsBox(box, capRects)) continue;
+      this.blocked.push(box);
+      this.letter(text, s.x, s.y, l.angle ?? 0, {
         font: `italic 500 ${size}px 'Alegreya Variable', serif`,
         spacing: size * (water ? 0.3 : 0.18),
         fill: water ? 'rgba(214, 231, 236, 0.82)' : 'rgba(84, 66, 46, 0.85)',
@@ -1039,53 +1099,49 @@ export class MapRenderer {
       });
     }
 
-    // realm names at distance (largest first; shrink or skip on collision)
-    if (ppx < 150) {
-      const fade = ppx < 95 ? 1 : 1 - (ppx - 95) / 55;
+    // realm names at distance (largest first; shrink, move or skip on collision). They fade out
+    // as province names take over, and province names give way to them while they show.
+    const fade = ppx < 78 ? 1 : 1 - (ppx - 78) / 30;
+    if (fade > 0.25) {
       const alpha = fade * (rs.mode === 'political' || rs.mode === 'diplomacy' ? 0.92 : 0.6);
-      const boxes: Rect[] = [];
-      const items: Array<{ nid: NationId; name: string; size: number; lab: NonNullable<RealmShape['label']> }> = [];
+      const items: Array<{ nid: NationId; name: string; base: number; size: number; lab: RealmLabel }> = [];
+      ctx.font = `700 100px 'Alegreya SC', 'Alegreya Variable', serif`;
+      const fitSize = (lab: RealmLabel, base: number) => Math.min(((lab.len * z) / base) * 100, lab.wid * z * 0.42, 50);
       for (const [nid, rsh] of this.realms) {
         const lab = rsh.label;
         if (!lab) continue;
         const name = sim.world.nationDefs[nid].short.toUpperCase();
-        ctx.font = `700 100px 'Alegreya SC', 'Alegreya Variable', serif`;
         const base = ctx.measureText(name).width + name.length * 22;
-        const size = Math.min(((lab.len * z) / base) * 100, lab.wid * z * 0.42, 50);
-        items.push({ nid, name, size, lab });
+        items.push({ nid, name, base, size: fitSize(lab, base), lab });
       }
       items.sort((a, b) => b.size - a.size);
       for (const it of alpha > 0.02 ? items : []) {
-        const s = cam.toScreen(it.lab.x, it.lab.y);
-        let size = it.size;
-        let box: Rect | null = null;
-        for (let tries = 0; tries < 3 && size >= 11; tries++, size *= 0.8) {
-          ctx.font = `700 ${size}px 'Alegreya SC', 'Alegreya Variable', serif`;
-          const w = ctx.measureText(it.name).width + size * 0.22 * (it.name.length - 1);
-          const h = size * 0.9;
-          const ca = Math.abs(Math.cos(it.lab.angle));
-          const sa = Math.abs(Math.sin(it.lab.angle));
-          const bw = w * ca + h * sa;
-          const bh = w * sa + h * ca;
-          const r = { x: s.x - bw / 2, y: s.y - bh / 2, w: bw, h: bh };
-          if (!boxes.some((o) => r.x < o.x + o.w && r.x + r.w > o.x && r.y < o.y + o.h && r.y + r.h > o.y)) {
-            box = r;
-            break;
+        // try the best frame, shrinking a little, then the alternatives
+        let placed: { lab: RealmLabel; size: number; s: { x: number; y: number }; box: OBox } | null = null;
+        for (const lab of [it.lab, ...it.lab.alts]) {
+          const s = cam.toScreen(lab.x, lab.y);
+          let size = lab === it.lab ? it.size : fitSize(lab, it.base);
+          for (let tries = 0; tries < 3 && size >= 11 && !placed; tries++, size *= 0.85) {
+            ctx.font = `700 ${size}px 'Alegreya SC', 'Alegreya Variable', serif`;
+            const w = ctx.measureText(it.name).width + size * 0.22 * (it.name.length - 1);
+            const box = orientedBox(s.x, s.y, w + 4, size * 0.9, lab.angle);
+            if (!this.overlapsBox(box, capRects)) placed = { lab, size, s, box };
           }
+          if (placed) break;
         }
-        if (!box || size < 11) continue;
-        boxes.push(box);
+        if (!placed) continue;
+        this.blocked.push(placed.box);
+        const { lab, size, s } = placed;
         const def = sim.world.nationDefs[it.nid];
         ctx.save();
         ctx.globalAlpha = alpha;
-        this.letter(it.name, s.x, s.y, it.lab.angle, size, {
+        this.letter(it.name, s.x, s.y, lab.angle, {
           font: `700 ${size}px 'Alegreya SC', 'Alegreya Variable', serif`,
           spacing: size * 0.22,
           fill: shade(def.color, -0.55),
           halo: 'rgba(244, 236, 216, 0.55)',
           haloW: Math.max(2, size * 0.09),
-          bend: it.lab.bend,
-          register: false,
+          bend: lab.bend,
         });
         ctx.restore();
       }
@@ -1093,38 +1149,29 @@ export class MapRenderer {
 
     // province names
     if (tier !== 'far') {
-      const st = sim.state;
-      const caps = new Set<string>();
-      for (const n of Object.values(st.nations)) if (n.alive && n.capital) caps.add(n.capital);
       const minR = density === 'many' ? 13 : density === 'few' ? 26 : 18;
       const cands = visible
         .map((v) => ({ v, cap: caps.has(v.id), pri: (caps.has(v.id) ? 1e6 : 0) + st.provinces[v.id].dev * 1000 + v.area / 100 }))
         .filter((c) => c.cap || c.v.lr * z > minR)
         .sort((a, b) => b.pri - a.pri);
       for (const c of cands) {
-        const name = sim.world.prov[c.v.id].name;
-        const size = Math.max(11, Math.min(tier === 'close' ? 17 : 14.5, c.v.lr * z * 0.34)) + (c.cap ? 1 : 0);
-        const s = cam.toScreen(c.v.lx, c.v.ly);
-        const font = c.cap ? `700 ${size}px 'Alegreya SC', 'Alegreya Variable', serif` : `500 ${size}px 'Alegreya Variable', serif`;
-        ctx.font = font;
-        const w = ctx.measureText(name).width + (c.cap ? name.length * 0.8 : 0);
-        const y = s.y + (c.cap ? 37 : 5);
-        const r: Rect = { x: s.x - w / 2 - 2, y: y - size * 0.62, w: w + 4, h: size * 1.2 };
-        // capitals are always named; other names give way to markers and each other
+        const { name, size, font, w, y, r } = c.cap ? capFrames.find((q) => q.v.id === c.v.id)!.f : nameFrame(c.v);
+        const s = { x: r.x + r.w / 2 };
+        // capitals are always named; other names give way to markers, lettering and each other
         if (!c.cap && this.overlaps(r)) continue;
         if (!c.cap && w > c.v.lr * z * 2.9) continue;
         this.place(r);
-        this.letter(name, s.x, y, 0, size, { font, spacing: c.cap ? 0.8 : 0, fill: '#2a241c', halo: 'rgba(246, 239, 222, 0.88)', haloW: 3 });
+        this.letter(name, s.x, y, 0, { font, spacing: c.cap ? 0.8 : 0, fill: '#2a241c', halo: 'rgba(246, 239, 222, 0.88)', haloW: 3 });
         if (tier === 'close' && rs.mode === 'economy') {
           const dv = `dev ${st.provinces[c.v.id].dev}`;
-          this.letter(dv, s.x, y + size * 0.95, 0, 11, { font: `600 11px 'Source Sans 3 Variable', sans-serif`, spacing: 0, fill: '#4a3a26', halo: 'rgba(246,239,222,0.8)', haloW: 2.5 });
+          this.letter(dv, s.x, y + size * 0.95, 0, { font: `600 11px 'Source Sans 3 Variable', sans-serif`, spacing: 0, fill: '#4a3a26', halo: 'rgba(246,239,222,0.8)', haloW: 2.5 });
         }
         if (tier === 'close' && rs.mode === 'terrain') {
           const t = sim.world.prov[c.v.id].terrain;
-          this.letter(`${t} · move ${moveCostLabel(t)}`, s.x, y + size * 0.95, 0, 11, { font: `600 11px 'Source Sans 3 Variable', sans-serif`, spacing: 0, fill: '#4a3a26', halo: 'rgba(246,239,222,0.8)', haloW: 2.5 });
+          this.letter(`${t} · move ${moveCostLabel(t)}`, s.x, y + size * 0.95, 0, { font: `600 11px 'Source Sans 3 Variable', sans-serif`, spacing: 0, fill: '#4a3a26', halo: 'rgba(246,239,222,0.8)', haloW: 2.5 });
         }
         if (tier === 'close' && rs.mode === 'frontier' && st.provinces[c.v.id].owner) {
-          this.letter(`${Math.floor(st.provinces[c.v.id].integration)}`, s.x, y + size * 0.95, 0, 11, { font: `700 11px 'Source Sans 3 Variable', sans-serif`, spacing: 0, fill: '#3a2e20', halo: 'rgba(246,239,222,0.8)', haloW: 2.5 });
+          this.letter(`${Math.floor(st.provinces[c.v.id].integration)}`, s.x, y + size * 0.95, 0, { font: `700 11px 'Source Sans 3 Variable', sans-serif`, spacing: 0, fill: '#3a2e20', halo: 'rgba(246,239,222,0.8)', haloW: 2.5 });
         }
       }
     }
@@ -1136,8 +1183,7 @@ export class MapRenderer {
     x: number,
     y: number,
     angle: number,
-    size: number,
-    o: { font: string; spacing: number; fill: string; halo: string; haloW: number; bend?: number; register?: boolean },
+    o: { font: string; spacing: number; fill: string; halo: string; haloW: number; bend?: number },
   ): void {
     const ctx = this.ctx;
     ctx.save();
@@ -1190,7 +1236,6 @@ export class MapRenderer {
       ctx.restore();
     }
     ctx.restore();
-    if (o.register !== false) void size;
   }
 
   /** Render a static preview of a world (menus, campaign setup). */
@@ -1262,6 +1307,32 @@ export class MapRenderer {
     const offY = (h - (b.maxY - b.minY) * z) / 2 - b.minY * z;
     return { z, offX, offY };
   }
+}
+
+/** A rotated label box: centre, half extents and axis. */
+interface OBox {
+  x: number;
+  y: number;
+  hw: number;
+  hh: number;
+  c: number;
+  s: number;
+}
+
+function orientedBox(x: number, y: number, w: number, h: number, angle: number): OBox {
+  return { x, y, hw: w / 2, hh: h / 2, c: Math.cos(angle), s: Math.sin(angle) };
+}
+
+/** Separating-axis test for two rotated rectangles. */
+function boxesOverlap(a: OBox, b: OBox): boolean {
+  const dx = b.x - a.x;
+  const dy = b.y - a.y;
+  for (const [ax, ay] of [[a.c, a.s], [-a.s, a.c], [b.c, b.s], [-b.s, b.c]]) {
+    const ra = a.hw * Math.abs(a.c * ax + a.s * ay) + a.hh * Math.abs(-a.s * ax + a.c * ay);
+    const rb = b.hw * Math.abs(b.c * ax + b.s * ay) + b.hh * Math.abs(-b.s * ax + b.c * ay);
+    if (Math.abs(dx * ax + dy * ay) > ra + rb) return false;
+  }
+  return true;
 }
 
 function moveCostLabel(t: string): string {
