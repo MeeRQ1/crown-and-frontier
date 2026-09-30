@@ -242,6 +242,12 @@ function diplomacy(sim: Sim, nid: NationId): void {
       const last = n.ai.lastProposal[`${o}:${type}`] ?? -1e9;
       const isPlayer = st.nations[o].isPlayer;
       if (st.tick - last < months(isPlayer ? 18 : 6)) continue;
+      if (isPlayer) {
+        // do not flood a human: one open proposal at a time, at most one every 3 months
+        const inbox = st.nations[o].ai.lastProposal['__incoming'] ?? -1e9;
+        if (st.proposals.some((x) => x.to === o) || st.tick - inbox < months(3)) continue;
+        st.nations[o].ai.lastProposal['__incoming'] = st.tick;
+      }
       // mutual interest: would we accept the same from them?
       if (!evaluateTreaty(sim, o, nid, type).accept) continue;
       if (!isPlayer && !evaluateTreaty(sim, nid, o, type).accept) continue;
