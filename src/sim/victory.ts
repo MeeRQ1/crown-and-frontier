@@ -20,6 +20,15 @@ import { opinion, worldDev } from './diplomacy';
 import { ownedProvinces, aliveNations, months, notify, nationName, endTick, dateOf, type Sim, warsOf } from './state';
 import type { NationId, VictoryPath } from './types';
 
+/**
+ * Victory thresholds for the map being played: the defaults in config,
+ * overridden by the scenario (a larger map spreads land and wealth over more
+ * realms, so the shares that mean "dominant" are smaller).
+ */
+export function victoryRules(sim: Sim) {
+  return { ...C.victory, ...(sim.world.scenario.victory ?? {}) };
+}
+
 export const VICTORY_MONTHS: Record<VictoryPath, number> = {
   territorial: C.victory.territorialMonths,
   economic: C.victory.economicMonths,
@@ -92,7 +101,7 @@ export function influence(sim: Sim, nid: NationId): number {
 
 export function influenceNeeded(sim: Sim, nid: NationId): number {
   const others = aliveNations(sim).filter((x) => x !== nid).length;
-  return Math.max(C.victory.diplomaticMinInfluence, Math.ceil(others * C.victory.diplomaticInfluencePerRealm));
+  return Math.max(victoryRules(sim).diplomaticMinInfluence, Math.ceil(others * victoryRules(sim).diplomaticInfluencePerRealm));
 }
 
 export function victoryProgress(sim: Sim, nid: NationId): VictoryProgress {
@@ -102,15 +111,15 @@ export function victoryProgress(sim: Sim, nid: NationId): VictoryProgress {
   const held = ownedProvinces(sim, nid).filter((p) => st.provinces[p].controller === nid).length;
   const regions = dominatedRegions(sim, nid);
   const share = held / total;
-  const tMet = regions.length >= C.victory.territorialRegions && share >= C.victory.territorialShare;
+  const tMet = regions.length >= victoryRules(sim).territorialRegions && share >= victoryRules(sim).territorialShare;
   const territorial: PathProgress = {
     met: tMet,
-    progress: Math.min(1, Math.min(regions.length / C.victory.territorialRegions, share / C.victory.territorialShare)),
+    progress: Math.min(1, Math.min(regions.length / victoryRules(sim).territorialRegions, share / victoryRules(sim).territorialShare)),
     streak: n.victoryStreak.territorial,
     required: C.victory.territorialMonths,
     lines: [
-      `Regions dominated: ${regions.length}/${C.victory.territorialRegions} (own ≥75% of a region)`,
-      `Provinces held: ${held}/${total} (${Math.round(share * 100)}% of ${Math.round(C.victory.territorialShare * 100)}% needed)`,
+      `Regions dominated: ${regions.length}/${victoryRules(sim).territorialRegions} (own ≥75% of a region)`,
+      `Provinces held: ${held}/${total} (${Math.round(share * 100)}% of ${Math.round(victoryRules(sim).territorialShare * 100)}% needed)`,
     ],
   };
 
@@ -128,14 +137,14 @@ export function victoryProgress(sim: Sim, nid: NationId): VictoryProgress {
   }
   const unrest = unrestDen ? unrestNum / unrestDen : 0;
   const bankrupt = n.bankruptUntil > st.tick;
-  const eMet = devShareV >= C.victory.economicShare && unrest <= C.victory.economicUnrest && n.treasury >= 0 && !bankrupt && !occupied;
+  const eMet = devShareV >= victoryRules(sim).economicShare && unrest <= C.victory.economicUnrest && n.treasury >= 0 && !bankrupt && !occupied;
   const economic: PathProgress = {
     met: eMet,
-    progress: Math.min(1, devShareV / C.victory.economicShare),
+    progress: Math.min(1, devShareV / victoryRules(sim).economicShare),
     streak: n.victoryStreak.economic,
     required: C.victory.economicMonths,
     lines: [
-      `Integrated development: ${idev}/${Math.ceil(wdev * C.victory.economicShare)} (${Math.round(devShareV * 100)}% of the world, ${Math.round(C.victory.economicShare * 100)}% needed)`,
+      `Integrated development: ${idev}/${Math.ceil(wdev * victoryRules(sim).economicShare)} (${Math.round(devShareV * 100)}% of the world, ${Math.round(victoryRules(sim).economicShare * 100)}% needed)`,
       `Average unrest ${Math.round(unrest)} (max ${C.victory.economicUnrest})${n.treasury < 0 ? ' · treasury in debt' : ''}${bankrupt ? ' · bankrupt' : ''}${occupied ? ' · land under occupation' : ''}`,
     ],
   };

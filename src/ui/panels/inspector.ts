@@ -10,7 +10,7 @@ import { fabricateProblem } from '../../sim/diplomacy';
 import { integrationFactor, provinceCrowns, provinceSupplies } from '../../sim/economy';
 import { integrationRate, unrestTarget } from '../../sim/integration';
 import { maxMorale, mergeProblem, recruitProblem, splitProblem, unitCost } from '../../sim/military';
-import { etaWeeks } from '../../sim/movement';
+import { etaWeeks, isRiver } from '../../sim/movement';
 import { siegeInfo } from '../../sim/siege';
 import { armiesAt, atWar, menOf, nationName, provName } from '../../sim/state';
 import { armySupplyInfo, provinceSupplyCapacity } from '../../sim/supply';
@@ -139,6 +139,18 @@ function provinceCard(app: App, pid: ProvinceId): HTMLElement[] {
       row('Roads · fort', `${p.infra}/${C.construction.infraMax} · ${p.fort}/${C.construction.fortMax}`),
       row('Population', `${fmt(p.pop, 1)}k`),
       me ? row('Supply capacity', plural(Math.floor(provinceSupplyCapacity(sim, me, pid)), 'regiment')) : null,
+      (() => {
+        const nb = sim.world.prov[pid].neighbors;
+        const rivers = nb.filter((n) => isRiver(sim, pid, n));
+        const straits = nb.filter((n) => sim.world.straitSet.has(pid < n ? `${pid}|${n}` : `${n}|${pid}`));
+        return h(
+          'div',
+          null,
+          rivers.length ? row('River borders', h('span', { title: 'Attackers crossing a river into a battle fight at a disadvantage: defenders +20%.' }, rivers.map((n) => provName(sim, n)).join(', '))) : null,
+          straits.length ? row('Straits to', h('span', { title: 'A sea crossing costs 2 extra movement points (Hrafnmark: none).' }, straits.map((n) => provName(sim, n)).join(', '))) : null,
+          rivers.length ? h('p', { class: 'small faint' }, 'Attacking across a river gives the defenders +20% in battle.') : null,
+        );
+      })(),
     ),
   );
   if (p.owner) {

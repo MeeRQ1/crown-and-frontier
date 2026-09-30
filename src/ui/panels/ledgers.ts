@@ -42,7 +42,7 @@ import {
 } from '../../sim/state';
 import { armySupplyInfo } from '../../sim/supply';
 import type { Army, NationId, PeaceTerms, TreatyType, War } from '../../sim/types';
-import { allScores, dominatedRegions, influence, influenceByPartner, influenceNeeded, SCORE_FORMULA, VICTORY_LABELS, VICTORY_MONTHS, victoryProgress } from '../../sim/victory';
+import { allScores, victoryRules, dominatedRegions, influence, influenceByPartner, influenceNeeded, SCORE_FORMULA, VICTORY_LABELS, VICTORY_MONTHS, victoryProgress } from '../../sim/victory';
 import { computeWarScore, evaluatePeace, goalOptions, provinceCost, scoreFor, termsCost, declareWarProblem } from '../../sim/war';
 import type { App } from '../app';
 import { action, bar, button, h, rebuild, row, setChildren } from '../dom';
@@ -847,9 +847,9 @@ function victoryLedger(app: App): HTMLElement {
   const alive = aliveNations(sim);
   const paths = ['territorial', 'economic', 'diplomatic'] as const;
   const desc: Record<(typeof paths)[number], string> = {
-    territorial: `Own and control ≥75% of the provinces in ${C.victory.territorialRegions} regions and ≥${Math.round(C.victory.territorialShare * 100)}% of all provinces, then hold it for ${VICTORY_MONTHS.territorial} months.`,
-    economic: `Integrated development (dev of provinces at integration ≥75) of ≥${Math.round(C.victory.economicShare * 100)}% of the world's, with average unrest ≤${C.victory.economicUnrest}, no debt or bankruptcy and none of your land occupied — for ${VICTORY_MONTHS.economic} months.`,
-    diplomatic: `Influence from treaties at least ${C.victory.diplomaticTreatyAge / 12} years old with partners whose opinion of you is ≥${C.victory.diplomaticOpinion} (alliance 2, trade 1): ${C.victory.diplomaticInfluencePerRealm} per other surviving realm; trust ≥${C.victory.diplomaticTrust}; no offensive war — for ${VICTORY_MONTHS.diplomatic} months.`,
+    territorial: `Own and control ≥75% of the provinces in ${victoryRules(sim).territorialRegions} regions and ≥${Math.round(victoryRules(sim).territorialShare * 100)}% of all provinces, then hold it for ${VICTORY_MONTHS.territorial} months.`,
+    economic: `Integrated development (dev of provinces at integration ≥75) of ≥${Math.round(victoryRules(sim).economicShare * 100)}% of the world's, with average unrest ≤${C.victory.economicUnrest}, no debt or bankruptcy and none of your land occupied — for ${VICTORY_MONTHS.economic} months.`,
+    diplomatic: `Influence from treaties at least ${C.victory.diplomaticTreatyAge / 12} years old with partners whose opinion of you is ≥${C.victory.diplomaticOpinion} (alliance 2, trade 1): ${victoryRules(sim).diplomaticInfluencePerRealm} per other surviving realm; trust ≥${C.victory.diplomaticTrust}; no offensive war — for ${VICTORY_MONTHS.diplomatic} months.`,
   };
   const mine = me ? victoryProgress(sim, me) : null;
   const infl = me ? influenceByPartner(sim, me) : {};

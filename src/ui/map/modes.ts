@@ -43,7 +43,7 @@ export const MODES: ModeDef[] = [
     label: 'Terrain',
     icon: 'terrain',
     key: 'W',
-    explain: 'Ground and how it slows marching armies and helps defenders. Rivers are drawn along borders: attacking across one is harder. Dashed lines are straits and fords, crossed at a movement cost.',
+    explain: 'Ground: how it slows marching armies and helps defenders. Mountain ranges cannot be crossed except at their passes. Rivers run along borders: attackers who cross one to start a battle face defenders +20%. Dashed lines over the sea are straits: +2 movement points to cross (Hrafnmark: none).',
   },
   {
     id: 'supply',
@@ -232,10 +232,14 @@ export function legendFor(mode: MapMode): LegendItem[] {
         { color: '#ece3cc', label: 'Parchment: unclaimed' },
       ];
     case 'terrain':
-      return (Object.keys(TERRAIN) as Array<keyof typeof TERRAIN>).map((t) => ({
-        color: TERRAIN_COLORS[t],
-        label: `${TERRAIN[t].label} · move ${TERRAIN[t].move} · defence +${Math.round(TERRAIN[t].defense * 100)}%`,
-      }));
+      return [
+        ...(Object.keys(TERRAIN) as Array<keyof typeof TERRAIN>).map((t) => ({
+          color: TERRAIN_COLORS[t],
+          label: `${TERRAIN[t].label} · move ${TERRAIN[t].move} · defence +${Math.round(TERRAIN[t].defense * 100)}%`,
+        })),
+        { color: '#b9aa8a', label: 'Mountain range: impassable' },
+        { color: '#3d7391', label: 'River border: defenders +20% against crossings' },
+      ];
     case 'supply':
       return [
         { color: '#2f7596', label: 'Supply source' },
