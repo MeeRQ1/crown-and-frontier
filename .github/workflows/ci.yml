@@ -36,8 +36,11 @@ jobs:
       - name: Portable ZIP
         run: npm run package
 
-      - name: AI-only campaign smoke run (2 seeds, 15 years)
-        run: npm run sim -- --seeds 1-2 --difficulty normal --years 15 --quiet --out reports/ci-ai-campaigns.md
+      - name: AI-only campaign smoke run, the Reach (2 seeds, 15 years)
+        run: npm run sim -- --scenario reach --seeds 1-2 --difficulty normal --years 15 --quiet --out reports/ci-ai-campaigns.md
+
+      - name: AI-only campaign smoke run, Aldmere (1 seed, 10 years)
+        run: npm run sim -- --scenario aldmere --seeds 1 --difficulty normal --years 10 --quiet --out reports/ci-ai-campaigns-aldmere.md
 
       - name: Install Chromium for browser checks
         run: npx playwright install --with-deps chromium
@@ -61,3 +64,4 @@ jobs:
           path: |
             reports/web-verification.md
             reports/ci-ai-campaigns.md
+            reports/ci-ai-campaigns-aldmere.md

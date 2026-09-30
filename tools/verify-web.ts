@@ -115,7 +115,41 @@ async function flow(browser: Browser, base: string, label: string): Promise<void
   const loadMs = Date.now() - t0;
   await startCampaign(page);
   const drawn = await canvasDrawn(page);
-  record(`${label}: loads, starts a campaign and draws the map`, drawn && problems.length === 0, `menu in ${loadMs} ms${problems.length ? `; ${problems.slice(0, 3).join('; ')}` : ''}`);
+  const info = await page.evaluate(() => {
+    const a = (window as any).cnf;
+    return `${a.sim.state.scenarioId}, ${a.sim.world.provIds.length} provinces`;
+  });
+  record(`${label}: loads, starts a campaign and draws the map`, drawn && problems.length === 0, `menu in ${loadMs} ms; ${info}${problems.length ? `; ${problems.slice(0, 3).join('; ')}` : ''}`);
+  await page.close();
+}
+
+/** Campaign setup: choose the quick map, a realm, begin; map modes and navigation keys. */
+async function mapChoice(browser: Browser, base: string): Promise<void> {
+  const page = await browser.newPage({ viewport: { width: 1366, height: 768 } });
+  const problems = await watch(page);
+  await page.goto(base);
+  await page.waitForSelector('.screen .menu-list button', { timeout: 15000 });
+  await page.getByRole('button', { name: /New campaign/ }).click();
+  await page.locator('[data-map="reach"]').click();
+  await page.locator('[data-realm="fen"]').click();
+  await page.waitForTimeout(300);
+  await page.locator('button:visible', { hasText: 'Begin campaign' }).first().click();
+  await page.waitForSelector('canvas.map');
+  await page.waitForTimeout(400);
+  const st = await page.evaluate(() => {
+    const a = (window as any).cnf;
+    return { map: a.sim.state.scenarioId, n: a.sim.world.provIds.length, player: a.player };
+  });
+  record('Campaign setup starts the chosen map and realm (the Reach, Fenward)', st.map === 'reach' && st.n === 99 && st.player === 'fen' && problems.length === 0, `${st.map}, ${st.n} provinces, ${st.player}`);
+  await page.locator('canvas.map').focus();
+  await page.keyboard.press('Shift+Digit2');
+  await page.waitForTimeout(100);
+  const mode = await page.evaluate(() => (window as any).cnf.mode);
+  const z0 = await page.evaluate(() => (window as any).cnf.renderer.camera.zoom);
+  await page.keyboard.press('KeyF');
+  await page.waitForTimeout(900);
+  const z1 = await page.evaluate(() => (window as any).cnf.renderer.camera.zoom);
+  record('Keyboard: Shift+2 shows the Terrain map; F fits the whole map', mode === 'terrain' && z1 < z0, `mode ${mode}, zoom ${z0.toFixed(3)} → ${z1.toFixed(3)}`);
   await page.close();
 }
 
@@ -129,6 +163,7 @@ async function main(): Promise<void> {
   try {
     await flow(browser, `${origin}/`, 'Site root');
     await flow(browser, `${origin}${SUB}`, 'Project subpath');
+    await mapChoice(browser, `${origin}/`);
     if (zipFiles) {
       record('Release ZIP has index.html at its root', zipFiles.has('index.html'), `${zipFiles.size} files`);
       await flow(browser, `${origin}/zip/`, 'Unpacked release ZIP');
