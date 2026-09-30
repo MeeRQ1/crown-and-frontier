@@ -2,7 +2,7 @@
 //
 //  1. Proposal expiry            (calls to arms honoured by default)
 //  2. AI decisions               (same command path as the player)
-//  3. Movement & arrivals        (id order; pinned armies stay)
+//  3. Standing orders, then movement & arrivals (id order; pinned armies stay)
 //  4. Battle detection + one combat round per battle (retreats begin)
 //  5. Sieges & occupation        (control changes -> supply network invalidated)
 //  6. Army care                  (supply recomputed on the new map: attrition,
@@ -22,7 +22,7 @@ import { monthlyEconomy } from './economy';
 import { monthlyEvents } from './events';
 import { monthlyIntegration } from './integration';
 import { weeklyArmyCare, weeklyRecruitment } from './military';
-import { weeklyMovement } from './movement';
+import { weeklyMovement, weeklyOrders } from './movement';
 import { monthlyResearch } from './progression';
 import { weeklySieges } from './siege';
 import { monthlyDiplomacy } from './diplomacy';
@@ -44,6 +44,7 @@ export function step(sim: Sim, opts: StepOptions = {}): void {
   if (isOver(sim)) return;
   weeklyProposals(sim);
   if (!opts.noAI) runAI(sim);
+  weeklyOrders(sim);
   weeklyMovement(sim);
   detectBattles(sim);
   weeklyCombat(sim);

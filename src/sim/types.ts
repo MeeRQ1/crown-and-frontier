@@ -189,6 +189,16 @@ export interface Army {
   task: string | null;
   /** the province the army last stepped out of, and when (river crossings) */
   lastMove?: { from: ProvinceId; tick: number };
+  /** player's army group (1–9), for grouped orders and quick selection */
+  group?: number | null;
+  /** standing order kept between marches */
+  order?: ArmyOrder | null;
+}
+
+/** Station: return to (and hold) this province whenever the army has nothing else to do. */
+export interface ArmyOrder {
+  kind: 'station';
+  province: ProvinceId;
 }
 
 export interface BattleRound {
@@ -506,6 +516,8 @@ export type Command =
   | { type: 'cancelRecruit'; nation: NationId; province: ProvinceId }
   | { type: 'move'; nation: NationId; army: ArmyId; dest: ProvinceId; /** add the leg after the current route instead of replacing it */ append?: boolean }
   | { type: 'stop'; nation: NationId; army: ArmyId }
+  | { type: 'setGroup'; nation: NationId; army: ArmyId; group: number | null }
+  | { type: 'setOrder'; nation: NationId; army: ArmyId; order: ArmyOrder | null }
   | { type: 'split'; nation: NationId; army: ArmyId; counts: Partial<Record<UnitType, number>> }
   | { type: 'merge'; nation: NationId; armies: ArmyId[] }
   | { type: 'disband'; nation: NationId; army: ArmyId }

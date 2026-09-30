@@ -334,6 +334,7 @@ function coastGuards(): Seed[] {
 /** land component of each province: 0 mainland, k+1 island k */
 const compOf = (p: Prov) => (p.island ? S.ISLANDS.indexOf(p.island) + 1 : 0);
 
+const byTmpLocal = (t: string) => provs.find((p) => p.tmp === t);
 function computeStraits(): Array<[string, string]> {
   const out: Array<[string, string]> = [];
   const key = new Set<string>();
@@ -351,9 +352,27 @@ function computeStraits(): Array<[string, string]> {
     pairs.sort((x, y) => x.d - y.d || (x.b.tmp < y.b.tmp ? -1 : 1));
     const best = pairs[0];
     add(best.a, best.b);
+    // an owned island is always linked to its owner's own coast, so the owner
+    // never has to cross a foreign realm to reach it
+    if (isl.owner && best.b.owner !== isl.owner) {
+      const home = pairs.find((p) => p.b.owner === isl.owner && p.d < best.d * 2.2);
+      if (home) add(home.a, home.b);
+      else warnings.push(`${isl.name} has no strait to ${isl.owner}'s land`);
+    }
     // a second landing: another province of this island, or another shore
     const second = pairs.find((p) => p.d < best.d * 1.3 && p.d < 560 && p.a !== best.a && p.b !== best.b);
     if (second) add(second.a, second.b);
+    // islands are stepping stones: a lane to the nearest coast held by someone else
+    const mineIds = new Set(mine.map((p) => p.tmp));
+    const linked = new Set(
+      out
+        .filter(([x, y]) => mineIds.has(x) || mineIds.has(y))
+        .flatMap(([x, y]) => [byTmpLocal(x), byTmpLocal(y)])
+        .filter((p) => p && compOf(p) !== k + 1)
+        .map((p) => p!.owner ?? '~'),
+    );
+    const lane = pairs.find((p) => p.d < 520 && !linked.has(p.b.owner ?? '~'));
+    if (lane) add(lane.a, lane.b);
     if (isl.count >= 2) {
       const third = pairs.find((p) => p.d < best.d * 1.5 && p.d < 600 && compOf(p.b) !== compOf(best.b));
       if (third) add(third.a, third.b);

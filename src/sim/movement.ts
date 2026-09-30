@@ -12,7 +12,7 @@
 import { TERRAIN } from './config';
 import { CostHeap } from './heap';
 import { nationMods } from './modifiers';
-import { atWar, hasAccess, notify, provName, type Sim } from './state';
+import { atWar, hasAccess, isFriendly, notify, provName, type Sim } from './state';
 import type { Army, NationId, ProvinceId } from './types';
 import { edgeKey } from './world';
 
@@ -163,6 +163,39 @@ export function weeklyMovement(sim: Sim): void {
         a.progress = 0;
         if (a.retreating) a.retreating = false;
       }
+    }
+  }
+}
+
+/** Why an army of `nid` cannot be stationed in a province (null = it can). */
+export function stationProblem(sim: Sim, nid: NationId, pid: ProvinceId): string | null {
+  const p = sim.state.provinces[pid];
+  if (!p) return 'Unknown province.';
+  if (!p.controller || !isFriendly(sim, nid, p.controller)) return 'Armies can be stationed only in land that we or our allies control.';
+  return null;
+}
+
+/**
+ * Standing orders, before movement: an army stationed somewhere marches back
+ * whenever it is idle elsewhere (after a retreat, for example). A station lost
+ * to the enemy cancels the order.
+ */
+export function weeklyOrders(sim: Sim): void {
+  const st = sim.state;
+  for (const id of Object.keys(st.armies).sort()) {
+    const a = st.armies[id];
+    const o = a.order;
+    if (!o) continue;
+    if (stationProblem(sim, a.nation, o.province)) {
+      a.order = null;
+      notify(sim, a.nation, 'normal', 'move', `${a.name} is no longer stationed at ${provName(sim, o.province)}: we no longer hold it.`, { army: a.id, province: o.province });
+      continue;
+    }
+    if (a.battle || a.retreating || a.path.length || a.location === o.province) continue;
+    const r = findPath(sim, a.nation, a.location, o.province);
+    if (r && r.path.length) {
+      a.path = r.path;
+      a.progress = 0;
     }
   }
 }

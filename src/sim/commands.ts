@@ -24,7 +24,7 @@ import {
 } from './diplomacy';
 import { choiceProblem, resolveEvent } from './events';
 import { cancelRecruits, disbandProblem, doDisband, doMerge, doSplit, mergeProblem, orderRecruit, recruitProblem, splitProblem } from './military';
-import { enterProblem, findPath } from './movement';
+import { enterProblem, findPath, stationProblem } from './movement';
 import { policyProblem, researchProblem, setPolicy } from './progression';
 import { nationName, notify, type Sim } from './state';
 import type { Command, CommandResult } from './types';
@@ -55,6 +55,22 @@ export function checkCommand(sim: Sim, cmd: Command): string | null {
       const ep = enterProblem(sim, cmd.nation, cmd.dest);
       if (ep) return ep;
       if (!findPath(sim, cmd.nation, from, cmd.dest)) return 'No legal route: the way is blocked by realms that deny us access.';
+      return null;
+    }
+    case 'setGroup': {
+      const a = st.armies[cmd.army];
+      if (!a || a.nation !== cmd.nation) return 'Not your army.';
+      if (cmd.group !== null && (!Number.isInteger(cmd.group) || cmd.group < 1 || cmd.group > 9)) return 'Army groups are numbered 1 to 9.';
+      return null;
+    }
+    case 'setOrder': {
+      const a = st.armies[cmd.army];
+      if (!a || a.nation !== cmd.nation) return 'Not your army.';
+      if (!cmd.order) return null;
+      if (cmd.order.kind !== 'station') return 'Unknown order.';
+      const sp = stationProblem(sim, cmd.nation, cmd.order.province);
+      if (sp) return sp;
+      if (a.location !== cmd.order.province && !findPath(sim, cmd.nation, a.location, cmd.order.province)) return 'No legal route to that province.';
       return null;
     }
     case 'stop': {
@@ -144,6 +160,8 @@ export function applyCommand(sim: Sim, cmd: Command): CommandResult {
       return { ok: true, message: 'Training cancelled; men and supplies returned (crowns are lost).' };
     case 'move': {
       const a = st.armies[cmd.army];
+      // a new march replaces a standing station order
+      if (a.order && cmd.dest !== a.order.province) a.order = null;
       if (cmd.append && a.path.length) {
         const end = a.path[a.path.length - 1];
         if (cmd.dest !== end) a.path = [...a.path, ...findPath(sim, cmd.nation, end, cmd.dest)!.path];
@@ -164,6 +182,20 @@ export function applyCommand(sim: Sim, cmd: Command): CommandResult {
       a.path = [];
       a.progress = 0;
       return { ok: true };
+    }
+    case 'setGroup': {
+      const a = st.armies[cmd.army];
+      a.group = cmd.group;
+      return { ok: true, message: cmd.group ? `${a.name} joins group ${cmd.group}.` : `${a.name} leaves its group.` };
+    }
+    case 'setOrder': {
+      const a = st.armies[cmd.army];
+      a.order = cmd.order;
+      if (cmd.order && a.location !== cmd.order.province && !a.battle && !a.retreating) {
+        a.path = findPath(sim, cmd.nation, a.location, cmd.order.province)!.path;
+        a.progress = 0;
+      }
+      return { ok: true, message: cmd.order ? `${a.name} is stationed at ${sim.world.prov[cmd.order.province].name}.` : `${a.name} has no standing order.` };
     }
     case 'split': {
       const b = doSplit(sim, cmd.army, cmd.counts);
