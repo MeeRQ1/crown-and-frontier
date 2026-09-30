@@ -19,13 +19,13 @@ place and event is fictional.
 
 | | Aldmere (standard campaign) | The Reach (quick campaign) |
 |---|---|---|
-| Provinces | 298 (33 unclaimed) | 99 (12 unclaimed) |
+| Provinces | 298 (34 unclaimed) | 99 (12 unclaimed) |
 | Realms | 14 | 9 |
 | Regions | 42 | 14 |
 | Mountain ranges and passes | Greyspine (Northgate, Kestrel Pass, Southern Gap), Hoarfells (Glen Ardach), Frostfangs (Frostgate), Iron Teeth (the Iron Gate) | Greyspine: three passes |
-| Rivers | Aldwater, Vess, Serre, Drevna, Kolva, Tarn: 62 river borders | none |
+| Rivers | Aldwater, Vess, Serre, Drevna, Kolva, Tarn: 65 river borders | none |
 | Straits | 15 | 10 |
-| Graph diameter | 28 provinces | 15 provinces |
+| Graph diameter | 26 provinces | 15 provinces |
 | Default length | 60 years (40 / 60 / 80) | 40 years (25 / 40 / 60) |
 
 The nine realms of the Reach return on Aldmere with larger holdings, joined by Carrow
@@ -453,15 +453,33 @@ default and disclosed in the setup screen and the game menu.
 
 ## Balance assumptions and evidence
 
-The numbers above were tuned against AI-only campaigns (`npm run sim`). The latest batch is in
-`reports/ai-campaigns.md` (seeds, difficulties, winners, war counts, bankruptcies, idle-army
-share, performance). Observations that drove the tuning:
+The numbers above were tuned against AI-only campaigns (`npm run sim`). The latest batches
+are in `reports/ai-campaigns-aldmere.md` and `reports/ai-campaigns.md`. They record seeds,
+difficulties, winners, war counts, bankruptcies, idle-army share and performance.
+Observations that drove the tuning:
 
 - **Too easy to win diplomatically:** diplomatic victory in about 6 years. Fixed with older-treaty influence, trust 65, a 60-month hold and rival counter-play.
 - **Frozen world:** pacts everywhere meant no wars. Fixed so aggressive temperaments refuse pacts that bind them, and pacts last 5 years.
 - **Useless late-game money:** treasuries of 30k+ because every province maxed its development by year 20. Fixed with escalating costs, the soft cap and charters.
 - **Alliance deterrence froze the map:** fixed by weighting allies by reach and adding restlessness.
 - **Then too hard to win diplomatically:** once rival wariness replaced alarm, no AI realm won diplomatically in 30 campaigns. Every broken streak was a partner's opinion slipping below 40 under small stacked penalties (border friction, claims, alarm from the diplomat's own conquests, wariness). The partner threshold is now 35.
-- **Remaining skew:** Aurel's plains economy and Tarsk's steppe geography win most AI-only
-  campaigns. Istrel and Calder tend to shrink, as do Morvaine and Vostmark between their larger neighbours. See STATUS.md.
-  These are small samples and diagnostic, not proof of balance.
+- **Aldmere, first batches:** Lessia won every early campaign on score, and Morvaine and
+  Hrafnmark collapsed between neighbours who could all attack them at once. The fixes were:
+  - crossroads caution (the *Exposure* term under AI);
+  - declining second fronts;
+  - front posts for idle armies;
+  - poorer Lessian lands and stronger Carrow and Hrafnmark (fortresses, wealth, morale).
+
+  Three other exposure formulas were tried and rejected, because each broke one map while
+  fixing the other. They are listed in STATUS.md.
+- **Large peaces on Aldmere:** a beaten AI realm concedes the land its enemy occupies. On
+  Aldmere that can be 10 provinces in one treaty. A province's cost is its share of the giving
+  realm's weight (floor 5), so this is the same share of a realm as 3 or 4 provinces on the
+  Reach. The rule was left as it is.
+- **Remaining skew:** the richest heartland wins most AI-only campaigns on both maps:
+  - Aldmere: Lessia 13 of 30, Tarsk 7, Aurel 5.
+  - The Reach: Aurel 15 of 30, Tarsk 8.
+
+  On Aldmere, Hrafnmark, Vostmark, the Ashmark and Carrow shrink on average. Serennes, Istrel
+  and Solmarre rarely go to war. See STATUS.md for the tables. These are small samples and
+  diagnostic, not proof of balance.

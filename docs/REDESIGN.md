@@ -107,11 +107,11 @@ The plan held. These are the places where the build differs from it, and why.
 | Provinces | 99 | 298 (3.0×) |
 | Realms | 9 | 14 |
 | Regions | 14 | 42 |
-| Unclaimed frontier | 12 | 33 |
-| Span (graph diameter, in provinces) | 15 | 28 |
-| Median province area | 23.0k units² | 18.8k units² |
+| Unclaimed frontier | 12 | 34 |
+| Span (graph diameter, in provinces) | 15 | 26 |
+| Median province area | 23.0k units² | 18.7k units² |
 | Mountain passes | 3 | 6, across 4 ranges |
-| River borders | 0 | 62 (6 rivers) |
+| River borders | 0 | 65 (6 rivers) |
 | Straits | 10 | 15 |
 
 - **14 realms, not 16.** The nine realms of the Reach return, scaled up, and five new ones join
@@ -131,6 +131,17 @@ The plan held. These are the places where the build differs from it, and why.
 
 ### Interface
 
+- **Names never overlap at rest.** Each frame places names against one collision list, in this
+  order of precedence:
+  1. markers;
+  2. capital names;
+  3. seas, ranges and lakes;
+  4. realm names, each with up to four frames to try (level or steeper, in different parts of
+     the realm);
+  5. province names.
+
+  Realm names fade out between about 78 and 100 px per province, as province names take over.
+  The first version let realm names run through province names at the default zoom.
 - The menu's atlas backdrop is painted once and drifted by a CSS transform. Redrawing it every
   frame cost 50–100 ms per frame in software rendering.
 - Diplomacy keeps the map on **our** relations and outlines the chosen realm; one button

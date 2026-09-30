@@ -1,210 +1,195 @@
 # Status
 
-Last updated at the release-candidate checkpoint (schema 1, version 0.1.0).
+Last updated at the redesign checkpoint: the living-atlas interface and the expanded standard
+world (save schema 1, version 0.2.0). The previous release is `main` at c29aea6.
 
 ## Evidence, kept separate
 
 | Kind | What was done | Where |
 |---|---|---|
-| Automated tests | 53 Vitest tests: rule boundaries, the combat worked examples, sieges, diplomacy conflicts, separate peace, stranded armies, rival reactions, elimination, progression, events, victory timing, determinism, save/load equivalence mid-war, replay of player commands, content validation, and 12-year AI campaigns with invariants | `tests/`, `npm test` |
-| AI-only campaigns | 30 full 40-year campaigns (seeds 1–10 × easy/normal/hard) through the real simulation | `reports/ai-campaigns.md`, `npm run sim` |
-| Browser verification | 25 automated checks in headless Chromium 141: site root, project sub-path, unpacked ZIP, iframe (resize, wheel isolation), hidden tab, audio gating, keyboard, slot save/load, export/import, damaged import, blocked storage, five laptop/Chromebook sizes and UI scaling, phone touch, performance probe | `reports/web-verification.md`, `npm run verify:web` |
-| Player-style campaign (my own, not a real playtest) | One full 40-year campaign as Calder (normal, seed 2024), played decision by decision through the same command API the UI uses; the second half partly on a simple autopilot. Findings and fixes below | "Player-style campaign" section |
-| Flows I exercised by script (with screenshots reviewed) | New campaign → select capital → start a project → recruit → select army → route preview → right-click move → run time → answer proposals and events → every ledger → phone layout; declare war from Diplomacy → march via "Set destination" → battles → peace builder preview and send | `e2e/playthrough.mjs`, `e2e/war-flow.mjs` |
-| External player feedback | **None yet.** Whether the game is fun, readable and well paced for real players is untested. | — |
+| Automated tests | 66 Vitest tests. The 53 from the previous release still pass, plus new ones: Aldmere's validity, connectivity and homelands; fortified passes; river borders and the river combat rule; Hrafnmark's straits; five AI years on Aldmere; army groups, station orders and waypoints; front detection for multi-front wars; and a real save from the previous release that loads on the Reach, plays a year and re-saves | `tests/`, `npm test` |
+| AI-only campaigns | 30 campaigns on each map (seeds 1–10 × easy/normal/hard): Aldmere 60 years, the Reach 40 years | `reports/ai-campaigns-aldmere.md`, `reports/ai-campaigns.md`, `npm run sim` |
+| Browser verification | 27 automated checks, all passing, in headless Chromium 141. Covered: site root and project sub-path (both starting Aldmere), unpacked ZIP, choosing the Reach and a realm in setup, map-mode and navigation keys, iframe (resize, wheel isolation), hidden tab, audio gating, keyboard, slot save/load, export/import, damaged import, blocked storage, five laptop sizes and UI scaling, phone touch, and a performance probe | `reports/web-verification.md`, `npm run verify:web` |
+| Screenshots | Before (previous release) and after, from the same scripted tour (Calder, seed 7, 30 weeks), at 1366×768 and 390×844: the Reach (matching pairs) and Aldmere | `docs/screenshots/`, `e2e/capture.mjs` |
+| Flows I exercised by script, with screenshots reviewed | Menu → setup (both maps, several realms) → campaign; every ledger at laptop and phone size; army groups and orders; attention list and decisions mid-war; settings, how to play, load; menu, setup and ledgers at phone size | `.scratch` scripts during development; `e2e/capture.mjs` |
+| External player feedback | **None.** No one but me has played the redesign. | — |
 
-## Requirement ledger
+## The redesign brief: requirement ledger
 
-**Status key:** ✅ implemented and exercised · 🟡 implemented with a known gap · ⏸ deferred by design.
+**Status key:** ✅ implemented and exercised · 🟡 implemented with a known gap · ⏸ not done.
 
-### World, map and economy
+### Interface
 
-| Requirement | Module(s) | Status | Evidence |
+| Requirement | Where | Status | Evidence |
 |---|---|---|---|
-| Territory map: ownership, terrain, borders, routes, inspection | `src/data/reach.ts`, `tools/genmap.ts`, `src/ui/map/renderer.ts`, `panels/context.ts` | ✅ | 99 provinces, 9 realms, Greyspine passes test, screenshots |
-| 80–120 provinces, 8–12 nations, defensible routes | `reach.ts` | ✅ | scenario test |
-| Economy: income, upkeep, investment, recruitment, stockpile limits, deficit stages | `economy.ts`, `military.ts`, `construction.ts` | ✅ | economy tests; debt-stage test |
-| Population ↔ output ↔ manpower without double counting | `economy.ts`, `military.ts` | ✅ | "pool never exceeds reserve − serving", recruitment conservation tests |
-| Movement: legal paths, terrain/roads/straits, arrival estimates, invalidated routes, crossings | `movement.ts` | ✅ | movement tests |
-| Supply: connection, range, capacity, causes and remedies, graduated penalties | `supply.ts`, `military.ts` | ✅ | supply tests; army panel |
+| Inspect the current build before designing | `docs/REDESIGN.md`, `docs/screenshots/before/` | ✅ | baseline tour and written diagnosis |
+| Shared design system: tokens, type, components | `src/ui/style.css`, `fonts.ts`, `icons.ts`, `heraldry.ts` | ✅ | one token set; three OFL fonts bundled locally |
+| Map-dominant layout, compact controls | `app.ts`, `style.css` | ✅ | laptop and phone screenshots |
+| Resource bar: current, net, commitments, urgent problems | `panels/hud.ts` | ✅ | underline states, tooltips with breakdowns, alert chips |
+| Context panels with obvious selections and primary actions | `panels/inspector.ts` | ✅ | province and army cards; "March here" |
+| Faction identity: heraldry, banners, selected and hover states | `heraldry.ts`, `map/renderer.ts` | ✅ | shields on markers, lists and sheets |
+| Tooltips, disabled-action reasons, battle forecasts, diplomatic feedback | `panels/common.ts`, `dom.ts`, inspector, Diplomacy | ✅ | forecasts incl. river crossings; treaty verdicts with reasons |
+| Notifications that inform without interrupting | toasts, attention list, decision dock | ✅ | decisions dock above the map; "Later" folds them |
+| Restrained motion with reduced-motion support | `camera.ts`, CSS | ✅ | setting plus system preference; backdrop drift stops |
+| Discoverable controls and shortcuts | How to play, Help ledger, tooltips | ✅ | keys listed on screen and in the README |
+| Menu and setup that communicate identity, map previews, start information | `screens.ts`, `atlas-view.ts` | ✅ | live map preview framed on the chosen realm; neighbours, passes, rivers, frontier, claims |
+| Every visible control works or explains why not | throughout | ✅ | disabled buttons carry reasons; verify-web clicks through the main flows |
 
-### Combat, infrastructure and progression
+### Map
 
-| Requirement | Module(s) | Status | Evidence |
+| Requirement | Where | Status | Evidence |
 |---|---|---|---|
-| Combat: composition, numbers, morale, tech, terrain, entrenchment, supply, bounded rolls | `combat.ts` | ✅ | three worked examples as tests; `npm run examples` |
-| Reinforcement, retreat, surrender, pursuit, casualty accounting, multi-nation sides | `combat.ts` | ✅ | combat tests |
-| Occupation and sieges distinct from battles | `siege.ts` | ✅ | siege tests |
-| Infrastructure, branching research, policies with cooldowns | `construction.ts`, `progression.ts`, `data/` | ✅ | progression tests |
-| Frontier integration and occupation costs (the distinguishing system) | `integration.ts`, `economy.ts`, `supply.ts`, `victory.ts` | ✅ | integration gates in UI and tests |
+| Coastlines, terrain, borders, colours, labels, capitals, markers, routes, occupation | `map/basemap.ts`, `map/renderer.ts` | ✅ | screenshots at three zoom levels |
+| Geographic structure: ranges, valleys, rivers, lakes, seas, landmarks | `tools/aldmere.spec.ts` | ✅ | 4 ranges, 6 passes, 6 rivers, 3 lakes, 6 named seas |
+| Features presented as affecting movement or combat match rules | `movement.ts`, `combat.ts`, Terrain legend | ✅ | ranges impassable except passes; river +20%; straits +2 (Hrafnmark 0); no decorative "fords" |
+| Zoom-dependent detail (far, medium, close) | `renderer.ts` tiers | ✅ | realm names far; province names, terrain, armies medium; forts, roads, sieges close |
+| No overlapping labels | `renderer.ts` | ✅ | one collision list per frame, in order of precedence: markers, capital names, seas, ranges and lakes, realm names (up to four frames each, then shrunk), province names. Realm names fade out as province names take over |
+| Smooth pan and zoom, limits, fit, reset, jump to capital, army, battle, alert | `camera.ts`, `mapui.ts` | ✅ | nav cluster and keys; eased flights |
+| Panels leave key locations visible | camera insets | ✅ | centring accounts for drawer, inspector, legend and tutorial |
 
-### Diplomacy, events and victory
+### Larger world
 
-| Requirement | Module(s) | Status | Evidence |
+| Requirement | Where | Status | Evidence |
 |---|---|---|---|
-| Diplomacy: relations, NAP, trade, alliance, war, peace, explained acceptance | `diplomacy.ts`, `war.ts` | ✅ | diplomacy tests; acceptance-reasons test |
-| Coalitions reacting to expansion | `diplomacy.ts`, `ai/strategic.ts` | ✅ | 4.4 coalitions and 1.0 coalition war per campaign (alarm now comes from conquest and territorial or economic bids only) |
-| War goals, war score, exhaustion, separate peace, no unresolvable wars | `war.ts` | ✅ | 0 forced peaces in 30 campaigns; separate-peace test |
-| Events with conditions, cooldowns, affordability, no save-scumming | `events.ts`, `data/events.ts` | ✅ | events tests (determinism, cooldowns, defaults) |
-| Three distinct victory paths, visible progress, simultaneous and limit rules | `victory.ts`, Victory ledger | ✅ | victory tests; campaigns ended by territorial (2), diplomatic (3), economic (2) and score (23) |
-| Understandable defeat; capital loss not instant; post-result continuation | `victory.ts`, `war.ts`, end screen | ✅ | elimination and capital relocation code; end screen |
+| About 3× the provinces | Aldmere | ✅ | 298 vs 99 |
+| Distinct regions, multiple fronts, passes, interiors, frontier | Aldmere | ✅ | 42 regions; Hollow Vale interior; 34 unclaimed |
+| Varied starts with viable options | realm definitions, setup sheet | 🟡 | varied by design; AI results show the wealthy central starts win most (see below) |
+| Islands reachable; visible connections match legal routes | generator, `world.ts` | ✅ | test: every province reachable; every strait is an adjacency |
+| Rebalanced travel, supply, economy, diplomacy, AI, victory thresholds | config, per-map rules | ✅ / 🟡 | per-map victory thresholds and tech costs; balance skews remain |
+| Army grouping, persistent orders, navigation shortcuts, regional summaries | inspector, Military ledger | ✅ | groups 1–9, station orders, Shift+N, fronts and regions |
+| AI manages the larger map: supply, fronts, achievable objectives | `ai/` | ✅ / 🟡 | crossroads caution, second-front refusal, front posts; see balance |
+| Keep the small map as a quick campaign; shared systems and definitions | `world.ts`, `tools/mapgen/core.ts` | ✅ | one core; the Reach byte-identical |
+| Existing saves keep their original map | `save.ts`, test fixture | ✅ | previous-release save loads on the Reach |
+| Validate connectivity, starts, pathfinding, supply, AI, completion, saves, rendering | tests, sim batches, verify-web | ✅ | 0 invariant failures in 60 campaigns; tests check that every province is reachable, strait costs and waypoint routes |
 
-### AI
+### Map options, browser and delivery
 
-| Requirement | Module(s) | Status | Evidence |
+| Requirement | Where | Status | Evidence |
 |---|---|---|---|
-| AI on the same rules and command path | `ai/*`, `commands.ts` | ✅ | AI issues only `applyCommand`; rejected orders logged |
-| Strategic, operational and execution layers; utility scores; commitment | `ai/strategic.ts`, `ai/operational.ts` | ✅ | diagnostics; campaigns |
-| Four or more personalities; three difficulties by decision quality | `data/personalities.ts`, `ai/common.ts` | ✅ | DESIGN.md tables |
-| AI diagnostics | `state.diagnostics`, Chronicle → bug report | ✅ | exported in bug reports |
+| Map modes with legends and explanations, no hidden information revealed | `map/modes.ts` | ✅ | 7 modes; everything shown is public (as before, no fog of war) |
+| Presentation controls, persisted | `settings.ts`, presentation panel | ✅ | labels, terrain detail, borders, armies, patterns, legend |
+| Overlays distinct from campaign map choice | modes vs setup | ✅ | modes on the map; map choice only in setup |
+| Laptops, Chromebooks, touch; no hover-only essentials | CSS, input | 🟡 | verified at 1024–1920 widths and a 390-px phone in Chromium; **no real Chromebook or touch device** |
+| Fast loading; local, licensed assets | fonts, lazy map chunks | ✅ | menu shown in about 120 ms (headless); Aldmere geometry 88 KB gzipped, loaded on demand |
+| Accessibility: contrast, UI scaling, ownership beyond colour | settings | ✅ | patterns, UI scale 85–130%, keyboard focus handling |
+| Profile, cache, cull; worker only if justified | tiles, caches, heap pathfinding, claim index | ✅ | no worker: see Performance |
+| Refreshes don't swallow clicks, reset forms or move focus | `dom.ts` `rebuild` | ✅ | focus and scroll restored; no rebuild while pointer is down |
+| Static build, sub-path, iframe, export/import; no backend | unchanged | ✅ | verify-web |
+| Draft PR, not merged | PR #2 | ✅ | — |
 
-### Interface, persistence and delivery
+## Measured performance
 
-| Requirement | Module(s) | Status | Evidence |
+| What | Aldmere | The Reach | How |
 |---|---|---|---|
-| UI: overview, context panel, ledgers, notifications, visible reasons, overlays | `src/ui/` | ✅ | screenshots; verify:web |
-| Time controls, keyboard shortcuts, settings, reduced motion, UI scale, patterns | `app.ts`, `settings.ts` | ✅ | keyboard check; layout checks |
-| Tutorial: short, skippable, legal suggestions | `tutorial.ts` | ✅ | suggestions checked against `buildProblem` / `recruitProblem` |
-| Save/load, autosave, export/import, versioning, damaged-file handling | `save.ts`, `ui/storage.ts` | ✅ | persistence tests; browser save checks |
-| Seeded, persisted PRNG; deterministic replay; reproducible bug reports | `rng.ts`, `replay.ts`, `tools/replay.ts` | ✅ | determinism and replay tests |
-| Static build, relative paths, sub-path, iframe, ZIP, CI, Pages workflow | `vite.config.ts`, `tools/`, `.github/workflows/` | ✅ / 🟡 | verified locally; **Pages not yet enabled and no live URL** |
-| Performance measured | `verify-web.ts`, `sim-cli.ts` | 🟡 | measured in a container with headless Chromium, **not on a Chromebook** |
-| Fog of war | — | ⏸ | deliberately not implemented; stated in Help |
-| Naval warfare, multiplayer, espionage, dynasties, production chains | — | ⏸ | out of scope per the brief |
+| Simulation per week, average (AI running every realm) | 16.7 ms alone; 19.6 ms in the batches | 3.8 ms | per-phase timing script (seed 1, 30 years); `npm run sim`, Node 22, three batches sharing four cores |
+| Slowest weeks | p99 37 ms; worst 69 ms (the first AI week). The batches saw one 263 ms week while sharing the CPU | worst 171 ms in the batches | per-phase timing script, 30 years; batch reports |
+| Map draw while panning, average (far / medium / close) | 3.0–3.7 / 6.2–6.5 / 2.2–2.3 ms | 2.7–3.8 / 2.9 / 2.5–2.8 ms | two runs, headless Chromium, software rendering, 1366×768 |
+| Map draw while panning, p95 | 5.1–6.7 / 17–18 / 6–10 ms | 5–7 / 4–5 / 15–16 ms | same; the high p95 values are terrain tiles being painted as they scroll into view |
+| Browser probe at fastest speed | 40–44 fps; map draw 6.4–7.4 ms average (p95 11.5–12.0 ms); 35 weeks simulated in 6.0 s (6 a second is the target); JS heap 15–19 MB | — | `verify:web`, two runs, headless Chromium, software rendering |
+| Download: map geometry, gzipped | 88 KB | 75 KB | loaded when a campaign on that map starts |
 
-## Milestone exit checks
+At the fastest speed (6 weeks a second) Aldmere's simulation takes about 10–12% of the main
+thread, so a worker was not justified. A rare slow week (40–70 ms) can drop a frame or two;
+that is noted below.
 
-1. **Playable core.** ✅ You can launch, invest, recruit, move, fight, gain control, settle a war and
-   finish or lose a campaign; the AI does all of these unscripted.
-2. **Interconnected strategy.**
-   - ✅ Economic choices bound war capacity (the budget, manpower and supply caps on the AI army target).
-   - ✅ Terrain and supply change battles (worked examples).
-   - ✅ Research branches compete (about 9 of 18 techs by year 20).
-   - ✅ Treaties change legal actions (pact, truce and alliance tests).
-   - ✅ Save/load works mid-war.
-3. **Credible opponents.** ✅ The AI fights on several fronts, ends bad wars (49 peace treaties per campaign,
-   0 forced), reacts to expansion (coalitions) and pursues victory (rival reactions). 🟡 Winners are
-   still concentrated (see below).
-4. **Release candidate.** ✅ Tutorial, settings, reports, persistence hardening, static delivery and
-   documentation. 🟡 No external playtest yet; no real-device or cross-browser testing.
+## Balance on the two maps
 
-## Player-style campaign (own exercised flow)
+Both batches are AI-only (every realm run by the AI), seeds 1–10 at each of easy, normal and
+hard. The full tables are in `reports/ai-campaigns-aldmere.md` and `reports/ai-campaigns.md`.
 
-This is my own play, not external feedback. I played Calder (normal difficulty, seed 2024,
-40 years) through the simulation's command API with a small text harness: I read a digest of
-the realm, chose orders, and advanced until the next decision. The harness stops for events,
-proposals and urgent news, which covers the UI's default auto-pause settings. From 1648 onward a simple autopilot answered events
-and kept construction and research busy, while I made the war, peace and treaty decisions
-myself. I did not play it in the browser.
+| | Aldmere (60 years) | The Reach (40 years) | The Reach, previous release |
+|---|---|---|---|
+| Winners | Lessia 13, Tarsk 7, Aurel 5, Drevenholt 2, Vostmark 1, Morvaine 1, Solmarre 1 | Aurel 15, Tarsk 8, Fenward 3, Serennes 2, Morvaine 1, Calder 1 | Aurel 12, Tarsk 11, Serennes 2, Drevenholt 2, Fenward 2, Calder 1 |
+| Won by a victory path before the limit | 13 of 30 (economic 6, territorial 6, diplomatic 1) | 12 of 30 (economic 5, territorial 4, diplomatic 3) | 7 of 30 |
+| Average length | 55.6 years | 36.0 years | 38.1 years |
+| Wars / battles per campaign | 45.4 / 325 | 26.8 / 95 | 30.2 / 116 |
+| Coalitions formed per campaign | 12.6 | 3.9 | 4.4 |
+| Realms eliminated per campaign | 0.07 (Vostmark, twice) | 0.03 | 0.03 |
+| Bankruptcies, invariant failures | 0, 0 | 0, 0 | 0, 0 |
+| Simulation per week, average | 19.6 ms | 3.8 ms | 3.2 ms |
 
-**What happened.**
+**What the Aldmere batches showed, and what I changed.** In the first Aldmere batch Lessia won
+all 6 campaigns on score, while Morvaine and Hrafnmark collapsed. I made four kinds of change.
+Each was checked with a batch on both maps, so that a fix for Aldmere did not break the Reach:
 
-1. **Opening, 1640–41.** Four trade agreements doubled net income in two months (9 → 21
-   crowns a month). I spent the money on development and roads rather than troops.
-2. **First war, 1641–42.** Vostmark (expansionist) attacked with 10 regiments against my 8
-   and took Harrowgate. A raid into unfortified Faltrip pulled its army off my besieged
-   capital, but I still had to cede Harrowgate after three lost battles.
-3. **Diplomacy, 1643–58.** With the army capped by manpower at about 9 regiments, I turned to
-   diplomacy: envoys, Diplomatic Corps, Resident Embassies and Concert of Crowns. The race for
-   Diplomatic Leadership was crowded, with Serennes, Fenward, Istrel, Aurel and Tarsk all
-   qualifying at times. Twice (Serennes in 1646, Fenward in 1647) I reset a rival's timer by cancelling my own
-   treaties with it, and gave up my own progress to do it.
-4. **Wars late in the campaign.** Twice Fenward called me to arms against Vostmark.
-   - In 1658 I joined and then made a separate white peace.
-   - In 1666 I stayed in instead: a separate peace would have pushed Fenward's opinion below
-     the diplomatic threshold. I lost the battle at Caldris, but the war ended without
-     Calder losing land.
-   - In 1670 Tarsk, a trade partner reacting to my diplomatic lead, attacked. I ceded Pellin
-     and 200 crowns.
-5. **End, 1680.** I re-qualified and held the diplomatic conditions for 36 of the 60 months
-   before the limit. Aurel won on score. Calder survived in 6th place (165 against 318).
+1. *AI caution about open borders.* Realms with many unfriendly neighbours now weigh the
+   potential of those neighbours before declaring war, scaled so that a realm with only one or
+   two open borders is unaffected. Three other formulas were tried and rejected: counting every
+   unbound neighbour gave Tarsk 5 territorial wins on the Reach; switching the weight off
+   brought the Aldmere collapses back; counting only hostile neighbours let Aurel win 5 campaigns on Aldmere.
+2. *Second fronts.* An AI realm already at war with war exhaustion of 25 or more now declines a
+   call to arms that would open a second war.
+3. *Front posts.* Idle armies in wartime now cover the front with the largest threat gap. On
+   Aldmere most realms have two or three fronts, and armies used to wait at the capital.
+4. *Realm and map tuning.*
+   - Lessia's lands were made less rich: the Lessian Vale went from wealth 3.5 to 2.7, the
+     delta from 3.0 to 2.4, and the upper Aldwater from 2.6 to 2.4 with one province fewer.
+     Its barge income fell from +15% to +10%, and it took −15% manpower.
+   - Carrow's glens and firths became richer. Its income penalty fell from −15% to −10%, and
+     it gained a fortified hill province, Carrick Fell, facing Vostmark.
+   - Hrafnmark gained a peninsula province and a fortress on the neck of its peninsula
+     (Skjoldheim), plus +0.25 morale.
+   - The Ashmark became defensive rather than expansionist.
 
-**Did decisions matter?** Yes, in every phase:
+Between the last two batches the Aldmere winners went from 4 realms to 7, and eliminations
+from 0.17 to 0.07 per campaign. Lessia's wins on hard went from 7 of 10 to 2 of 10.
 
-- trade versus troops early on;
-- where to give battle (the forecasts were right each time I checked them);
-- raids against unfortified provinces;
-- whose treaties to keep or cut in a victory race;
-- whether to answer a call to arms or leave it.
+**What remains.** Lessia still wins 13 of 30. I traced two of its wins with
+`tools/trace-realm.ts`. In seed 1 it took 29 provinces from Tarsk in three wars, and the
+largest single peace gave it 10 provinces. In seed 4 it took 13 from Tarsk and 6 from
+Morvaine. The large peaces are Tarsk conceding land that Lessia already occupies. A province's
+peace cost is its share of the giving realm's weight, with a floor of 5, so this is the same
+proportion a 10-province realm on the Reach concedes. It is not an effect of map size, and I
+left the rule unchanged. The underlying cause is economic: the Aldwater valley is the richest
+land on the continent, and Lessia fields the largest armies next to Tarsk, whose steppe is
+poor. The Reach has the same pattern with Aurel's plains, and so did the previous release.
 
-**Problems found and fixed in this pass:**
-
-- **Separate peace.** The attacker's "war goals are unmet" penalty was applied to a
-  secondary defender who could never meet it. It now applies only to the war's target.
-  Leaving a war early now costs 15 opinion with the allies left fighting, so joining a call
-  to arms and leaving at once is not free.
-- **Rival reaction to a diplomatic leader.** It added alarm, which was shown as "Alarmed by
-  their expansion" and formed a coalition "because of rapid expansion" against a realm that
-  had not expanded. The alarm and coalition reaction is now reserved for territorial and
-  economic leaders. A diplomatic leader faces wariness instead: at most −25 opinion, with
-  its own label. Coalition notices now name the real cause.
-- **No defensive forecast.** The army panel only forecast battles we start. It now shows
-  "Incoming attack", or "If they attack us at …" on an enemy army, from the defender's side.
-- **Counterplay was invisible.** The Victory ledger now tells you how to stop the leading
-  rival on each path. For diplomacy this includes which partners supply its influence.
-- **Unanswerable calls to arms were silent.** When the player could not join an ally's war
-  because of a conflicting treaty, only the ally was told. Now the player is told too.
-- **Stranded armies.** An AI whose armies were cut off from home kept re-issuing the same
-  impossible move every week. That flooded the diagnostics buffer (400 entries) and pushed
-  out useful records. The AI now checks the route first. Armies of either side left in a
-  friend's land with no legal route home now return under safe conduct.
-- **Diplomatic path too hard after the fix above.** With wariness replacing alarm, no AI realm won
-  diplomatically in a 30-campaign batch. Every broken streak was a partner's opinion slipping
-  below 40, so the partner threshold is now 35. My campaign was played at 40.
-- **All research done.** After every technology was researched (about year 32 for rich
-  realms), the UI still demanded a new choice and AI realms kept paying for research. Both
-  are fixed. The research warning now also says correctly that progress banks up to 60
-  points.
-
-**Pacing notes, not changed:**
-
-- The first technology takes about 2 years at default funding. Higher funding is the lever.
-- 60-month truces after the 1641 wars produced a 3-year lull. At the fastest speed that is
-  about 25 seconds of real time, with events and envoys in between.
-- Crowns pile up in peacetime for a small realm whose army is capped by manpower. With both
-  construction slots busy I still ran 400–900 crowns late in the game, and nothing but
-  research funding and more expensive units soaks that up.
+Three other skews remain:
+- **Shrinking realms:** Hrafnmark (14 → 9.3 provinces on average), Vostmark (20 → 15.3), the
+  Ashmark (15 → 11.8) and Carrow (13 → 11.9) lose ground on average.
+- **Passive realms:** Serennes, Istrel and Solmarre declare almost no wars.
+- **Victory thresholds:** I did not lower them to force more path victories; 17 of 30 Aldmere
+  campaigns still end on score at the limit.
 
 ## Known issues and limitations
 
-- **Balance.** In AI-only play Aurel (12/30) and Tarsk (11/30) win most campaigns, and 23 of 30 end
-  at the time limit on score. Each victory path wins only 2–3 of 30. Morvaine, Istrel, Vostmark and
-  Calder usually end smaller. Serennes (a diplomat) keeps armies idle during 31% of its war weeks: its
-  fronts are usually beyond supply reach. These samples are diagnostic, not proof of balance, and
-  **no one other than me has played a campaign**. Mine was played through the command API, not the
-  browser (see above).
-- **Late-game money.** Treasuries of 500–1,500 crowns build up after year 20. Once development and
-  research run out there is little left to buy (seen both in AI batches and in my campaign).
-- **AI.** It has no naval or strait-crossing strategy beyond normal pathing. It does not anticipate
-  the enemy's reinforcements in forecasts. Allies that join defensive wars far from home rarely
-  contribute troops.
-- **Performance.** A worst-case simulation week took 56 ms in the latest CLI batch (35–123 ms in earlier ones). That is fine at normal
-  speed, but at the fastest speed a rare slow week may skip a frame.
-- **Browsers.** Only Chromium was verified. Firefox and Safari are untested; iOS Safari may partition
-  or clear storage in iframes.
-- **Saves.** There is no migration path yet. Any future schema change must add a migration or refuse
-  old saves, which the current code already does with a clear message.
+- **Balance:** Lessia wins 13 of 30 AI-only campaigns on Aldmere and Aurel 15 of 30 on the Reach: the
+  richest heartland wins most often on both maps. Hrafnmark, Vostmark, the Ashmark and Carrow
+  shrink on average. The investigation and the rejected fixes are under *Balance on the two
+  maps*. These are AI-only samples, not proof of balance, and **no one
+  other than me has played either map**.
+- **Passive diplomats:** Serennes, Istrel and Solmarre rarely declare war on Aldmere and keep
+  armies idle about half of the time. That fits their temperaments, but it means those realms
+  rarely take part in the continent's wars unless attacked.
+- **Late-game money:** AI treasuries pile up (tens of thousands of crowns by year 60 on
+  Aldmere) once development caps and the tech tree run out. Crowns have no late-game sink.
+- **Slow weeks:** a rare simulation week takes 40–70 ms on Aldmere, which can drop a frame at
+  the fastest speed.
+- **Browsers:** only Chromium was verified. There was no Firefox or Safari run, and no real
+  Chromebook or touch device.
+- **Army glide:** armies move along their route by progress between weeks. There is no
+  per-frame animation between ticks.
+- **Hosting:** GitHub Pages is still not enabled and no live URL exists.
 
-## Next milestone
+## Next steps
 
-1. **External playtest:** 3–5 players, one full campaign each, noting confusion points, downtime and
-   whether decisions feel consequential.
-2. **Balance pass:**
-   - AI-only: Aurel's plains advantage (development caps or a stronger constraint); smaller
-     defensive realms (earlier alliances, forts at chokepoints).
-   - Player: the economic victory threshold.
-3. **Cross-browser:** Firefox and Safari runs of `verify:web` (Playwright supports both engines), and a
-   check on a real Chromebook.
-4. **Hosting:** enable GitHub Pages, verify the live URL, and add it to the README.
+1. **External playtest** on both maps (3–5 players): readability of the atlas at each zoom,
+   whether the setup screen explains starts well enough, and pacing on Aldmere.
+2. **Balance:** the wealthy central starts on Aldmere (Lessia, Aurel); small defensive realms
+   (Carrow, Hrafnmark); a late-game sink for crowns.
+3. **Cross-browser and devices:** Firefox and WebKit runs of `verify:web`; a real Chromebook
+   and a tablet.
+4. **Hosting:** enable GitHub Pages and verify the live URL.
 
 ## Continuation checkpoint
 
-- **Working state:** all commands below pass locally.
+- **Working state:** all of these pass locally.
   ```bash
   npm ci && npm run typecheck && npm test && npm run build && npm run package && npm run verify:web
-  npm run sim -- --seeds 1-10 --difficulty all --years 40 --out reports/ai-campaigns.md   # about 3 minutes here
+  npm run sim -- --scenario aldmere --seeds 1-10 --difficulty all --years 60 --out reports/ai-campaigns-aldmere.md
+  npm run sim -- --scenario reach --seeds 1-10 --difficulty all --years 40 --out reports/ai-campaigns.md
   ```
 - **Unresolved failures:** none.
-- **Next concrete task:** gather external playtest notes, then the balance pass above. Change numbers in
-  `src/sim/config.ts`, `src/data/reach.ts` and `src/sim/data/personalities.ts`, and re-run the
-  campaign batch after each change.
+- **Map changes:** edit `tools/aldmere.spec.ts` (geography, regions, fixed provinces) or
+  `src/data/aldmere.ts` (realms), run `npm run genworld`, then `npm test` and an AI batch.
+  `tools/trace-realm.ts` follows one realm's wars and gains or losses through a campaign.
