@@ -46,6 +46,8 @@ export interface UIState {
   dockOpen: boolean;
   dockItem: string | null;
   attentionOpen: boolean;
+  /** move orders apply to every army in the selected army's group */
+  groupOrders: boolean;
   /** legend panel open (starts closed on phones, where it would cover the map) */
   legendOpen: boolean;
 }
@@ -166,7 +168,7 @@ export class App {
   }
 
   private freshUI(): UIState {
-    return { peace: null, split: {}, ledgerTab: null, diploTarget: null, logFilter: 'all', inspectorPeek: false, presentationOpen: false, dockOpen: false, dockItem: null, attentionOpen: false, legendOpen: this.settings?.showLegend ?? true };
+    return { peace: null, split: {}, ledgerTab: null, diploTarget: null, logFilter: 'all', inspectorPeek: false, presentationOpen: false, dockOpen: false, dockItem: null, attentionOpen: false, groupOrders: false, legendOpen: this.settings?.showLegend ?? true };
   }
 
   get player(): NationId | null {
@@ -436,6 +438,7 @@ export class App {
         reducedMotion: s.reducedMotion,
         player: this.player,
         presentation: { labels: s.labelDensity, terrain: s.terrainDetail, borders: s.borderEmphasis, armies: s.armyMarkers, patterns: s.patterns },
+        outlineRealm: this.ui.ledgerTab === 'diplomacy' ? this.ui.diploTarget : null,
       },
       now,
     );
@@ -622,6 +625,7 @@ export class App {
   }
 
   selectArmy(id: string | null, center = false): void {
+    if (id !== this.selectedArmy) this.ui.groupOrders = false;
     this.selectedArmy = id;
     this.moveMode = false;
     this.ui.split = {};
@@ -677,8 +681,50 @@ export class App {
   orderMove(dest: ProvinceId, armyId?: string, append = false): void {
     const id = armyId ?? this.selectedArmy;
     if (!id) return;
+    const a = this.sim?.state.armies[id];
+    const group = a && this.ui.groupOrders && a.group ? this.groupArmies(a.group) : [];
+    if (group.length > 1) {
+      // every army of the group marches on its own best route
+      let ok = 0;
+      const why: string[] = [];
+      for (const g of group) {
+        const r = applyCommand(this.sim!, { type: 'move', nation: this.player!, army: g.id, dest, ...(append ? { append: true } : {}) });
+        if (r.ok) ok++;
+        else why.push(`${g.name}: ${r.reason}`);
+      }
+      this.toast(`Group ${a!.group}: ${ok} of ${group.length} armies marching to ${this.sim!.world.prov[dest].name}.${why.length ? ` ${why[0]}` : ''}`, why.length ? 'fail' : 'good');
+      this.sound.play(ok ? 'click' : 'alert');
+      this.cancelMoveMode();
+      this.refresh();
+      return;
+    }
     this.do({ type: 'move', army: id, dest, ...(append ? { append: true } : {}) }, true);
     this.cancelMoveMode();
+  }
+
+  /** The player's armies in a group, in id order. */
+  groupArmies(group: number): Army[] {
+    const sim = this.sim;
+    if (!sim || !this.player) return [];
+    return Object.values(sim.state.armies)
+      .filter((x) => x.nation === this.player && x.group === group)
+      .sort((x, y) => (x.id < y.id ? -1 : 1));
+  }
+
+  /** Select the next army group (Shift+N) with group orders on. */
+  cycleGroup(): void {
+    const sim = this.sim;
+    if (!sim || !this.player) return;
+    const groups = [...new Set(Object.values(sim.state.armies).filter((x) => x.nation === this.player && x.group).map((x) => x.group!))].sort((a, b) => a - b);
+    if (!groups.length) {
+      this.toast('No army groups yet: give armies a group number in their panel.', 'info');
+      return;
+    }
+    const cur = this.selectedArmy ? sim.state.armies[this.selectedArmy]?.group ?? 0 : 0;
+    const next = groups.find((g) => g > cur) ?? groups[0];
+    this.selectArmy(this.groupArmies(next)[0].id, true);
+    this.ui.groupOrders = true;
+    this.refresh();
   }
 
   setMode(m: MapMode): void {
@@ -778,10 +824,8 @@ export class App {
   openLedger(tab: LedgerTab): void {
     this.ui.ledgerTab = tab;
     this.drawerEl.classList.remove('closed');
-    if (tab === 'diplomacy') {
-      if (this.mode !== 'diplomacy') this.setMode('diplomacy');
-      this.focusNation = this.ui.diploTarget && this.ui.diploTarget !== this.player ? this.ui.diploTarget : null;
-    }
+    // the diplomacy map shows our relations; the chosen realm is outlined
+    if (tab === 'diplomacy' && this.mode !== 'diplomacy') this.setMode('diplomacy');
     if (tab === 'wars' && this.mode === 'political') this.setMode('military');
     renderLedger(this);
     this.updateInsets();
@@ -1214,6 +1258,7 @@ export class App {
     else if (lk === 'c') this.centreSelection();
     else if (lk === 'k') this.nextBattle();
     else if (lk === 'j') this.jumpToAlert();
+    else if (lk === 'n' && e.shiftKey) this.cycleGroup();
     else if (lk === 'n') this.cycleArmy();
     else if (k === 'Home') this.goCapital();
     else if (cam && (k === '+' || k === '=')) cam.zoomAt(cam.vw / 2, cam.vh / 2, 1.25);

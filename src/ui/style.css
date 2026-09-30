@@ -348,6 +348,8 @@ table.data tr.selected td { background: var(--brass-soft); }
   cursor: pointer;
 }
 .segmented button:hover { color: var(--text); background: rgba(255, 255, 255, 0.05); }
+.segmented.group-seg { display: flex; }
+.segmented.group-seg button { flex: 1; padding: 0; min-width: 0; }
 .segmented button.active { background: var(--ink-700); color: var(--paper-50); box-shadow: var(--shadow-1); }
 
 /* ── Form controls ───────────────────────────────────────────────────────── */
@@ -746,6 +748,56 @@ canvas.map.dragging { cursor: grabbing; }
 .modal > footer { display: flex; gap: var(--s4); justify-content: flex-end; flex-wrap: wrap; padding: var(--s5) var(--s7); border-top: 1px solid var(--line); background: rgba(0, 0, 0, 0.14); border-radius: 0 0 var(--r-xl) var(--r-xl); }
 .modal .illum { float: left; margin: 4px 14px 4px 0; font-family: var(--serif); font-size: 3.1em; line-height: 0.8; color: var(--seal-hi); }
 
+/* ── Military ledger ─────────────────────────────────────────────────────── */
+.army-table { display: flex; flex-direction: column; }
+.army-head, .army-row { display: grid; grid-template-columns: minmax(96px, 1.3fr) minmax(70px, 1fr) 52px 48px 56px 12px minmax(80px, 1.2fr); gap: var(--s3); align-items: center; }
+.army-head { font-size: var(--fs-xs); color: var(--text-3); text-transform: uppercase; letter-spacing: 0.06em; font-weight: 700; padding: 0 var(--s3) var(--s2); }
+.army-row { width: 100%; text-align: left; padding: 7px var(--s3); border: 1px solid transparent; border-radius: var(--r-sm); background: none; color: var(--text); cursor: pointer; font-size: var(--fs-sm); }
+.army-row:hover { background: rgba(255, 255, 255, 0.04); }
+.army-row.selected { background: var(--brass-soft); border-color: rgba(207, 170, 98, 0.45); }
+.army-row .ar-n { font-weight: 700; display: flex; align-items: center; gap: 6px; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.army-row .ar-loc, .army-row .ar-st { color: var(--text-2); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.army-row .ar-mix, .army-row .ar-men { font-variant-numeric: tabular-nums; color: var(--text-2); }
+.army-row .ar-st.bad { color: #ffb4a6; }
+.army-row .ar-st.warn { color: #f4d38a; }
+.dot { width: 9px; height: 9px; border-radius: 50%; background: var(--good); display: inline-block; }
+.dot.strained { background: var(--warn); }
+.dot.unsupplied { background: var(--bad); }
+.grp { display: inline-grid; place-items: center; min-width: 17px; height: 17px; padding: 0 3px; border-radius: 4px; background: var(--brass); color: #1b1712; font-size: 11px; font-weight: 800; }
+.grp.big { min-width: 24px; height: 24px; font-size: 13px; }
+.region-head { display: flex; align-items: center; gap: var(--s4); padding: var(--s4) var(--s3) var(--s2); border-top: 1px solid var(--line); margin-top: var(--s2); }
+.region-head:first-of-type { border-top: 0; }
+.region-head b { font-family: var(--serif); font-size: var(--fs-md); font-weight: 600; }
+.group-card { border: 1px solid var(--line); border-radius: var(--r-lg); padding: var(--s3); margin-bottom: var(--s4); background: var(--ink-850); }
+.gc-head { display: flex; align-items: center; gap: var(--s4); padding: var(--s2) var(--s3) var(--s3); }
+.front-row { display: flex; align-items: center; gap: var(--s4); padding: var(--s3) 0; border-bottom: 1px solid rgba(255, 255, 255, 0.05); }
+.front-row:last-child { border-bottom: 0; }
+details.section > summary { cursor: pointer; list-style: none; }
+details.section > summary::-webkit-details-marker { display: none; }
+details.section > summary::before { content: '▸'; margin-right: 6px; }
+details.section[open] > summary::before { content: '▾'; }
+
+/* ── Diplomacy ledger ────────────────────────────────────────────────────── */
+.diplo-summary { display: flex; flex-wrap: wrap; gap: var(--s3) var(--s6); margin-bottom: var(--s5); font-size: var(--fs-sm); color: var(--text-2); }
+.diplo-summary span { display: inline-flex; align-items: center; gap: 6px; }
+.diplo-summary .ico { width: 16px; height: 16px; color: var(--text-3); }
+.diplo-split { display: grid; grid-template-columns: minmax(150px, 180px) 1fr; gap: var(--s5); align-items: start; }
+.diplo-list { display: flex; flex-direction: column; gap: 1px; position: sticky; top: 0; }
+.dl-group { font-size: var(--fs-xs); color: var(--text-3); text-transform: uppercase; letter-spacing: 0.07em; font-weight: 700; padding: var(--s4) var(--s3) var(--s2); }
+.dl-group:first-child { padding-top: 0; }
+.diplo-item { display: flex; align-items: center; gap: var(--s3); padding: 6px var(--s3); border: 1px solid transparent; border-radius: var(--r-sm); background: none; color: var(--text); cursor: pointer; text-align: left; font-size: var(--fs-sm); }
+.diplo-item:hover { background: rgba(255, 255, 255, 0.04); }
+.diplo-item.selected { background: var(--brass-soft); border-color: rgba(207, 170, 98, 0.45); }
+.diplo-item .di-n { flex: 1; font-weight: 700; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.diplo-item .di-op { font-variant-numeric: tabular-nums; font-weight: 700; font-size: var(--fs-xs); }
+.diplo-item .di-al .ico { width: 14px; height: 14px; color: var(--warn); }
+.diplo-detail { min-width: 0; }
+.dd-head { display: flex; align-items: center; gap: var(--s4); }
+.dd-head h3 { margin: 0; font-size: var(--fs-lg); }
+.treaty { margin: var(--s2) 0; }
+.big.good { color: #a7dca9; }
+.big.bad { color: #ffb4a6; }
+
 /* ── Full screens (menu, setup, load, settings, end) ─────────────────────── */
 .screen { position: absolute; inset: 0; z-index: 70; overflow: hidden; background: var(--ink-900); display: flex; }
 .screen .screen-scroll { position: relative; z-index: 2; flex: 1; overflow-y: auto; }
@@ -891,6 +943,14 @@ table.data tr.me td { background: var(--brass-soft); }
   .setup { display: flex; flex-direction: column; overflow-y: auto; }
   .setup .col { overflow: visible; border: 0 !important; }
   .setup > * { flex: none; }
+  .diplo-split { grid-template-columns: 1fr; }
+  .diplo-list { flex-direction: row; overflow-x: auto; position: static; gap: var(--s2); padding-bottom: var(--s3); scrollbar-width: thin; }
+  .diplo-list .dl-group { display: none; }
+  .diplo-item { flex: none; border-color: var(--line); }
+  .army-head { display: none; }
+  .army-row { grid-template-columns: 1fr auto 60px; row-gap: 2px; }
+  .army-row .ar-mix, .army-row .ar-men, .army-row .ar-sup { display: none; }
+  .army-row .ar-st { grid-column: 1 / -1; }
   .setup-begin { display: flex; align-items: center; gap: var(--s4); position: sticky; bottom: 0; z-index: 3; padding: var(--s4) var(--s5) calc(var(--s4) + env(safe-area-inset-bottom)); background: rgba(11, 16, 21, 0.94); border-top: 1px solid var(--line); backdrop-filter: blur(6px); }
   .setup-begin .sb-realm { display: flex; align-items: center; gap: var(--s3); flex: 1; min-width: 0; font-family: var(--serif); font-weight: 600; }
   .setup-begin .sb-realm small { display: block; font-family: var(--sans); font-size: var(--fs-xs); color: var(--text-3); font-weight: 600; }

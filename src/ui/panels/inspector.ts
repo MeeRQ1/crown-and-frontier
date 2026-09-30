@@ -3,6 +3,7 @@
 // next, and details follow. Unavailable actions always say why.
 
 import { C, TERRAIN, UNITS } from '../../sim/config';
+import { checkCommand } from '../../sim/commands';
 import { forecastBattle } from '../../sim/combat';
 import { activeProjects, buildProblem, buildSlots, devCap, devMax, PROJECT_LABELS, projectCost } from '../../sim/construction';
 import { fabricateProblem } from '../../sim/diplomacy';
@@ -289,6 +290,7 @@ function armyCard(app: App, a: Army): HTMLElement[] {
       tile('Supply', `${Math.round(sup.level * 100)}%`, sup.connected ? `line ${sup.distance.toFixed(1)}/${sup.range}` : 'cut: foraging', 'Supply level here: capacity versus the regiments drawing on it, and whether a supply line reaches.'),
     ),
   );
+  if (mine) body.appendChild(ordersSection(app, a));
   if (a.battle && st.battles[a.battle]) body.appendChild(battleSection(app, a.battle));
   else if (a.path.length && !a.retreating) {
     const dest = a.path[0];
@@ -410,5 +412,57 @@ function battleSection(app: App, bid: string): HTMLElement {
     row('Round', `${b.rounds.length} of at most ${C.combat.maxRounds}`),
     b.factors.length ? h('ul', { class: 'reasons' }, b.factors.map((x) => h('li', null, x))) : null,
     h('p', { class: 'small faint' }, 'A side breaks at 25% morale or after losing 90% of its men. Reinforcements arriving in the province join the battle.'),
+  );
+}
+
+/** Army group and standing order controls. */
+function ordersSection(app: App, a: Army): HTMLElement {
+  const sim = app.sim!;
+  const groupSeg = h('div', { class: 'segmented group-seg', role: 'radiogroup', 'aria-label': 'Army group' });
+  for (const g of [null, 1, 2, 3, 4, 5, 6, 7, 8, 9] as Array<number | null>) {
+    const on = (a.group ?? null) === g;
+    const b = h('button', { type: 'button', class: on ? 'active' : '', role: 'radio', 'aria-checked': on ? 'true' : 'false', 'data-fk': `group-${g ?? 0}` }, g === null ? '–' : String(g));
+    b.addEventListener('click', () => {
+      if (!on) app.do({ type: 'setGroup', army: a.id, group: g }, true);
+    });
+    tip(b, g === null ? 'No group' : `Group ${g}: select with Shift+N and order every army in it at once`);
+    groupSeg.appendChild(b);
+  }
+  const members = a.group ? app.groupArmies(a.group) : [];
+  const groupLine = members.length > 1
+    ? h(
+        'label',
+        { class: 'switch', style: 'margin-top:6px' },
+        (() => {
+          const cb = h('input', { type: 'checkbox', checked: app.ui.groupOrders ? true : undefined, 'data-fk': 'group-orders' });
+          cb.addEventListener('change', () => {
+            app.ui.groupOrders = cb.checked;
+            app.refresh();
+          });
+          return cb;
+        })(),
+        h('span', null, `Move orders go to all ${members.length} armies of group ${a.group}`),
+      )
+    : a.group
+      ? h('p', { class: 'small faint' }, `The only army in group ${a.group} so far.`)
+      : null;
+  const o = a.order;
+  const here = a.location;
+  const dest = a.path.length ? a.path[a.path.length - 1] : null;
+  const stationBtn = (pid: ProvinceId, label: string) =>
+    action(label, 'Whenever it has nothing else to do (after a retreat, for example) the army marches back here. A new move order replaces this.', () => app.do({ type: 'setOrder', army: a.id, order: { kind: 'station', province: pid } }), checkCommand(sim, { type: 'setOrder', nation: a.nation, army: a.id, order: { kind: 'station', province: pid } }));
+  return section(
+    'Orders',
+    h('div', { class: 'field' }, h('span', { class: 'label' }, 'Army group'), groupSeg),
+    groupLine,
+    o
+      ? h(
+          'div',
+          { class: 'callout info', style: 'margin-top:8px' },
+          icon('flag'),
+          h('span', { class: 'grow' }, `Stationed at ${provName(sim, o.province)}: returns there whenever idle.`),
+          button('Clear', () => app.do({ type: 'setOrder', army: a.id, order: null }), { cls: 'small quiet', fk: 'clear-order' }),
+        )
+      : h('div', { style: 'margin-top:8px' }, stationBtn(here, `Station at ${provName(sim, here)}`), dest && dest !== here ? stationBtn(dest, `Station at ${provName(sim, dest)} (route's end)`) : null),
   );
 }

@@ -933,6 +933,16 @@ export class MapRenderer {
       ctx.font = `800 9px 'Source Sans 3 Variable', sans-serif`;
       ctx.fillText('!', x + w, y + 0.5);
     }
+    // group number: a small tab on the top-left corner of our own markers
+    if (mine && a.group) {
+      ctx.fillStyle = '#f2d48a';
+      ctx.beginPath();
+      ctx.roundRect(x - 4, y - 5, 11, 11, 3);
+      ctx.fill();
+      ctx.fillStyle = '#1b1712';
+      ctx.font = `800 9px 'Source Sans 3 Variable', sans-serif`;
+      ctx.fillText(String(a.group), x + 1.5, y + 0.8);
+    }
     if (a.retreating) {
       ctx.fillStyle = 'rgba(12,14,16,0.6)';
       ctx.beginPath();
