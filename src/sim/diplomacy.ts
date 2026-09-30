@@ -29,7 +29,7 @@ import {
   warsOf,
   type Sim,
 } from './state';
-import type { CommandResult, Memory, NationId, ProvinceId, Proposal, TreatyType } from './types';
+import type { CommandResult, Memory, NationId, ProvinceId, Proposal, TreatyType, VictoryPath } from './types';
 
 export const MEMORY_LABELS: Record<string, string> = {
   envoy: 'Envoy improved relations',
@@ -43,6 +43,8 @@ export const MEMORY_LABELS: Record<string, string> = {
   rebuffed: 'Rebuffed our proposal',
   event: 'Recent dealings',
   liberated: 'Liberated our land',
+  rivalBid: 'Wary of their bid for diplomatic leadership',
+  separatePeace: 'Made a separate peace and left us fighting',
 };
 
 export const TREATY_LABELS: Record<TreatyType, string> = {
@@ -86,7 +88,7 @@ export function opinionParts(sim: Sim, a: NationId, b: NationId): OpinionPart[] 
   const eb = enemiesOf(sim, b);
   if (ea.some((x) => eb.includes(x))) parts.push({ label: 'Common enemy', value: C.diplomacy.commonEnemy });
   const alarm = sim.state.alarm[a]?.[b] ?? 0;
-  if (alarm >= 1) parts.push({ label: `Alarmed by their expansion (${Math.round(alarm)})`, value: -alarm * C.diplomacy.alarmOpinion });
+  if (alarm >= 1) parts.push({ label: `Alarmed by their conquests or power (${Math.round(alarm)})`, value: -alarm * C.diplomacy.alarmOpinion });
   const trust = sim.state.nations[b].trust;
   const tv = (trust - 50) * 0.3;
   if (Math.abs(tv) >= 0.5) parts.push({ label: `Their reputation (trust ${Math.round(trust)})`, value: tv });
@@ -368,6 +370,22 @@ export function coalitionAgainst(sim: Sim, target: NationId) {
   return sim.state.coalitions.find((c) => c.target === target);
 }
 
+/** The victory path a realm has visibly held long enough to worry its rivals, if any. */
+export function visibleBid(sim: Sim, nid: NationId): VictoryPath | null {
+  const s = sim.state.nations[nid].victoryStreak;
+  const need: Record<VictoryPath, number> = { territorial: C.victory.territorialMonths, economic: C.victory.economicMonths, diplomatic: C.victory.diplomaticMonths };
+  let best: VictoryPath | null = null;
+  let bf = 0;
+  for (const k of ['territorial', 'economic', 'diplomatic'] as const) {
+    const f = s[k] / need[k];
+    if (f >= C.victory.rivalReaction && f > bf) {
+      best = k;
+      bf = f;
+    }
+  }
+  return best;
+}
+
 export function joinCoalitionProblem(sim: Sim, nid: NationId, target: NationId): string | null {
   const st = sim.state;
   if (nid === target) return 'Cannot join a coalition against yourself.';
@@ -387,7 +405,9 @@ export function joinCoalition(sim: Sim, nid: NationId, target: NationId): void {
     st.counters.coalition++;
     c = { id: `c${st.counters.coalition}`, target, members: [], since: st.tick };
     st.coalitions.push(c);
-    notify(sim, target, 'urgent', 'coalition', `A coalition has formed against us, led by ${nationName(sim, nid)}. Rapid expansion has alarmed our neighbours.`);
+    const bid = visibleBid(sim, target);
+    const why = bid ? `Our bid for ${bid === 'territorial' ? 'territorial dominance' : 'economic prosperity'} has alarmed our neighbours.` : 'Our expansion has alarmed our neighbours.';
+    notify(sim, target, 'urgent', 'coalition', `A coalition has formed against us, led by ${nationName(sim, nid)}. ${why}`);
   }
   if (!c.members.includes(nid)) c.members.push(nid);
   c.members.sort();

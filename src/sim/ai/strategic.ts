@@ -8,12 +8,12 @@ import { PERSONALITIES, type PersonalityDef } from '../data/personalities';
 import { POLICIES, POLICY_LIST } from '../data/policies';
 import { TECH_LIST } from '../data/techs';
 import { activeProjects, buildProblem, buildSlots, projectCost } from '../construction';
-import { claimsOn, coalitionAgainst, envoySlots, evaluateTreaty, fabricateProblem, opinion, sharedThreat, treatyProblem } from '../diplomacy';
+import { addMemory, claimsOn, coalitionAgainst, envoySlots, evaluateTreaty, fabricateProblem, memoriesOf, opinion, sharedThreat, treatyProblem } from '../diplomacy';
 import { grossIncome, poolCap, reserveCap, tradeValue } from '../economy';
 import { overextension } from '../integration';
 import { nationPotential, nationStrength } from '../military';
 import { nationMods } from '../modifiers';
-import { policyProblem } from '../progression';
+import { policyProblem, techAvailable } from '../progression';
 import {
   aliveNations,
   alliesOf,
@@ -92,7 +92,8 @@ function planBudget(sim: Sim, nid: NationId): void {
   n.ai.armyTarget = Math.max(3, target);
   // research funding follows the surplus
   const net = n.lastMonth.net;
-  const level: 0 | 1 | 2 | 3 = n.treasury < 0 || net < 0 ? 0 : n.treasury > gross * 10 && net > gross * 0.3 ? 3 : net > gross * 0.25 && n.treasury > gross * 2 ? 2 : 1;
+  const nothingLeft = !n.research.current && !TECH_LIST.some((t) => techAvailable(sim, nid, t.id));
+  const level: 0 | 1 | 2 | 3 = nothingLeft || n.treasury < 0 || net < 0 ? 0 : n.treasury > gross * 10 && net > gross * 0.3 ? 3 : net > gross * 0.25 && n.treasury > gross * 2 ? 2 : 1;
   if (level !== n.research.funding) issue(sim, { type: 'funding', nation: nid, level });
 }
 
@@ -304,7 +305,7 @@ export function rivalLeader(sim: Sim, nid: NationId): { nid: NationId; path: Vic
     const s = sim.state.nations[o].victoryStreak;
     for (const k of ['territorial', 'economic', 'diplomatic'] as VictoryPath[]) {
       const f = s[k] / VICTORY_MONTHS[k];
-      if (f >= 0.35 && (!best || f > best.f)) best = { nid: o, path: k, f };
+      if (f >= C.victory.rivalReaction && (!best || f > best.f)) best = { nid: o, path: k, f };
     }
   }
   return best ? { nid: best.nid, path: best.path } : null;
@@ -606,8 +607,14 @@ export function strategic(sim: Sim, nid: NationId): void {
   // rivals close to victory make everyone nervous
   const rival = rivalLeader(sim, nid);
   if (rival) {
-    const row = (sim.state.alarm[nid] ??= {});
-    row[rival.nid] = Math.min(100, (row[rival.nid] ?? 0) + 2);
+    if (rival.path === 'diplomatic') {
+      // a peaceful bid breeds wariness (opinion), not fear of conquest (alarm, coalitions)
+      const m = memoriesOf(sim, nid, rival.nid).find((x) => x.kind === 'rivalBid');
+      if (!m || m.value > -C.diplomacy.rivalBidCap) addMemory(sim, nid, rival.nid, 'rivalBid', -1, 0.3);
+    } else {
+      const row = (sim.state.alarm[nid] ??= {});
+      row[rival.nid] = Math.min(100, (row[rival.nid] ?? 0) + 2);
+    }
     // deny a diplomatic winner our trade unless we are close friends
     const leadStreak = sim.state.nations[rival.nid].victoryStreak.diplomatic / VICTORY_MONTHS.diplomatic;
     if (rival.path === 'diplomatic' && leadStreak >= 0.5 && hasTreaty(sim, 'trade', nid, rival.nid) && opinion(sim, nid, rival.nid) < 60 && aiRand(sim) < 0.15) {

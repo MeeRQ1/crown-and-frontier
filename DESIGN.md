@@ -302,13 +302,18 @@ Each month the conditions fail, a timer loses 6 months.
    bankruptcy and none of your land occupied, held for 60 months. A windfall cannot
    do it; rivals can break it by occupying one province.
 3. **Diplomatic Leadership:** influence from treaties at least 3 years old whose
-   partner's opinion of you is ≥ 40 (alliance 2, trade 1), at 1.25 per other surviving realm
+   partner's opinion of you is ≥ 35 (alliance 2, trade 1), at 1.25 per other surviving realm
    (minimum 6), with trust ≥ 65 and no offensive war, held for 60 months. New
    treaties do not count, so cycling treaties is pointless.
 
-- **Rival reactions:** AI realms react to a rival past 35% of a timer. They raise their alarm
-  about it, arm, lower their war threshold against it, and — for a diplomatic leader past
-  halfway — may cancel trade with it.
+- **Rival reactions:** AI realms react to a rival past 35% of a timer. Against a territorial or
+  economic leader they raise their alarm (which feeds coalitions), arm, and lower their war
+  threshold against it. Against a diplomatic leader they grow wary instead (up to −25 opinion,
+  shown as its own line in the opinion breakdown) and, past halfway, may cancel trade with it.
+  Coalition notices name the cause: expansion or a bid for victory.
+- **Separate peace:** a secondary participant can leave a war with the opposing leader. The war
+  goal penalty applies only to the war's actual target, and allies left fighting lose 15 opinion
+  of the realm that left.
 - **Simultaneous winners:** resolved by campaign score (disclosed): 3 × provinces + 0.6 ×
   integrated dev + 3 × technologies + 3 × influence + min(treasury, 2000)/100 +
   per path (20 × timer fraction + 10 × condition progress).
@@ -381,6 +386,7 @@ share, performance). Observations that drove the tuning:
 - **Frozen world:** pacts everywhere meant no wars. Fixed so aggressive temperaments refuse pacts that bind them, and pacts last 5 years.
 - **Useless late-game money:** treasuries of 30k+ because every province maxed its development by year 20. Fixed with escalating costs, the soft cap and charters.
 - **Alliance deterrence froze the map:** fixed by weighting allies by reach and adding restlessness.
+- **Then too hard to win diplomatically:** once rival wariness replaced alarm, no AI realm won diplomatically in 30 campaigns. Every broken streak was a partner's opinion slipping below 40 under small stacked penalties (border friction, claims, alarm from the diplomat's own conquests, wariness). The partner threshold is now 35.
 - **Remaining skew:** Aurel's plains economy and Tarsk's steppe geography win most AI-only
   campaigns. Small defensive realms (Calder, Istrel, Fenward) tend to shrink. See STATUS.md.
   These are small samples and diagnostic, not proof of balance.

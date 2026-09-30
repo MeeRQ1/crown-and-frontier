@@ -28,7 +28,7 @@ import { poolCap, stockpileCap } from './economy';
 import { cancelRecruits, removeArmy } from './military';
 import { pruneBattles } from './combat';
 import { nationMods } from './modifiers';
-import { canEnter } from './movement';
+import { canEnter, findPath } from './movement';
 import {
   aliveNations,
   alliesOf,
@@ -195,7 +195,11 @@ function callDefenders(sim: Sim, w: War, target: NationId): void {
     if (nid === w.attackerLead) continue;
     const isAlly = hasTreaty(sim, 'alliance', nid, target);
     if (!canJoin(sim, nid, w, 'defender')) {
-      if (isAlly) notify(sim, target, 'normal', 'war', `${nationName(sim, nid)} cannot answer our call: conflicting commitments with the enemy.`);
+      if (isAlly) {
+        notify(sim, target, 'normal', 'war', `${nationName(sim, nid)} cannot answer our call: conflicting commitments with the enemy.`);
+        if (st.nations[nid].isPlayer)
+          notify(sim, nid, 'normal', 'war', `Our ally ${nationName(sim, target)} is under attack by ${nationName(sim, w.attackerLead)}, but we cannot join: a treaty with their side or a war with ${nationName(sim, target)}'s side prevents it. The alliance stays intact.`);
+      }
       continue;
     }
     const n = st.nations[nid];
@@ -367,7 +371,8 @@ export function evaluatePeace(sim: Sim, warId: string, proposer: NationId, targe
     if (adv < 0) add('We are losing', -adv * 0.5);
     if (ageMonths > 36) add('A long war', 10);
     add(`${pers.label} stubbornness`, -pers.stubborn);
-    if (target === w.attackerLead && ageMonths < 12) add('Our war goals are unmet', -15);
+    // the war goal is against the defending leader; a secondary defender cannot meet it
+    if (target === w.attackerLead && proposer === w.defenderLead && ageMonths < 12) add('Our war goals are unmet', -15);
   } else if (terms.mode === 'demand') {
     const cost = termsCost(sim, w, target, proposer, terms);
     add(`Cost of their demands (${cost})`, -cost);
@@ -448,6 +453,12 @@ export function applyPeace(sim: Sim, warId: string, proposer: NationId, target: 
     } else {
       const minor = [w.attackerLead, w.defenderLead].includes(proposer) ? target : proposer;
       const lead = minor === proposer ? target : proposer;
+      // allies left fighting resent a separate peace
+      for (const ally of sideOf(w, minor) === 'attacker' ? w.attackers : w.defenders) {
+        if (ally === minor || !hasTreaty(sim, 'alliance', ally, minor)) continue;
+        addMemory(sim, ally, minor, 'separatePeace', -15, 0.3);
+        notify(sim, ally, 'normal', 'peace', `${nationName(sim, minor)} made a separate peace and left us to fight on.`);
+      }
       w.attackers = w.attackers.filter((n) => n !== minor);
       w.defenders = w.defenders.filter((n) => n !== minor);
       st.truces.push({ a: minor, b: lead, until: st.tick + months(C.diplomacy.truceMonths) });
@@ -616,8 +627,35 @@ export function eliminate(sim: Sim, nid: NationId, by: NationId | null): void {
 
 // ───────────────────────────── Monthly war upkeep ───────────────────────────
 
+/**
+ * Armies left in foreign land they may no longer stand in, or with no legal
+ * route home (for example after a war ended or an alliance lapsed), return
+ * under safe conduct, as after a peace.
+ */
+export function returnStrandedArmies(sim: Sim): void {
+  const st = sim.state;
+  for (const id of Object.keys(st.armies).sort()) {
+    const a = st.armies[id];
+    if (a.battle || a.retreating || a.path.length) continue;
+    const ctrl = st.provinces[a.location].controller;
+    if (ctrl === a.nation || (ctrl && atWar(sim, a.nation, ctrl))) continue;
+    const hops = sim.world.hops[a.location];
+    const home = sim.world.provIds
+      .filter((pid) => st.provinces[pid].controller === a.nation)
+      .sort((x, y) => (hops[x] ?? Infinity) - (hops[y] ?? Infinity) || (x < y ? -1 : 1));
+    if (!home.length) continue;
+    if (canEnter(sim, a.nation, a.location) && home.some((pid) => findPath(sim, a.nation, a.location, pid))) continue;
+    const from = a.location;
+    a.location = home[0];
+    a.progress = 0;
+    notify(sim, a.nation, 'normal', 'move', `${a.name} had no legal route home from ${provName(sim, from)} and returned to ${provName(sim, home[0])} under safe conduct.`, { army: a.id, province: home[0] });
+    bump(sim);
+  }
+}
+
 export function monthlyWars(sim: Sim): void {
   const st = sim.state;
+  returnStrandedArmies(sim);
   const atWarSet = new Set<NationId>();
   for (const id of Object.keys(st.wars).sort()) {
     const w = st.wars[id];

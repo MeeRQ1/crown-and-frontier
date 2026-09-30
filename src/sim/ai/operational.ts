@@ -10,6 +10,7 @@ import { forecastBattle } from '../combat';
 import { grossIncome } from '../economy';
 import { armyStrength, maxMorale, recruitProblem, unitCost } from '../military';
 import { nationMods } from '../modifiers';
+import { findPath } from '../movement';
 import {
   armiesOf,
   atWar,
@@ -115,6 +116,8 @@ function moveTo(sim: Sim, a: Army, dest: ProvinceId, why?: string): void {
     return;
   }
   if (a.path.length && a.path[a.path.length - 1] === dest) return;
+  // no legal route (for example through realms that deny access): don't reissue it every week
+  if (!findPath(sim, a.nation, a.location, dest)) return;
   issue(sim, { type: 'move', nation: a.nation, army: a.id, dest }, why);
 }
 

@@ -212,6 +212,7 @@ export const C = {
     tradeOpinion: 10,
     commonEnemy: 15,
     alarmOpinion: 0.5,
+    rivalBidCap: 25, // most opinion a diplomatic front-runner loses to rivals' wariness
     alarmDecay: 0.6,
     alarmCoalition: 45,
     alarmLeave: 25,
@@ -244,6 +245,8 @@ export const C = {
   },
 
   victory: {
+    /** rivals react once a realm has held a victory path for this share of its timer */
+    rivalReaction: 0.35,
     territorialRegions: 3,
     territorialShare: 0.23,
     regionHold: 0.75,
@@ -255,7 +258,7 @@ export const C = {
     diplomaticInfluencePerRealm: 1.25, // influence needed per other surviving realm
     diplomaticMinInfluence: 6,
     diplomaticTreatyAge: 36, // months a treaty must exist to count
-    diplomaticOpinion: 40,
+    diplomaticOpinion: 35,
     diplomaticTrust: 65,
     diplomaticMonths: 60,
   },

@@ -1,7 +1,7 @@
-import { TECHS } from '../../sim/data/techs';
+import { TECHS, TECH_LIST } from '../../sim/data/techs';
 import { debtStage, grossIncome, poolCap, stockpileCap } from '../../sim/economy';
 import { overextension } from '../../sim/integration';
-import { researchRate } from '../../sim/progression';
+import { researchRate, techAvailable } from '../../sim/progression';
 import { dateOf, warsOf } from '../../sim/state';
 import type { App } from '../app';
 import { h, setChildren } from '../dom';
@@ -46,14 +46,30 @@ export function renderTopbar(app: App): void {
       stat('Supplies', [`${fmt(n.supplies)}/${fmt(stockpileCap(sim, pid))}`, h('small', { class: sNet >= 0 ? 'good' : 'bad' }, `${signed(sNet)}`)], 'Supply stockpile / limit and monthly change. Armies on supply lines draw from it.', () => app.openLedger('realm'), n.supplies <= 0 ? 'bad' : ''),
     );
     items.push(
-      stat('Manpower', [fmt(n.manpower), h('small', { class: 'muted' }, `/${fmt(poolCap(sim, pid))}`)], `Men available to recruit and reinforce (pool / current limit). Recovers ${fmt(n.lastMonth.manpowerIn)} per month.`, () => app.openLedger('realm')),
+      stat(
+        'Manpower',
+        [fmt(n.manpower), h('small', { class: 'muted' }, `/${fmt(poolCap(sim, pid))}`)],
+        n.manpower > poolCap(sim, pid)
+          ? 'Men available to recruit and reinforce (pool / current limit). The pool is above the limit because occupied or lost land shrank the reserve, or more men are serving: no new men arrive until it falls below.'
+          : `Men available to recruit and reinforce (pool / current limit). Recovers ${fmt(n.lastMonth.manpowerIn)} per month.`,
+        () => app.openLedger('realm'),
+      ),
     );
     const cur = n.research.current ? TECHS[n.research.current] : null;
+    const anyLeft = TECH_LIST.some((t) => techAvailable(sim, pid, t.id));
     items.push(
       stat(
         'Research',
-        cur ? [cur.name.split(' ')[0], h('small', { class: 'muted' }, `${Math.min(99, Math.floor((n.research.progress / cur.cost) * 100))}%`)] : [h('span', { class: 'warn' }, 'Choose!')],
-        cur ? `${cur.name}: ${Math.floor(n.research.progress)}/${cur.cost} (${researchRate(sim, pid).toFixed(1)}/month)` : 'No technology selected — research points are being wasted.',
+        cur
+          ? [cur.name.split(' ')[0], h('small', { class: 'muted' }, `${Math.min(99, Math.floor((n.research.progress / cur.cost) * 100))}%`)]
+          : anyLeft
+            ? [h('span', { class: 'warn' }, 'Choose!')]
+            : [h('span', { class: 'muted' }, 'Complete')],
+        cur
+          ? `${cur.name}: ${Math.floor(n.research.progress)}/${cur.cost} (${researchRate(sim, pid).toFixed(1)}/month)`
+          : anyLeft
+            ? 'No technology selected — progress banks only up to 60 points, then is lost.'
+            : 'Every technology has been researched. Research funding can be set to None to save crowns.',
         () => app.openLedger('research'),
       ),
     );

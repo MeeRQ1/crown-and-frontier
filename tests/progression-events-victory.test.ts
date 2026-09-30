@@ -3,7 +3,7 @@ import { applyCommand, checkCommand } from '../src/sim/commands';
 import { EVENTS, EVENT_MAP } from '../src/sim/data/events';
 import { POLICIES } from '../src/sim/data/policies';
 import { TECHS, TECH_LIST } from '../src/sim/data/techs';
-import { signTreaty } from '../src/sim/diplomacy';
+import { joinCoalition, memoriesOf, signTreaty } from '../src/sim/diplomacy';
 import { defaultChoice, eventCtx, monthlyEvents } from '../src/sim/events';
 import { createGame } from '../src/sim/game';
 import { computeMods } from '../src/sim/modifiers';
@@ -12,6 +12,7 @@ import { months } from '../src/sim/state';
 import { runTicks } from '../src/sim/tick';
 import { monthlyVictory, victoryProgress } from '../src/sim/victory';
 import { transferProvince } from '../src/sim/war';
+import { strategic } from '../src/sim/ai/strategic';
 import { lineGame } from './helpers';
 
 describe('research and policy', () => {
@@ -110,6 +111,20 @@ describe('victory', () => {
     sim.state.nations.a.victoryStreak.territorial = 20;
     monthlyVictory(sim);
     expect(sim.state.nations.a.victoryStreak.territorial).toBe(14);
+  });
+
+  it('rivals grow wary of a diplomatic front-runner but alarmed by a territorial one', () => {
+    const sim = lineGame();
+    sim.state.nations.a.victoryStreak.diplomatic = 30; // half of the 60-month hold
+    strategic(sim, 'b');
+    expect(memoriesOf(sim, 'b', 'a').find((m) => m.kind === 'rivalBid')?.value).toBeLessThan(0);
+    expect(sim.state.alarm.b?.a ?? 0).toBe(0);
+    sim.state.nations.a.victoryStreak.diplomatic = 0;
+    sim.state.nations.a.victoryStreak.territorial = 12; // half of 24
+    strategic(sim, 'c');
+    expect(sim.state.alarm.c?.a ?? 0).toBeGreaterThan(0);
+    joinCoalition(sim, 'c', 'a');
+    expect(sim.state.notifications.some((n) => n.nation === 'a' && /bid for territorial dominance/.test(n.text))).toBe(true);
   });
 
   it('new treaties do not count toward diplomatic leadership', () => {

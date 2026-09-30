@@ -1,11 +1,11 @@
 import { describe, expect, it } from 'vitest';
 import { applyCommand, checkCommand } from '../src/sim/commands';
-import { evaluateTreaty, monthlyDiplomacy, signTreaty } from '../src/sim/diplomacy';
+import { evaluateTreaty, monthlyDiplomacy, opinionParts, signTreaty } from '../src/sim/diplomacy';
 import { checkInvariants } from '../src/sim/invariants';
 import { siegeInfo } from '../src/sim/siege';
 import { atWar, hasTreaty, months, truceUntil } from '../src/sim/state';
 import { runTicks, step } from '../src/sim/tick';
-import { applyPeace, declareWar, joinWar, transferProvince } from '../src/sim/war';
+import { applyPeace, declareWar, evaluatePeace, joinWar, returnStrandedArmies, transferProvince } from '../src/sim/war';
 import { addArmy, lineGame } from './helpers';
 
 describe('sieges and occupation', () => {
@@ -77,6 +77,34 @@ describe('diplomacy and wars', () => {
     expect(atWar(sim, 'a', 'c')).toBe(false);
     expect(truceUntil(sim, 'a', 'c')).toBeGreaterThan(sim.state.tick);
     expect(checkCommand(sim, { type: 'declareWar', nation: 'a', target: 'c', goal: { type: 'conquest', provinces: ['c2'] } })).toMatch(/Truce/);
+  });
+
+  it('a secondary defender is not held to the war goal, but allies left fighting resent a separate peace', () => {
+    const sim = lineGame();
+    signTreaty(sim, 'alliance', 'b', 'c');
+    const w = declareWar(sim, 'a', 'b', { type: 'conquest', provinces: ['b3'] });
+    expect(w.defenders).toContain('c');
+    const labels = (from: string) => evaluatePeace(sim, w.id, from, 'a', { mode: 'white', provinces: [], gold: 0 }).reasons.map((r) => r.label);
+    expect(labels('b')).toContain('Our war goals are unmet');
+    expect(labels('c')).not.toContain('Our war goals are unmet');
+    applyPeace(sim, w.id, 'c', 'a', { mode: 'white', provinces: [], gold: 0 });
+    const resent = opinionParts(sim, 'b', 'c').find((p) => /separate peace/.test(p.label));
+    expect(resent?.value).toBeLessThan(0);
+    expect(checkInvariants(sim)).toEqual([]);
+  });
+
+  it('an army with no legal route home returns under safe conduct', () => {
+    const sim = lineGame();
+    const army = addArmy(sim, 'a', 'c1', { foot: 2 });
+    returnStrandedArmies(sim);
+    expect(sim.state.provinces[sim.state.armies[army.id].location].owner).toBe('a');
+    expect(sim.state.notifications.some((n) => n.nation === 'a' && /safe conduct/.test(n.text))).toBe(true);
+    // an army in a friend's land that can still march home stays put
+    const sim2 = lineGame();
+    signTreaty(sim2, 'alliance', 'a', 'b');
+    const guest = addArmy(sim2, 'a', 'b1', { foot: 2 });
+    returnStrandedArmies(sim2);
+    expect(sim2.state.armies[guest.id].location).toBe('b1');
   });
 
   it('peace transfers ceded land at low integration and ends the war', () => {

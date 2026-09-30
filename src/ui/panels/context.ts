@@ -1,6 +1,8 @@
 // Right-hand context panel: realm summary, province, army or battle details.
 
 import { C, TERRAIN, UNITS } from '../../sim/config';
+import { TECH_LIST } from '../../sim/data/techs';
+import { techAvailable } from '../../sim/progression';
 import { forecastBattle } from '../../sim/combat';
 import { activeProjects, buildProblem, buildSlots, devCap, devMax, PROJECT_LABELS, projectCost } from '../../sim/construction';
 import { coalitionAgainst, fabricateProblem } from '../../sim/diplomacy';
@@ -17,7 +19,7 @@ import { rivalLeader } from '../../sim/ai/strategic';
 import { scoreFor } from '../../sim/war';
 import type { App } from '../app';
 import { action, bar, button, h, row, setChildren } from '../dom';
-import { fmt, men, signed, weeks } from '../format';
+import { fmt, men, plural, signed, weeks } from '../format';
 import { confirmDialog, showEventDialog, showProposalDialog } from './dialogs';
 import { shield } from './topbar';
 
@@ -71,7 +73,7 @@ function realmSummary(app: App): HTMLElement {
   const stage = debtStage(sim, pid);
   if (stage) warn(['', 'Treasury in debt: 2% monthly interest.', 'Severe debt: morale recovery halved, unrest rising.', 'Bankruptcy imminent!'][stage], () => app.openLedger('realm'), 'bad');
   if (n.supplies <= 0) warn('Supply stockpile empty: armies on supply lines are starving.', () => app.openLedger('realm'), 'bad');
-  if (!n.research.current) warn('No research selected — points are being wasted.', () => app.openLedger('research'));
+  if (!n.research.current && TECH_LIST.some((t) => techAvailable(sim, pid, t.id))) warn('No research selected — progress banks only up to 60 points, then is lost.', () => app.openLedger('research'));
   const free = buildSlots(sim, pid) - activeProjects(sim, pid).length;
   if (free > 0 && n.treasury > 60) warn(`${free} construction slot${free > 1 ? 's' : ''} idle. Select a province to develop, build roads or grant charters.`);
   const ox = overextension(sim, pid);
@@ -155,7 +157,7 @@ function provinceView(app: App, pid: ProvinceId): HTMLElement {
         'Output (per month)',
         row('Crowns to owner', fmt(provinceCrowns(sim, pid), 1)),
         row('Supplies', fmt(provinceSupplies(sim, pid), 1)),
-        me ? row('Supply capacity (your troops)', `${Math.floor(provinceSupplyCapacity(sim, me, pid))} regiments`) : null,
+        me ? row('Supply capacity (your troops)', plural(Math.floor(provinceSupplyCapacity(sim, me, pid)), 'regiment')) : null,
         row('Military reserve', `${fmt(p.pop * C.population.reservePerPop * (0.2 + 0.8 * p.integration / 100))} men`),
       ),
     );
@@ -238,7 +240,7 @@ function provinceView(app: App, pid: ProvinceId): HTMLElement {
       section(
         'Armies here',
         ...here.map((a) => {
-          const b = h('button', { class: 'btn small', type: 'button', style: 'width:100%;text-align:left;margin:2px 0;display:flex;gap:6px;align-items:center' }, shield(app, a.nation), `${a.name} — ${a.regiments.length} regiments, ${men(menOf(a))} men${a.battle ? ' ⚔' : ''}`);
+          const b = h('button', { class: 'btn small', type: 'button', style: 'width:100%;text-align:left;margin:2px 0;display:flex;gap:6px;align-items:center' }, shield(app, a.nation), `${a.name} — ${plural(a.regiments.length, 'regiment')}, ${men(menOf(a))} men${a.battle ? ' ⚔' : ''}`);
           b.addEventListener('click', () => app.selectArmy(a.id));
           return b;
         }),
@@ -291,7 +293,7 @@ function armyView(app: App, a: Army): HTMLElement {
       ...(['foot', 'horse', 'guns'] as UnitType[]).map((t) => {
         const regs = byType(t);
         const m = regs.reduce((s, r) => s + r.men, 0);
-        return row(`${UNITS[t].plural}`, `${regs.length} regiments · ${men(m)} men`);
+        return row(`${UNITS[t].plural}`, `${plural(regs.length, 'regiment')} · ${men(m)} men`);
       }),
       row('Total', `${men(menOf(a))} / ${men(a.regiments.length * C.regimentSize)} men`),
       row('Morale', `${a.morale.toFixed(2)} / ${mm.toFixed(1)}`),
@@ -304,7 +306,7 @@ function armyView(app: App, a: Army): HTMLElement {
       'Supply',
       row('Status', h('span', { class: sup.status === 'supplied' ? 'good' : sup.status === 'strained' ? 'warn' : 'bad' }, `${sup.status[0].toUpperCase()}${sup.status.slice(1)} (${Math.round(sup.level * 100)}%)`)),
       row('Supply line', sup.connected ? `connected, ${sup.distance.toFixed(1)} of ${sup.range} steps` : 'cut — foraging only'),
-      row('Local capacity', `${Math.floor(sup.capacity)} regiments (${sup.load} here)`),
+      row('Local capacity', `${plural(Math.floor(sup.capacity), 'regiment')} (${sup.load} here)`),
       sup.reasons.length ? h('ul', { class: 'reasons' }, sup.reasons.map((r) => h('li', { class: 'bad' }, r))) : null,
       sup.remedies.length ? h('ul', { class: 'reasons' }, sup.remedies.map((r) => h('li', { class: 'muted' }, `Remedy: ${r}`))) : null,
       h('p', { class: 'small muted' }, 'Strained: no reinforcement, half morale recovery, −10% combat. Unsupplied: 2% attrition per week, morale loss, −25% combat.'),
@@ -318,6 +320,33 @@ function armyView(app: App, a: Army): HTMLElement {
     if (foes.length) {
       const f = forecastBattle(sim, dest, [a], foes);
       out.push(section('Battle forecast', row('Next step', provName(sim, dest)), forecastView(f)));
+    }
+  }
+  if (app.player && !a.battle && !a.retreating) {
+    // an enemy marching on a province held by us: what if it attacks there?
+    const me = app.player;
+    let target: ProvinceId | null = null;
+    let attackers: Army[] = [];
+    if (mine && !a.path.length) {
+      target = a.location;
+      attackers = Object.values(st.armies).filter((x) => !x.retreating && !x.battle && x.path.includes(a.location) && atWar(sim, me, x.nation));
+    } else if (!mine && a.path.length && atWar(sim, me, a.nation)) {
+      target = a.path.find((pid) => armiesAt(sim, pid).some((y) => y.nation === me && !y.retreating)) ?? null;
+      attackers = [a];
+    }
+    const holders = target ? armiesAt(sim, target).filter((x) => !x.retreating && !x.battle && !atWar(sim, me, x.nation)) : [];
+    if (target && attackers.length && holders.some((x) => x.nation === me)) {
+      const f = forecastBattle(sim, target, attackers, holders);
+      const eta = Math.min(...attackers.map((x) => etaWeeks(sim, x, x.path.slice(0, x.path.indexOf(target!) + 1), x.progress)));
+      out.push(
+        section(
+          mine ? 'Incoming attack' : `If they reach our army at ${provName(sim, target)}`,
+          mine ? row('Enemy', attackers.map((x) => `${x.name} (${nationName(sim, x.nation)}, ${plural(x.regiments.length, 'regiment')})`).join(', ')) : null,
+          row('Arrives', `in about ${weeks(eta)}`),
+          forecastView(f, 'defender'),
+          h('p', { class: 'small muted' }, 'Assumes both sides as they are now. Holding still lets defenders dig in; forts and rough terrain favour them.'),
+        ),
+      );
     }
   }
 
@@ -384,15 +413,23 @@ function armyView(app: App, a: Army): HTMLElement {
   return h('div', null, out);
 }
 
-export function forecastView(f: ReturnType<typeof forecastBattle>): HTMLElement {
-  const cls = f.verdict === 'Likely victory' ? 'good' : f.verdict === 'Likely defeat' ? 'bad' : 'warn';
+/** Forecast from our side: `side` says whether we are the attacker or the defender. */
+export function forecastView(f: ReturnType<typeof forecastBattle>, side: 'attacker' | 'defender' = 'attacker'): HTMLElement {
+  const ours = (o: string | null) => o === side;
+  const wins = f.outcomes.filter(ours).length;
+  const verdict = wins === 3 ? 'Likely victory' : wins === 0 ? 'Likely defeat' : 'Uncertain';
+  const cls = wins === 3 ? 'good' : wins === 0 ? 'bad' : 'warn';
+  const [ourMen, theirMen] = side === 'attacker' ? [f.attMen, f.defMen] : [f.defMen, f.attMen];
+  const [ourLoss, theirLoss] = side === 'attacker' ? [f.attLoss, f.defLoss] : [f.defLoss, f.attLoss];
+  // rolls are listed from our point of view: unlucky for us first
+  const rolls = side === 'attacker' ? f.outcomes : [...f.outcomes].reverse();
   return h(
     'div',
     null,
-    row('Outlook', h('b', { class: cls }, f.verdict)),
-    row('Strength', `${men(f.attMen)} vs ${men(f.defMen)}`),
-    row('Expected losses', `ours ${men(f.attLoss)}, theirs ${men(f.defLoss)} (~${f.rounds} weeks)`),
-    h('p', { class: 'small muted' }, `Outcomes under unlucky / even / lucky rolls: ${f.outcomes.map((o) => (o === 'attacker' ? 'win' : 'loss')).join(' / ')}.`),
+    row('Outlook', h('b', { class: cls }, verdict)),
+    row('Strength', `ours ${men(ourMen)} vs theirs ${men(theirMen)}`),
+    row('Expected losses', `ours ${men(ourLoss)}, theirs ${men(theirLoss)} (~${f.rounds} weeks)`),
+    h('p', { class: 'small muted' }, `Outcomes under unlucky / even / lucky rolls: ${rolls.map((o) => (ours(o) ? 'win' : o ? 'loss' : 'undecided')).join(' / ')}.`),
     f.factors.length ? h('ul', { class: 'reasons' }, f.factors.map((x) => h('li', null, x))) : null,
   );
 }

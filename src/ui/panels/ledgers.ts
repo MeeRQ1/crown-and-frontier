@@ -42,7 +42,7 @@ import {
 } from '../../sim/state';
 import { armySupplyInfo } from '../../sim/supply';
 import type { NationId, PeaceTerms, TreatyType, War } from '../../sim/types';
-import { allScores, influence, influenceByPartner, influenceNeeded, SCORE_FORMULA, VICTORY_LABELS, VICTORY_MONTHS, victoryProgress } from '../../sim/victory';
+import { allScores, dominatedRegions, influence, influenceByPartner, influenceNeeded, SCORE_FORMULA, VICTORY_LABELS, VICTORY_MONTHS, victoryProgress } from '../../sim/victory';
 import { computeWarScore, evaluatePeace, goalOptions, provinceCost, scoreFor, termsCost, declareWarProblem } from '../../sim/war';
 import type { App } from '../app';
 import { action, bar, button, h, row, setChildren } from '../dom';
@@ -609,6 +609,29 @@ function peaceBuilder(app: App, w: War): HTMLElement {
 
 // ───────────────────────────── Victory ──────────────────────────────────────
 
+/** How to break the rival furthest along a path (shown only when one is holding it). */
+function counterplay(app: App, k: 'territorial' | 'economic' | 'diplomatic'): HTMLElement | null {
+  const sim = app.sim!;
+  const rival = aliveNations(sim)
+    .filter((n) => n !== app.player)
+    .map((n) => ({ n, p: victoryProgress(sim, n)[k] }))
+    .filter((x) => x.p.met && x.p.streak > 0)
+    .sort((a, b) => b.p.streak - a.p.streak)[0];
+  if (!rival) return null;
+  const name = nationName(sim, rival.n);
+  let text: string;
+  if (k === 'territorial') {
+    const regions = dominatedRegions(sim, rival.n).map((r) => sim.world.scenario.regions.find((x) => x.id === r)?.name ?? r);
+    text = `${name} dominates ${regions.join(', ')}. Occupying or taking land there, or cutting their share of all provinces, breaks the condition.`;
+  } else if (k === 'economic') {
+    text = `Occupying any one province of ${name} in a war, driving their unrest above ${C.victory.economicUnrest}, or pushing them into debt breaks the condition.`;
+  } else {
+    const parts = Object.entries(influenceByPartner(sim, rival.n)).map(([n, v]) => `${nationName(sim, n)} ${v}`);
+    text = `${name}'s influence: ${parts.join(', ')} (needs ${influenceNeeded(sim, rival.n)}). Ending your own treaties with them, or turning a partner's opinion of them below ${C.victory.diplomaticOpinion}, breaks it; so would an offensive war of theirs.`;
+  }
+  return h('p', { class: 'small warn', style: 'margin-top:6px' }, `How to stop ${name}: ${text} Each month the condition fails costs them 6 months of progress.`);
+}
+
 function victoryLedger(app: App): HTMLElement {
   const sim = app.sim!;
   const me = app.player;
@@ -643,6 +666,7 @@ function victoryLedger(app: App): HTMLElement {
             .sort((a, b) => b.p.streak - a.p.streak || b.p.progress - a.p.progress)
             .slice(0, 4)
             .map(({ n, p }) => row(h('span', null, shield(app, n), ' ', nationName(sim, n)), `${Math.round(p.progress * 100)}%${p.streak ? ` · held ${p.streak} mo` : ''}`)),
+          counterplay(app, k),
         ),
       ),
     ),
@@ -749,7 +773,7 @@ function helpLedger(app: App): HTMLElement {
     sec('Frontier integration', 'Every province has integration 0–100. Low integration means little tax, few recruits, no development, no supply source and more unrest. New conquests start at 10 (25 with a claim), settled land at 20. Roads, garrisons, claims, charters and the Frontier Settlement policy speed it up; too much raw frontier at once overextends your administration.'),
     sec('Economy', 'Crowns come from development and population (scaled by integration and unrest); armies, forts, envoys and research funding cost upkeep. Supplies feed armies on supply lines. The manpower pool refills from the military reserve, which men under arms already use.'),
     sec('War', 'Declare war with a claim (no trust cost) or a conquest goal (costs trust, alarms neighbours). Battles: terrain, forts, entrenchment, supply, composition, morale and technology decide; forecasts show three outcomes. Winning a battle does not take land — standing in a province besieges it. Peace uses war score; every choice shows whether the enemy would accept and why.'),
-    sec('Diplomacy', 'Envoys raise opinion. Pacts forbid war; trade earns crowns; alliances are defensive calls to arms. Proposals show the other side’s reasoning before you send them. Rapid conquest raises alarm; alarmed neighbours form coalitions.'),
+    sec('Diplomacy', 'Envoys raise opinion. Pacts forbid war; trade earns crowns; alliances are defensive calls to arms. Proposals show the other side’s reasoning before you send them. Rapid conquest raises alarm, and so does a visible bid for territorial or economic victory; alarmed neighbours form coalitions. A bid for diplomatic leadership instead makes rivals wary (lower opinion) and may cost you their trade.'),
     sec('Saves', 'The game autosaves every few months (Settings) and when the tab is hidden. Saves live in this browser only: they do not sync across devices or sites and can be erased by private browsing or managed-device policies. Use Menu → Export to keep a copy, and Import to restore it.'),
     sec('Fog of war', 'All information is public for everyone — AI realms see exactly what you see and follow the same rules, costs and formulas.'),
   );
