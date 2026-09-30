@@ -18,7 +18,7 @@ export const PALETTE = {
   paperShade: '#ddd1b3',
   ink: '#352f27',
   coastInk: '#2a3a40',
-  peakBase: '#d3c6a8',
+  peakBase: '#b9aa8a',
   terrainTint: {
     plains: '#ede4c8',
     steppe: '#e9dcae',
@@ -247,16 +247,22 @@ export class BaseMap {
     // land
     g.fillStyle = PALETTE.paper;
     g.fill(land);
-    // faint terrain tints by province
+    // faint terrain tints by province (one fill per tint: no seams between cells)
+    const tints = new Map<string, Path2D>();
     for (const p of provs) {
       const tint = PALETTE.terrainTint[this.terrainOf(p.id)];
       if (!tint || tint === PALETTE.terrainTint.plains) continue;
+      (tints.get(tint) ?? tints.set(tint, new Path2D()).get(tint)!).addPath(p.path);
+    }
+    for (const [tint, path] of tints) {
       g.fillStyle = tint;
-      g.fill(p.path);
+      g.fill(path);
     }
     // mountain ranges (impassable)
+    const range = new Path2D();
+    for (const { w } of peaks) range.addPath(w.path);
     g.fillStyle = PALETTE.peakBase;
-    for (const { w } of peaks) g.fill(w.path);
+    g.fill(range);
     // paper grain over land
     const pat = g.createPattern(grainCanvas(), 'repeat');
     if (pat) {
@@ -268,29 +274,30 @@ export class BaseMap {
       g.fill(land);
       g.restore();
     }
-    // lakes
+    // lakes: one body of water, with water lines along the real shore only
+    const lakes = new Path2D();
+    let anyLake = false;
     for (const l of geo.lakes) {
       if (!inRect(l.bbox)) continue;
-      g.fillStyle = PALETTE.lake;
-      g.fill(l.path);
+      lakes.addPath(l.path);
+      anyLake = true;
     }
-    if (ppw * S > 0.06) {
-      g.save();
-      for (const l of geo.lakes) {
-        if (!inRect(l.bbox)) continue;
+    if (anyLake) {
+      g.fillStyle = PALETTE.lake;
+      g.fill(lakes);
+      if (ppw * S > 0.06) {
         g.save();
-        g.clip(l.path);
+        g.clip(lakes);
         g.strokeStyle = PALETTE.waterLine;
         g.globalAlpha = 0.45;
         g.lineWidth = 16 * S;
-        g.stroke(l.path);
+        g.stroke(shore);
         g.strokeStyle = PALETTE.lake;
         g.globalAlpha = 1;
         g.lineWidth = 16 * S - Math.max(1.1 * px, 1.4 * S);
-        g.stroke(l.path);
+        g.stroke(shore);
         g.restore();
       }
-      g.restore();
     }
 
     // terrain art

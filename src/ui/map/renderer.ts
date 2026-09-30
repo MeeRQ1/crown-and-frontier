@@ -78,6 +78,9 @@ export class MapRenderer {
   height = 0;
   private realmKey = '';
   private realms = new Map<NationId, RealmShape>();
+  /** realm lettering frames, reused while a realm's territory is unchanged */
+  private labelCache = new Map<NationId, { sig: string; label: RealmShape['label'] }>();
+  private riverPath: Path2D | null = null;
   private patternCache = new Map<string, CanvasPattern | null>();
   private placed: Rect[] = [];
   private pending = false;
@@ -219,6 +222,23 @@ export class MapRenderer {
       ctx.stroke(rsh.border);
       ctx.restore();
     }
+    // rivers: strategic lines (attackers crossing one fight at a disadvantage)
+    if (this.geo.riverEdges.length) {
+      if (!this.riverPath) {
+        this.riverPath = new Path2D();
+        for (const e of this.geo.riverEdges) this.riverPath.addPath(e.path);
+      }
+      ctx.save();
+      ctx.lineCap = 'round';
+      ctx.lineJoin = 'round';
+      ctx.strokeStyle = 'rgba(232, 240, 238, 0.55)';
+      ctx.lineWidth = (tier === 'far' ? 3.6 : 4.6) * px;
+      ctx.stroke(this.riverPath);
+      ctx.strokeStyle = '#3d7391';
+      ctx.lineWidth = (tier === 'far' ? 1.9 : tier === 'medium' ? 2.4 : 2.8) * px;
+      ctx.stroke(this.riverPath);
+      ctx.restore();
+    }
     const realmBorder = new Path2D();
     for (const rsh of this.realms.values()) realmBorder.addPath(rsh.border);
     ctx.strokeStyle = 'rgba(33, 27, 21, 0.92)';
@@ -338,9 +358,11 @@ export class MapRenderer {
       const union = new Path2D();
       const border = new Path2D();
       let any = false;
+      let sig = '';
       for (const pid of sim.world.provIds) {
         if (owner(pid) !== nid) continue;
         any = true;
+        sig += `${pid},`;
         union.addPath(this.geo.provs.get(pid)!.path);
         for (const e of this.geo.edgesOf.get(pid) ?? []) {
           if (e.coast) continue;
@@ -349,7 +371,9 @@ export class MapRenderer {
         }
       }
       if (!any) continue;
-      this.realms.set(nid, { union, border, label: this.realmLabel(sim, nid) });
+      let lab = this.labelCache.get(nid);
+      if (!lab || lab.sig !== sig) this.labelCache.set(nid, (lab = { sig, label: this.realmLabel(sim, nid) }));
+      this.realms.set(nid, { union, border, label: lab.label });
     }
   }
 
@@ -424,23 +448,50 @@ export class MapRenderer {
       const v0 = -(p.lx - mx) * sa + (p.ly - my) * ca;
       above += (v0 < 0 ? 1 : -1) * p.area;
     }
-    // anchor inside the realm: nearest province anchor to the centroid (if the centroid falls outside)
-    let x = mx + ((lo + hi) / 2) * ca;
-    let y = my + ((lo + hi) / 2) * sa;
-    const inside = best.some((id) => this.geo.provinceAt(x, y) === id);
-    if (!inside) {
-      let bd = Infinity;
-      for (const id of best) {
-        const p = this.geo.provs.get(id)!;
-        const d = Math.hypot(p.lx - x, p.ly - y);
-        if (d < bd) {
-          bd = d;
-          x = p.lx;
-          y = p.ly;
-        }
+    void lo;
+    void hi;
+    void wlo;
+    void whi;
+    // Fit the lettering inside the realm: try lines through several interior
+    // points at a few angles; measure how far each runs before leaving the
+    // realm, and how thick the realm is across it.
+    const inRealm = (x: number, y: number) => {
+      const id = this.geo.provinceAt(x, y);
+      return !!id && st.provinces[id].owner === nid;
+    };
+    const stepLen = this.geo.provScale * 0.3;
+    const reach = (x: number, y: number, ca2: number, sa2: number, max: number) => {
+      let d = 0;
+      while (d < max && inRealm(x + (d + stepLen) * ca2, y + (d + stepLen) * sa2)) d += stepLen;
+      return d;
+    };
+    const anchors = best
+      .map((id) => this.geo.provs.get(id)!)
+      .sort((p, q) => Math.hypot(p.lx - mx, p.ly - my) - Math.hypot(q.lx - mx, q.ly - my))
+      .slice(0, 8);
+    const angles = [...new Set([angle, angle / 2, 0, -0.25, 0.25].map((v) => Math.round(v * 100) / 100))];
+    let bestFit: { x: number; y: number; angle: number; len: number; wid: number; score: number } | null = null;
+    const maxRun = this.geo.provScale * 14;
+    for (const p of anchors) {
+      for (const ang of angles) {
+        const c = Math.cos(ang);
+        const sn = Math.sin(ang);
+        const back = reach(p.lx, p.ly, -c, -sn, maxRun);
+        const fwd = reach(p.lx, p.ly, c, sn, maxRun);
+        const len = back + fwd;
+        const x = p.lx + ((fwd - back) / 2) * c;
+        const y = p.ly + ((fwd - back) / 2) * sn;
+        if (!inRealm(x, y)) continue;
+        const up = reach(x, y, sn, -c, maxRun / 3);
+        const down = reach(x, y, -sn, c, maxRun / 3);
+        const wid = 2 * Math.min(up, down) + stepLen;
+        // lettering size is bounded by both length and thickness; prefer level text
+        const score = Math.min(len / 7, wid * 0.42) * (1 - Math.abs(ang) * 0.25);
+        if (!bestFit || score > bestFit.score) bestFit = { x, y, angle: ang, len, wid, score };
       }
     }
-    return { x, y, angle, len: (hi - lo) * 0.82, wid: whi - wlo, bend: Math.sign(above) * Math.min(0.05, (0.5 * Math.abs(above)) / sw) };
+    if (!bestFit) return null;
+    return { x: bestFit.x, y: bestFit.y, angle: bestFit.angle, len: bestFit.len * 0.9, wid: bestFit.wid, bend: Math.abs(bestFit.angle) > 0.1 ? Math.sign(above) * Math.min(0.04, (0.5 * Math.abs(above)) / sw) : 0 };
   }
 
   private hatchPattern(color: string): CanvasPattern | null {
@@ -941,31 +992,52 @@ export class MapRenderer {
       });
     }
 
-    // realm names at distance
+    // realm names at distance (largest first; shrink or skip on collision)
     if (ppx < 150) {
       const fade = ppx < 95 ? 1 : 1 - (ppx - 95) / 55;
+      const alpha = fade * (rs.mode === 'political' || rs.mode === 'diplomacy' ? 0.92 : 0.6);
+      const boxes: Rect[] = [];
+      const items: Array<{ nid: NationId; name: string; size: number; lab: NonNullable<RealmShape['label']> }> = [];
       for (const [nid, rsh] of this.realms) {
         const lab = rsh.label;
         if (!lab) continue;
-        const def = sim.world.nationDefs[nid];
-        const name = def.short.toUpperCase();
+        const name = sim.world.nationDefs[nid].short.toUpperCase();
         ctx.font = `700 100px 'Alegreya SC', 'Alegreya Variable', serif`;
         const base = ctx.measureText(name).width + name.length * 22;
-        let size = ((lab.len * z) / base) * 100;
-        size = Math.min(size, lab.wid * z * 0.4, 50);
-        if (size < 11) continue;
-        const s = cam.toScreen(lab.x, lab.y);
-        const alpha = fade * (rs.mode === 'political' || rs.mode === 'diplomacy' ? 0.92 : 0.6);
-        if (alpha <= 0.02) continue;
+        const size = Math.min(((lab.len * z) / base) * 100, lab.wid * z * 0.42, 50);
+        items.push({ nid, name, size, lab });
+      }
+      items.sort((a, b) => b.size - a.size);
+      for (const it of alpha > 0.02 ? items : []) {
+        const s = cam.toScreen(it.lab.x, it.lab.y);
+        let size = it.size;
+        let box: Rect | null = null;
+        for (let tries = 0; tries < 3 && size >= 11; tries++, size *= 0.8) {
+          ctx.font = `700 ${size}px 'Alegreya SC', 'Alegreya Variable', serif`;
+          const w = ctx.measureText(it.name).width + size * 0.22 * (it.name.length - 1);
+          const h = size * 0.9;
+          const ca = Math.abs(Math.cos(it.lab.angle));
+          const sa = Math.abs(Math.sin(it.lab.angle));
+          const bw = w * ca + h * sa;
+          const bh = w * sa + h * ca;
+          const r = { x: s.x - bw / 2, y: s.y - bh / 2, w: bw, h: bh };
+          if (!boxes.some((o) => r.x < o.x + o.w && r.x + r.w > o.x && r.y < o.y + o.h && r.y + r.h > o.y)) {
+            box = r;
+            break;
+          }
+        }
+        if (!box || size < 11) continue;
+        boxes.push(box);
+        const def = sim.world.nationDefs[it.nid];
         ctx.save();
         ctx.globalAlpha = alpha;
-        this.letter(name, s.x, s.y, lab.angle, size, {
+        this.letter(it.name, s.x, s.y, it.lab.angle, size, {
           font: `700 ${size}px 'Alegreya SC', 'Alegreya Variable', serif`,
           spacing: size * 0.22,
           fill: shade(def.color, -0.55),
           halo: 'rgba(244, 236, 216, 0.55)',
           haloW: Math.max(2, size * 0.09),
-          bend: lab.bend,
+          bend: it.lab.bend,
           register: false,
         });
         ctx.restore();
@@ -991,7 +1063,8 @@ export class MapRenderer {
         const w = ctx.measureText(name).width + (c.cap ? name.length * 0.8 : 0);
         const y = s.y + (c.cap ? 37 : 5);
         const r: Rect = { x: s.x - w / 2 - 2, y: y - size * 0.62, w: w + 4, h: size * 1.2 };
-        if (this.overlaps(r)) continue;
+        // capitals are always named; other names give way to markers and each other
+        if (!c.cap && this.overlaps(r)) continue;
         if (!c.cap && w > c.v.lr * z * 2.9) continue;
         this.place(r);
         this.letter(name, s.x, y, 0, size, { font, spacing: c.cap ? 0.8 : 0, fill: '#2a241c', halo: 'rgba(246, 239, 222, 0.88)', haloW: 3 });
@@ -1023,8 +1096,19 @@ export class MapRenderer {
     ctx.save();
     ctx.font = o.font;
     ctx.textBaseline = 'middle';
-    ctx.textAlign = 'left';
     ctx.lineJoin = 'round';
+    if (!angle && !o.bend && !o.spacing) {
+      // level, unspaced lettering (most place names): draw the string whole
+      ctx.textAlign = 'center';
+      ctx.strokeStyle = o.halo;
+      ctx.lineWidth = o.haloW;
+      ctx.strokeText(text, x, y);
+      ctx.fillStyle = o.fill;
+      ctx.fillText(text, x, y);
+      ctx.restore();
+      return;
+    }
+    ctx.textAlign = 'left';
     const widths = [...text].map((ch) => ctx.measureText(ch).width);
     const total = widths.reduce((a, b) => a + b, 0) + o.spacing * (text.length - 1);
     ctx.translate(x, y);

@@ -31,6 +31,7 @@ const NY = Math.ceil((B.maxY - B.minY) / G);
 const cx = (i: number) => B.minX + (i + 0.5) * G;
 const cy = (j: number) => B.minY + (j + 0.5) * G;
 const warnings: string[] = [];
+const notes: string[] = [];
 const fail = (m: string): never => {
   throw new Error(m);
 };
@@ -377,7 +378,7 @@ const isPass = (id: string) => !!byTmp.get(id)?.fixed?.pass;
 let built: BuiltMap | null = null;
 const extraPeaks: Pt[] = [];
 for (let round = 0; round < 8; round++) {
-  built = buildMap(makeSeeds(extraPeaks), scaledBounds, straitsTmp, { minBorder: 14 });
+  built = buildMap(makeSeeds(extraPeaks), scaledBounds, straitsTmp, { minBorder: 14, noiseMin: 9.5 });
   // borders that leak through a ridge get another peak where they cross it
   let leaks = 0;
   for (const [a, ns] of Object.entries(built.neighbors)) {
@@ -680,8 +681,10 @@ const provIdsTmp = provs.map((p) => p.tmp);
     if (!(sides.has(1) && sides.has(-1))) warnings.push(`pass ${p.name} does not connect both sides of ${r.name}`);
   }
   for (const t of provIdsTmp) {
-    const minN = byTmp.get(t)!.island ? 1 : 2;
+    // single-province islands and coastal spits may be dead ends; inland provinces may not
+    const minN = byTmp.get(t)!.island || coastal.has(t) ? 1 : 2;
     if (neighbors[t].length < minN) warnings.push(`${rid(t)} has ${neighbors[t].length} neighbour(s)`);
+    else if (neighbors[t].length === 1 && !byTmp.get(t)!.island) notes.push(`${rid(t)} is a coastal dead end`);
   }
   for (const n of ALDMERE_NATIONS) {
     const mine = provIdsTmp.filter((t) => out.get(t)!.owner === n.id);
@@ -720,7 +723,8 @@ writeFileSync(new URL('../src/data/aldmere.provinces.json', import.meta.url), JS
 const geo = {
   generated,
   bounds: { minX: Math.round(scaledBounds.minX), minY: Math.round(scaledBounds.minY), maxX: Math.round(scaledBounds.maxX), maxY: Math.round(scaledBounds.maxY) },
-  provinces: Object.fromEntries(provIdsTmp.map((t) => [rid(t), M.provinces[t]])),
+  // outlines are rebuilt from the shared edges in the browser (src/ui/map/rings.ts)
+  provinces: Object.fromEntries(provIdsTmp.map((t) => [rid(t), { cx: M.provinces[t].cx, cy: M.provinces[t].cy, area: M.provinces[t].area }])),
   edges: M.edges.map((e) => ({ ...e, a: rid(e.a), b: rid(e.b) })),
   waste: M.waste,
   straits: straitsOut,
@@ -733,7 +737,8 @@ mkdirSync(new URL('../reports/', import.meta.url), { recursive: true });
   const colors = new Map(ALDMERE_NATIONS.map((n) => [n.id, n.color]));
   const own = new Map(provincesOut.map((p) => [p.id, p.owner]));
   const nm = new Map(provincesOut.map((p) => [p.id, p.name]));
-  writeFileSync(new URL('../reports/aldmere-preview.svg', import.meta.url), previewSvg(geo.bounds, geo, straitsOut, (id) => own.get(id) ?? null, (n) => colors.get(n)!, (id) => nm.get(id)!, 2));
+  const withPolys = { ...geo, provinces: Object.fromEntries(provIdsTmp.map((t) => [rid(t), M.provinces[t]])) };
+  writeFileSync(new URL('../reports/aldmere-preview.svg', import.meta.url), previewSvg(geo.bounds, withPolys, straitsOut, (id) => own.get(id) ?? null, (n) => colors.get(n)!, (id) => nm.get(id)!, 2));
 }
 
 // report
@@ -762,12 +767,14 @@ mkdirSync(new URL('../reports/', import.meta.url), { recursive: true });
     const ow = [...new Set(mine.map((p) => p.owner ?? '—'))].join(', ');
     lines.push(`| ${r.name} | ${mine.length} | ${ow} | ${Math.round(regionArea[r.id] / Math.max(1, mine.filter((p) => !S.FIXED.find((f) => f.id === p.id && f.pass)).length))} |`);
   }
+  if (notes.length) lines.push('', '## Notes', '', ...notes.map((w) => `- ${w}`));
   if (warnings.length) lines.push('', '## Warnings', '', ...warnings.map((w) => `- ${w}`));
   writeFileSync(new URL('../reports/aldmere-map.md', import.meta.url), lines.join('\n') + '\n');
   console.log(lines.slice(4, 10).join('\n'));
 }
 const tiny = M.warnings.filter((w) => w.startsWith('tiny border')).length;
 console.log(`core: ${tiny} tiny borders ignored for adjacency`);
-const other = [...warnings, ...M.warnings.filter((w) => !w.startsWith('tiny border'))];
+// the core's neighbour-count check is superseded by the coast-aware one above
+const other = [...warnings, ...M.warnings.filter((w) => !w.startsWith('tiny border') && !/has only \d neighbour/.test(w))];
 if (other.length) console.log('WARNINGS:\n  ' + other.join('\n  '));
 else console.log('no warnings');

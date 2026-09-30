@@ -4,13 +4,17 @@
 
 import { REACH_LABELS } from '../../data/reach';
 import type { MapGeometry } from './geometry';
+import { ringFromEdges } from './rings';
 
 type Loader = () => Promise<MapGeometry>;
 
 const LOADERS: Record<string, Loader> = {
   aldmere: async () => {
     const { default: g } = await import('../../data/aldmere.map.json');
-    return { ...(g as unknown as Omit<MapGeometry, 'id'>), id: 'aldmere' };
+    const raw = g as unknown as Omit<MapGeometry, 'id' | 'provinces'> & { provinces: Record<string, { cx: number; cy: number; area: number }> };
+    const provinces: MapGeometry['provinces'] = {};
+    for (const [id, p] of Object.entries(raw.provinces)) provinces[id] = { ...p, poly: ringFromEdges(id, raw.edges) };
+    return { ...raw, provinces, id: 'aldmere' };
   },
   reach: async () => {
     const { default: g } = await import('../../data/reach.map.json');
