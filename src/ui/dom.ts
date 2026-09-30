@@ -1,6 +1,9 @@
 // Minimal DOM helpers (no framework).
 
-type Child = Node | string | number | null | undefined | false | Child[];
+import { icon, type IconName } from './icons';
+import { setRestoringFocus } from './panels/common';
+
+export type Child = Node | string | number | null | undefined | false | Child[];
 type Attrs = Record<string, unknown> & { class?: string; style?: string };
 
 export function h<K extends keyof HTMLElementTagNameMap>(tag: K, attrs: Attrs | null = null, ...children: Child[]): HTMLElementTagNameMap[K] {
@@ -39,7 +42,11 @@ export function setChildren(el: Element, ...children: Child[]): void {
   append(el, children);
 }
 
-export function button(label: Child, onClick: () => void, opts: { disabled?: string | null | boolean; title?: string; cls?: string; key?: string } = {}): HTMLButtonElement {
+export function button(
+  label: Child,
+  onClick: () => void,
+  opts: { disabled?: string | null | boolean; title?: string; cls?: string; key?: string; icon?: IconName; fk?: string } = {},
+): HTMLButtonElement {
   const disabled = !!opts.disabled;
   const b = h(
     'button',
@@ -49,7 +56,9 @@ export function button(label: Child, onClick: () => void, opts: { disabled?: str
       title: opts.title ?? (typeof opts.disabled === 'string' ? opts.disabled : undefined),
       'aria-disabled': disabled ? 'true' : undefined,
       'aria-keyshortcuts': opts.key,
+      'data-fk': opts.fk ?? (typeof label === 'string' ? label : undefined),
     },
+    opts.icon ? icon(opts.icon) : null,
     label,
   );
   b.addEventListener('click', (e) => {
@@ -59,6 +68,29 @@ export function button(label: Child, onClick: () => void, opts: { disabled?: str
   });
   if (disabled) b.classList.add('disabled');
   return b;
+}
+
+/**
+ * Rebuild a container's contents without losing the reader's place: the
+ * scroll position and the focused control (matched by its data-fk key) are
+ * restored after the rebuild.
+ */
+export function rebuild(el: Element, render: () => void): void {
+  const active = document.activeElement as HTMLElement | null;
+  const fk = active && el.contains(active) ? active.getAttribute('data-fk') : null;
+  const scrollers = [...el.querySelectorAll('.scroll')].map((s) => [s.getAttribute('data-sk'), (s as HTMLElement).scrollTop] as const);
+  render();
+  for (const [k, top] of scrollers) {
+    if (!k) continue;
+    const s = el.querySelector(`.scroll[data-sk="${k}"]`) as HTMLElement | null;
+    if (s) s.scrollTop = top;
+  }
+  if (fk) {
+    const again = el.querySelector(`[data-fk="${CSS.escape(fk)}"]`) as HTMLElement | null;
+    setRestoringFocus(true);
+    again?.focus({ preventScroll: true });
+    setRestoringFocus(false);
+  }
 }
 
 /** A button whose unavailability reason is always visible below it (not hover-only). */

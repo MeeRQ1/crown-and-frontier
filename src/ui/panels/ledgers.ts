@@ -45,11 +45,12 @@ import type { NationId, PeaceTerms, TreatyType, War } from '../../sim/types';
 import { allScores, dominatedRegions, influence, influenceByPartner, influenceNeeded, SCORE_FORMULA, VICTORY_LABELS, VICTORY_MONTHS, victoryProgress } from '../../sim/victory';
 import { computeWarScore, evaluatePeace, goalOptions, provinceCost, scoreFor, termsCost, declareWarProblem } from '../../sim/war';
 import type { App } from '../app';
-import { action, bar, button, h, row, setChildren } from '../dom';
+import { action, bar, button, h, rebuild, row, setChildren } from '../dom';
 import { fmt, men, signed } from '../format';
 import { downloadText } from '../storage';
 import { confirmDialog } from './dialogs';
-import { shield } from './topbar';
+import { shield } from './common';
+import { icon } from '../icons';
 
 export type LedgerTab = 'realm' | 'military' | 'research' | 'policy' | 'diplomacy' | 'wars' | 'victory' | 'log' | 'help';
 
@@ -68,24 +69,21 @@ const TITLES: Record<LedgerTab, string> = {
 export function renderLedger(app: App): void {
   const tab = app.ui.ledgerTab;
   if (!tab || !app.sim) return;
-  const tabs = h(
-    'div',
-    { class: 'tabs', role: 'tablist' },
-    (Object.keys(TITLES) as LedgerTab[]).map((t) => {
-      const b = h('button', { class: `btn small ${t === tab ? 'active' : ''}`, type: 'button', role: 'tab', 'aria-selected': t === tab ? 'true' : 'false' }, TITLES[t]);
-      b.addEventListener('click', () => app.openLedger(t));
-      return b;
-    }),
-  );
-  const content = BODIES[tab](app);
-  const modal = h(
-    'div',
-    { class: 'modal', role: 'dialog', 'aria-modal': 'true', 'aria-label': TITLES[tab] },
-    h('header', null, h('h2', null, TITLES[tab]), button('✕', () => app.closeModal(), { cls: 'small', title: 'Close (Esc)' })),
-    tabs,
-    h('div', { class: 'body' }, content),
-  );
-  setChildren(app.modalLayer, modal);
+  rebuild(app.drawerEl, () => {
+    const tabs = h(
+      'div',
+      { class: 'tabs', role: 'tablist' },
+      (Object.keys(TITLES) as LedgerTab[]).map((t) => {
+        const b = h('button', { class: `tab ${t === tab ? 'active' : ''}`, type: 'button', role: 'tab', 'aria-selected': t === tab ? 'true' : 'false', 'data-fk': `tab-${t}` }, TITLES[t]);
+        b.addEventListener('click', () => app.openLedger(t));
+        return b;
+      }),
+    );
+    const close = h('button', { class: 'btn quiet icon', type: 'button', 'aria-label': 'Close ledger (Esc)', 'data-fk': 'drawer-close' }, icon('close'));
+    close.addEventListener('click', () => app.closeLedger());
+    const content = BODIES[tab](app);
+    setChildren(app.drawerEl, h('header', null, h('h2', null, TITLES[tab]), close), tabs, h('div', { class: 'body scroll', 'data-sk': `ledger-${tab}`, role: 'tabpanel' }, content));
+  });
 }
 
 const BODIES: Record<LedgerTab, (app: App) => HTMLElement> = {
@@ -201,7 +199,7 @@ function realmLedger(app: App): HTMLElement {
             h('td', null, s.project ? `${s.project.kind} ${s.project.progress}/${s.project.total}` : '—'),
           );
           tr.addEventListener('click', () => {
-            app.closeModal();
+            app.closeLedger();
             app.selectProvince(p, true);
           });
           return tr;
@@ -247,7 +245,7 @@ function militaryLedger(app: App): HTMLElement {
                 h('td', null, status),
               );
               tr.addEventListener('click', () => {
-                app.closeModal();
+                app.closeLedger();
                 app.selectArmy(a.id, true);
               });
               return tr;
@@ -751,7 +749,7 @@ function logLedger(app: App): HTMLElement {
             .map((n) => {
               const d = h('div', { class: `kv ${n.priority === 'urgent' ? 'bad' : n.priority === 'low' ? 'muted' : ''}`, style: n.province ? 'cursor:pointer' : '' }, h('span', { class: 'k nowrap' }, dateOf(sim, n.tick).short), h('span', { class: 'v', style: 'text-align:left;flex:1;margin-left:10px' }, n.text));
               if (n.province) d.addEventListener('click', () => {
-                app.closeModal();
+                app.closeLedger();
                 app.selectProvince(n.province!, true);
               });
               return d;

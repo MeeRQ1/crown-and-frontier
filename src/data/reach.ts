@@ -289,3 +289,12 @@ export const REACH_PROVINCES: Omit<ProvinceDef, 'neighbors'>[] = ROWS.map((r) =>
   integration: r[6] ? (r[10]?.integ ?? 100) : 0,
   claims: r[10]?.claims ?? [],
 }));
+
+/** Named geography drawn on the map (presentation only). */
+export const REACH_LABELS: Array<{ kind: 'sea' | 'lake' | 'range' | 'region' | 'river'; name: string; x: number; y: number; size?: number; angle?: number }> = [
+  { kind: 'sea', name: 'The Western Main', x: -30, y: 820, size: 44, angle: -Math.PI / 2 },
+  { kind: 'sea', name: 'The Grey Sea', x: 1040, y: 28, size: 40 },
+  { kind: 'sea', name: 'The Serene Sea', x: 1000, y: 1480, size: 46 },
+  { kind: 'lake', name: 'Mirrormere', x: 862, y: 700, size: 22, angle: -Math.PI / 2 },
+  { kind: 'range', name: 'The Greyspine', x: 1245, y: 470, size: 26, angle: -Math.PI / 2 + 0.05 },
+];

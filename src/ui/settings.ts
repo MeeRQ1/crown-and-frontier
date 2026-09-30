@@ -14,6 +14,13 @@ export interface UISettings {
   autoPauseProposal: boolean;
   autosaveMonths: number; // 0 = off
   tutorial: boolean;
+  /** map presentation */
+  showLegend: boolean;
+  labelDensity: 'few' | 'normal' | 'many';
+  terrainDetail: 'full' | 'reduced' | 'off';
+  borderEmphasis: 'subtle' | 'normal' | 'strong';
+  armyMarkers: 'all' | 'relevant' | 'mine';
+  mapMode: string;
 }
 
 export const DEFAULT_SETTINGS: UISettings = {
@@ -29,6 +36,12 @@ export const DEFAULT_SETTINGS: UISettings = {
   autoPauseProposal: true,
   autosaveMonths: 6,
   tutorial: true,
+  showLegend: true,
+  labelDensity: 'normal',
+  terrainDetail: 'full',
+  borderEmphasis: 'normal',
+  armyMarkers: 'relevant',
+  mapMode: 'political',
 };
 
 const KEY = 'cnf-settings';

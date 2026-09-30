@@ -295,6 +295,8 @@ const out = {
   straits: STRAITS,
 };
 writeFileSync(new URL('../src/data/reach.map.json', import.meta.url), JSON.stringify(out));
+// the simulation only needs adjacency; the browser loads the geometry on demand
+writeFileSync(new URL('../src/data/reach.adjacency.json', import.meta.url), JSON.stringify({ generated: out.generated, neighbors }));
 
 // SVG preview for visual inspection.
 {

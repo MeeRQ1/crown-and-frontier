@@ -1,6 +1,6 @@
 // Static world construction and scenario registry.
 
-import mapData from '../data/reach.map.json';
+import adjacency from '../data/reach.adjacency.json';
 import { REACH_NATIONS, REACH_PROVINCES, REACH_REGIONS, STRAITS } from '../data/reach';
 import type { ProvinceId, ScenarioDef, World } from './types';
 
@@ -17,7 +17,7 @@ export function scenarioIds(): string[] {
 }
 
 export function buildReachScenario(): ScenarioDef {
-  const neighbors = (mapData as { neighbors: Record<string, string[]> }).neighbors;
+  const neighbors = (adjacency as { neighbors: Record<string, string[]> }).neighbors;
   return {
     id: 'reach',
     name: 'The Reach, 1640',

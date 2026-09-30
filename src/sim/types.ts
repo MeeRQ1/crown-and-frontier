@@ -53,6 +53,8 @@ export interface NationDef {
   strength: string;
   constraint: string;
   traits: NationTraits;
+  /** heraldry (presentation only): field, ordinary and charge */
+  arms?: { field: string; ordinary: string; ordinaryTincture: string; charge: string; chargeTincture: string };
 }
 
 export interface ProvinceDef {
@@ -484,7 +486,7 @@ export interface GameState {
 export type Command =
   | { type: 'recruit'; nation: NationId; province: ProvinceId; unit: UnitType; count?: number }
   | { type: 'cancelRecruit'; nation: NationId; province: ProvinceId }
-  | { type: 'move'; nation: NationId; army: ArmyId; dest: ProvinceId }
+  | { type: 'move'; nation: NationId; army: ArmyId; dest: ProvinceId; /** add the leg after the current route instead of replacing it */ append?: boolean }
   | { type: 'stop'; nation: NationId; army: ArmyId }
   | { type: 'split'; nation: NationId; army: ArmyId; counts: Partial<Record<UnitType, number>> }
   | { type: 'merge'; nation: NationId; armies: ArmyId[] }

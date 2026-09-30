@@ -41,6 +41,7 @@ async function tour(viewport, prefix, touch = false) {
     a.dialogLayer?.classList.add('hidden');
     a.selectProvince?.(null);
   });
+  await page.mouse.move(viewport.width * 0.45, viewport.height * 0.55);
   await page.waitForTimeout(600);
   await shot('03-map-overview');
   // province panel: player's capital
@@ -56,22 +57,31 @@ async function tour(viewport, prefix, touch = false) {
   await page.waitForTimeout(500);
   await shot('05-army');
   for (const [key, name] of [['b', 'realm'], ['m', 'military'], ['t', 'research'], ['d', 'diplomacy'], ['w', 'wars'], ['v', 'victory'], ['l', 'log']]) {
-    await page.evaluate(() => window.cnf.selectProvince(null));
-    await page.keyboard.press('Escape');
+    await page.evaluate(() => window.cnf.clearSelection ? window.cnf.clearSelection() : window.cnf.selectProvince(null));
+    await page.waitForTimeout(150);
     await page.keyboard.press(key);
-    await page.waitForTimeout(350);
+    await page.waitForTimeout(400);
     await shot(`06-ledger-${name}`);
-    await page.keyboard.press('Escape');
+    await page.evaluate(() => (window.cnf.closeLedger ? window.cnf.closeLedger() : window.cnf.closeModal()));
   }
   // overlays
   for (const [key, name] of [['w', 'terrain'], ['e', 'supply'], ['r', 'relations']]) {
-    await page.evaluate((k) => { const a = window.cnf; a.setOverlay?.(k); }, name === 'relations' ? 'diplomacy' : name);
+    await page.evaluate((k) => { const a = window.cnf; if (a.setMode) a.setMode(k); else a.setOverlay?.(k); }, name === 'relations' ? 'diplomacy' : name);
     await page.waitForTimeout(300);
     await shot(`07-overlay-${name}`);
   }
-  await page.evaluate(() => window.cnf.setOverlay?.('political'));
+  await page.evaluate(() => { const a = window.cnf; if (a.setMode) a.setMode('political'); else a.setOverlay?.('political'); });
   // zoomed in
-  await page.evaluate(() => { const a = window.cnf; const cap = a.sim.state.nations[a.player].capital; const r = a.renderer; const c = r.constructor.provinceCenter ? r.constructor.provinceCenter(cap) : null; if (c) r.camera.centerOn(c.x, c.y, 2.2); a.refresh?.(); });
+  await page.evaluate(() => {
+    const a = window.cnf;
+    a.clearSelection?.();
+    const cap = a.sim.state.nations[a.player].capital;
+    const r = a.renderer;
+    const c = r.provinceCenter ? r.provinceCenter(cap) : r.constructor.provinceCenter(cap);
+    const z = r.camera.zoomForProvincePx ? r.camera.zoomForProvincePx(230) : 2.2;
+    r.camera.centerOn(c.x, c.y, z, false);
+    a.refresh?.();
+  });
   await page.waitForTimeout(500);
   await shot('08-zoomed');
   await ctx.close();

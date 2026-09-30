@@ -50,10 +50,11 @@ export function checkCommand(sim: Sim, cmd: Command): string | null {
       if (!st.provinces[cmd.dest]) return 'Unknown province.';
       if (a.battle) return 'The army is engaged in battle and cannot manoeuvre.';
       if (a.retreating) return 'The army is retreating and cannot take orders until it arrives.';
-      if (cmd.dest === a.location) return null;
+      const from = cmd.append && a.path.length ? a.path[a.path.length - 1] : a.location;
+      if (cmd.dest === from) return null;
       const ep = enterProblem(sim, cmd.nation, cmd.dest);
       if (ep) return ep;
-      if (!findPath(sim, cmd.nation, a.location, cmd.dest)) return 'No legal route: the way is blocked by realms that deny us access.';
+      if (!findPath(sim, cmd.nation, from, cmd.dest)) return 'No legal route: the way is blocked by realms that deny us access.';
       return null;
     }
     case 'stop': {
@@ -143,6 +144,11 @@ export function applyCommand(sim: Sim, cmd: Command): CommandResult {
       return { ok: true, message: 'Training cancelled; men and supplies returned (crowns are lost).' };
     case 'move': {
       const a = st.armies[cmd.army];
+      if (cmd.append && a.path.length) {
+        const end = a.path[a.path.length - 1];
+        if (cmd.dest !== end) a.path = [...a.path, ...findPath(sim, cmd.nation, end, cmd.dest)!.path];
+        return { ok: true };
+      }
       if (cmd.dest === a.location) {
         a.path = [];
         a.progress = 0;
