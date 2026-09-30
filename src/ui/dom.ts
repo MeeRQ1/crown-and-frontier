@@ -1,0 +1,80 @@
+// Minimal DOM helpers (no framework).
+
+type Child = Node | string | number | null | undefined | false | Child[];
+type Attrs = Record<string, unknown> & { class?: string; style?: string };
+
+export function h<K extends keyof HTMLElementTagNameMap>(tag: K, attrs: Attrs | null = null, ...children: Child[]): HTMLElementTagNameMap[K] {
+  const el = document.createElement(tag);
+  if (attrs) {
+    for (const [k, v] of Object.entries(attrs)) {
+      if (v === undefined || v === null || v === false) continue;
+      if (k.startsWith('on') && typeof v === 'function') {
+        el.addEventListener(k.slice(2).toLowerCase(), v as EventListener);
+      } else if (k === 'class') el.className = String(v);
+      else if (k === 'style') el.setAttribute('style', String(v));
+      else if (k === 'html') el.innerHTML = String(v);
+      else if (v === true) el.setAttribute(k, '');
+      else el.setAttribute(k, String(v));
+    }
+  }
+  append(el, children);
+  return el;
+}
+
+export function append(el: Node, children: Child[]): void {
+  for (const c of children) {
+    if (c === null || c === undefined || c === false) continue;
+    if (Array.isArray(c)) append(el, c);
+    else if (c instanceof Node) el.appendChild(c);
+    else el.appendChild(document.createTextNode(String(c)));
+  }
+}
+
+export function clear(el: Element): void {
+  while (el.firstChild) el.removeChild(el.firstChild);
+}
+
+export function setChildren(el: Element, ...children: Child[]): void {
+  clear(el);
+  append(el, children);
+}
+
+export function button(label: Child, onClick: () => void, opts: { disabled?: string | null | boolean; title?: string; cls?: string; key?: string } = {}): HTMLButtonElement {
+  const disabled = !!opts.disabled;
+  const b = h(
+    'button',
+    {
+      class: `btn ${opts.cls ?? ''}`.trim(),
+      type: 'button',
+      title: opts.title ?? (typeof opts.disabled === 'string' ? opts.disabled : undefined),
+      'aria-disabled': disabled ? 'true' : undefined,
+      'aria-keyshortcuts': opts.key,
+    },
+    label,
+  );
+  b.addEventListener('click', (e) => {
+    e.stopPropagation();
+    if (disabled) return;
+    onClick();
+  });
+  if (disabled) b.classList.add('disabled');
+  return b;
+}
+
+/** A button whose unavailability reason is always visible below it (not hover-only). */
+export function action(label: Child, detail: Child, onClick: () => void, problem: string | null, cls = ''): HTMLElement {
+  return h('div', { class: `action ${problem ? 'is-disabled' : ''}` }, button(label, onClick, { disabled: problem, cls }), h('div', { class: problem ? 'why' : 'detail' }, problem ?? detail));
+}
+
+export function bar(value: number, max: number, cls = '', label?: string): HTMLElement {
+  const pct = Math.max(0, Math.min(100, (value / Math.max(1e-9, max)) * 100));
+  return h(
+    'div',
+    { class: `meter ${cls}`, role: 'meter', 'aria-valuemin': 0, 'aria-valuemax': max, 'aria-valuenow': Math.round(value), 'aria-label': label },
+    h('div', { class: 'meter-fill', style: `width:${pct.toFixed(1)}%` }),
+  );
+}
+
+export function row(label: Child, value: Child, cls = ''): HTMLElement {
+  return h('div', { class: `kv ${cls}` }, h('span', { class: 'k' }, label), h('span', { class: 'v' }, value));
+}

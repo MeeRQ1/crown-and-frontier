@@ -1,0 +1,39 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <meta name="description" content="Crown &amp; Frontier — a single-player grand strategy game in your browser. Grow a realm, integrate the frontier, and outlast rival crowns." />
+    <meta name="theme-color" content="#181b21" />
+    <title>Crown &amp; Frontier</title>
+    <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='12' fill='%23181b21'/%3E%3Cpath d='M12 44 L16 22 L26 32 L32 16 L38 32 L48 22 L52 44 Z' fill='%23d8b36a'/%3E%3Crect x='12' y='46' width='40' height='6' rx='2' fill='%23d8b36a'/%3E%3C/svg%3E" />
+    <style>
+      /* critical loading styles (the full stylesheet arrives with the bundle) */
+      html, body { margin: 0; height: 100%; background: #181b21; color: #ece6d6; font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
+      #boot { position: fixed; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 18px; }
+      #boot h1 { font-family: Georgia, "Palatino Linotype", serif; font-weight: 600; letter-spacing: 0.04em; color: #d8b36a; margin: 0; font-size: clamp(28px, 6vw, 48px); }
+      #boot .bar { width: min(320px, 70vw); height: 8px; border-radius: 4px; background: #2b3039; overflow: hidden; }
+      #boot .fill { height: 100%; width: 5%; background: #d8b36a; transition: width 0.2s; }
+      #boot p { margin: 0; font-size: 14px; color: #b8b09c; }
+      #boot noscript { color: #f0a0a0; }
+    </style>
+  </head>
+  <body>
+    <div id="boot" role="status" aria-live="polite">
+      <h1>Crown &amp; Frontier</h1>
+      <div class="bar"><div class="fill" id="boot-fill"></div></div>
+      <p id="boot-text">Loading…</p>
+      <noscript>This game needs JavaScript enabled.</noscript>
+    </div>
+    <div id="app"></div>
+    <script>
+      // Browsers refuse to load module scripts from file:// pages; explain instead of hanging.
+      if (location.protocol === 'file:') {
+        document.getElementById('boot-text').innerHTML =
+          'This game must be opened from a web address (http:// or https://), not as a local file.<br>' +
+          'Play the hosted version, or serve this folder, e.g. <code>npx serve .</code> or <code>python3 -m http.server</code>.';
+      }
+    </script>
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>
