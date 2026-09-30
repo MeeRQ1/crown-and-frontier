@@ -326,8 +326,9 @@ export function peaceProblem(sim: Sim, nid: NationId, warId: string, other: Nati
   if (!s1 || !s2 || s1 === s2) return 'Peace must be made with a nation on the opposing side.';
   const leaders = [w.attackerLead, w.defenderLead];
   if (!leaders.includes(nid) && !leaders.includes(other)) return 'A separate peace must be made with the opposing war leader.';
-  if (sim.state.proposals.some((p) => p.kind === 'peace' && p.war === warId && ((p.from === nid && p.to === other) || (p.from === other && p.to === nid))))
-    return 'A peace offer is already awaiting an answer.';
+  if (sim.state.proposals.some((p) => p.kind === 'peace' && p.war === warId && p.from === other && p.to === nid))
+    return `${nationName(sim, other)} has already sent us an offer: answer it first (decisions waiting).`;
+  if (sim.state.proposals.some((p) => p.kind === 'peace' && p.war === warId && p.from === nid && p.to === other)) return 'Our offer is still awaiting their answer.';
   if (!terms || !['white', 'demand', 'concede'].includes(terms.mode)) return 'Invalid terms.';
   const giver = terms.mode === 'demand' ? other : nid;
   if (terms.mode !== 'white') {

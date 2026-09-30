@@ -26,6 +26,14 @@
       <noscript>This game needs JavaScript enabled.</noscript>
     </div>
     <div id="app"></div>
+    <script>
+      // Browsers refuse to load module scripts from file:// pages; explain instead of hanging.
+      if (location.protocol === 'file:') {
+        document.getElementById('boot-text').innerHTML =
+          'This game must be opened from a web address (http:// or https://), not as a local file.<br>' +
+          'Play the hosted version, or serve this folder, e.g. <code>npx serve .</code> or <code>python3 -m http.server</code>.';
+      }
+    </script>
     <script type="module" src="/src/main.ts"></script>
   </body>
 </html>

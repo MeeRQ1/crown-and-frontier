@@ -113,6 +113,7 @@ canvas.map.move-mode { cursor: crosshair; }
 .nav .btn .badge + kbd { margin-left: 4px; }
 .context { position: absolute; right: 8px; top: 8px; bottom: 8px; width: min(360px, 40vw); background: rgba(31,35,43,0.96); border: 1px solid var(--line); border-radius: var(--radius); padding: 12px 14px; overflow-y: auto; z-index: 10; box-shadow: 0 6px 24px rgba(0,0,0,0.4); }
 .context .close { position: absolute; right: 8px; top: 8px; }
+.summary-toggle { display: none; }
 .context h2 { display: flex; align-items: center; gap: 8px; padding-right: 30px; }
 .context section { margin-top: 12px; }
 .context section > h4 { font-family: var(--sans); font-size: 0.78em; text-transform: uppercase; letter-spacing: 0.08em; color: var(--muted); margin-bottom: 6px; }
@@ -129,7 +130,7 @@ canvas.map.move-mode { cursor: crosshair; }
 .reduced-motion .toast { animation: none; }
 .decisions { position: absolute; right: calc(min(360px, 40vw) + 20px); bottom: 10px; z-index: 12; }
 .decisions .btn { background: #7b5f2b; border-color: var(--gold); box-shadow: 0 0 0 3px rgba(216,179,106,0.25); }
-.banner { position: absolute; left: 50%; top: 10px; transform: translateX(-50%); background: #2d3a4a; border: 1px solid #5a7ea8; padding: 8px 14px; border-radius: 6px; z-index: 25; display: flex; gap: 10px; align-items: center; }
+.banner { position: absolute; left: 50%; bottom: 56px; transform: translateX(-50%); background: #2d3a4a; border: 1px solid #5a7ea8; padding: 8px 14px; border-radius: 6px; z-index: 25; display: flex; gap: 10px; align-items: center; }
 .hover-tip { position: absolute; pointer-events: none; background: rgba(18,20,26,0.95); border: 1px solid var(--line); border-radius: 6px; padding: 6px 9px; font-size: 0.86em; z-index: 40; max-width: 280px; line-height: 1.35; }
 
 /* ── Modal ledgers ───────────────────────────────────── */
@@ -183,6 +184,7 @@ input[type='checkbox'] { accent-color: var(--gold); width: 1.1em; height: 1.1em;
   .menu-label { display: none; }
   .speed .btn { min-width: 1.9em; }
   .tutorial { top: 6px; bottom: auto; }
+  .banner { bottom: 116px; }
   .toasts { top: auto; bottom: 64px; flex-direction: column-reverse; }
   .stat { min-width: 64px; padding: 2px 6px; }
   .topbar .realm span.nm { display: none; }
@@ -191,7 +193,10 @@ input[type='checkbox'] { accent-color: var(--gold); width: 1.1em; height: 1.1em;
   .nav .btn kbd { display: none; }
   .context { left: 0; right: 0; top: auto; bottom: 52px; width: auto; max-height: 46%; border-radius: 12px 12px 0 0; }
   .overlays { bottom: 60px; max-width: calc(100% - 16px); }
-  .context:not(.hidden) ~ .overlays { display: none; }
+  .context:not(.hidden):not(.collapsed) ~ .overlays { display: none; }
+  .summary-toggle { display: block; width: 100%; margin-bottom: 6px; }
+  .context.collapsed { max-height: 50px; overflow: hidden; padding: 6px 10px; }
+  .context.collapsed ~ .overlays { bottom: 108px; }
   .decisions { right: 10px; bottom: 62px; }
   .legend { bottom: 104px; }
   .modal-layer { padding: 0; }

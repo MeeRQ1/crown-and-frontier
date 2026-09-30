@@ -42,6 +42,28 @@ describe('determinism', () => {
   });
 });
 
+describe('replay and content', () => {
+  it('a bug report (seed + settings + player commands) reproduces the campaign exactly', async () => {
+    const { applyCommand } = await import('../src/sim/commands');
+    const { replayCommands } = await import('../src/sim/replay');
+    const { fnv1a } = await import('../src/sim/save');
+    const sim = createGame({ seed: 5, playerNation: 'vos' });
+    applyCommand(sim, { type: 'research', nation: 'vos', tech: 'drill' });
+    runTicks(sim, 30);
+    applyCommand(sim, { type: 'recruit', nation: 'vos', province: 'vostburg', unit: 'foot', count: 2 });
+    applyCommand(sim, { type: 'build', nation: 'vos', province: 'harnfeld', project: 'infra' });
+    runTicks(sim, 70);
+    const r = replayCommands(sim.state.settings, 'reach', sim.state.playerLog, sim.state.tick);
+    expect(r.rejected).toBe(0);
+    expect(r.checksum).toBe(fnv1a(JSON.stringify(sim.state)));
+  });
+
+  it('content data is valid at startup', async () => {
+    const { validateContent } = await import('../src/sim/content');
+    expect(validateContent(getWorld('reach').scenario)).toEqual([]);
+  });
+});
+
 describe('persistence', () => {
   it('a game saved mid-war continues exactly like the original', () => {
     const sim = createGame({ seed: 3, playerNation: null });

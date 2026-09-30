@@ -28,9 +28,18 @@ export function renderContext(app: App): void {
     app.selectedArmy = null;
     app.selectProvince(null);
   }, { cls: 'small close', title: 'Close (Esc)' });
+  const hasSelection = !!((app.selectedArmy && sim.state.armies[app.selectedArmy]) || app.selectedProvince);
+  el.classList.toggle('collapsed', !hasSelection && !app.ui.summaryOpen);
   if (app.selectedArmy && sim.state.armies[app.selectedArmy]) setChildren(el, close, armyView(app, sim.state.armies[app.selectedArmy]));
   else if (app.selectedProvince) setChildren(el, close, provinceView(app, app.selectedProvince));
-  else setChildren(el, realmSummary(app));
+  else {
+    const toggle = h('button', { class: 'btn small summary-toggle', type: 'button', 'aria-expanded': app.ui.summaryOpen ? 'true' : 'false' }, app.ui.summaryOpen ? 'Hide overview ▼' : 'Realm overview ▲');
+    toggle.addEventListener('click', () => {
+      app.ui.summaryOpen = !app.ui.summaryOpen;
+      app.refresh();
+    });
+    setChildren(el, toggle, realmSummary(app));
+  }
 }
 
 function section(title: string, ...children: (Node | string | null | false)[]): HTMLElement {

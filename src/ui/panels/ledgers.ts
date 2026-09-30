@@ -692,7 +692,7 @@ function logLedger(app: App): HTMLElement {
       playerCommands: st.playerLog,
       recentNotifications: st.notifications.slice(-60),
       aiDiagnostics: st.diagnostics.slice(-150),
-      howToReproduce: 'createGame(settings) then replay playerCommands at their ticks (apply before stepping that tick); compare stateChecksum at the final tick.',
+      howToReproduce: 'npx tsx tools/replay.ts <this file> — replays playerCommands on a fresh game with these settings and compares stateChecksum.',
     };
     downloadText(`crown-and-frontier-bug-${st.settings.seed}-${st.tick}.json`, JSON.stringify(report, null, 1));
   };

@@ -29,16 +29,16 @@ type Row = [
 const ROWS: Row[] = [
   // ── Aurel: rich western plains, open borders ─────────────────────────────
   ['aurelon', 'Aurelon', 520, 640, 'plains', 'goods', 'aur', 6, 85, 'heartland', { infra: 2, fort: 1 }],
-  ['westmere', 'Westmere', 340, 620, 'plains', 'grain', 'aur', 4, 55, 'heartland'],
+  ['westmere', 'Westmere', 340, 620, 'plains', 'grain', 'aur', 3, 50, 'heartland'],
   ['hollin', 'Hollin', 410, 770, 'plains', 'grain', 'aur', 3, 45, 'heartland'],
-  ['brask', 'Brask', 570, 790, 'plains', null, 'aur', 4, 45, 'heartland', { infra: 1 }],
+  ['brask', 'Brask', 570, 790, 'plains', null, 'aur', 3, 40, 'heartland', { infra: 1 }],
   ['terrow', 'Terrow', 690, 690, 'plains', null, 'aur', 3, 40, 'heartland'],
   ['vantry', 'Vantry', 660, 550, 'forest', null, 'aur', 3, 30, 'heartland'],
   ['leyfield', 'Leyfield', 500, 490, 'plains', null, 'aur', 3, 40, 'heartland', { infra: 1 }],
   ['corbel', 'Corbel', 350, 480, 'hills', null, 'aur', 3, 30, 'heartland', { fort: 1 }],
   ['ashford', 'Ashford', 240, 770, 'plains', null, 'aur', 3, 35, 'heartland'],
   ['duncairn', 'Duncairn', 460, 900, 'hills', 'iron', 'aur', 3, 30, 'southmarch', { claims: ['ser'] }],
-  ['marrowby', 'Marrowby', 620, 920, 'plains', null, 'aur', 3, 35, 'southmarch'],
+  ['marrowby', 'Marrowby', 620, 920, 'plains', null, 'aur', 2, 30, 'southmarch'],
   ['elmsgate', 'Elmsgate', 740, 830, 'forest', null, 'aur', 2, 25, 'lakelands', { claims: ['cal'] }],
 
   // ── Vostmark: martial northern uplands, poor soil ────────────────────────

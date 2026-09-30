@@ -9,6 +9,7 @@ import { seedState } from './rng';
 import { months, ownedProvinces, type Sim } from './state';
 import type { Difficulty, GameState, MonthlyLedger, NationId, NationState, Regiment, Settings, UnitType } from './types';
 import { getWorld, validateScenario } from './world';
+import { validateContent } from './content';
 
 export interface NewGameOptions {
   scenario?: string;
@@ -25,7 +26,7 @@ function emptyLedger(): MonthlyLedger {
 
 export function createGame(opts: NewGameOptions = {}): Sim {
   const world = getWorld(opts.scenario ?? 'reach');
-  const errs = validateScenario(world.scenario);
+  const errs = [...validateScenario(world.scenario), ...validateContent(world.scenario)];
   if (errs.length) throw new Error(`Invalid scenario: ${errs.join('; ')}`);
   const seed = (opts.seed ?? 1) >>> 0;
   const settings: Settings = {

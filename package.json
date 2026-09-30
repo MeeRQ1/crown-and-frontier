@@ -14,7 +14,9 @@
     "genmap": "tsx tools/genmap.ts",
     "sim": "tsx tools/sim-cli.ts",
     "package": "tsx tools/package-zip.ts",
-    "verify:web": "tsx tools/verify-web.ts"
+    "verify:web": "tsx tools/verify-web.ts",
+    "examples": "tsx tools/combat-examples.ts",
+    "check": "npm run typecheck && npm test && npm run build && npm run package && npm run verify:web"
   },
   "devDependencies": {
     "@types/d3-delaunay": "^6.0.4",

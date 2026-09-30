@@ -33,6 +33,8 @@ export interface UIState {
   ledgerTab: LedgerTab | null;
   diploTarget: NationId | null;
   logFilter: 'all' | 'urgent' | 'battles';
+  /** realm summary expanded on small screens */
+  summaryOpen: boolean;
 }
 
 export class App {
@@ -51,7 +53,7 @@ export class App {
   hoverProvince: ProvinceId | null = null;
   moveMode = false;
   overlay: Overlay = 'political';
-  ui: UIState = { peace: null, split: {}, ledgerTab: null, diploTarget: null, logFilter: 'all' };
+  ui: UIState = { peace: null, split: {}, ledgerTab: null, diploTarget: null, logFilter: 'all', summaryOpen: false };
 
   private acc = 0;
   private lastFrame = 0;
@@ -66,6 +68,7 @@ export class App {
   private pinchDist = 0;
   private longPress: number | null = null;
   private hoverPos: { x: number; y: number } | null = null;
+  private pointerDown = false;
 
   // DOM
   private gameEl: HTMLElement | null = null;
@@ -92,6 +95,10 @@ export class App {
     window.addEventListener('keydown', (e) => this.onKey(e));
     document.addEventListener('visibilitychange', () => this.onVisibility());
     window.addEventListener('pagehide', () => void this.autosave(true));
+    // never rebuild panels under a pressed pointer (a replaced button would swallow the click)
+    window.addEventListener('pointerdown', () => (this.pointerDown = true), true);
+    window.addEventListener('pointerup', () => (this.pointerDown = false), true);
+    window.addEventListener('pointercancel', () => (this.pointerDown = false), true);
     const unlock = () => this.sound.unlock();
     window.addEventListener('pointerdown', unlock, { passive: true });
     window.addEventListener('keydown', unlock);
@@ -156,7 +163,7 @@ export class App {
     this.selectedArmy = null;
     this.selectedProvince = null;
     this.moveMode = false;
-    this.ui = { peace: null, split: {}, ledgerTab: null, diploTarget: null, logFilter: 'all' };
+    this.ui = { peace: null, split: {}, ledgerTab: null, diploTarget: null, logFilter: 'all', summaryOpen: false };
     this.buildGameDom();
     this.hideScreen();
     const cap = this.player ? sim.state.nations[this.player].capital : null;
@@ -266,7 +273,7 @@ export class App {
       this.drawMap(dt);
       this.mapDirty = false;
     }
-    if (this.uiDirty && t - this.lastUI > 200) {
+    if (this.uiDirty && t - this.lastUI > 200 && !this.pointerDown && !this.editingForm()) {
       this.lastUI = t;
       this.uiDirty = false;
       this.renderUI();
@@ -302,6 +309,13 @@ export class App {
       },
       dt / 1000,
     );
+  }
+
+  /** A select/input inside a panel has focus: rebuilding would close or reset it. */
+  private editingForm(): boolean {
+    const a = document.activeElement as HTMLElement | null;
+    if (!a || !(a.tagName === 'SELECT' || a.tagName === 'INPUT')) return false;
+    return !!a.closest('.modal-layer, .context');
   }
 
   refresh(): void {
@@ -401,6 +415,17 @@ export class App {
     }
   }
 
+  /** Developer/test hook (console only): advance the simulation N weeks immediately. */
+  debugAdvance(weeksToRun: number): void {
+    const sim = this.sim;
+    if (!sim) return;
+    for (let i = 0; i < weeksToRun && !isOver(sim); i++) {
+      step(sim);
+      this.afterTick();
+    }
+    this.refresh();
+  }
+
   showEnd(): void {
     if (!this.sim) return;
     this.showScreen(renderEndScreen(this));
@@ -470,7 +495,11 @@ export class App {
   centerOn(pid: ProvinceId): void {
     if (!this.renderer) return;
     const c = MapRenderer.provinceCenter(pid);
-    this.renderer.camera.centerOn(c.x, c.y, Math.max(this.renderer.camera.zoom, 0.8));
+    const cam = this.renderer.camera;
+    cam.centerOn(c.x, c.y, Math.max(cam.zoom, 0.8));
+    // keep the province clear of the side panel on wide screens
+    const panel = this.contextEl?.getBoundingClientRect();
+    if (panel && panel.width && panel.height > this.mainEl.clientHeight * 0.6 && panel.width < this.mainEl.clientWidth * 0.6) cam.pan(-panel.width / 2, 0);
     this.mapDirty = true;
   }
 
