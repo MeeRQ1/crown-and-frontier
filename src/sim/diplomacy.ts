@@ -107,14 +107,29 @@ export function opinion(sim: Sim, a: NationId, b: NationId): number {
   return clamp(Math.round(v), -100, 100);
 }
 
-/** Provinces owned by `target` that `nid` holds a claim on. */
+const claimIndex = new WeakMap<object, { key: string; map: Map<string, ProvinceId[]> }>();
+
+/**
+ * Provinces owned by `target` that `nid` holds a claim on. Indexed once per
+ * state revision (every change of ownership or claims bumps the revision).
+ */
 export function claimsOn(sim: Sim, nid: NationId, target: NationId): ProvinceId[] {
-  const out: ProvinceId[] = [];
-  for (const pid of sim.world.provIds) {
-    const p = sim.state.provinces[pid];
-    if (p.owner === target && p.claims.includes(nid)) out.push(pid);
+  const key = `${sim.state.tick}|${sim.state.rev}`;
+  let idx = claimIndex.get(sim.state);
+  if (!idx || idx.key !== key) {
+    const map = new Map<string, ProvinceId[]>();
+    for (const pid of sim.world.provIds) {
+      const p = sim.state.provinces[pid];
+      if (!p.owner) continue;
+      for (const c of p.claims) {
+        const k = `${c}|${p.owner}`;
+        (map.get(k) ?? map.set(k, []).get(k)!).push(pid);
+      }
+    }
+    idx = { key, map };
+    claimIndex.set(sim.state, idx);
   }
-  return out;
+  return [...(idx.map.get(`${nid}|${target}`) ?? [])];
 }
 
 // ───────────────────────────── Envoys ───────────────────────────────────────
@@ -529,6 +544,7 @@ export function monthlyDiplomacy(sim: Sim): void {
     const p = st.provinces[f.province];
     if (p.owner && p.owner !== f.nation && !p.claims.includes(f.nation)) {
       p.claims.push(f.nation);
+      bump(sim);
       notify(sim, f.nation, 'normal', 'claim', `We now hold a claim on ${provName(sim, f.province)}.`, { province: f.province });
     }
   }

@@ -180,6 +180,7 @@ export const C = {
     breakAt: 0.25, // side breaks at this fraction of max morale
     maxRounds: 8,
     fortBonus: 0.15, // per level, defender only
+    riverBonus: 0.2, // defender, when every attacker crossed a river into the province
     maxDefense: 0.7,
     flankHorseShare: 0.2,
     flankBonus: 0.15,
@@ -273,6 +274,8 @@ export const C = {
   ai: {
     diagnosticsKept: 400,
     openingMonths: 18, // AI realms start no offensive wars during the opening
+    exposureWeight: 0.15, // share of each open neighbour's strength counted against a war plan (beyond two open borders)
+    secondFrontExhaustion: 25, // an AI at war and this exhausted refuses a call to a second front
   },
 } as const;
 

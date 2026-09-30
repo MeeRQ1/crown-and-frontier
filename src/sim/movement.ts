@@ -10,8 +10,9 @@
 // Paths are revalidated every step; a blocked route is re-planned or halted.
 
 import { TERRAIN } from './config';
+import { CostHeap } from './heap';
 import { nationMods } from './modifiers';
-import { atWar, hasAccess, notify, provName, type Sim } from './state';
+import { atWar, hasAccess, isFriendly, notify, provName, type Sim } from './state';
 import type { Army, NationId, ProvinceId } from './types';
 import { edgeKey } from './world';
 
@@ -27,12 +28,24 @@ export function enterProblem(sim: Sim, nid: NationId, pid: ProvinceId): string |
   return `No military access to ${provName(sim, pid)}: ${who} is neither allied nor at war with you.`;
 }
 
-export function moveCost(sim: Sim, from: ProvinceId, to: ProvinceId): number {
+/** Extra movement points to cross a sea strait. */
+export const STRAIT_COST = 2;
+
+/**
+ * Movement points to step from one province into a neighbour. `nid` applies
+ * national modifiers (Hrafnmark's longships cross straits at no extra cost).
+ */
+export function moveCost(sim: Sim, from: ProvinceId, to: ProvinceId, nid?: NationId): number {
   const t = TERRAIN[sim.world.prov[to].terrain].move;
   const infra = (sim.state.provinces[from].infra + sim.state.provinces[to].infra) / 2;
   let c = t * (1 - 0.12 * infra);
-  if (sim.world.straitSet.has(edgeKey(from, to))) c += 2;
+  if (sim.world.straitSet.has(edgeKey(from, to))) c += Math.max(0, STRAIT_COST + (nid ? nationMods(sim, nid).straitCost : 0));
   return c;
+}
+
+/** True when the border between two provinces is a river. */
+export function isRiver(sim: Sim, a: ProvinceId, b: ProvinceId): boolean {
+  return sim.world.riverSet.has(edgeKey(a, b));
 }
 
 export function armySpeed(sim: Sim, a: Army): number {
@@ -58,15 +71,10 @@ export function findPath(sim: Sim, nid: NationId, from: ProvinceId, to: Province
   const dist: Record<string, number> = { [from]: 0 };
   const prev: Record<string, ProvinceId> = {};
   const done = new Set<ProvinceId>();
-  const open: ProvinceId[] = [from];
-  while (open.length) {
-    let bi = 0;
-    for (let i = 1; i < open.length; i++) {
-      const d = dist[open[i]];
-      const bd = dist[open[bi]];
-      if (d < bd || (d === bd && open[i] < open[bi])) bi = i;
-    }
-    const cur = open.splice(bi, 1)[0];
+  const open = new CostHeap();
+  open.push(0, from);
+  while (open.size) {
+    const cur = open.pop();
     if (cur === to) break;
     if (done.has(cur)) continue;
     done.add(cur);
@@ -74,11 +82,11 @@ export function findPath(sim: Sim, nid: NationId, from: ProvinceId, to: Province
       if (done.has(nb)) continue;
       if (avoid && avoid.has(nb) && nb !== to) continue;
       if (!canEnter(sim, nid, nb)) continue;
-      const nd = dist[cur] + moveCost(sim, cur, nb);
+      const nd = dist[cur] + moveCost(sim, cur, nb, nid);
       if (dist[nb] === undefined || nd < dist[nb]) {
         dist[nb] = nd;
         prev[nb] = cur;
-        open.push(nb);
+        open.push(nd, nb);
       }
     }
   }
@@ -99,7 +107,7 @@ export function etaWeeks(sim: Sim, a: Army, path: ProvinceId[], progress = 0): n
   let weeks = 0;
   let carry = progress;
   for (const step of path) {
-    const cost = moveCost(sim, from, step);
+    const cost = moveCost(sim, from, step, a.nation);
     const need = Math.max(0, cost - carry);
     weeks += Math.max(1, Math.ceil(need / speed));
     carry = 0;
@@ -144,9 +152,10 @@ export function weeklyMovement(sim: Sim): void {
       next = a.path[0];
     }
     a.progress += armySpeed(sim, a);
-    const cost = moveCost(sim, a.location, next);
+    const cost = moveCost(sim, a.location, next, a.nation);
     if (a.progress >= cost) {
       a.progress = Math.min(a.progress - cost, 1);
+      a.lastMove = { from: a.location, tick: st.tick };
       a.location = next;
       a.path.shift();
       a.stationary = 0;
@@ -154,6 +163,39 @@ export function weeklyMovement(sim: Sim): void {
         a.progress = 0;
         if (a.retreating) a.retreating = false;
       }
+    }
+  }
+}
+
+/** Why an army of `nid` cannot be stationed in a province (null = it can). */
+export function stationProblem(sim: Sim, nid: NationId, pid: ProvinceId): string | null {
+  const p = sim.state.provinces[pid];
+  if (!p) return 'Unknown province.';
+  if (!p.controller || !isFriendly(sim, nid, p.controller)) return 'Armies can be stationed only in land that we or our allies control.';
+  return null;
+}
+
+/**
+ * Standing orders, before movement: an army stationed somewhere marches back
+ * whenever it is idle elsewhere (after a retreat, for example). A station lost
+ * to the enemy cancels the order.
+ */
+export function weeklyOrders(sim: Sim): void {
+  const st = sim.state;
+  for (const id of Object.keys(st.armies).sort()) {
+    const a = st.armies[id];
+    const o = a.order;
+    if (!o) continue;
+    if (stationProblem(sim, a.nation, o.province)) {
+      a.order = null;
+      notify(sim, a.nation, 'normal', 'move', `${a.name} is no longer stationed at ${provName(sim, o.province)}: we no longer hold it.`, { army: a.id, province: o.province });
+      continue;
+    }
+    if (a.battle || a.retreating || a.path.length || a.location === o.province) continue;
+    const r = findPath(sim, a.nation, a.location, o.province);
+    if (r && r.path.length) {
+      a.path = r.path;
+      a.progress = 0;
     }
   }
 }

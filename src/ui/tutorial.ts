@@ -34,7 +34,7 @@ function suggestProject(app: App): { pid: string; kind: ProjectKind } | { reason
 
 const STEPS: Step[] = [
   {
-    title: 'Welcome to the Reach',
+    title: 'Welcome',
     text: (app) => {
       const d = app.sim!.world.nationDefs[app.player!];
       return [`You rule the ${d.name}. ${d.summary} The game is paused: nothing happens until you press ▶ or Space, so take your time.`];
@@ -87,14 +87,14 @@ const STEPS: Step[] = [
   {
     title: 'Terrain and supply',
     text: () => ['Open the Supply overlay (bottom left). Armies are fed along a supply line from integrated or fortified provinces; beyond it they forage and suffer. Mountains, marshes and forests slow armies, help defenders and feed fewer troops.'],
-    done: (app) => app.overlay === 'supply',
-    show: (app) => app.setOverlay('supply'),
+    done: (app) => app.mode === 'supply',
+    show: (app) => app.setMode('supply'),
   },
   {
     title: 'The frontier',
     text: () => ['Now open the Integration overlay. New land starts as raw frontier: little tax, no recruits, unrest. Roads, garrisons, charters and claims integrate it. Conquer faster than you can integrate and your realm overextends.'],
-    done: (app) => app.overlay === 'integration',
-    show: (app) => app.setOverlay('integration'),
+    done: (app) => app.mode === 'frontier',
+    show: (app) => app.setMode('frontier'),
   },
   {
     title: 'Neighbours',

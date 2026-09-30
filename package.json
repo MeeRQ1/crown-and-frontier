@@ -1,6 +1,6 @@
 {
   "name": "crown-and-frontier",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "private": true,
   "description": "Crown & Frontier: a single-player browser grand strategy game about integrating a frontier realm.",
   "type": "module",
@@ -16,7 +16,8 @@
     "package": "tsx tools/package-zip.ts",
     "verify:web": "tsx tools/verify-web.ts",
     "examples": "tsx tools/combat-examples.ts",
-    "check": "npm run typecheck && npm test && npm run build && npm run package && npm run verify:web"
+    "check": "npm run typecheck && npm test && npm run build && npm run package && npm run verify:web",
+    "genworld": "tsx tools/genworld.ts"
   },
   "devDependencies": {
     "@types/d3-delaunay": "^6.0.4",
@@ -27,5 +28,10 @@
     "typescript": "~5.9.3",
     "vite": "^8.3.1",
     "vitest": "^5.0.2"
+  },
+  "dependencies": {
+    "@fontsource-variable/alegreya": "^5.3.0",
+    "@fontsource-variable/source-sans-3": "^5.3.0",
+    "@fontsource/alegreya-sc": "^5.3.0"
   }
 }

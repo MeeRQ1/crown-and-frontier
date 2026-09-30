@@ -1,56 +1,56 @@
 # AI-only campaign report
 
-Runs: 30 (seeds 1–10, difficulties easy, normal, hard, 40-year limit). Node v22.22.2.
+Map: reach. Runs: 30 (seeds 1–10, difficulties easy, normal, hard, 40-year limit). Node v22.22.2.
 
-Winners: aur 12, tar 11, ser 2, dre 2, cal 1, fen 2
-Victory paths: score 23, diplomatic 3, economic 2, territorial 2
-Average campaign length: 38.1 years; wars per campaign 30.2; average war 10.7 months; peace treaties 49.4; forced peaces 0.0; battles 116.
-Coalitions formed per campaign: 4.4; coalition wars: 1.0.
+Winners: aur 15, fen 3, mor 1, tar 8, ser 2, cal 1
+Victory paths: economic 5, diplomatic 3, score 18, territorial 4
+Average campaign length: 36.0 years; wars per campaign 26.8; average war 10.9 months; peace treaties 41.9; forced peaces 0.0; battles 95.
+Coalitions formed per campaign: 3.9; coalition wars: 2.0.
 Eliminations per campaign: 0.03; bankruptcies per campaign: 0.00.
-Performance: 3.15 ms/tick average, 56 ms worst tick, heap ≈ 76 MB.
+Performance: 3.83 ms/tick average, 171 ms worst tick, heap ≈ 69 MB.
 Invariant failures: none
 
 | Nation | Wins | Avg start→end provinces | Alive % | Avg wars declared | Battles won/lost | Idle army share | Avg techs |
 |---|---|---|---|---|---|---|---|
-| aur | 12 | 12→16.3 | 100% | 4.0 | 11.4/7.5 | 7% | 17.6 |
-| vos | 0 | 11→9.5 | 100% | 3.8 | 15.5/7.7 | 11% | 16.2 |
-| ser | 2 | 9→10.5 | 100% | 0.2 | 4.2/11.0 | 31% | 17.5 |
-| cal | 1 | 8→7.6 | 100% | 0.9 | 5.1/21.4 | 13% | 17.2 |
-| ist | 0 | 8→6.5 | 100% | 0.3 | 3.0/16.7 | 13% | 16.4 |
-| dre | 2 | 10→14.8 | 100% | 9.2 | 30.3/7.9 | 9% | 16.4 |
-| mor | 0 | 10→7.2 | 97% | 5.0 | 19.6/19.6 | 10% | 15.1 |
-| fen | 2 | 7→7.5 | 100% | 0.1 | 1.7/19.2 | 11% | 16.0 |
-| tar | 11 | 12→19.1 | 100% | 6.6 | 25.3/5.6 | 3% | 17.2 |
+| aur | 15 | 12→18.0 | 100% | 3.4 | 9.8/6.8 | 14% | 16.9 |
+| vos | 0 | 11→10.1 | 100% | 3.0 | 11.3/7.9 | 15% | 15.1 |
+| ser | 2 | 9→10.1 | 100% | 0.1 | 3.0/8.2 | 36% | 16.5 |
+| cal | 1 | 8→7.9 | 100% | 0.7 | 3.7/17.4 | 11% | 16.6 |
+| ist | 0 | 8→6.1 | 100% | 0.2 | 2.0/12.2 | 11% | 15.7 |
+| dre | 0 | 10→12.8 | 100% | 8.3 | 24.8/6.1 | 9% | 15.2 |
+| mor | 1 | 10→8.4 | 97% | 5.1 | 18.6/14.3 | 6% | 14.5 |
+| fen | 3 | 7→7.5 | 100% | 0.1 | 1.6/15.4 | 12% | 15.0 |
+| tar | 8 | 12→18.1 | 100% | 5.9 | 20.3/7.8 | 3% | 16.1 |
 
 | Seed | Difficulty | Result | Year | Wars | Battles | Eliminated |
 |---|---|---|---|---|---|---|
-| 1 | easy | aur (score) | 1680.1 | 30 | 102 | — |
-| 2 | easy | tar (score) | 1680.1 | 23 | 76 | — |
-| 3 | easy | tar (score) | 1680.1 | 27 | 156 | — |
-| 4 | easy | tar (score) | 1680.1 | 39 | 168 | — |
-| 5 | easy | aur (score) | 1680.1 | 34 | 135 | — |
-| 6 | easy | ser (diplomatic) | 1671.6 | 31 | 140 | — |
-| 7 | easy | aur (score) | 1680.1 | 27 | 100 | — |
-| 8 | easy | tar (score) | 1680.1 | 37 | 110 | — |
-| 9 | easy | aur (score) | 1680.1 | 30 | 119 | — |
-| 10 | easy | aur (score) | 1680.1 | 41 | 140 | — |
-| 1 | normal | tar (score) | 1680.1 | 33 | 173 | — |
-| 2 | normal | aur (economic) | 1675.3 | 29 | 111 | — |
-| 3 | normal | dre (score) | 1680.1 | 27 | 109 | — |
-| 4 | normal | aur (economic) | 1665.2 | 25 | 59 | — |
-| 5 | normal | aur (score) | 1680.1 | 34 | 111 | — |
-| 6 | normal | cal (score) | 1680.1 | 28 | 124 | — |
-| 7 | normal | fen (diplomatic) | 1668.8 | 26 | 123 | — |
-| 8 | normal | tar (territorial) | 1675.2 | 22 | 101 | — |
-| 9 | normal | aur (score) | 1680.1 | 34 | 131 | — |
-| 10 | normal | dre (score) | 1680.1 | 22 | 85 | — |
-| 1 | hard | aur (score) | 1680.1 | 35 | 134 | — |
-| 2 | hard | fen (diplomatic) | 1678.8 | 37 | 139 | — |
-| 3 | hard | tar (score) | 1680.1 | 24 | 91 | — |
-| 4 | hard | aur (score) | 1680.1 | 38 | 117 | mor |
-| 5 | hard | tar (score) | 1680.1 | 33 | 134 | — |
-| 6 | hard | aur (score) | 1680.1 | 19 | 62 | — |
-| 7 | hard | tar (score) | 1680.1 | 29 | 96 | — |
-| 8 | hard | ser (score) | 1680.1 | 28 | 149 | — |
-| 9 | hard | tar (score) | 1680.1 | 35 | 120 | — |
-| 10 | hard | tar (territorial) | 1666.8 | 28 | 62 | — |
+| 1 | easy | aur (economic) | 1671.9 | 33 | 108 | — |
+| 2 | easy | fen (diplomatic) | 1674.8 | 14 | 41 | — |
+| 3 | easy | aur (score) | 1680.1 | 18 | 73 | — |
+| 4 | easy | fen (diplomatic) | 1671.8 | 27 | 99 | — |
+| 5 | easy | mor (score) | 1680.1 | 32 | 127 | — |
+| 6 | easy | aur (economic) | 1666.5 | 31 | 58 | — |
+| 7 | easy | tar (territorial) | 1671.9 | 33 | 88 | mor |
+| 8 | easy | aur (score) | 1680.1 | 35 | 147 | — |
+| 9 | easy | aur (score) | 1680.1 | 29 | 112 | — |
+| 10 | easy | aur (economic) | 1666.3 | 25 | 81 | — |
+| 1 | normal | aur (score) | 1680.1 | 25 | 135 | — |
+| 2 | normal | ser (score) | 1680.1 | 28 | 132 | — |
+| 3 | normal | ser (score) | 1680.1 | 13 | 67 | — |
+| 4 | normal | tar (score) | 1680.1 | 37 | 136 | — |
+| 5 | normal | aur (score) | 1680.1 | 33 | 98 | — |
+| 6 | normal | aur (score) | 1680.1 | 25 | 118 | — |
+| 7 | normal | fen (diplomatic) | 1677.9 | 35 | 154 | — |
+| 8 | normal | tar (territorial) | 1668.9 | 36 | 80 | — |
+| 9 | normal | aur (score) | 1680.1 | 35 | 138 | — |
+| 10 | normal | aur (economic) | 1675.3 | 35 | 112 | — |
+| 1 | hard | aur (score) | 1680.1 | 16 | 53 | — |
+| 2 | hard | aur (economic) | 1678.1 | 22 | 81 | — |
+| 3 | hard | aur (score) | 1680.1 | 15 | 68 | — |
+| 4 | hard | tar (territorial) | 1654.8 | 19 | 39 | — |
+| 5 | hard | tar (score) | 1680.1 | 24 | 101 | — |
+| 6 | hard | aur (score) | 1680.1 | 22 | 60 | — |
+| 7 | hard | tar (score) | 1680.1 | 29 | 101 | — |
+| 8 | hard | tar (territorial) | 1659.5 | 23 | 57 | — |
+| 9 | hard | tar (score) | 1680.1 | 30 | 133 | — |
+| 10 | hard | cal (score) | 1680.1 | 24 | 61 | — |

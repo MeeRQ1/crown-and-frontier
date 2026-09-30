@@ -380,7 +380,20 @@ export function warCandidates(sim: Sim, nid: NationId): { cands: WarCandidate[];
     let extra = 0;
     const c = coalitionAgainst(sim, nid);
     if (c?.members.includes(t)) for (const m of c.members) if (m !== t) extra += nationPotential(sim, m) * 0.6;
-    const ratio = mine / Math.max(0.5, theirs + extra);
+    // exposure: a realm with more open borders than it can watch must fear a
+    // stab in the back. Neighbours not bound to us by treaty and not friendly
+    // count, once there are more than two of them (a crossroads realm).
+    let exposure = 0;
+    let open = 0;
+    for (const o of aliveNations(sim)) {
+      if (o === nid || o === t || !borders(sim, nid, o)) continue;
+      if (hasTreaty(sim, 'alliance', o, nid) || hasTreaty(sim, 'nap', o, nid) || opinion(sim, o, nid) >= 25) continue;
+      open++;
+      exposure += nationPotential(sim, o) * C.ai.exposureWeight;
+    }
+    exposure *= Math.max(0, open - 2) / Math.max(1, open);
+    if (exposure > mine * 0.3) notes.push('exposed on other borders');
+    const ratio = mine / Math.max(0.5, theirs + extra + exposure);
     let need = p.warRatio;
     if (p.id === 'opportunist' && warsOf(sim, t).length) need *= 0.75;
     if (rival?.nid === t) need *= 0.85;

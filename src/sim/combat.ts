@@ -14,7 +14,9 @@
 //             morale mul = 0.6 + 0.4 * morale ratio
 //   casualties inflicted = fire * 55 * roll(0.85..1.15), attacker's fire reduced by
 //             defence = terrain + fort (0.15/level, if the defenders hold it) +
-//             entrenchment (0.1 after 2 weeks, 0.2 after 4) + tech, capped at 0.7
+//             entrenchment (0.1 after 2 weeks, 0.2 after 4) + tech + river
+//             (0.2 when every attacker crossed a river border to open the battle),
+//             capped at 0.7
 //   morale loss = 0.15 + (casualties/men) * 8 * enemy shock (horse 1.6, guns 1.2, foot 1.0)
 // End: a side breaks at 25% morale or 10% of its starting men; if both break the
 // side with the lower morale ratio loses (attacker on ties); after 8 rounds the
@@ -26,7 +28,7 @@ import { C, TERRAIN, UNITS } from './config';
 import { removePopulation, reserveCap } from './economy';
 import { maxMorale, removeArmy } from './military';
 import { nationMods } from './modifiers';
-import { canEnter } from './movement';
+import { canEnter, isRiver } from './movement';
 import { range } from './rng';
 import { atWar, bump, isFriendly, nationName, notify, provName, type Sim } from './state';
 import { supplyCombatMul, supplyDistances, supplyStatus } from './supply';
@@ -158,12 +160,16 @@ export function entrenchBonus(sim: Sim, nid: NationId, stationary: number): numb
   return base * Math.max(0, 1 + nationMods(sim, nid).entrench);
 }
 
-export function defenceBonus(sim: Sim, pid: ProvinceId, def: SideSnap): { value: number; notes: string[] } {
+export function defenceBonus(sim: Sim, pid: ProvinceId, def: SideSnap, river = false): { value: number; notes: string[] } {
   const terr = TERRAIN[sim.world.prov[pid].terrain];
   const p = sim.state.provinces[pid];
   const notes: string[] = [];
   let v = terr.defense;
   if (terr.defense > 0) notes.push(`${terr.label}: defender +${Math.round(terr.defense * 100)}%`);
+  if (river) {
+    v += C.combat.riverBonus;
+    notes.push(`Attack across a river: defender +${Math.round(C.combat.riverBonus * 100)}%`);
+  }
   const lead = def.armies[0]?.nation;
   if (lead && p.fort > 0 && isFriendly(sim, lead, p.controller)) {
     v += C.combat.fortBonus * p.fort;
@@ -199,10 +205,10 @@ export interface RoundResult {
 }
 
 /** Resolves one round on the snapshots in place. */
-export function resolveRound(sim: Sim, pid: ProvinceId, att: SideSnap, def: SideSnap, rollA: number, rollD: number): RoundResult {
+export function resolveRound(sim: Sim, pid: ProvinceId, att: SideSnap, def: SideSnap, rollA: number, rollD: number, river = false): RoundResult {
   const A = sideCalc(sim, pid, att);
   const D = sideCalc(sim, pid, def);
-  const dfb = defenceBonus(sim, pid, def);
+  const dfb = defenceBonus(sim, pid, def, river);
   const defCas = A.fire * C.combat.casualtyPerFire * rollA * (1 - dfb.value);
   const attCas = D.fire * C.combat.casualtyPerFire * rollD;
   const attMen = sideMen(att);
@@ -282,7 +288,7 @@ function cloneSide(s: SideSnap): SideSnap {
   return { armies: s.armies.map((a) => ({ ...a, regs: a.regs.map((r) => ({ ...r })) })) };
 }
 
-export function simulateSnap(sim: Sim, pid: ProvinceId, att: SideSnap, def: SideSnap, rollA: number, rollD: number) {
+export function simulateSnap(sim: Sim, pid: ProvinceId, att: SideSnap, def: SideSnap, rollA: number, rollD: number, river = false) {
   const a = cloneSide(att);
   const d = cloneSide(def);
   const as = sideMen(a);
@@ -294,7 +300,7 @@ export function simulateSnap(sim: Sim, pid: ProvinceId, att: SideSnap, def: Side
   let defLoss = 0;
   while (!out && round < C.combat.maxRounds + 1) {
     round++;
-    const r = resolveRound(sim, pid, a, d, rollA, rollD);
+    const r = resolveRound(sim, pid, a, d, rollA, rollD, river);
     if (round === 1) factors = r.factors;
     attLoss += r.attCas;
     defLoss += r.defCas;
@@ -303,15 +309,20 @@ export function simulateSnap(sim: Sim, pid: ProvinceId, att: SideSnap, def: Side
   return { outcome: out ?? 'defender', rounds: round, attLoss, defLoss, factors };
 }
 
-/** Battle forecast from the attacker's perspective with bounded rolls. */
-export function forecastBattle(sim: Sim, pid: ProvinceId, attackers: Army[], defenders: Army[]): Forecast {
+/**
+ * Battle forecast from the attacker's perspective with bounded rolls.
+ * `from`: the province the attackers step out of (defaults to each attacker's
+ * location); a river border there gives the defender the river bonus.
+ */
+export function forecastBattle(sim: Sim, pid: ProvinceId, attackers: Army[], defenders: Army[], from?: ProvinceId): Forecast {
   const att: SideSnap = { armies: attackers.map((x) => snapArmy(sim, x)) };
   const def: SideSnap = { armies: defenders.map((x) => snapArmy(sim, x)) };
   // an attacker arriving has not dug in
   for (const a of att.armies) a.stationary = 0;
-  const lo = simulateSnap(sim, pid, att, def, C.combat.rollMin, C.combat.rollMax);
-  const mid = simulateSnap(sim, pid, att, def, 1, 1);
-  const hi = simulateSnap(sim, pid, att, def, C.combat.rollMax, C.combat.rollMin);
+  const river = attackers.length > 0 && attackers.every((a) => isRiver(sim, from ?? a.location, pid));
+  const lo = simulateSnap(sim, pid, att, def, C.combat.rollMin, C.combat.rollMax, river);
+  const mid = simulateSnap(sim, pid, att, def, 1, 1, river);
+  const hi = simulateSnap(sim, pid, att, def, C.combat.rollMax, C.combat.rollMin, river);
   const outcomes = [lo.outcome, mid.outcome, hi.outcome];
   const wins = outcomes.filter((o) => o === 'attacker').length;
   return {
@@ -403,6 +414,12 @@ export function detectBattles(sim: Sim): void {
       if (isFriendly(sim, a.nation, anchor.nation) && atWar(sim, a.nation, foe.nation)) join(b, a, 'def');
       else if (isFriendly(sim, a.nation, foe.nation) && atWar(sim, a.nation, anchor.nation)) join(b, a, 'att');
     }
+    // attackers who all stepped across a river this week fight at a disadvantage
+    const crossed = (id: string) => {
+      const lm = st.armies[id].lastMove;
+      return !!lm && lm.tick === st.tick && isRiver(sim, lm.from, pid);
+    };
+    if (b.attackers.length && b.attackers.every(crossed)) b.river = true;
     const atk = sim.world.nationDefs[foe.nation]?.short;
     const dfn = sim.world.nationDefs[anchor.nation]?.short;
     for (const n of new Set([...b.attackerNations, ...b.defenderNations])) {
@@ -476,7 +493,7 @@ export function weeklyCombat(sim: Sim): void {
     for (const a of att.armies) a.stationary = 0; // attackers never count as entrenched
     const rollA = range(st.rng, C.combat.rollMin, C.combat.rollMax);
     const rollD = range(st.rng, C.combat.rollMin, C.combat.rollMax);
-    const r = resolveRound(sim, b.province, att, def, rollA, rollD);
+    const r = resolveRound(sim, b.province, att, def, rollA, rollD, !!b.river);
     if (b.rounds.length === 0) b.factors = r.factors;
     // write back to armies
     for (const snap of [...att.armies, ...def.armies]) writeBack(sim, snap);

@@ -60,8 +60,9 @@ export function monthlyResearch(sim: Sim): void {
       continue;
     }
     const t = TECHS[cur];
-    if (n.research.progress >= t.cost) {
-      n.research.progress -= t.cost;
+    const cost = techCost(sim, cur);
+    if (n.research.progress >= cost) {
+      n.research.progress -= cost;
       n.research.done.push(cur);
       n.research.current = null;
       notify(sim, nid, 'normal', 'research', `Research complete: ${t.name}. Choose the next technology.`);
@@ -90,4 +91,13 @@ export function setPolicy(sim: Sim, nid: NationId, policy: string): void {
   n.treasury -= policySwitchCost(sim, nid);
   n.policy = policy;
   n.policySince = sim.state.tick;
+}
+
+/**
+ * Research points a technology costs on the map being played. Larger maps
+ * have larger realms that research faster, so their costs are scaled up
+ * (ScenarioDef.researchCostMul) to keep the tree lasting a whole campaign.
+ */
+export function techCost(sim: Sim, id: string): number {
+  return Math.round(TECHS[id].cost * (sim.world.scenario.researchCostMul ?? 1));
 }

@@ -329,8 +329,15 @@ function warOps(sim: Sim, nid: NationId, armies: Army[]): void {
     }
   }
   n.ai.objectives = newObjectives;
-  // unassigned armies: recover, withdraw from danger, or hold the rally point
+  // unassigned armies: recover, withdraw from danger, or cover a front
   const rally = n.ai.rally ?? n.capital;
+  const posts = frontPosts(sim, nid);
+  const covered = new Map<ProvinceId, number>();
+  for (const a of armies) {
+    if (!st.armies[a.id] || !assigned.has(a.id)) continue;
+    const post = posts.find((p) => p.post === a.location || (sim.world.hops[p.post]?.[a.location] ?? 99) <= 1);
+    if (post) covered.set(post.post, (covered.get(post.post) ?? 0) + armyStrength(sim, a));
+  }
   for (const a of armies) {
     if (assigned.has(a.id) || !st.armies[a.id]) continue;
     const r = reach.get(a.id)!;
@@ -346,9 +353,59 @@ function warOps(sim: Sim, nid: NationId, armies: Army[]): void {
       }
     }
     if (a.task?.startsWith('garrison:') && st.provinces[a.task.slice(9)]?.controller === nid && danger === 0) continue;
+    // cover the front whose threat is least matched by the armies already there
+    const mine2 = armyStrength(sim, a);
+    let best: { post: ProvinceId; gap: number } | null = null;
+    for (const p of posts) {
+      if (r.dist[p.post] === undefined || r.dist[p.post] > 20) continue;
+      const gap = p.threat - (covered.get(p.post) ?? 0);
+      if (gap > 0 && (!best || gap > best.gap)) best = { post: p.post, gap };
+    }
+    if (best) {
+      covered.set(best.post, (covered.get(best.post) ?? 0) + mine2);
+      a.task = `front:${best.post}`;
+      moveTo(sim, a, best.post);
+      continue;
+    }
     a.task = 'reserve';
     if (rally && a.location !== rally) moveTo(sim, a, rally);
   }
+}
+
+/**
+ * Fronts in war: for each enemy, the province of ours best placed to face
+ * its armies (a fortified or developed border province), with the strength
+ * of that enemy's armies within three marches of our land.
+ */
+export function frontPosts(sim: Sim, nid: NationId): Array<{ enemy: NationId; post: ProvinceId; threat: number }> {
+  const st = sim.state;
+  const mine = ownedProvinces(sim, nid).filter((p) => st.provinces[p].controller === nid);
+  const out: Array<{ enemy: NationId; post: ProvinceId; threat: number }> = [];
+  for (const e of enemiesOf(sim, nid)) {
+    const border = mine.filter((p) => sim.world.prov[p].neighbors.some((nb) => st.provinces[nb].controller === e));
+    if (!border.length) continue;
+    let threat = 0;
+    const near: ProvinceId[] = [];
+    for (const a of armiesOf(sim, e)) {
+      if (a.retreating) continue;
+      let d = 99;
+      for (const p of border) d = Math.min(d, sim.world.hops[a.location]?.[p] ?? 99);
+      if (d <= 3) {
+        threat += armyStrength(sim, a);
+        near.push(a.location);
+      }
+    }
+    if (threat <= 0) continue;
+    // the post: closest border province to their armies, preferring forts and development
+    const score = (p: ProvinceId) => {
+      let d = 99;
+      for (const q of near) d = Math.min(d, sim.world.hops[p]?.[q] ?? 99);
+      return d * 3 - st.provinces[p].fort * 2 - st.provinces[p].dev * 0.3;
+    };
+    const post = [...border].sort((x, y) => score(x) - score(y) || (x < y ? -1 : 1))[0];
+    out.push({ enemy: e, post, threat });
+  }
+  return out.sort((a, b) => b.threat - a.threat || (a.post < b.post ? -1 : 1));
 }
 
 /** Weekly operational pass for one AI realm. */

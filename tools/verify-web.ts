@@ -88,8 +88,8 @@ async function watch(page: Page): Promise<string[]> {
 }
 
 async function startCampaign(page: Page): Promise<void> {
-  await page.getByText('New campaign').click();
-  await page.getByText('Begin campaign').click();
+  await page.getByRole('button', { name: /New campaign/ }).click();
+  await page.locator('button:visible', { hasText: 'Begin campaign' }).first().click();
   await page.waitForSelector('canvas.map');
   await page.waitForTimeout(500);
 }
@@ -111,11 +111,45 @@ async function flow(browser: Browser, base: string, label: string): Promise<void
   const problems = await watch(page);
   const t0 = Date.now();
   await page.goto(base);
-  await page.waitForSelector('.screen .menu-buttons button', { timeout: 15000 });
+  await page.waitForSelector('.screen .menu-list button', { timeout: 15000 });
   const loadMs = Date.now() - t0;
   await startCampaign(page);
   const drawn = await canvasDrawn(page);
-  record(`${label}: loads, starts a campaign and draws the map`, drawn && problems.length === 0, `menu in ${loadMs} ms${problems.length ? `; ${problems.slice(0, 3).join('; ')}` : ''}`);
+  const info = await page.evaluate(() => {
+    const a = (window as any).cnf;
+    return `${a.sim.state.scenarioId}, ${a.sim.world.provIds.length} provinces`;
+  });
+  record(`${label}: loads, starts a campaign and draws the map`, drawn && problems.length === 0, `menu in ${loadMs} ms; ${info}${problems.length ? `; ${problems.slice(0, 3).join('; ')}` : ''}`);
+  await page.close();
+}
+
+/** Campaign setup: choose the quick map, a realm, begin; map modes and navigation keys. */
+async function mapChoice(browser: Browser, base: string): Promise<void> {
+  const page = await browser.newPage({ viewport: { width: 1366, height: 768 } });
+  const problems = await watch(page);
+  await page.goto(base);
+  await page.waitForSelector('.screen .menu-list button', { timeout: 15000 });
+  await page.getByRole('button', { name: /New campaign/ }).click();
+  await page.locator('[data-map="reach"]').click();
+  await page.locator('[data-realm="fen"]').click();
+  await page.waitForTimeout(300);
+  await page.locator('button:visible', { hasText: 'Begin campaign' }).first().click();
+  await page.waitForSelector('canvas.map');
+  await page.waitForTimeout(400);
+  const st = await page.evaluate(() => {
+    const a = (window as any).cnf;
+    return { map: a.sim.state.scenarioId, n: a.sim.world.provIds.length, player: a.player };
+  });
+  record('Campaign setup starts the chosen map and realm (the Reach, Fenward)', st.map === 'reach' && st.n === 99 && st.player === 'fen' && problems.length === 0, `${st.map}, ${st.n} provinces, ${st.player}`);
+  await page.locator('canvas.map').focus();
+  await page.keyboard.press('Shift+Digit2');
+  await page.waitForTimeout(100);
+  const mode = await page.evaluate(() => (window as any).cnf.mode);
+  const z0 = await page.evaluate(() => (window as any).cnf.renderer.camera.zoom);
+  await page.keyboard.press('KeyF');
+  await page.waitForTimeout(900);
+  const z1 = await page.evaluate(() => (window as any).cnf.renderer.camera.zoom);
+  record('Keyboard: Shift+2 shows the Terrain map; F fits the whole map', mode === 'terrain' && z1 < z0, `mode ${mode}, zoom ${z0.toFixed(3)} → ${z1.toFixed(3)}`);
   await page.close();
 }
 
@@ -129,6 +163,7 @@ async function main(): Promise<void> {
   try {
     await flow(browser, `${origin}/`, 'Site root');
     await flow(browser, `${origin}${SUB}`, 'Project subpath');
+    await mapChoice(browser, `${origin}/`);
     if (zipFiles) {
       record('Release ZIP has index.html at its root', zipFiles.has('index.html'), `${zipFiles.size} files`);
       await flow(browser, `${origin}/zip/`, 'Unpacked release ZIP');
@@ -140,8 +175,8 @@ async function main(): Promise<void> {
       const problems = await watch(page);
       await page.goto(`${origin}/host.html`);
       const frame = page.frameLocator('#game');
-      await frame.getByText('New campaign').click();
-      await frame.getByText('Begin campaign').click();
+      await frame.getByRole('button', { name: /New campaign/ }).click();
+      await frame.locator('button:visible', { hasText: 'Begin campaign' }).first().click();
       await frame.locator('canvas.map').waitFor();
       await page.waitForTimeout(400);
       const f = page.frames().find((x) => x.url().includes(SUB))!;
@@ -193,37 +228,40 @@ async function main(): Promise<void> {
       });
       record('Audio starts only after a user gesture, without errors', audio !== 'none', `AudioContext state: ${audio}`);
       await page.keyboard.press('d');
-      const diplo = await page.locator('.modal h2', { hasText: 'Diplomacy' }).count();
+      await page.waitForTimeout(150);
+      const diplo = await page.locator('.drawer:not(.closed) h2', { hasText: 'Diplomacy' }).count();
       await page.keyboard.press('Escape');
-      record('Keyboard: D opens Diplomacy, Esc closes', diplo === 1);
+      await page.waitForTimeout(150);
+      const closed = await page.locator('.drawer.closed').count();
+      record('Keyboard: D opens Diplomacy, Esc closes', diplo === 1 && closed === 1);
       // save to a slot, return to the menu, load it back
       const tick = await page.evaluate(() => (window as any).cnf.sim.state.tick);
-      await page.getByRole('button', { name: 'Menu' }).click();
-      await page.getByText('Save to slot-1').click();
+      await page.getByRole('button', { name: 'Game menu' }).click();
+      await page.locator('.modal').getByRole('button', { name: 'Slot 1' }).click();
       await page.waitForTimeout(300);
-      await page.getByRole('button', { name: 'Menu' }).click();
-      const [download] = await Promise.all([page.waitForEvent('download'), page.getByText('Export to file').click()]);
+      await page.getByRole('button', { name: 'Game menu' }).click();
+      const [download] = await Promise.all([page.waitForEvent('download'), page.getByRole('button', { name: 'Export to file' }).click()]);
       const exportPath = join('reports', 'tmp', 'export.json');
       mkdirSync(join('reports', 'tmp'), { recursive: true });
       await download.saveAs(exportPath);
-      await page.getByText('Save & quit to menu').click();
-      await page.waitForSelector('.screen .menu-buttons button');
-      await page.getByText('Load or import a save').click();
-      await page.locator('.card', { hasText: 'slot-1' }).getByRole('button', { name: 'Load' }).click();
+      await page.getByRole('button', { name: 'Save and quit to menu' }).click();
+      await page.waitForSelector('.screen .menu-list button');
+      await page.getByRole('button', { name: /Load or import/ }).click();
+      await page.locator('.save-card', { hasText: 'Slot 1' }).getByRole('button', { name: 'Load' }).click();
       await page.waitForSelector('canvas.map');
       const loaded = await page.evaluate(() => (window as any).cnf.sim.state.tick);
       record('Save to a slot and load it back', loaded === tick, `tick ${tick} → ${loaded}`);
       // import the exported file
-      await page.getByRole('button', { name: 'Menu' }).click();
-      const [chooser] = await Promise.all([page.waitForEvent('filechooser'), page.getByText('Import file…').click()]);
+      await page.getByRole('button', { name: 'Game menu' }).click();
+      const [chooser] = await Promise.all([page.waitForEvent('filechooser'), page.getByRole('button', { name: 'Import file' }).click()]);
       await chooser.setFiles(exportPath);
       await page.waitForTimeout(500);
       const imported = await page.evaluate(() => (window as any).cnf.sim?.state.tick);
       record('Export to file and import it again', imported === tick, `exported ${readFileSync(exportPath).length} bytes`);
       // a damaged import keeps the current campaign
       writeFileSync(join('reports', 'tmp', 'broken.json'), readFileSync(exportPath, 'utf8').slice(0, 5000));
-      await page.getByRole('button', { name: 'Menu' }).click();
-      const [chooser2] = await Promise.all([page.waitForEvent('filechooser'), page.getByText('Import file…').click()]);
+      await page.getByRole('button', { name: 'Game menu' }).click();
+      const [chooser2] = await Promise.all([page.waitForEvent('filechooser'), page.getByRole('button', { name: 'Import file' }).click()]);
       await chooser2.setFiles(join('reports', 'tmp', 'broken.json'));
       await page.waitForTimeout(400);
       const msg = await page.locator('.modal h2', { hasText: 'Cannot load this save' }).count();
@@ -277,15 +315,15 @@ async function main(): Promise<void> {
       const page = await browser.newPage({ viewport: { width: w, height: hgt } });
       const problems = await watch(page);
       await page.goto(`${origin}/`);
-      await page.waitForSelector('.menu-buttons button');
+      await page.waitForSelector('.menu-list button');
       await page.evaluate((s) => (window as any).cnf.updateSettings({ uiScale: s }), scale);
       await startCampaign(page);
       await page.keyboard.press('b');
       await page.waitForTimeout(200);
       const res = await page.evaluate(() => ({
         overflow: document.documentElement.scrollWidth > innerWidth || document.documentElement.scrollHeight > innerHeight,
-        topbar: document.querySelector('.topbar')!.getBoundingClientRect().height,
-        modalFits: document.querySelector('.modal')!.getBoundingClientRect().bottom <= innerHeight + 1,
+        topbar: document.querySelector('.hud')!.getBoundingClientRect().height,
+        modalFits: document.querySelector('.drawer')!.getBoundingClientRect().bottom <= innerHeight + 1,
       }));
       record(`Layout ${w}×${hgt} (UI scale ${scale})`, !res.overflow && res.modalFits && problems.length === 0, `top bar ${Math.round(res.topbar)} px${res.overflow ? '; page overflows' : ''}${res.modalFits ? '' : '; ledger taller than the window'}`);
       await page.evaluate(() => (window as any).cnf.updateSettings({ uiScale: 1 }));
@@ -298,22 +336,23 @@ async function main(): Promise<void> {
       const page = await ctx.newPage();
       const problems = await watch(page);
       await page.goto(`${origin}/`);
-      await page.getByText('New campaign').tap();
-      await page.getByText('Begin campaign').tap();
+      await page.getByRole('button', { name: /New campaign/ }).tap();
+      await page.locator('button:visible', { hasText: 'Begin campaign' }).first().tap();
       await page.waitForSelector('canvas.map');
       await page.waitForTimeout(400);
       const p = await page.evaluate(() => {
         const app = (window as any).cnf;
-        const c = app.renderer.constructor.provinceCenter('westmere');
+        const cap = app.sim.state.nations[app.player].capital;
+        const c = app.renderer.provinceCenter(cap);
         const s = app.renderer.camera.toScreen(c.x, c.y);
         const r = app.canvas.getBoundingClientRect();
-        return { x: s.x + r.left, y: s.y + r.top + 14 };
+        return { x: s.x + r.left, y: s.y + r.top + 14, cap };
       });
       await page.touchscreen.tap(p.x, p.y);
       await page.waitForTimeout(400);
       const sel = await page.evaluate(() => (window as any).cnf.selectedProvince);
       const overflow = await page.evaluate(() => document.documentElement.scrollWidth > innerWidth);
-      record('Touch: tapping a province selects it (390×780 phone)', sel === 'westmere', `selected ${sel}`);
+      record('Touch: tapping a province selects it (390×780 phone)', sel === p.cap, `selected ${sel}, expected ${p.cap}`);
       record('Phone layout has no horizontal page scroll', !overflow);
       record('Touch session without errors', problems.length === 0, problems.slice(0, 3).join('; '));
       await ctx.close();
@@ -330,7 +369,7 @@ async function main(): Promise<void> {
       const page = await ctx.newPage();
       const problems = await watch(page);
       await page.goto(`${origin}/`);
-      await page.waitForSelector('.screen .menu-buttons button');
+      await page.waitForSelector('.screen .menu-list button');
       const warned = await page.getByText(/blocks storage/).count();
       await startCampaign(page);
       const drawn = await canvasDrawn(page);

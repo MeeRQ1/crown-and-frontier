@@ -1,8 +1,10 @@
 // Static world construction and scenario registry.
 
-import mapData from '../data/reach.map.json';
+import aldmere from '../data/aldmere.provinces.json';
+import { ALDMERE_NATIONS, ALDMERE_REGIONS } from '../data/aldmere';
+import adjacency from '../data/reach.adjacency.json';
 import { REACH_NATIONS, REACH_PROVINCES, REACH_REGIONS, STRAITS } from '../data/reach';
-import type { ProvinceId, ScenarioDef, World } from './types';
+import type { ProvinceDef, ProvinceId, ScenarioDef, World } from './types';
 
 const registry = new Map<string, () => ScenarioDef>();
 const worldCache = new Map<string, World>();
@@ -16,12 +18,37 @@ export function scenarioIds(): string[] {
   return [...registry.keys()];
 }
 
+/** The standard campaign. */
+export const DEFAULT_SCENARIO = 'aldmere';
+
+export function buildAldmereScenario(): ScenarioDef {
+  const data = aldmere as unknown as { provinces: ProvinceDef[]; straits: Array<[string, string]>; rivers: Array<[string, string]> };
+  return {
+    id: 'aldmere',
+    name: 'Aldmere, 1640',
+    description: 'Fourteen realms across a continent of passes, rivers and open frontier.',
+    blurb: 'The standard campaign: about 300 provinces, several fronts for every realm, and long marches.',
+    startYear: 1640,
+    // fourteen realms share the land: dominance is a smaller share than on the Reach
+    // (thresholds scaled from the Reach's multiple of an average realm; see DESIGN.md)
+    victory: { territorialRegions: 6, territorialShare: 0.18, economicShare: 0.18, diplomaticInfluencePerRealm: 0.85 },
+    // larger realms research faster; the tree should last a 60-year campaign
+    researchCostMul: 1.35,
+    nations: ALDMERE_NATIONS,
+    regions: ALDMERE_REGIONS,
+    straits: data.straits,
+    rivers: data.rivers,
+    provinces: data.provinces.map((p) => ({ ...p, claims: [...p.claims], neighbors: [...p.neighbors] })),
+  };
+}
+
 export function buildReachScenario(): ScenarioDef {
-  const neighbors = (mapData as { neighbors: Record<string, string[]> }).neighbors;
+  const neighbors = (adjacency as { neighbors: Record<string, string[]> }).neighbors;
   return {
     id: 'reach',
     name: 'The Reach, 1640',
     description: 'Nine crowns and an unsettled frontier divided by the Greyspine mountains.',
+    blurb: 'The quick campaign: 99 provinces and nine realms, wars decided in a few seasons.',
     startYear: 1640,
     nations: REACH_NATIONS,
     regions: REACH_REGIONS,
@@ -30,6 +57,7 @@ export function buildReachScenario(): ScenarioDef {
   };
 }
 
+registerScenario('aldmere', buildAldmereScenario);
 registerScenario('reach', buildReachScenario);
 
 export function edgeKey(a: ProvinceId, b: ProvinceId): string {
@@ -46,6 +74,7 @@ export function buildWorld(s: ScenarioDef): World {
   for (const r of s.regions) regionProvinces[r.id] = [];
   for (const p of s.provinces) (regionProvinces[p.region] ??= []).push(p.id);
   const straitSet = new Set(s.straits.map(([a, b]) => edgeKey(a, b)));
+  const riverSet = new Set((s.rivers ?? []).map(([a, b]) => edgeKey(a, b)));
   const hops: World['hops'] = {};
   for (const src of provIds) {
     const d: Record<ProvinceId, number> = { [src]: 0 };
@@ -61,7 +90,7 @@ export function buildWorld(s: ScenarioDef): World {
     }
     hops[src] = d;
   }
-  return { scenario: s, prov, provIds, nationDefs, nationIds: s.nations.map((n) => n.id), regionProvinces, straitSet, hops };
+  return { scenario: s, prov, provIds, nationDefs, nationIds: s.nations.map((n) => n.id), regionProvinces, straitSet, riverSet, hops };
 }
 
 export function getWorld(scenarioId: string): World {
@@ -90,6 +119,7 @@ export function validateScenario(s: ScenarioDef): string[] {
       else if (!s.provinces.find((q) => q.id === n)!.neighbors.includes(p.id)) errs.push(`${p.id}-${n}: adjacency not symmetric`);
     }
     for (const c of p.claims) if (!nations.has(c)) errs.push(`${p.id}: unknown claimant ${c}`);
+    for (const [a, b] of s.rivers ?? []) if (a === p.id && !p.neighbors.includes(b)) errs.push(`river ${a}-${b} is not a border`);
     if (p.dev < 1) errs.push(`${p.id}: dev < 1`);
   }
   for (const n of s.nations) {

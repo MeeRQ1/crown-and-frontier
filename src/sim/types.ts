@@ -38,6 +38,8 @@ export interface NationTraits {
   integrationMul?: number;
   envoyAdd?: number;
   opinionAdd?: number;
+  /** added to the movement cost of a sea strait (Hrafnmark: -2) */
+  straitCostAdd?: number;
 }
 
 export interface NationDef {
@@ -53,6 +55,12 @@ export interface NationDef {
   strength: string;
   constraint: string;
   traits: NationTraits;
+  /** kind of starting position, shown when choosing a realm */
+  startType?: string;
+  /** how forgiving the start is for a new player */
+  rating?: 'recommended' | 'standard' | 'challenging';
+  /** heraldry (presentation only): field, ordinary and charge */
+  arms?: { field: string; ordinary: string; ordinaryTincture: string; charge: string; chargeTincture: string };
 }
 
 export interface ProvinceDef {
@@ -91,6 +99,14 @@ export interface ScenarioDef {
   provinces: ProvinceDef[];
   regions: RegionDef[];
   straits: Array<[ProvinceId, ProvinceId]>;
+  /** borders that are rivers: attacking across one gives the defender a bonus */
+  rivers?: Array<[ProvinceId, ProvinceId]>;
+  /** optional per-map victory thresholds (defaults in config) */
+  victory?: Partial<{ territorialRegions: number; territorialShare: number; economicShare: number; diplomaticInfluencePerRealm: number; diplomaticMinInfluence: number }>;
+  /** short blurb for the campaign picker */
+  blurb?: string;
+  /** technology costs are multiplied by this (default 1) */
+  researchCostMul?: number;
 }
 
 /** Static world derived from a scenario: lookups and graph structure. */
@@ -103,6 +119,8 @@ export interface World {
   regionProvinces: Record<string, ProvinceId[]>;
   /** key `${a}|${b}` with a<b → strait crossing */
   straitSet: Set<string>;
+  /** key `${a}|${b}` with a<b → river border */
+  riverSet: Set<string>;
   /** all-pairs hop distances (unweighted graph), for AI/proximity heuristics */
   hops: Record<ProvinceId, Record<ProvinceId, number>>;
 }
@@ -171,6 +189,18 @@ export interface Army {
   supply: number;
   /** AI assignment tag (operational layer) */
   task: string | null;
+  /** the province the army last stepped out of, and when (river crossings) */
+  lastMove?: { from: ProvinceId; tick: number };
+  /** player's army group (1–9), for grouped orders and quick selection */
+  group?: number | null;
+  /** standing order kept between marches */
+  order?: ArmyOrder | null;
+}
+
+/** Station: return to (and hold) this province whenever the army has nothing else to do. */
+export interface ArmyOrder {
+  kind: 'station';
+  province: ProvinceId;
 }
 
 export interface BattleRound {
@@ -196,6 +226,8 @@ export interface Battle {
   defLosses: number;
   /** summary of main modifiers for the report */
   factors: string[];
+  /** every attacker opened the battle by crossing a river into the province */
+  river?: boolean;
 }
 
 export interface BattleReport {
@@ -484,8 +516,10 @@ export interface GameState {
 export type Command =
   | { type: 'recruit'; nation: NationId; province: ProvinceId; unit: UnitType; count?: number }
   | { type: 'cancelRecruit'; nation: NationId; province: ProvinceId }
-  | { type: 'move'; nation: NationId; army: ArmyId; dest: ProvinceId }
+  | { type: 'move'; nation: NationId; army: ArmyId; dest: ProvinceId; /** add the leg after the current route instead of replacing it */ append?: boolean }
   | { type: 'stop'; nation: NationId; army: ArmyId }
+  | { type: 'setGroup'; nation: NationId; army: ArmyId; group: number | null }
+  | { type: 'setOrder'; nation: NationId; army: ArmyId; order: ArmyOrder | null }
   | { type: 'split'; nation: NationId; army: ArmyId; counts: Partial<Record<UnitType, number>> }
   | { type: 'merge'; nation: NationId; armies: ArmyId[] }
   | { type: 'disband'; nation: NationId; army: ArmyId }

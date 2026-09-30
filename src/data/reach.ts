@@ -201,6 +201,7 @@ export const REACH_REGIONS: RegionDef[] = [
 export const REACH_NATIONS: NationDef[] = [
   {
     id: 'aur', name: 'Kingdom of Aurel', short: 'Aurel', adjective: 'Aurelian', color: '#3f6fc4',
+    startType: 'Wealthy heartland', rating: 'recommended',
     capital: 'aurelon', personality: 'commercial', emblem: 'sun',
     summary: 'Rich, populous plains with open borders on every side.',
     strength: 'Fertile heartland: +20% supply production.',
@@ -209,6 +210,7 @@ export const REACH_NATIONS: NationDef[] = [
   },
   {
     id: 'vos', name: 'Margraviate of Vostmark', short: 'Vostmark', adjective: 'Vostic', color: '#a8323e',
+    startType: 'Martial uplands', rating: 'standard',
     capital: 'vostburg', personality: 'expansionist', emblem: 'tower',
     summary: 'Hardy upland march with a martial tradition and poor soil.',
     strength: 'Martial tradition: +0.5 maximum morale.',
@@ -217,6 +219,7 @@ export const REACH_NATIONS: NationDef[] = [
   },
   {
     id: 'ser', name: 'Serene League', short: 'Serennes', adjective: 'Serennese', color: '#1f9a8f',
+    startType: 'Maritime trader', rating: 'standard',
     capital: 'serenna', personality: 'diplomat', emblem: 'ship',
     summary: 'Merchant ports and isles that prefer contracts to battles.',
     strength: 'Merchant fleets: trade agreements yield 50% more.',
@@ -225,6 +228,7 @@ export const REACH_NATIONS: NationDef[] = [
   },
   {
     id: 'cal', name: 'Republic of Calder', short: 'Calder', adjective: 'Calderan', color: '#d0a22a',
+    startType: 'Compact defensive', rating: 'challenging',
     capital: 'caldris', personality: 'defensive', emblem: 'book',
     summary: 'Scholarly lake republic guarding the Kestrel Pass.',
     strength: 'Academies: +25% research.',
@@ -233,6 +237,7 @@ export const REACH_NATIONS: NationDef[] = [
   },
   {
     id: 'ist', name: 'Duchy of Istrel', short: 'Istrel', adjective: 'Istrelan', color: '#7d4fb0',
+    startType: 'Mountain fortress', rating: 'standard',
     capital: 'istrenne', personality: 'defensive', emblem: 'mountain',
     summary: 'Rugged highlands full of iron and old fortresses.',
     strength: 'Mountain engineers: forts cost 25% less and sieges progress 25% faster.',
@@ -241,6 +246,7 @@ export const REACH_NATIONS: NationDef[] = [
   },
   {
     id: 'dre', name: 'Principality of Drevenholt', short: 'Drevenholt', adjective: 'Drevish', color: '#3e8a3a',
+    startType: 'Frontier to settle', rating: 'standard',
     capital: 'drevholm', personality: 'opportunist', emblem: 'tree',
     summary: 'Populous forest principality with a frontier to the east.',
     strength: 'Forest folk: +15% manpower.',
@@ -249,6 +255,7 @@ export const REACH_NATIONS: NationDef[] = [
   },
   {
     id: 'mor', name: 'Kingdom of Morvaine', short: 'Morvaine', adjective: 'Morvish', color: '#d8742a',
+    startType: 'Crossroads, many borders', rating: 'standard',
     capital: 'morvay', personality: 'expansionist', emblem: 'hammer',
     summary: 'Iron-working hill kingdom at the crossroads of the east.',
     strength: 'Foundries: guns cost 25% less.',
@@ -257,6 +264,7 @@ export const REACH_NATIONS: NationDef[] = [
   },
   {
     id: 'fen', name: 'Fenward Compact', short: 'Fenward', adjective: 'Fenward', color: '#5d7f8f',
+    startType: 'Small and sheltered', rating: 'challenging',
     capital: 'fenhold', personality: 'diplomat', emblem: 'reed',
     summary: 'A small compact of marsh towns, hard to invade and quick to befriend.',
     strength: 'Old compacts: +1 envoy and +10 opinion with everyone.',
@@ -265,6 +273,7 @@ export const REACH_NATIONS: NationDef[] = [
   },
   {
     id: 'tar', name: 'Khaganate of Tarsk', short: 'Tarsk', adjective: 'Tarskan', color: '#9a6b3c',
+    startType: 'Vast and loosely held', rating: 'standard',
     capital: 'kharsa', personality: 'opportunist', emblem: 'horse',
     summary: 'Vast steppe khaganate of horsemen with a loosely held periphery.',
     strength: 'Horse clans: horse regiments cost 30% less and gain +10% attack.',
@@ -289,3 +298,12 @@ export const REACH_PROVINCES: Omit<ProvinceDef, 'neighbors'>[] = ROWS.map((r) =>
   integration: r[6] ? (r[10]?.integ ?? 100) : 0,
   claims: r[10]?.claims ?? [],
 }));
+
+/** Named geography drawn on the map (presentation only). */
+export const REACH_LABELS: Array<{ kind: 'sea' | 'lake' | 'range' | 'region' | 'river'; name: string; x: number; y: number; size?: number; angle?: number }> = [
+  { kind: 'sea', name: 'The Western Main', x: -30, y: 820, size: 44, angle: -Math.PI / 2 },
+  { kind: 'sea', name: 'The Grey Sea', x: 1040, y: 28, size: 40 },
+  { kind: 'sea', name: 'The Serene Sea', x: 1000, y: 1480, size: 46 },
+  { kind: 'lake', name: 'Mirrormere', x: 862, y: 700, size: 22, angle: -Math.PI / 2 },
+  { kind: 'range', name: 'The Greyspine', x: 1245, y: 470, size: 26, angle: -Math.PI / 2 + 0.05 },
+];

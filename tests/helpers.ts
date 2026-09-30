@@ -4,6 +4,7 @@
 //         \              /
 //          ──── m1 ─────          (m1: unclaimed mountains)
 //   a1 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ c2   (sea strait)
+//   a3 | b3 is a river border
 
 import { createGame, type NewGameOptions } from '../src/sim/game';
 import { createArmy, newRegiment } from '../src/sim/military';
@@ -28,6 +29,7 @@ export function lineScenario(): ScenarioDef {
     nations: [nation('a', 'a1'), nation('b', 'b1'), nation('c', 'c1')],
     regions: [{ id: 'a', name: 'A' }, { id: 'b', name: 'B' }, { id: 'c', name: 'C' }, { id: 'wild', name: 'Wild' }],
     straits: [['a1', 'c2']],
+    rivers: [['a3', 'b3']],
     provinces: [
       prov('a1', 'plains', 'a', ['a2', 'c2']),
       prov('a2', 'plains', 'a', ['a1', 'a3', 'm1']),

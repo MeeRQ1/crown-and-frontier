@@ -1,8 +1,9 @@
 // Headless AI-only campaigns through the real simulation.
-//   npm run sim -- --seeds 1-10 --difficulty normal --years 40 [--out reports/ai-campaigns.md] [--json path]
+//   npm run sim -- --seeds 1-10 --difficulty normal --years 40 [--scenario aldmere|reach] [--out reports/ai-campaigns.md] [--json path]
+//   npm run sim -- --merge a.json,b.json --out report.md   (combine runs made in parallel)
 // Every run records its seed and settings so any failure can be reproduced.
 
-import { mkdirSync, writeFileSync } from 'node:fs';
+import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { dirname } from 'node:path';
 import { createGame } from '../src/sim/game';
 import { checkInvariants } from '../src/sim/invariants';
@@ -18,6 +19,8 @@ interface Args {
   out?: string;
   json?: string;
   quiet: boolean;
+  scenario: string;
+  merge?: string[];
 }
 
 function parseArgs(): Args {
@@ -34,10 +37,11 @@ function parseArgs(): Args {
   }
   const d = get('difficulty') ?? 'normal';
   const difficulties = (d === 'all' ? ['easy', 'normal', 'hard'] : d.split(',')) as Difficulty[];
-  return { seeds, difficulties, years: Number(get('years') ?? 40), out: get('out'), json: get('json'), quiet: a.includes('--quiet') };
+  return { seeds, difficulties, years: Number(get('years') ?? 40), out: get('out'), json: get('json'), quiet: a.includes('--quiet'), scenario: get('scenario') ?? 'reach', merge: get('merge')?.split(',') };
 }
 
 interface RunResult {
+  scenario?: string;
   seed: number;
   difficulty: Difficulty;
   years: number;
@@ -61,8 +65,8 @@ interface RunResult {
   snapshots: Array<{ year: number; techsAvg: number; treasuryMax: number; best: Record<string, string> }>;
 }
 
-function runOne(seed: number, difficulty: Difficulty, years: number): RunResult {
-  const sim = createGame({ seed, difficulty, playerNation: null, campaignYears: years });
+function runOne(seed: number, difficulty: Difficulty, years: number, scenario: string): RunResult {
+  const sim = createGame({ seed, difficulty, playerNation: null, campaignYears: years, scenario });
   const st = sim.state;
   const start: Record<string, number> = {};
   for (const n of sim.world.nationIds) start[n] = ownedProvinces(sim, n).length;
@@ -148,6 +152,7 @@ function runOne(seed: number, difficulty: Difficulty, years: number): RunResult 
   let battles = 0;
   for (const nid in st.nations) battles += st.nations[nid].stats.battlesWon;
   return {
+    scenario,
     seed,
     difficulty,
     years,
@@ -174,9 +179,10 @@ function runOne(seed: number, difficulty: Difficulty, years: number): RunResult 
 
 const args = parseArgs();
 const results: RunResult[] = [];
-for (const difficulty of args.difficulties) {
+if (args.merge) for (const f of args.merge) results.push(...(JSON.parse(readFileSync(f, 'utf8')) as RunResult[]));
+for (const difficulty of args.merge ? [] : args.difficulties) {
   for (const seed of args.seeds) {
-    const r = runOne(seed, difficulty, args.years);
+    const r = runOne(seed, difficulty, args.years, args.scenario);
     results.push(r);
     if (!args.quiet) {
       const prov = Object.entries(r.nations)
@@ -200,7 +206,9 @@ for (const r of results) {
 const lines: string[] = [];
 lines.push(`# AI-only campaign report`);
 lines.push('');
-lines.push(`Runs: ${results.length} (seeds ${args.seeds[0]}–${args.seeds[args.seeds.length - 1]}, difficulties ${args.difficulties.join(', ')}, ${args.years}-year limit). Node ${process.version}.`);
+const seeds = [...new Set(results.map((r) => r.seed))].sort((a, b) => a - b);
+const diffs = [...new Set(results.map((r) => r.difficulty))];
+lines.push(`Map: ${results[0]?.scenario ?? args.scenario}. Runs: ${results.length} (seeds ${seeds[0]}–${seeds[seeds.length - 1]}, difficulties ${diffs.join(', ')}, ${results[0]?.years ?? args.years}-year limit). Node ${process.version}.`);
 lines.push('');
 lines.push(`Winners: ${Object.entries(wins).map(([k, v]) => `${k} ${v}`).join(', ')}`);
 lines.push(`Victory paths: ${Object.entries(paths).map(([k, v]) => `${k} ${v}`).join(', ')}`);

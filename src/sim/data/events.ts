@@ -293,7 +293,7 @@ export const EVENTS: EventDef[] = [
       }
       return null;
     },
-    text: (c) => `${ON(c)} is close to mastery of the Reach. Our court debates whether to rally others against them or to seek their favour.`,
+    text: (c) => `${ON(c)} is close to mastering the continent. Our court debates whether to rally others against them or to seek their favour.`,
     choices: [
       { label: 'Denounce them', effect: (c) => `Every other realm's alarm about ${ON(c)} +10; our trust −3; ${ON(c)} −20 opinion.`, apply: (c) => { for (const x of aliveNations(c.sim)) if (x !== c.other) addAlarm(c.sim, x, c.other!, 10); N(c).trust = Math.max(0, N(c).trust - 3); addMemory(c.sim, c.other!, c.nid, 'event', -20, 0.3); }, ai: () => 1.3 },
       { label: 'Seek their favour', effect: (c) => `${ON(c)} +15 opinion of us.`, apply: (c) => addMemory(c.sim, c.other!, c.nid, 'event', 15, 0.3), ai: () => 0.7 },

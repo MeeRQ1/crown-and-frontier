@@ -233,6 +233,7 @@ export function doSplit(sim: Sim, id: ArmyId, counts: Partial<Record<UnitType, n
   const b = createArmy(sim, a.nation, a.location, moved, a.morale);
   b.stationary = a.stationary;
   b.supply = a.supply;
+  if (a.group) b.group = a.group;
   return b;
 }
 

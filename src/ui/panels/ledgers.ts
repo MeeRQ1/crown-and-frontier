@@ -21,7 +21,7 @@ import { checkCommand } from '../../sim/commands';
 import { adminCapacity, frontierLoad, overextension } from '../../sim/integration';
 import { maxMorale, nationStrength } from '../../sim/military';
 import { describeEffects } from '../../sim/modifiers';
-import { policyProblem, policySwitchCost, researchProblem, researchRate } from '../../sim/progression';
+import { policyProblem, policySwitchCost, researchProblem, researchRate, techCost } from '../../sim/progression';
 import { fnv1a } from '../../sim/save';
 import {
   aliveNations,
@@ -41,15 +41,16 @@ import {
   warsOf,
 } from '../../sim/state';
 import { armySupplyInfo } from '../../sim/supply';
-import type { NationId, PeaceTerms, TreatyType, War } from '../../sim/types';
-import { allScores, dominatedRegions, influence, influenceByPartner, influenceNeeded, SCORE_FORMULA, VICTORY_LABELS, VICTORY_MONTHS, victoryProgress } from '../../sim/victory';
+import type { Army, NationId, PeaceTerms, TreatyType, War } from '../../sim/types';
+import { allScores, victoryRules, dominatedRegions, influence, influenceByPartner, influenceNeeded, SCORE_FORMULA, VICTORY_LABELS, VICTORY_MONTHS, victoryProgress } from '../../sim/victory';
 import { computeWarScore, evaluatePeace, goalOptions, provinceCost, scoreFor, termsCost, declareWarProblem } from '../../sim/war';
 import type { App } from '../app';
-import { action, bar, button, h, row, setChildren } from '../dom';
-import { fmt, men, signed } from '../format';
+import { action, bar, button, h, rebuild, row, setChildren } from '../dom';
+import { fmt, men, plural, signed } from '../format';
 import { downloadText } from '../storage';
 import { confirmDialog } from './dialogs';
-import { shield } from './topbar';
+import { section, shield } from './common';
+import { icon } from '../icons';
 
 export type LedgerTab = 'realm' | 'military' | 'research' | 'policy' | 'diplomacy' | 'wars' | 'victory' | 'log' | 'help';
 
@@ -68,24 +69,21 @@ const TITLES: Record<LedgerTab, string> = {
 export function renderLedger(app: App): void {
   const tab = app.ui.ledgerTab;
   if (!tab || !app.sim) return;
-  const tabs = h(
-    'div',
-    { class: 'tabs', role: 'tablist' },
-    (Object.keys(TITLES) as LedgerTab[]).map((t) => {
-      const b = h('button', { class: `btn small ${t === tab ? 'active' : ''}`, type: 'button', role: 'tab', 'aria-selected': t === tab ? 'true' : 'false' }, TITLES[t]);
-      b.addEventListener('click', () => app.openLedger(t));
-      return b;
-    }),
-  );
-  const content = BODIES[tab](app);
-  const modal = h(
-    'div',
-    { class: 'modal', role: 'dialog', 'aria-modal': 'true', 'aria-label': TITLES[tab] },
-    h('header', null, h('h2', null, TITLES[tab]), button('✕', () => app.closeModal(), { cls: 'small', title: 'Close (Esc)' })),
-    tabs,
-    h('div', { class: 'body' }, content),
-  );
-  setChildren(app.modalLayer, modal);
+  rebuild(app.drawerEl, () => {
+    const tabs = h(
+      'div',
+      { class: 'tabs', role: 'tablist' },
+      (Object.keys(TITLES) as LedgerTab[]).map((t) => {
+        const b = h('button', { class: `tab ${t === tab ? 'active' : ''}`, type: 'button', role: 'tab', 'aria-selected': t === tab ? 'true' : 'false', 'data-fk': `tab-${t}` }, TITLES[t]);
+        b.addEventListener('click', () => app.openLedger(t));
+        return b;
+      }),
+    );
+    const close = h('button', { class: 'btn quiet icon', type: 'button', 'aria-label': 'Close ledger (Esc)', 'data-fk': 'drawer-close' }, icon('close'));
+    close.addEventListener('click', () => app.closeLedger());
+    const content = BODIES[tab](app);
+    setChildren(app.drawerEl, h('header', null, h('h2', null, TITLES[tab]), close), tabs, h('div', { class: 'body scroll', 'data-sk': `ledger-${tab}`, role: 'tabpanel' }, content));
+  });
 }
 
 const BODIES: Record<LedgerTab, (app: App) => HTMLElement> = {
@@ -201,7 +199,7 @@ function realmLedger(app: App): HTMLElement {
             h('td', null, s.project ? `${s.project.kind} ${s.project.progress}/${s.project.total}` : '—'),
           );
           tr.addEventListener('click', () => {
-            app.closeModal();
+            app.closeLedger();
             app.selectProvince(p, true);
           });
           return tr;
@@ -213,68 +211,184 @@ function realmLedger(app: App): HTMLElement {
 
 // ───────────────────────────── Military ─────────────────────────────────────
 
+function armyRow(app: App, a: Army): HTMLElement {
+  const sim = app.sim!;
+  const mm = maxMorale(sim, a.nation);
+  const c = (t: string) => a.regiments.filter((r) => r.type === t).length;
+  const sup = armySupplyInfo(sim, a, true);
+  const status = a.battle ? 'In battle' : a.retreating ? 'Retreating' : a.path.length ? `To ${provName(sim, a.path[a.path.length - 1])}` : a.order ? `Stationed at ${provName(sim, a.order.province)}` : 'Holding';
+  const el = h(
+    'button',
+    { class: `army-row ${app.selectedArmy === a.id ? 'selected' : ''}`, type: 'button', 'data-fk': `army-${a.id}` },
+    h('span', { class: 'ar-n' }, a.group ? h('span', { class: 'grp' }, String(a.group)) : null, a.name),
+    h('span', { class: 'ar-loc' }, provName(sim, a.location)),
+    h('span', { class: 'ar-mix', title: 'Foot / horse / guns' }, `${c('foot')}·${c('horse')}·${c('guns')}`),
+    h('span', { class: 'ar-men' }, men(menOf(a))),
+    h('span', { class: 'ar-mor' }, bar(a.morale, mm, a.morale / mm > 0.5 ? 'good' : a.morale / mm > 0.25 ? 'warn' : 'bad', 'Morale')),
+    h('span', { class: `ar-sup dot ${sup.status}`, title: `Supply: ${sup.status}` }),
+    h('span', { class: `ar-st ${a.battle ? 'bad' : a.retreating ? 'warn' : ''}` }, status),
+  );
+  el.addEventListener('click', () => app.selectArmy(a.id, true));
+  return el;
+}
+
 function militaryLedger(app: App): HTMLElement {
   const sim = app.sim!;
+  const st = sim.state;
   const pid = app.player;
   if (!pid) return noRealm();
   const armies = armiesOf(sim, pid).sort((a, b) => (a.id < b.id ? -1 : 1));
-  const mm = maxMorale(sim, pid);
-  const training = sim.world.provIds.flatMap((p) => sim.state.provinces[p].recruits.filter((r) => r.nation === pid).map((r) => `${UNITS[r.unit].label} at ${provName(sim, p)} (${r.weeksLeft} wk)`));
-  return h(
-    'div',
-    null,
-    h(
-      'table',
-      { class: 'data' },
-      h('thead', null, h('tr', null, ['Army', 'Location', 'Foot/Horse/Guns', 'Men', 'Morale', 'Supply', 'Status'].map((t) => h('th', null, t)))),
-      h(
-        'tbody',
-        null,
-        armies.length
-          ? armies.map((a) => {
-              const c = (t: string) => a.regiments.filter((r) => r.type === t).length;
-              const sup = armySupplyInfo(sim, a, true);
-              const status = a.battle ? '⚔ battle' : a.retreating ? 'retreating' : a.path.length ? `→ ${provName(sim, a.path[a.path.length - 1])}` : 'holding';
-              const tr = h(
-                'tr',
-                { class: 'clickable' },
-                h('td', null, a.name),
-                h('td', null, provName(sim, a.location)),
-                h('td', null, `${c('foot')}/${c('horse')}/${c('guns')}`),
-                h('td', null, men(menOf(a))),
-                h('td', { class: a.morale / mm < 0.4 ? 'bad' : '' }, `${Math.round((a.morale / mm) * 100)}%`),
-                h('td', { class: sup.status === 'supplied' ? 'good' : sup.status === 'strained' ? 'warn' : 'bad' }, sup.status),
-                h('td', null, status),
-              );
-              tr.addEventListener('click', () => {
-                app.closeModal();
-                app.selectArmy(a.id, true);
-              });
-              return tr;
-            })
-          : h('tr', null, h('td', { colspan: 7, class: 'muted' }, 'No armies. Raise regiments from a province panel.')),
-      ),
-    ),
-    h('p', { class: 'small' }, training.length ? `In training: ${training.join('; ')}` : 'No regiments in training.'),
-    h('h3', { style: 'margin-top:12px' }, 'Regiment types'),
+  const regs = armies.reduce((n, a) => n + a.regiments.length, 0);
+  const upkeep = st.nations[pid].lastMonth.expenses['Army upkeep'] ?? 0;
+  const troubled = armies.filter((a) => armySupplyInfo(sim, a, true).status !== 'supplied').length;
+  const training = sim.world.provIds.flatMap((p) => st.provinces[p].recruits.filter((r) => r.nation === pid).map((r) => ({ p, r })));
+  const tile = (label: string, value: string, sub?: string) => h('div', { class: 'stat-tile' }, h('div', { class: 'eyebrow' }, label), h('div', { class: 'big' }, value), sub ? h('div', { class: 'sub' }, sub) : null);
+  const kids: Array<Node | null> = [
     h(
       'div',
-      { class: 'cols' },
-      (['foot', 'horse', 'guns'] as const).map((t) =>
-        h(
-          'div',
-          { class: 'card' },
-          h('h4', null, UNITS[t].label),
-          h('p', { class: 'small' }, UNITS[t].role),
-          row('Cost', `${UNITS[t].cost} crowns, ${UNITS[t].supplies} supplies, 1,000 men`),
-          row('Upkeep / month', `${UNITS[t].upkeep} crowns, ${UNITS[t].supplyUse} supplies`),
-          row('Firepower', `${UNITS[t].attack}× (morale shock ${UNITS[t].morale}×)`),
-          row('Speed', `${UNITS[t].speed}`),
+      { class: 'stat-grid' },
+      tile('Armies', String(armies.length), `${regs} regiments`),
+      tile('Men serving', men(menServing(sim, pid)), `reserve ${men(reserveCap(sim, pid))}`),
+      tile('Upkeep', `${fmt(upkeep)}/mo`, 'crowns, last month'),
+      tile('Supply', troubled ? `${troubled} short` : 'All supplied', troubled ? 'armies strained or cut off' : undefined),
+    ),
+  ];
+
+  // fronts: every war enemy, with what stands near the shared border
+  const wars = warsOf(sim, pid);
+  if (wars.length) {
+    const enemies = new Set<NationId>();
+    for (const w of wars) for (const n of sideOf(w, pid) === 'attacker' ? w.defenders : w.attackers) enemies.add(n);
+    const mine = new Set(ownedProvinces(sim, pid));
+    const near = (pids: Set<string>, hops: number) => {
+      const out = new Set(pids);
+      let frontier = [...pids];
+      for (let i = 0; i < hops; i++) {
+        const next: string[] = [];
+        for (const p of frontier) for (const n of sim.world.prov[p].neighbors) if (!out.has(n)) (out.add(n), next.push(n));
+        frontier = next;
+      }
+      return out;
+    };
+    const ourZone = near(mine, 2);
+    kids.push(
+      section(
+        'Fronts',
+        ...[...enemies].map((e) => {
+          const theirs = new Set(ownedProvinces(sim, e));
+          const theirZone = near(theirs, 1);
+          const foes = Object.values(st.armies).filter((x) => x.nation === e && ourZone.has(x.location));
+          const ours = armies.filter((x) => theirZone.has(x.location));
+          const fr = foes.reduce((n, x) => n + x.regiments.length, 0);
+          const or = ours.reduce((n, x) => n + x.regiments.length, 0);
+          const occ = [...mine].filter((p) => st.provinces[p].controller === e).length;
+          const show = button('Show', () => {
+            app.setMode('military');
+            const target = foes[0]?.location ?? ours[0]?.location ?? [...theirs][0];
+            if (target) app.centerOn(target, 70);
+          }, { cls: 'small quiet', icon: 'target', fk: `front-${e}` });
+          return h(
+            'div',
+            { class: 'front-row' },
+            shield(app, e),
+            h('div', { class: 'grow' }, h('b', null, nationName(sim, e)), h('div', { class: 'small muted' }, `Their ${fr} regiment${fr === 1 ? '' : 's'} near our land · our ${or} at their border${occ ? ` · ${occ} of our provinces occupied` : ''}`)),
+            h('span', { class: `tag ${fr > or * 1.3 ? 'bad' : or > fr * 1.3 ? 'good' : 'warn'}` }, fr > or * 1.3 ? 'Outnumbered' : or > fr * 1.3 ? 'Stronger' : 'Even'),
+            show,
+          );
+        }),
+      ),
+    );
+  }
+
+  // army groups
+  const groups = [...new Set(armies.filter((a) => a.group).map((a) => a.group!))].sort((a, b) => a - b);
+  if (groups.length) {
+    kids.push(
+      section(
+        'Army groups',
+        ...groups.map((g) => {
+          const list = armies.filter((a) => a.group === g);
+          const sel = button('Select group', () => {
+            app.selectArmy(list[0].id, true);
+            app.ui.groupOrders = true;
+            app.refresh();
+          }, { cls: 'small', fk: `group-sel-${g}` });
+          return h(
+            'div',
+            { class: 'group-card' },
+            h('div', { class: 'gc-head' }, h('span', { class: 'grp big' }, String(g)), h('b', { class: 'grow' }, `Group ${g}`), h('span', { class: 'small muted' }, `${plural(list.length, 'army', 'armies')} · ${plural(list.reduce((n, a) => n + a.regiments.length, 0), 'regiment')}`), sel),
+            ...list.map((a) => armyRow(app, a)),
+          );
+        }),
+        h('p', { class: 'small faint' }, 'Select a group (or press Shift+N) and every move order goes to all of its armies.'),
+      ),
+    );
+  }
+
+  // armies by region: where our strength stands, and what faces it there
+  const byRegion = new Map<string, Army[]>();
+  for (const a of armies) {
+    const r = sim.world.prov[a.location].region;
+    (byRegion.get(r) ?? byRegion.set(r, []).get(r)!).push(a);
+  }
+  const regionName = (id: string) => sim.world.scenario.regions.find((r) => r.id === id)?.name ?? id;
+  kids.push(
+    section(
+      'Armies by region',
+      armies.length
+        ? h(
+            'div',
+            { class: 'army-table' },
+            h('div', { class: 'army-head' }, h('span', null, 'Army'), h('span', null, 'Where'), h('span', null, 'F·H·G'), h('span', null, 'Men'), h('span', null, 'Morale'), h('span', null, ''), h('span', null, 'Doing')),
+            ...[...byRegion.entries()]
+              .sort((x, y) => y[1].length - x[1].length || regionName(x[0]).localeCompare(regionName(y[0])))
+              .flatMap(([r, list]) => {
+                const provs = sim.world.regionProvinces[r] ?? [];
+                const ours = provs.filter((p) => st.provinces[p].owner === pid).length;
+                const hostile = Object.values(st.armies).filter((x) => provs.includes(x.location) && atWar(sim, pid, x.nation));
+                const hr = hostile.reduce((n, x) => n + x.regiments.length, 0);
+                return [
+                  h('div', { class: 'region-head' }, h('b', null, regionName(r)), h('span', { class: 'small muted' }, `${ours}/${provs.length} provinces ours`), hr ? h('span', { class: 'tag bad' }, `${hr} enemy regiments`) : null),
+                  ...list.map((a) => armyRow(app, a)),
+                ];
+              }),
+          )
+        : h('div', { class: 'callout info' }, icon('info'), 'No armies. Raise regiments from a province panel (select one of your provinces).'),
+    ),
+  );
+  kids.push(
+    section(
+      'In training',
+      training.length
+        ? h('div', null, training.map(({ p, r }) => row(`${UNITS[r.unit].label} at ${provName(sim, p)}`, `${r.weeksLeft} wk`)))
+        : h('p', { class: 'small muted' }, 'No regiments in training.'),
+    ),
+  );
+  kids.push(
+    h(
+      'details',
+      { class: 'section' },
+      h('summary', { class: 'eyebrow' }, 'Regiment types'),
+      h(
+        'div',
+        { class: 'cols' },
+        (['foot', 'horse', 'guns'] as const).map((t) =>
+          h(
+            'div',
+            { class: 'card' },
+            h('h4', null, UNITS[t].label),
+            h('p', { class: 'small' }, UNITS[t].role),
+            row('Cost', `${UNITS[t].cost} crowns, ${UNITS[t].supplies} supplies`),
+            row('Upkeep / month', `${UNITS[t].upkeep} crowns, ${UNITS[t].supplyUse} supplies`),
+            row('Firepower', `${UNITS[t].attack}× (shock ${UNITS[t].morale}×)`),
+            row('Speed', `${UNITS[t].speed}`),
+          ),
         ),
       ),
+      h('p', { class: 'small muted' }, 'Terrain limits how many regiments fight at once (frontage). Horse gain +20–30% on plains and steppe and lose up to 50% in mountains; at least 20% horse on open ground flanks for +15%. Guns fire at half effect without an infantry screen and speed sieges. Attacking across a river gives the defender +20%.'),
     ),
-    h('p', { class: 'small muted' }, 'Terrain limits how many regiments can fight at once (frontage). Horse gain +20–30% on plains and steppe and lose up to 50% in mountains; ≥20% horse on open ground flanks for +15%. Guns fire at half effect without an infantry screen and speed sieges.'),
   );
+  return h('div', null, ...kids);
 }
 
 // ───────────────────────────── Research ─────────────────────────────────────
@@ -300,11 +414,11 @@ function researchLedger(app: App): HTMLElement {
         const card = h(
           'div',
           { class: `card ${done ? 'done' : ''} ${current ? 'current' : ''} ${locked ? 'locked' : ''}`, style: 'margin:6px 0' },
-          h('h4', null, t.name, ' ', h('span', { class: 'tag' }, `Tier ${t.tier} · ${t.cost} pts`)),
+          h('h4', null, t.name, ' ', h('span', { class: 'tag' }, `Tier ${t.tier} · ${techCost(sim, t.id)} pts`)),
           h('p', { class: 'small' }, describeEffects(t.effects).join(' · ')),
           h('p', { class: 'small muted' }, t.description),
           t.requires.length ? h('p', { class: 'small muted' }, `Requires ${t.requires.map((r) => TECHS[r].name).join(', ')}`) : null,
-          done ? h('span', { class: 'tag good' }, 'Researched') : current ? h('div', null, bar(n.research.progress, t.cost, 'info'), h('span', { class: 'small' }, `${Math.floor(n.research.progress)}/${t.cost} · ~${Math.max(0, Math.ceil((t.cost - n.research.progress) / Math.max(0.1, rate)))} months`)) : action('Research this', `~${Math.ceil(t.cost / Math.max(0.1, rate))} months at the current rate`, () => app.do({ type: 'research', tech: t.id }), prob),
+          done ? h('span', { class: 'tag good' }, 'Researched') : current ? h('div', null, bar(n.research.progress, techCost(sim, t.id), 'info'), h('span', { class: 'small' }, `${Math.floor(n.research.progress)}/${techCost(sim, t.id)} · ~${Math.max(0, Math.ceil((techCost(sim, t.id) - n.research.progress) / Math.max(0.1, rate)))} months`)) : action('Research this', `~${Math.ceil(techCost(sim, t.id) / Math.max(0.1, rate))} months at the current rate`, () => app.do({ type: 'research', tech: t.id }), prob),
         );
         return card;
       }),
@@ -370,48 +484,63 @@ function reasonsList(parts: Array<{ label: string; value: number }>): HTMLElemen
   );
 }
 
+function sharesBorder(app: App, a: NationId, b: NationId): boolean {
+  const sim = app.sim!;
+  for (const p of ownedProvinces(sim, a)) for (const n of sim.world.prov[p].neighbors) if (sim.state.provinces[n].owner === b) return true;
+  return false;
+}
+
 function diplomacyLedger(app: App): HTMLElement {
   const sim = app.sim!;
   const me = app.player;
   if (!me) return noRealm();
+  const st = sim.state;
   const others = aliveNations(sim).filter((n) => n !== me);
   if (!app.ui.diploTarget || !others.includes(app.ui.diploTarget)) app.ui.diploTarget = others[0] ?? null;
   const target = app.ui.diploTarget;
-  const myStr = Math.max(0.1, nationStrength(sim, me));
-  const table = h(
-    'table',
-    { class: 'data' },
-    h('thead', null, h('tr', null, ['Realm', 'Relation', 'Their opinion', 'Their alarm', 'Strength', 'Temperament'].map((t) => h('th', null, t)))),
-    h(
-      'tbody',
-      null,
-      others.map((o) => {
-        const tr = h(
-          'tr',
-          { class: 'clickable', style: o === target ? 'background:rgba(216,179,106,0.12)' : '' },
-          h('td', null, shield(app, o), ' ', nationName(sim, o)),
-          h('td', null, relationTag(app, o)),
-          h('td', { class: opinion(sim, o, me) >= 0 ? 'good' : 'bad' }, signed(opinion(sim, o, me), 0)),
-          h('td', { class: (sim.state.alarm[o]?.[me] ?? 0) >= 35 ? 'bad' : '' }, String(Math.round(sim.state.alarm[o]?.[me] ?? 0))),
-          h('td', null, `${(nationStrength(sim, o) / myStr).toFixed(1)}×`),
-          h('td', { class: 'small muted' }, PERSONALITIES[sim.state.nations[o].ai.personality].label),
-        );
-        tr.addEventListener('click', () => {
-          app.ui.diploTarget = o;
-          renderLedger(app);
-        });
-        return tr;
-      }),
-    ),
-  );
-  const envoysUsed = sim.state.envoys.filter((e) => e.from === me).length;
+  const groupOf = (o: NationId) =>
+    atWar(sim, me, o) ? 0 : hasTreaty(sim, 'alliance', me, o) || hasTreaty(sim, 'nap', me, o) || hasTreaty(sim, 'trade', me, o) ? 1 : sharesBorder(app, me, o) ? 2 : 3;
+  const GROUPS = ['At war', 'Allies and partners', 'Neighbours', 'Farther realms'];
+  const sorted = [...others].sort((x, y) => groupOf(x) - groupOf(y) || opinion(sim, y, me) - opinion(sim, x, me));
+  const list = h('div', { class: 'diplo-list', role: 'listbox', 'aria-label': 'Realms' });
+  let last = -1;
+  for (const o of sorted) {
+    const g = groupOf(o);
+    if (g !== last) {
+      list.appendChild(h('div', { class: 'dl-group' }, GROUPS[g]));
+      last = g;
+    }
+    const op = opinion(sim, o, me);
+    const alarm = st.alarm[o]?.[me] ?? 0;
+    const item = h(
+      'button',
+      { class: `diplo-item ${o === target ? 'selected' : ''}`, type: 'button', role: 'option', 'aria-selected': o === target ? 'true' : 'false', 'data-fk': `diplo-${o}` },
+      shield(app, o),
+      h('span', { class: 'di-n' }, sim.world.nationDefs[o].short),
+      h('span', { class: `di-op ${op >= 0 ? 'good' : 'bad'}`, title: 'Their opinion of us' }, signed(op, 0)),
+      alarm >= C.diplomacy.alarmCoalition * 0.8 ? h('span', { class: 'di-al', title: `Alarmed by us (${Math.round(alarm)})` }, icon('alert')) : null,
+    );
+    item.addEventListener('click', () => {
+      app.ui.diploTarget = o;
+      app.focusNation = null;
+      app.refresh();
+    });
+    list.appendChild(item);
+  }
+  const envoysUsed = st.envoys.filter((e) => e.from === me).length;
   const coal = coalitionAgainst(sim, me);
   return h(
     'div',
     null,
-    h('p', { class: 'small' }, `Envoys: ${envoysUsed}/${envoySlots(sim, me)} · Trust: ${Math.round(sim.state.nations[me].trust)} · Allies: ${alliesOf(sim, me).map((a) => nationName(sim, a)).join(', ') || 'none'}`),
-    coal ? h('p', { class: 'bad small' }, `Coalition against you: ${coal.members.map((m) => nationName(sim, m)).join(', ')}. If you attack any member, all join; they may attack together.`) : null,
-    h('div', { class: 'cols', style: 'grid-template-columns: minmax(300px, 1.1fr) minmax(300px, 1fr)' }, h('div', null, table), target ? nationDetail(app, target) : h('div')),
+    h(
+      'div',
+      { class: 'diplo-summary' },
+      h('span', null, icon('envoy'), `Envoys ${envoysUsed}/${envoySlots(sim, me)}`),
+      h('span', null, icon('pact'), `Trust ${Math.round(st.nations[me].trust)}`),
+      h('span', null, icon('alliance'), `Allies: ${alliesOf(sim, me).map((a) => sim.world.nationDefs[a].short).join(', ') || 'none'}`),
+    ),
+    coal ? h('div', { class: 'callout bad', style: 'margin-bottom:10px' }, icon('alert'), `Coalition against us: ${coal.members.map((m) => nationName(sim, m)).join(', ')}. Attack any member and all join; they may attack together.`) : null,
+    h('div', { class: 'diplo-split' }, list, target ? nationDetail(app, target) : h('div')),
   );
 }
 
@@ -431,7 +560,7 @@ function nationDetail(app: App, o: NationId): HTMLElement {
     const likely = ev.accept ? h('span', { class: 'good' }, `Likely to accept (${signed(ev.score, 0)})`) : h('span', { class: 'bad' }, `Likely to refuse (${signed(ev.score, 0)})`);
     return h(
       'div',
-      { class: 'card', style: 'margin:6px 0' },
+      { class: 'treaty' },
       action(`Propose ${TREATY_LABELS[t].toLowerCase()}`, h('span', null, likely), () => app.do({ type: 'propose', target: o, treaty: t }), prob),
       prob ? null : h('details', null, h('summary', { class: 'small muted' }, 'Why?'), reasonsList(ev.reasons)),
     );
@@ -439,7 +568,7 @@ function nationDetail(app: App, o: NationId): HTMLElement {
   const envoyHere = st.envoys.find((e) => e.from === me && e.to === o);
   const goals = goalOptions(sim, me, o);
   const warBlock = atWar(sim, me, o)
-    ? h('p', { class: 'bad' }, 'You are at war. Make peace from the Wars ledger.')
+    ? h('div', { class: 'callout bad' }, icon('wars'), h('span', { class: 'grow' }, 'We are at war.'), button('Wars & Peace', () => app.openLedger('wars'), { cls: 'small' }))
     : goals.length
       ? h(
           'div',
@@ -451,38 +580,67 @@ function nationDetail(app: App, o: NationId): HTMLElement {
             const cons = [
               g.type === 'conquest' ? `Costs ${C.war.conquestTrustLoss} trust and alarms their neighbours.` : g.type === 'claim' ? 'Pressing a claim costs no trust.' : 'All coalition members join you.',
               allies.length ? `Their allies may join: ${allies.map((a) => nationName(sim, a)).join(', ')}.` : 'They have no allies.',
-              coal?.members.includes(o) ? 'They are in a coalition against you — all members will join them!' : '',
+              coal?.members.includes(o) ? 'They are in a coalition against you: all members will join them!' : '',
             ].join(' ');
             const label = `${g.type === 'claim' ? 'Press claims' : g.type === 'coalition' ? 'Coalition war' : 'War of conquest'}: ${g.provinces.map((p) => provName(sim, p)).join(', ')}`;
-            return action(label, cons, () =>
-              confirmDialog(app, `Declare war on ${def.short}?`, cons, () => app.do(g.type === 'coalition' ? { type: 'coalitionWar', target: o } : { type: 'declareWar', target: o, goal: g })), prob, 'danger');
+            return action(label, cons, () => confirmDialog(app, `Declare war on ${def.short}?`, cons, () => app.do(g.type === 'coalition' ? { type: 'coalitionWar', target: o } : { type: 'declareWar', target: o, goal: g })), prob, 'danger');
           }),
         )
-      : h('p', { class: 'small muted' }, 'No war goal: you need a claim on their land (fabricate one from a bordering province) or a shared border for a war of conquest.');
+      : h('p', { class: 'small muted' }, 'No war goal: we need a claim on their land (fabricate one from a province of ours that borders it) or a shared border for a war of conquest.');
   const coalAgainstThem = coalitionAgainst(sim, o);
   const myAlarm = st.alarm[me]?.[o] ?? 0;
+  const theirAlarm = st.alarm[o]?.[me] ?? 0;
+  const ratio = nationStrength(sim, o) / Math.max(0.1, nationStrength(sim, me));
+  const op = opinion(sim, o, me);
+  const ourClaims = claimsOn(sim, me, o);
+  const theirClaims = claimsOn(sim, o, me);
+  const tile = (label: string, value: string, cls: string, tipText: string) => h('div', { class: 'stat-tile', title: tipText }, h('div', { class: 'eyebrow' }, label), h('div', { class: `big ${cls}` }, value));
+  const onMap = button('Their relations on the map', () => {
+    app.focusNation = o;
+    app.setMode('diplomacy');
+  }, { cls: 'small quiet', icon: 'relations', fk: 'their-view' });
+  const find = button('Show on map', () => {
+    const cap = st.nations[o].capital;
+    if (cap) app.centerOn(cap, 60);
+  }, { cls: 'small quiet', icon: 'target', fk: 'show-realm' });
   return h(
     'div',
-    { class: 'card' },
-    h('h3', null, shield(app, o), ' ', def.name),
-    h('p', { class: 'small muted' }, def.summary),
-    h('p', { class: 'small' }, `Allies: ${alliesOf(sim, o).map((a) => nationName(sim, a)).join(', ') || 'none'} · Wars: ${warsOf(sim, o).map((w) => w.name).join(', ') || 'none'} · Provinces: ${ownedProvinces(sim, o).length} · Trust ${Math.round(st.nations[o].trust)}`),
-    claimsOn(sim, me, o).length ? h('p', { class: 'small' }, `Our claims on them: ${claimsOn(sim, me, o).map((p) => provName(sim, p)).join(', ')}`) : null,
-    h('h4', null, `Their opinion of us: ${signed(opinion(sim, o, me), 0)}`),
-    reasonsList(parts),
-    h('div', { class: 'sep' }),
-    envoyHere
-      ? action('Recall envoy', `Envoy at their court until ${dateOf(sim, envoyHere.until).short} (+${C.diplomacy.envoyGain}/month opinion, up to ${C.diplomacy.envoyCap}).`, () => app.do({ type: 'recallEnvoy', target: o }), null)
-      : action('Send envoy', `${C.diplomacy.envoyCost} crowns/month for 12 months: +${C.diplomacy.envoyGain} opinion each month (up to ${C.diplomacy.envoyCap}).`, () => app.do({ type: 'envoy', target: o }), envoyProblem(sim, me, o)),
-    treaty('trade'),
-    treaty('nap'),
-    treaty('alliance'),
-    h('h4', { style: 'margin-top:10px' }, 'Coalition'),
-    coalAgainstThem?.members.includes(me)
-      ? action('Leave coalition', `Members: ${coalAgainstThem.members.map((m) => nationName(sim, m)).join(', ')}`, () => app.do({ type: 'leaveCoalition', target: o }), null)
-      : action(`Join coalition against ${def.short}`, `Our alarm about them: ${Math.round(myAlarm)} (needs ${C.diplomacy.alarmCoalition}). Members defend each other against them.`, () => app.do({ type: 'joinCoalition', target: o }), joinCoalitionProblem(sim, me, o)),
-    h('h4', { style: 'margin-top:10px' }, 'War'),
-    warBlock,
+    { class: 'diplo-detail' },
+    h('div', { class: 'dd-head' }, shield(app, o, 'lg'), h('div', { class: 'grow' }, h('h3', null, def.name), h('div', { class: 'small muted' }, `${PERSONALITIES[st.nations[o].ai.personality].label} · ${ownedProvinces(sim, o).length} provinces · ${def.startType ?? ''}`)), relationTag(app, o)),
+    h('div', { class: 'row', style: 'gap:6px;margin:6px 0 10px;flex-wrap:wrap' }, find, onMap),
+    h(
+      'div',
+      { class: 'stat-grid' },
+      tile('Their opinion', signed(op, 0), op >= 0 ? 'good' : 'bad', 'How they regard us. Treaties and war goals depend on it.'),
+      tile('Their alarm', String(Math.round(theirAlarm)), theirAlarm >= C.diplomacy.alarmCoalition ? 'bad' : '', `How threatened they feel by us. At ${C.diplomacy.alarmCoalition} realms may join coalitions.`),
+      tile('Strength', `${ratio.toFixed(1)}×`, ratio > 1.3 ? 'bad' : ratio < 0.77 ? 'good' : '', 'Their military strength relative to ours.'),
+      tile('Their trust', String(Math.round(st.nations[o].trust)), '', 'Their reputation for keeping agreements.'),
+    ),
+    h('details', { class: 'section', open: true }, h('summary', { class: 'eyebrow' }, 'Why they feel this way'), reasonsList(parts)),
+    section(
+      'Envoy and treaties',
+      envoyHere
+        ? action('Recall envoy', `Envoy at their court until ${dateOf(sim, envoyHere.until).short} (+${C.diplomacy.envoyGain}/month opinion, up to ${C.diplomacy.envoyCap}).`, () => app.do({ type: 'recallEnvoy', target: o }), null)
+        : action('Send envoy', `${C.diplomacy.envoyCost} crowns/month for 12 months: +${C.diplomacy.envoyGain} opinion each month (up to ${C.diplomacy.envoyCap}).`, () => app.do({ type: 'envoy', target: o }), envoyProblem(sim, me, o)),
+      treaty('trade'),
+      treaty('nap'),
+      treaty('alliance'),
+    ),
+    section(
+      'Their situation',
+      row('Allies', alliesOf(sim, o).map((a) => sim.world.nationDefs[a].short).join(', ') || 'none'),
+      row('Wars', warsOf(sim, o).map((w) => w.name).join(', ') || 'none'),
+      row('Shared border', sharesBorder(app, me, o) ? 'yes' : 'no'),
+      row('Our claims on them', ourClaims.length ? ourClaims.map((p) => provName(sim, p)).join(', ') : 'none'),
+      row('Their claims on us', theirClaims.length ? theirClaims.map((p) => provName(sim, p)).join(', ') : 'none'),
+    ),
+    section(
+      'Coalition',
+      coalAgainstThem?.members.includes(me)
+        ? action('Leave coalition', `Members: ${coalAgainstThem.members.map((m) => nationName(sim, m)).join(', ')}`, () => app.do({ type: 'leaveCoalition', target: o }), null)
+        : action(`Join coalition against ${def.short}`, `Our alarm about them: ${Math.round(myAlarm)} (needs ${C.diplomacy.alarmCoalition}). Members defend each other against them.`, () => app.do({ type: 'joinCoalition', target: o }), joinCoalitionProblem(sim, me, o)),
+    ),
+    section('War', warBlock),
   );
 }
 
@@ -493,10 +651,60 @@ function warsLedger(app: App): HTMLElement {
   const me = app.player;
   const mine = me ? warsOf(sim, me) : [];
   const others = Object.values(sim.state.wars).filter((w) => !mine.includes(w));
+  // at peace: what we could fight for, and who might come for us
+  const peace: Array<Node | null> = [];
+  if (me && !mine.length) {
+    const sim2 = sim;
+    const rows = aliveNations(sim2)
+      .filter((o) => o !== me)
+      .map((o) => ({ o, goals: goalOptions(sim2, me, o), theirClaims: claimsOn(sim2, o, me).length, alarm: sim2.state.alarm[o]?.[me] ?? 0 }));
+    const targets = rows.filter((r) => r.goals.length);
+    const threats = rows.filter((r) => r.theirClaims || r.alarm >= C.diplomacy.alarmCoalition * 0.8).sort((a, b) => b.theirClaims - a.theirClaims || b.alarm - a.alarm);
+    const open = (o: NationId) => button('Diplomacy', () => app.openDiplomacy(o), { cls: 'small quiet', fk: `wars-dip-${o}` });
+    peace.push(
+      h('div', { class: 'callout good' }, icon('pact'), 'We are at peace.'),
+      section(
+        'War goals we hold',
+        targets.length
+          ? h(
+              'div',
+              null,
+              targets.map((r) =>
+                h(
+                  'div',
+                  { class: 'front-row' },
+                  shield(app, r.o),
+                  h('div', { class: 'grow' }, h('b', null, nationName(sim2, r.o)), h('div', { class: 'small muted' }, r.goals.map((g) => `${g.type === 'claim' ? 'claims' : g.type === 'conquest' ? 'conquest' : 'coalition'}: ${g.provinces.map((p) => provName(sim2, p)).join(', ')}`).join(' · '))),
+                  open(r.o),
+                ),
+              ),
+            )
+          : h('p', { class: 'small muted' }, 'None yet. Fabricate a claim from a province of ours that borders the land we want, or share a border for a war of conquest.'),
+      ),
+      section(
+        'Who might come for us',
+        threats.length
+          ? h(
+              'div',
+              null,
+              threats.map((r) =>
+                h(
+                  'div',
+                  { class: 'front-row' },
+                  shield(app, r.o),
+                  h('div', { class: 'grow' }, h('b', null, nationName(sim2, r.o)), h('div', { class: 'small muted' }, [r.theirClaims ? `claims ${r.theirClaims} of our provinces` : '', r.alarm >= C.diplomacy.alarmCoalition * 0.8 ? `alarmed by us (${Math.round(r.alarm)})` : ''].filter(Boolean).join(' · '))),
+                  open(r.o),
+                ),
+              ),
+            )
+          : h('p', { class: 'small muted' }, 'No realm claims our land or is alarmed by us.'),
+      ),
+    );
+  }
   return h(
     'div',
     null,
-    mine.length ? mine.map((w) => warCard(app, w, true)) : h('p', { class: 'muted' }, 'You are at peace.'),
+    mine.length ? mine.map((w) => warCard(app, w, true)) : peace,
     others.length ? h('h3', { style: 'margin-top:16px' }, 'Other wars') : null,
     others.map((w) => warCard(app, w, false)),
     h(
@@ -639,9 +847,9 @@ function victoryLedger(app: App): HTMLElement {
   const alive = aliveNations(sim);
   const paths = ['territorial', 'economic', 'diplomatic'] as const;
   const desc: Record<(typeof paths)[number], string> = {
-    territorial: `Own and control ≥75% of the provinces in ${C.victory.territorialRegions} regions and ≥${Math.round(C.victory.territorialShare * 100)}% of all provinces, then hold it for ${VICTORY_MONTHS.territorial} months.`,
-    economic: `Integrated development (dev of provinces at integration ≥75) of ≥${Math.round(C.victory.economicShare * 100)}% of the world's, with average unrest ≤${C.victory.economicUnrest}, no debt or bankruptcy and none of your land occupied — for ${VICTORY_MONTHS.economic} months.`,
-    diplomatic: `Influence from treaties at least ${C.victory.diplomaticTreatyAge / 12} years old with partners whose opinion of you is ≥${C.victory.diplomaticOpinion} (alliance 2, trade 1): ${C.victory.diplomaticInfluencePerRealm} per other surviving realm; trust ≥${C.victory.diplomaticTrust}; no offensive war — for ${VICTORY_MONTHS.diplomatic} months.`,
+    territorial: `Own and control ≥75% of the provinces in ${victoryRules(sim).territorialRegions} regions and ≥${Math.round(victoryRules(sim).territorialShare * 100)}% of all provinces, then hold it for ${VICTORY_MONTHS.territorial} months.`,
+    economic: `Integrated development (dev of provinces at integration ≥75) of ≥${Math.round(victoryRules(sim).economicShare * 100)}% of the world's, with average unrest ≤${C.victory.economicUnrest}, no debt or bankruptcy and none of your land occupied — for ${VICTORY_MONTHS.economic} months.`,
+    diplomatic: `Influence from treaties at least ${C.victory.diplomaticTreatyAge / 12} years old with partners whose opinion of you is ≥${C.victory.diplomaticOpinion} (alliance 2, trade 1): ${victoryRules(sim).diplomaticInfluencePerRealm} per other surviving realm; trust ≥${C.victory.diplomaticTrust}; no offensive war — for ${VICTORY_MONTHS.diplomatic} months.`,
   };
   const mine = me ? victoryProgress(sim, me) : null;
   const infl = me ? influenceByPartner(sim, me) : {};
@@ -751,7 +959,7 @@ function logLedger(app: App): HTMLElement {
             .map((n) => {
               const d = h('div', { class: `kv ${n.priority === 'urgent' ? 'bad' : n.priority === 'low' ? 'muted' : ''}`, style: n.province ? 'cursor:pointer' : '' }, h('span', { class: 'k nowrap' }, dateOf(sim, n.tick).short), h('span', { class: 'v', style: 'text-align:left;flex:1;margin-left:10px' }, n.text));
               if (n.province) d.addEventListener('click', () => {
-                app.closeModal();
+                app.closeLedger();
                 app.selectProvince(n.province!, true);
               });
               return d;
