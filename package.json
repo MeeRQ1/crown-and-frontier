@@ -1,0 +1,29 @@
+{
+  "name": "crown-and-frontier",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Crown & Frontier: a single-player browser grand strategy game about integrating a frontier realm.",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc --noEmit && vite build",
+    "preview": "vite preview",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "genmap": "tsx tools/genmap.ts",
+    "sim": "tsx tools/sim-cli.ts",
+    "package": "tsx tools/package-zip.ts",
+    "verify:web": "tsx tools/verify-web.ts"
+  },
+  "devDependencies": {
+    "@types/d3-delaunay": "^6.0.4",
+    "@types/node": "^22.20.4",
+    "d3-delaunay": "^6.0.4",
+    "playwright": "1.56.1",
+    "tsx": "^4.23.15",
+    "typescript": "~5.9.3",
+    "vite": "^8.3.1",
+    "vitest": "^5.0.2"
+  }
+}
