@@ -201,12 +201,26 @@ export function hasAccess(sim: Sim, nid: NationId, owner: NationId | null, ctrl:
   return false;
 }
 
+const borderCache = new WeakMap<object, { key: string; pairs: Set<string> }>();
+
+/** Do realms a and b share a land border (or strait)? Cached per revision. */
 export function borders(sim: Sim, a: NationId, b: NationId): boolean {
-  for (const pid of sim.world.provIds) {
-    if (sim.state.provinces[pid].owner !== a) continue;
-    for (const n of sim.world.prov[pid].neighbors) if (sim.state.provinces[n].owner === b) return true;
+  const key = `${sim.state.tick}|${sim.state.rev}`;
+  let c = borderCache.get(sim.state);
+  if (!c || c.key !== key) {
+    const pairs = new Set<string>();
+    for (const pid of sim.world.provIds) {
+      const o = sim.state.provinces[pid].owner;
+      if (!o) continue;
+      for (const n of sim.world.prov[pid].neighbors) {
+        const o2 = sim.state.provinces[n].owner;
+        if (o2 && o2 !== o) pairs.add(`${o}|${o2}`);
+      }
+    }
+    c = { key, pairs };
+    borderCache.set(sim.state, c);
   }
-  return false;
+  return c.pairs.has(`${a}|${b}`);
 }
 
 /** Shortest hop distance between any province of a and any of b (Infinity if none). */

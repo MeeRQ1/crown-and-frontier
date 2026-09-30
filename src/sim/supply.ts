@@ -70,10 +70,17 @@ export function supplyDistances(sim: Sim, nid: NationId): Record<ProvinceId, num
       open.push([0, pid]);
     }
   }
-  // Dijkstra through friendly-controlled provinces (small graph: simple sorted queue).
+  // Dijkstra through friendly-controlled provinces (small graph: linear minimum scan).
   while (open.length) {
-    open.sort((a, b) => a[0] - b[0] || (a[1] < b[1] ? -1 : 1));
-    const [d, cur] = open.shift()!;
+    let bi = 0;
+    for (let i = 1; i < open.length; i++) {
+      const x = open[i];
+      const y = open[bi];
+      if (x[0] < y[0] || (x[0] === y[0] && x[1] < y[1])) bi = i;
+    }
+    const [d, cur] = open[bi];
+    open[bi] = open[open.length - 1];
+    open.pop();
     if (d > dist[cur]) continue;
     for (const nb of sim.world.prov[cur].neighbors) {
       const nd = d + stepCost(sim, nb);
