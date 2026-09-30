@@ -571,7 +571,7 @@ export class MapRenderer {
     const here = this.provinceCenter(a.location);
     if (!a.path.length || a.progress <= 0 || a.battle) return here;
     const next = this.provinceCenter(a.path[0]);
-    const cost = Math.max(0.1, moveCost(sim, a.location, a.path[0]));
+    const cost = Math.max(0.1, moveCost(sim, a.location, a.path[0], a.nation));
     const u = Math.max(0, Math.min(0.85, a.progress / cost));
     return { x: here.x + (next.x - here.x) * u, y: here.y + (next.y - here.y) * u };
   }

@@ -8,6 +8,10 @@ import type { MapGeometry } from './geometry';
 type Loader = () => Promise<MapGeometry>;
 
 const LOADERS: Record<string, Loader> = {
+  aldmere: async () => {
+    const { default: g } = await import('../../data/aldmere.map.json');
+    return { ...(g as unknown as Omit<MapGeometry, 'id'>), id: 'aldmere' };
+  },
   reach: async () => {
     const { default: g } = await import('../../data/reach.map.json');
     const raw = g as unknown as Omit<MapGeometry, 'id' | 'labels'>;

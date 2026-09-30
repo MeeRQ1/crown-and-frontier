@@ -29,6 +29,7 @@ export interface Mods {
   attrition: number;
   entrench: number;
   moveSpeed: number;
+  straitCost: number;
   devCost: number;
   infraCost: number;
   fortCost: number;
@@ -76,6 +77,7 @@ export const MOD_LABELS: Record<keyof Mods, [string, 'pct' | 'flat']> = {
   attrition: ['Attrition', 'pct'],
   entrench: ['Entrenchment', 'pct'],
   moveSpeed: ['Movement speed', 'pct'],
+  straitCost: ['Sea crossing cost (movement points)', 'flat'],
   devCost: ['Development cost', 'pct'],
   infraCost: ['Road cost', 'pct'],
   fortCost: ['Fort cost', 'pct'],
@@ -130,6 +132,7 @@ export function traitMods(t: NationTraits): ModEffects {
     integration: t.integrationMul ?? 0,
     envoys: t.envoyAdd ?? 0,
     opinion: t.opinionAdd ?? 0,
+    straitCost: t.straitCostAdd ?? 0,
   };
 }
 

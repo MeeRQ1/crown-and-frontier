@@ -2,6 +2,7 @@
 // single-source path search, threat estimates.
 
 import { applyCommand } from '../commands';
+import { CostHeap } from '../heap';
 import { armyStrength } from '../military';
 import { canEnter, moveCost } from '../movement';
 import { nextFloat } from '../rng';
@@ -60,24 +61,19 @@ export function reachFrom(sim: Sim, nid: NationId, from: ProvinceId): Reach {
   const dist: Record<ProvinceId, number> = { [from]: 0 };
   const prev: Record<ProvinceId, ProvinceId> = {};
   const done = new Set<ProvinceId>();
-  const open: ProvinceId[] = [from];
-  while (open.length) {
-    let bi = 0;
-    for (let i = 1; i < open.length; i++) {
-      const d = dist[open[i]];
-      const bd = dist[open[bi]];
-      if (d < bd || (d === bd && open[i] < open[bi])) bi = i;
-    }
-    const cur = open.splice(bi, 1)[0];
+  const open = new CostHeap();
+  open.push(0, from);
+  while (open.size) {
+    const cur = open.pop();
     if (done.has(cur)) continue;
     done.add(cur);
     for (const nb of sim.world.prov[cur].neighbors) {
       if (done.has(nb) || !canEnter(sim, nid, nb)) continue;
-      const nd = dist[cur] + moveCost(sim, cur, nb);
+      const nd = dist[cur] + moveCost(sim, cur, nb, nid);
       if (dist[nb] === undefined || nd < dist[nb]) {
         dist[nb] = nd;
         prev[nb] = cur;
-        open.push(nb);
+        open.push(nd, nb);
       }
     }
   }

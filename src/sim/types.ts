@@ -38,6 +38,8 @@ export interface NationTraits {
   integrationMul?: number;
   envoyAdd?: number;
   opinionAdd?: number;
+  /** added to the movement cost of a sea strait (Hrafnmark: -2) */
+  straitCostAdd?: number;
 }
 
 export interface NationDef {
@@ -93,6 +95,12 @@ export interface ScenarioDef {
   provinces: ProvinceDef[];
   regions: RegionDef[];
   straits: Array<[ProvinceId, ProvinceId]>;
+  /** borders that are rivers: attacking across one gives the defender a bonus */
+  rivers?: Array<[ProvinceId, ProvinceId]>;
+  /** optional per-map victory thresholds (defaults in config) */
+  victory?: Partial<{ territorialRegions: number; territorialShare: number; economicShare: number; diplomaticInfluencePerRealm: number; diplomaticMinInfluence: number }>;
+  /** short blurb for the campaign picker */
+  blurb?: string;
 }
 
 /** Static world derived from a scenario: lookups and graph structure. */
@@ -105,6 +113,8 @@ export interface World {
   regionProvinces: Record<string, ProvinceId[]>;
   /** key `${a}|${b}` with a<b → strait crossing */
   straitSet: Set<string>;
+  /** key `${a}|${b}` with a<b → river border */
+  riverSet: Set<string>;
   /** all-pairs hop distances (unweighted graph), for AI/proximity heuristics */
   hops: Record<ProvinceId, Record<ProvinceId, number>>;
 }
@@ -173,6 +183,8 @@ export interface Army {
   supply: number;
   /** AI assignment tag (operational layer) */
   task: string | null;
+  /** the province the army last stepped out of, and when (river crossings) */
+  lastMove?: { from: ProvinceId; tick: number };
 }
 
 export interface BattleRound {
@@ -198,6 +210,8 @@ export interface Battle {
   defLosses: number;
   /** summary of main modifiers for the report */
   factors: string[];
+  /** every attacker opened the battle by crossing a river into the province */
+  river?: boolean;
 }
 
 export interface BattleReport {

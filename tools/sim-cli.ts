@@ -1,5 +1,5 @@
 // Headless AI-only campaigns through the real simulation.
-//   npm run sim -- --seeds 1-10 --difficulty normal --years 40 [--out reports/ai-campaigns.md] [--json path]
+//   npm run sim -- --seeds 1-10 --difficulty normal --years 40 [--scenario aldmere|reach] [--out reports/ai-campaigns.md] [--json path]
 // Every run records its seed and settings so any failure can be reproduced.
 
 import { mkdirSync, writeFileSync } from 'node:fs';
@@ -18,6 +18,7 @@ interface Args {
   out?: string;
   json?: string;
   quiet: boolean;
+  scenario: string;
 }
 
 function parseArgs(): Args {
@@ -34,7 +35,7 @@ function parseArgs(): Args {
   }
   const d = get('difficulty') ?? 'normal';
   const difficulties = (d === 'all' ? ['easy', 'normal', 'hard'] : d.split(',')) as Difficulty[];
-  return { seeds, difficulties, years: Number(get('years') ?? 40), out: get('out'), json: get('json'), quiet: a.includes('--quiet') };
+  return { seeds, difficulties, years: Number(get('years') ?? 40), out: get('out'), json: get('json'), quiet: a.includes('--quiet'), scenario: get('scenario') ?? 'reach' };
 }
 
 interface RunResult {
@@ -61,8 +62,8 @@ interface RunResult {
   snapshots: Array<{ year: number; techsAvg: number; treasuryMax: number; best: Record<string, string> }>;
 }
 
-function runOne(seed: number, difficulty: Difficulty, years: number): RunResult {
-  const sim = createGame({ seed, difficulty, playerNation: null, campaignYears: years });
+function runOne(seed: number, difficulty: Difficulty, years: number, scenario: string): RunResult {
+  const sim = createGame({ seed, difficulty, playerNation: null, campaignYears: years, scenario });
   const st = sim.state;
   const start: Record<string, number> = {};
   for (const n of sim.world.nationIds) start[n] = ownedProvinces(sim, n).length;
@@ -176,7 +177,7 @@ const args = parseArgs();
 const results: RunResult[] = [];
 for (const difficulty of args.difficulties) {
   for (const seed of args.seeds) {
-    const r = runOne(seed, difficulty, args.years);
+    const r = runOne(seed, difficulty, args.years, args.scenario);
     results.push(r);
     if (!args.quiet) {
       const prov = Object.entries(r.nations)
