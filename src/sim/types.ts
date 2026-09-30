@@ -105,6 +105,8 @@ export interface ScenarioDef {
   victory?: Partial<{ territorialRegions: number; territorialShare: number; economicShare: number; diplomaticInfluencePerRealm: number; diplomaticMinInfluence: number }>;
   /** short blurb for the campaign picker */
   blurb?: string;
+  /** technology costs are multiplied by this (default 1) */
+  researchCostMul?: number;
 }
 
 /** Static world derived from a scenario: lookups and graph structure. */

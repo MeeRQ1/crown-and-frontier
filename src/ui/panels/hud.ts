@@ -6,7 +6,7 @@ import { coalitionAgainst } from '../../sim/diplomacy';
 import { computeLedger, debtStage, grossIncome, poolCap, stockpileCap } from '../../sim/economy';
 import { activeProjects, buildSlots } from '../../sim/construction';
 import { overextension } from '../../sim/integration';
-import { researchRate, techAvailable } from '../../sim/progression';
+import { researchRate, techAvailable, techCost } from '../../sim/progression';
 import { armiesOf, dateOf, provName, warsOf } from '../../sim/state';
 import { rivalLeader } from '../../sim/ai/strategic';
 import { VICTORY_LABELS } from '../../sim/victory';
@@ -151,15 +151,15 @@ export function renderHud(app: App): void {
         res({
           label: 'Research',
           icon: 'research',
-          value: cur ? [cur.name.split(' ').slice(-1)[0], h('span', { class: 'cap' }, ` ${Math.min(99, Math.floor((n.research.progress / cur.cost) * 100))}%`)] : [anyLeft ? 'Choose' : 'Complete'],
-          sub: cur ? [h('span', { class: 'pos' }, `+${fmt(rate, 1)}/mo`), h('span', { class: 'commit' }, `~${Math.max(1, Math.ceil((cur.cost - n.research.progress) / Math.max(0.1, rate)))} mo`)] : [h('span', { class: 'commit' }, anyLeft ? 'nothing selected' : 'all done')],
+          value: cur ? [cur.name.split(' ').slice(-1)[0], h('span', { class: 'cap' }, ` ${Math.min(99, Math.floor((n.research.progress / techCost(sim, cur.id)) * 100))}%`)] : [anyLeft ? 'Choose' : 'Complete'],
+          sub: cur ? [h('span', { class: 'pos' }, `+${fmt(rate, 1)}/mo`), h('span', { class: 'commit' }, `~${Math.max(1, Math.ceil((techCost(sim, cur.id) - n.research.progress) / Math.max(0.1, rate)))} mo`)] : [h('span', { class: 'commit' }, anyLeft ? 'nothing selected' : 'all done')],
           state: !cur && anyLeft ? 'caution' : '',
           tip: () =>
             h(
               'div',
               null,
               h('b', { class: 't' }, cur ? cur.name : 'Research'),
-              h('p', null, cur ? `${Math.floor(n.research.progress)} of ${cur.cost} points; ${fmt(rate, 1)} per month at funding level ${n.research.funding}.` : anyLeft ? 'No technology selected — progress banks only up to 60 points, then is lost.' : 'Every technology has been researched. Research funding can be set to None to save crowns.'),
+              h('p', null, cur ? `${Math.floor(n.research.progress)} of ${techCost(sim, cur.id)} points; ${fmt(rate, 1)} per month at funding level ${n.research.funding}.` : anyLeft ? 'No technology selected — progress banks only up to 60 points, then is lost.' : 'Every technology has been researched. Research funding can be set to None to save crowns.'),
             ),
           onClick: () => app.openLedger('research'),
         }),

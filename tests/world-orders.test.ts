@@ -167,3 +167,20 @@ describe('army groups and standing orders', () => {
     expect(findPath(sim, 'a', 'a1', 'a3')?.path).toEqual(['a2', 'a3']);
   });
 });
+
+describe('AI on several fronts', () => {
+  it('finds one front per enemy, placed toward that enemy’s armies and weighted by their strength', async () => {
+    const { frontPosts } = await import('../src/sim/ai/operational');
+    const sim = lineGame();
+    declareWar(sim, 'a', 'b', { type: 'conquest', provinces: ['b3'] });
+    declareWar(sim, 'c', 'b', { type: 'conquest', provinces: ['b2'] });
+    addArmy(sim, 'a', 'a3', { foot: 6 });
+    addArmy(sim, 'c', 'c1', { foot: 2 });
+    const posts = frontPosts(sim, 'b');
+    expect(posts.map((p) => [p.enemy, p.post])).toEqual([
+      ['a', 'b3'],
+      ['c', 'b2'],
+    ]);
+    expect(posts[0].threat).toBeGreaterThan(posts[1].threat);
+  });
+});

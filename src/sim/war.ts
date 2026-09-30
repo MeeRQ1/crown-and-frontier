@@ -36,6 +36,7 @@ import {
   atWar,
   bump,
   dateOf,
+  enemiesOf,
   hasTreaty,
   months,
   nationName,
@@ -223,8 +224,10 @@ function callDefenders(sim: Sim, w: War, target: NationId): void {
 function aiHonours(sim: Sim, nid: NationId, w: War): boolean {
   const n = sim.state.nations[nid];
   if (n.warExhaustion >= 60) return false;
-  if (warsOf(sim, nid).length >= 2) return false;
-  void w;
+  const wars = warsOf(sim, nid);
+  if (wars.length >= 2) return false;
+  // already fighting on another front and tiring: a second front is refused
+  if (wars.length && n.warExhaustion >= C.ai.secondFrontExhaustion && !enemiesOf(sim, nid).includes(w.attackerLead)) return false;
   return true;
 }
 

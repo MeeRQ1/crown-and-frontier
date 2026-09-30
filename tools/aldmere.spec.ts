@@ -146,7 +146,7 @@ export const FIXED: FixedProv[] = [
   { id: 'caldris', name: 'Caldris', x: 1810, y: 1150, region: 'lakelands', owner: 'cal', terrain: 'plains', resource: 'goods', dev: 6, pop: 60, infra: 1, fort: 2 },
   { id: 'istrenne', name: 'Istrenne', x: 1960, y: 1860, region: 'isthigh', owner: 'ist', terrain: 'hills', resource: 'iron', dev: 5, pop: 45, infra: 1, fort: 2 },
   { id: 'solmarre', name: 'Solmarre', x: 2210, y: 2720, region: 'solmarre', owner: 'sol', terrain: 'plains', resource: 'goods', dev: 6, pop: 60, infra: 2, fort: 2 },
-  { id: 'lessara', name: 'Lessara', x: 2650, y: 1700, region: 'lessvale', owner: 'les', terrain: 'plains', resource: 'goods', dev: 7, pop: 85, infra: 2, fort: 1 },
+  { id: 'lessara', name: 'Lessara', x: 2650, y: 1700, region: 'lessvale', owner: 'les', terrain: 'plains', resource: 'goods', dev: 6, pop: 75, infra: 2, fort: 1 },
   { id: 'morvay', name: 'Morvay', x: 3350, y: 1060, region: 'morhills', owner: 'mor', terrain: 'hills', resource: 'iron', dev: 6, pop: 55, infra: 1, fort: 1 },
   { id: 'fenhold', name: 'Fenhold', x: 4120, y: 700, region: 'fens', owner: 'fen', terrain: 'marsh', resource: 'grain', dev: 4, pop: 40, infra: 1, fort: 2 },
   { id: 'emberwatch', name: 'Emberwatch', x: 4340, y: 1260, region: 'ashmark', owner: 'ash', terrain: 'hills', resource: null, dev: 4, pop: 40, infra: 1, fort: 2 },
@@ -158,6 +158,8 @@ export const FIXED: FixedProv[] = [
   { id: 'glenardach', name: 'Glen Ardach', x: 652, y: 986, region: 'firths', owner: 'car', terrain: 'mountains', resource: null, dev: 1, pop: 8, fort: 2, claims: ['aur'], pass: true },
   { id: 'frostgate', name: 'Frostgate', x: 3050, y: 540, region: 'morcross', owner: 'mor', terrain: 'mountains', resource: null, dev: 1, pop: 8, fort: 1, integ: 75, pass: true },
   { id: 'irongate', name: 'The Iron Gate', x: 3330, y: 1542, region: 'weststeppe', owner: 'tar', terrain: 'mountains', resource: 'iron', dev: 1, pop: 10, fort: 2, integ: 80, claims: ['mor'], pass: true },
+  // Hrafnmark's fortress on the neck of its peninsula
+  { id: 'skjoldheim', name: 'Skjoldheim', x: 1990, y: 330, region: 'hrafn', owner: 'hra', terrain: 'hills', resource: 'iron', dev: 3, pop: 30, fort: 2 },
   // landmarks of the frontier
   { id: 'amberfield', name: 'Amberfield', x: 2790, y: 820, region: 'hollowvale', owner: null, terrain: 'plains', resource: 'goods', dev: 2, pop: 14 },
 ];
@@ -165,8 +167,8 @@ export const FIXED: FixedProv[] = [
 // prettier-ignore
 export const REGIONS: RegionSpec[] = [
   // ── west of the Greyspine ────────────────────────────────────────────────
-  { id: 'glens', culture: 'car', count: 8, wealth: 1.5, anchors: [{ x: 430, y: 580, owner: 'car' }, { x: 720, y: 560, owner: 'car' }], biome: { hills: 4, forest: 2, mountains: 1.2, plains: 1.5 } },
-  { id: 'firths', culture: 'car', count: 5, wealth: 1.7, anchors: [{ x: 300, y: 830, owner: 'car' }, { x: 640, y: 860, owner: 'car' }], biome: { hills: 2, plains: 2, forest: 2, marsh: 1 }, claims: [['vos', 1]] },
+  { id: 'glens', culture: 'car', count: 8, wealth: 1.9, anchors: [{ x: 430, y: 580, owner: 'car' }, { x: 720, y: 560, owner: 'car' }], biome: { hills: 4, forest: 2, mountains: 1.2, plains: 1.5 } },
+  { id: 'firths', culture: 'car', count: 5, wealth: 2.0, anchors: [{ x: 300, y: 830, owner: 'car' }, { x: 640, y: 860, owner: 'car' }], biome: { hills: 2, plains: 2, forest: 2, marsh: 1 }, claims: [['vos', 1]] },
   { id: 'westfold', culture: 'wildw', count: 3, wealth: 0.8, anchors: [{ x: 250, y: 1060, owner: null }], biome: { marsh: 3, forest: 1, plains: 1 } },
   { id: 'skerries', culture: 'wildw', count: 3, wealth: 0.7, anchors: [], biome: { hills: 2, plains: 1 } },
   { id: 'greycoast', culture: 'vos', count: 6, wealth: 1.8, anchors: [{ x: 1130, y: 440, owner: 'vos' }, { x: 1330, y: 440, owner: 'vos' }], biome: { forest: 3, plains: 2, hills: 2 } },
@@ -181,9 +183,9 @@ export const REGIONS: RegionSpec[] = [
   { id: 'serecoast', culture: 'ser', count: 9, wealth: 3.4, anchors: [{ x: 500, y: 2150, owner: 'ser' }, { x: 860, y: 2320, owner: 'ser' }], biome: { plains: 5, hills: 1, forest: 1 } },
   { id: 'sereisles', culture: 'ser', count: 4, wealth: 2.4, anchors: [], biome: { plains: 2, hills: 1, forest: 1 } },
   // ── centre ───────────────────────────────────────────────────────────────
-  { id: 'hrafn', culture: 'hra', count: 7, wealth: 1.8, anchors: [{ x: 2000, y: 160, owner: 'hra' }, { x: 1930, y: 300, owner: 'hra' }], biome: { hills: 3, forest: 2, plains: 2, marsh: 0.5 } },
+  { id: 'hrafn', culture: 'hra', count: 8, wealth: 2.0, anchors: [{ x: 2000, y: 160, owner: 'hra' }, { x: 1930, y: 300, owner: 'hra' }], biome: { hills: 3, forest: 2, plains: 2, marsh: 0.5 } },
   { id: 'hrafnisles', culture: 'hra', count: 2, wealth: 1.4, anchors: [], biome: { hills: 2, plains: 1 } },
-  { id: 'drevmouth', culture: 'hra', count: 4, wealth: 2.0, anchors: [{ x: 1700, y: 430, owner: 'hra' }], biome: { plains: 2, marsh: 1, forest: 1 }, claims: [['dre', 2]] },
+  { id: 'drevmouth', culture: 'hra', count: 4, wealth: 2.2, anchors: [{ x: 1700, y: 430, owner: 'hra' }], biome: { plains: 2, marsh: 1, forest: 1 }, claims: [['dre', 2]] },
   { id: 'drevwoods', culture: 'dre', count: 10, wealth: 2.2, anchors: [{ x: 2140, y: 470, owner: 'dre' }, { x: 2400, y: 640, owner: 'dre' }], biome: { forest: 7, plains: 2, hills: 1 } },
   { id: 'tarnlands', culture: 'dre', count: 7, wealth: 2.4, anchors: [{ x: 1760, y: 800, owner: 'dre' }, { x: 2080, y: 900, owner: 'dre' }], biome: { forest: 3, plains: 3, hills: 1 }, claims: [['cal', 1], ['hra', 1]] },
   { id: 'drevwolds', culture: 'dre', count: 4, wealth: 1.2, anchors: [{ x: 2600, y: 410, owner: 'dre' }], integ: [65, 80], biome: { forest: 3, hills: 2, plains: 1 } },
@@ -192,10 +194,10 @@ export const REGIONS: RegionSpec[] = [
   { id: 'isthigh', culture: 'ist', count: 10, wealth: 2.4, anchors: [{ x: 1850, y: 1790, owner: 'ist' }, { x: 2150, y: 1760, owner: 'ist' }], biome: { hills: 3, mountains: 1.5, forest: 1.5, plains: 1.5 }, claims: [['cal', 1]] },
   { id: 'littoral', culture: 'ist', count: 7, wealth: 2.5, anchors: [{ x: 1640, y: 2300, owner: 'ist' }, { x: 1960, y: 2240, owner: 'ist' }], biome: { plains: 3, hills: 2, forest: 1 }, claims: [['ser', 1], ['sol', 1]] },
   { id: 'solmarre', culture: 'sol', count: 12, wealth: 3.2, anchors: [{ x: 2200, y: 2760, owner: 'sol' }, { x: 2270, y: 2500, owner: 'sol' }], biome: { plains: 3, hills: 3, forest: 1 }, claims: [['ist', 1], ['les', 1]] },
-  { id: 'upperald', culture: 'les', count: 8, wealth: 2.6, anchors: [{ x: 2560, y: 1120, owner: 'les' }, { x: 2800, y: 1200, owner: 'les' }], biome: { plains: 3, forest: 2, hills: 2 }, claims: [['dre', 1], ['mor', 1]] },
-  { id: 'lessvale', culture: 'les', count: 9, wealth: 3.5, anchors: [{ x: 2620, y: 1680, owner: 'les' }], biome: { plains: 6, forest: 1 } },
-  { id: 'delta', culture: 'les', count: 8, wealth: 3.0, anchors: [{ x: 2720, y: 2360, owner: 'les' }, { x: 2480, y: 2250, owner: 'les' }], biome: { plains: 4, marsh: 3 }, claims: [['sol', 1], ['tar', 1]] },
-  { id: 'hollowvale', culture: 'vale', count: 6, wealth: 2.2, anchors: [{ x: 2800, y: 830, owner: null }], biome: { plains: 3, forest: 1, hills: 1 } },
+  { id: 'upperald', culture: 'les', count: 7, wealth: 2.4, anchors: [{ x: 2560, y: 1120, owner: 'les' }, { x: 2800, y: 1200, owner: 'les' }], biome: { plains: 3, forest: 2, hills: 2 }, claims: [['dre', 1], ['mor', 1]] },
+  { id: 'lessvale', culture: 'les', count: 9, wealth: 3.0, anchors: [{ x: 2620, y: 1680, owner: 'les' }], biome: { plains: 6, forest: 1 } },
+  { id: 'delta', culture: 'les', count: 8, wealth: 2.6, anchors: [{ x: 2720, y: 2360, owner: 'les' }, { x: 2480, y: 2250, owner: 'les' }], biome: { plains: 4, marsh: 3 }, claims: [['sol', 1], ['tar', 1]] },
+  { id: 'hollowvale', culture: 'vale', count: 7, wealth: 2.2, anchors: [{ x: 2800, y: 830, owner: null }], biome: { plains: 3, forest: 1, hills: 1 } },
   // ── east ─────────────────────────────────────────────────────────────────
   { id: 'northwilds', culture: 'wild', count: 14, wealth: 0.8, weight: 0.9, anchors: [{ x: 2880, y: 380, owner: null }, { x: 3280, y: 390, owner: null }, { x: 3700, y: 360, owner: null }, { x: 4150, y: 360, owner: null }], biome: { forest: 4, hills: 2, plains: 1, marsh: 1 } },
   { id: 'morcross', culture: 'mor', count: 8, wealth: 2.5, anchors: [{ x: 3060, y: 860, owner: 'mor' }, { x: 3100, y: 1300, owner: 'mor' }], biome: { plains: 3, hills: 2, forest: 2 }, claims: [['les', 2]] },
@@ -224,7 +226,7 @@ export const NAMES: Record<string, string[]> = {
   ist: ['Ardel', 'Corvo', 'Valdis', 'Sarn', 'Belcrest', 'Pellmark', 'Aigueval', 'Montrevel', 'Castelnau', 'Rocheval', 'Serrat', 'Vallorbe', 'Brianne', 'Lauzet', 'Mirabel', 'Queyras', 'Estagel'],
   sol: ['Alcara', 'Villaroja', 'Puerto Sal', 'Santaval', 'Oliveira', 'Cabo Lume', 'Mirasol', 'Almena', 'Sierra Dorada', 'Valdoro', 'Isla Clara', 'Torrecilla'],
   les: ['Oriel', 'Kallion', 'Melanthe', 'Dorion', 'Ithene', 'Kyrena', 'Pelagon', 'Argyra', 'Nysa', 'Therma', 'Astrion', 'Myrrhine', 'Velaxis', 'Eudora', 'Callisthe', 'Palaia', 'Aldford', 'Syrinx', 'Thaleia', 'Korinna', 'Lykos', 'Phaedon', 'Selene', 'Amphis'],
-  vale: ['Goldmere', 'Oakenhall', 'Brightwater', 'Haverstock', 'Linden Vale', 'Harvestfold'],
+  vale: ['Goldmere', 'Oakenhall', 'Brightwater', 'Haverstock', 'Linden Vale', 'Harvestfold', 'Sheaf Hollow'],
   mor: ['Garrow', 'Emberlin', 'Thornby', 'Rookhill', 'Selvane', 'Dunmore', 'Carrack', 'Ilse', 'Wexley', 'Blackmoor', 'Pendrake', 'Caerwyn', 'Hollowell', 'Tregarth', 'Briarford', 'Ashcombe', 'Redmarch', 'Coldharbour', 'Kilnsey', 'Ironbridge', 'Penhallow', 'Morwen', 'Glaston', 'Trewen'],
   fen: ['Wendmire', 'Reedby', 'Saltmere', 'Holt', 'Cressing', 'Blackwater', 'Veendam', 'Moorwyk', 'Dijkhaven', 'Sluis', 'Eelbrook', 'Marram', 'Fleetholm'],
   ash: ['Cinderfell', 'Ashfort', 'Wardenhall', 'Greystone', 'Burnhollow', 'Charwood', 'Smokeholm', 'Kilnmoor', 'Brandwick', 'Harthold', 'Fellwatch', 'Beaconridge', 'Soothill', 'Cinderby', 'Scorchmoor'],

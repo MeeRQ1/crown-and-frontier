@@ -96,6 +96,50 @@ along province borders and carry a real combat rule (attacking across a river). 
 reachable by a strait or ford. Old saves keep their scenario id, so they load on their original
 map.
 
+## As built
+
+The plan held. These are the places where the build differs from it, and why.
+
+### World
+
+| | The Reach (quick) | Aldmere (standard) |
+|---|---|---|
+| Provinces | 99 | 298 (3.0×) |
+| Realms | 9 | 14 |
+| Regions | 14 | 42 |
+| Unclaimed frontier | 12 | 33 |
+| Span (graph diameter, in provinces) | 15 | 28 |
+| Median province area | 23.0k units² | 18.8k units² |
+| Mountain passes | 3 | 6, across 4 ranges |
+| River borders | 0 | 62 (6 rivers) |
+| Straits | 10 | 15 |
+
+- **14 realms, not 16.** The nine realms of the Reach return, scaled up, and five new ones join
+  them: Carrow, Hrafnmark, Solmarre, Lessia and the Ashmark. Each of the five has its own
+  trait, heraldry and kind of start. Sixteen would have meant two realms that only repeated
+  an existing identity.
+- **No fords.** Only straits link land across water. The plan's "fords" had no rule behind
+  them, and the brief allows no geographic feature without one.
+- **No inner sea.** The central lake republic (Calder around Mirrormere) and four deep gulfs
+  (Aurelian, Serene, Sunward and Ember) do that job, and they read better at world zoom.
+- **Rivers run along province borders**, so crossing one is a precise, visible event. The
+  rule: attackers who all cross a river to open a battle face defenders +20%. It is shown in
+  forecasts, in battle factors, in the province card, and in the Terrain legend.
+- **Islands:** every owned island is linked to its owner's own coast, and each island also
+  gets a sea lane to the nearest coast held by someone else. Hrafnmark's longships cross
+  straits at no extra cost.
+
+### Interface
+
+- The menu's atlas backdrop is painted once and drifted by a CSS transform. Redrawing it every
+  frame cost 50–100 ms per frame in software rendering.
+- Diplomacy keeps the map on **our** relations and outlines the chosen realm; one button
+  switches to theirs. The first version switched the map to the other realm's point of view
+  on every click, which was disorienting.
+- Army groups (1–9) and a station order were added to the army card, the map markers and
+  the Military ledger. The Military ledger is organised by front, by group and by region,
+  because on 298 provinces a flat army list stopped being useful.
+
 ## Order of work
 
 1. Design system (tokens, fonts, components) and the new map renderer: tile-cached geography,

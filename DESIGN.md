@@ -1,8 +1,9 @@
 # Crown & Frontier — Design
 
 This document describes the rules **as implemented**. Every number lives in
-`src/sim/config.ts` (or the content files in `src/sim/data/` and
-`src/data/reach.ts`); formulas are in the module named beside each section.
+`src/sim/config.ts` (or the content files in `src/sim/data/`, `src/data/aldmere.ts`,
+`src/data/reach.ts` and the generated `src/data/aldmere.provinces.json`); formulas are in
+the module named beside each section.
 
 ## Identity
 
@@ -13,10 +14,40 @@ integrate it. You expand by settlement, investment or conquest, you bind the new
 the crown before rivals exploit its weakness, and you win the Reach through dominance,
 prosperity or leadership.
 
-**Setting.** An original early-modern (pike-and-shot) continent in 1640: nine
-realms, 99 provinces (12 of them unclaimed frontier), the Greyspine mountains
-with three passes (Northgate, Kestrel Pass, Southern Gap), Lake Calder, and island
-straits. Every name, place and event is fictional.
+**Setting.** Two original early-modern (pike-and-shot) maps, both in 1640. Every name,
+place and event is fictional.
+
+| | Aldmere (standard campaign) | The Reach (quick campaign) |
+|---|---|---|
+| Provinces | 298 (33 unclaimed) | 99 (12 unclaimed) |
+| Realms | 14 | 9 |
+| Regions | 42 | 14 |
+| Mountain ranges and passes | Greyspine (Northgate, Kestrel Pass, Southern Gap), Hoarfells (Glen Ardach), Frostfangs (Frostgate), Iron Teeth (the Iron Gate) | Greyspine: three passes |
+| Rivers | Aldwater, Vess, Serre, Drevna, Kolva, Tarn: 62 river borders | none |
+| Straits | 15 | 10 |
+| Graph diameter | 28 provinces | 15 provinces |
+| Default length | 60 years (40 / 60 / 80) | 40 years (25 / 40 / 60) |
+
+The nine realms of the Reach return on Aldmere with larger holdings, joined by Carrow
+(highland clans), Hrafnmark (a seafaring peninsula), Solmarre (a vineyard peninsula),
+Lessia (the Aldwater valley) and the Ashmark (frontier wardens). Starts are deliberately
+different: compact and defensible (Carrow, Calder, Istrel, Fenward), exposed frontier
+(Vostmark, Hrafnmark, the Ashmark), wealthy and central (Aurel, Lessia, Solmarre), large
+with difficult borders (Morvaine, Tarsk), and frontier to settle (Drevenholt). The setup
+screen shows each start's neighbours, passes, river borders, frontier and claims.
+
+**How Aldmere is made** (`tools/genworld.ts` from `tools/aldmere.spec.ts`, shared core in
+`tools/mapgen/core.ts`): the authored spec gives the coastline, islands, lakes, mountain
+ridges with their passes, river courses, and regions with anchors, target province counts,
+biomes and wealth. The generator rasterises land, lakes and mountain walls; grows regions
+from their anchors (walls and water stop growth, so ranges and seas become region
+borders); splits each region into provinces with k-means (capitals, passes and landmarks
+stay pinned); builds Voronoi cells with noisy shared borders; adds peaks along each ridge
+(closing any border that leaks through one); routes rivers along province borders; and
+links islands by strait, always to the owner's own coast plus a sea lane to someone else's.
+Terrain, resources, development, forts, claims and names follow from region, biome noise,
+rivers and ranges. The output is deterministic and checked in. The Reach's geometry comes
+from the same core and is byte-identical to the previous release.
 
 **Distinguishing idea: frontier integration.** Each owned province has
 integration from 0 to 100. That single value connects the economy, war, supply,
@@ -120,14 +151,22 @@ stay in the hundreds to low thousands rather than piling up.
 Each week an army gains movement points: 1.0, or 1.5 if it is all horse, or 0.8 with guns,
 × (1 + modifiers). Entering a province costs the terrain's value (plains and steppe 2,
 forest and hills 3, marsh 4, mountains 5), reduced by 12% per road level (the average
-of both ends); a sea strait adds 2. Paths are the cheapest legal Dijkstra
-route. Armies may enter their own or their allies' land, unclaimed land, land of
+of both ends); a sea strait adds 2 (Hrafnmark's longships: 0). Paths are the cheapest legal
+Dijkstra route, found with a binary heap that breaks ties by province id, so results do not
+depend on the order of the search. Armies may enter their own or their allies' land, unclaimed land, land of
 co-belligerents, and land of realms they are at war with. An army stays *located in
 its origin* until it arrives. An army cannot leave a province that holds a hostile
 army; armies are processed in id order, so hostile armies crossing on one edge always
 meet. Every step is re-validated: a blocked route is re-planned or halted with a
 notice. Peace returns armies standing in no-longer-accessible land to the nearest
 controlled province.
+
+**Orders.** Shift+right-click adds a waypoint after the current route. A **station order**
+keeps an army's home: whenever the army is idle elsewhere (after a retreat, say) it marches
+back. A new move replaces the order, and losing the station to an enemy cancels it with a
+notice. **Army groups** (1–9) let the player send one move order to every army in a group;
+each marches by its own best route. Groups and orders are player tools; the AI does not use
+them.
 
 ## Supply (`supply.ts`)
 
@@ -166,7 +205,9 @@ join the side they are friendly with and whose opponent they are at war with. Th
 - **Casualties inflicted:** firepower × 55 × roll (0.85–1.15, seeded). The
   attacker's fire is reduced by the defence bonus: terrain (forest 15%, marsh 20%, hills 25%,
   mountains 50%) + fort 15% per level if the defenders hold it + entrenchment (10% after 2
-  stationary weeks, 20% after 4) + technology, capped at 70%.
+  stationary weeks, 20% after 4) + technology + **river crossing** (20% when every
+  attacker stepped across a river border into the province to open the battle), capped
+  at 70%. Forecasts apply the river bonus when the attackers would cross one.
 - **Morale loss:** 0.15 + (casualties / men) × 8 × the enemy's shock (horse 1.6, guns 1.2, foot 1.0).
 - **Ending:** a side breaks at 25% morale or at 10% of its starting men. If both break,
   the side with the lower morale ratio loses; exact ties go to the defender. After 8 rounds the
@@ -266,8 +307,9 @@ province and counts toward war score.
 ## Research and policy (`progression.ts`, `data/techs.ts`, `data/policies.ts`)
 
 - **Research:** 18 technologies in three branches (Arms, Statecraft, Civics), each with two
-  tier-1, two tier-2 and two tier-3 techs. Costs are 100, 200 and 350 points; prerequisites
-  stay within a branch. Points per month = (0.5 + 0.4 × √Σ(dev × integration factor)) × funding ×
+  tier-1, two tier-2 and two tier-3 techs. Costs are 100, 200 and 350 points (×1.35 on
+  Aldmere, whose larger realms research faster, so that the tree lasts a 60-year campaign);
+  prerequisites stay within a branch. Points per month = (0.5 + 0.4 × √Σ(dev × integration factor)) × funding ×
   (1 + modifiers) × (1 − overextension/2). The full tree takes most of a long campaign, so
   specialisation matters early.
 - **Policies:** six national priorities, each with a benefit and a drawback: Mercantile Charter,
@@ -295,16 +337,28 @@ war weariness, a rival close to victory, and alarmed neighbours.
 All three paths are evaluated monthly for every realm and shown in the Victory ledger.
 Each month the conditions fail, a timer loses 6 months.
 
-1. **Territorial Dominance:** own and control ≥ 75% of the provinces in 3 regions and
-   ≥ 23% of all provinces, held for 24 months.
+1. **Territorial Dominance:** own and control ≥ 75% of the provinces in *R* regions and
+   ≥ *T* of all provinces, held for 24 months.
 2. **Economic Prosperity:** integrated development (the dev of controlled provinces at
-   integration ≥ 75) ≥ 25% of the world's development, with dev-weighted unrest ≤ 25, no debt, no
+   integration ≥ 75) ≥ *E* of the world's development, with dev-weighted unrest ≤ 25, no debt, no
    bankruptcy and none of your land occupied, held for 60 months. A windfall cannot
    do it; rivals can break it by occupying one province.
 3. **Diplomatic Leadership:** influence from treaties at least 3 years old whose
-   partner's opinion of you is ≥ 35 (alliance 2, trade 1), at 1.25 per other surviving realm
+   partner's opinion of you is ≥ 35 (alliance 2, trade 1), at *D* per other surviving realm
    (minimum 6), with trust ≥ 65 and no offensive war, held for 60 months. New
    treaties do not count, so cycling treaties is pointless.
+
+| Threshold | The Reach (9 realms) | Aldmere (14 realms) |
+|---|---|---|
+| *R* regions dominated | 3 of 14 | 6 of 42 |
+| *T* share of all provinces | 23% (23 provinces) | 18% (54 provinces) |
+| *E* share of world development | 25% | 18% |
+| *D* influence per other realm | 1.25 (10 with 8 rivals) | 0.85 (12 with 13 rivals) |
+
+Aldmere's thresholds are scaled from the Reach's by what "dominant" means among fourteen
+realms rather than nine: an average realm holds 7% of Aldmere against 11% of the Reach. The
+Reach's 23% is 2.1× an average share; Aldmere's 18% is 2.5×, so dominance on the larger map
+is, if anything, relatively harder. Region counts scale with the number of regions.
 
 - **Rival reactions:** AI realms react to a rival past 35% of a timer. Against a territorial or
   economic leader they raise their alarm (which feeds coalitions), arm, and lower their war
@@ -339,6 +393,19 @@ not implemented, and this is stated in the Help ledger.
 - *Value* comes from the goal provinces' development, claims and whether the target is a rival close to victory. It is halved when the AI's neighbours are alarmed and when the target is already beset.
 - *Supply feasibility* is checked first.
 - *Required ratios* come from the personality. Aggressive temperaments grow restless during long peace and as the campaign advances.
+- *Exposure* (crossroads realms): unfriendly neighbours not bound by a pact or alliance count
+  against a war plan, at 15% of their strength, scaled by (open borders − 2) / open borders.
+  A realm with two open borders ignores them; one with six weighs two thirds of them. This
+  stopped crossroads realms such as Morvaine from starting a war nearly every year and being
+  carved up by the neighbours they had left open.
+- *Second fronts:* an AI already at war and at 25+ war exhaustion refuses an ally's call to a
+  new front (breaking the alliance, as a player would).
+
+**Several fronts.** In war, armies without an objective no longer all gather at one rally
+point. For each enemy the AI picks a front post (the border province best placed to face
+that enemy's armies, preferring forts and development) and weighs the strength of the enemy
+armies within three marches. Idle armies go where the threat is least matched by armies
+already there.
 
 **Stability.** Commitment bonuses keep plans from flip-flopping; emergencies reassign armies at once.
 
@@ -349,10 +416,10 @@ forecasts, and rejected orders. They are included in bug reports.
 | Personality | War ratio | Aggression | Preferred path | Realms |
 |---|---|---|---|---|
 | Expansionist | 1.15 | 1.4 | territorial | Vostmark, Morvaine |
-| Opportunist | 1.2 (0.9 vs a realm already at war) | 1.1 | territorial | Drevenholt, Tarsk |
-| Commercial | 1.45 | 0.7 | economic | Aurel |
-| Defensive | 1.8 | 0.5 | economic | Calder, Istrel |
-| Diplomat | 2.0 | 0.4 | diplomatic | Serennes, Fenward |
+| Opportunist | 1.2 (0.9 vs a realm already at war) | 1.1 | territorial | Drevenholt, Tarsk, Hrafnmark |
+| Commercial | 1.45 | 0.7 | economic | Aurel, Lessia |
+| Defensive | 1.8 | 0.5 | economic | Calder, Istrel, Carrow, the Ashmark |
+| Diplomat | 2.0 | 0.4 | diplomatic | Serennes, Fenward, Solmarre |
 
 | Difficulty | Operational cadence | Objectives weighed | Coordinated attacks | Mistake chance | Attack margin | Accepts uncertain odds |
 |---|---|---|---|---|---|---|
@@ -372,9 +439,17 @@ default and disclosed in the setup screen and the game menu.
   Tests assert this, and that a game saved mid-war continues exactly like the original.
 - **Save format:** versioned (`schema: 1`) and checksummed JSON of the complete state, including
   movement progress, battles, queues, treaties, events and AI commitments.
+- **Saves keep their map.** Every save records its `scenarioId`; loading rebuilds that map's
+  world, so a Reach campaign always loads on the Reach and its province ids are never
+  interpreted against Aldmere. The Reach's geometry and adjacency are byte-identical to the
+  previous release. New state added by this version is optional (`army.group`,
+  `army.order`, `army.lastMove`, `battle.river`), so older saves load unchanged and the
+  schema stays at 1: no migration is needed. A save written by the previous release
+  (`tests/fixtures/reach-save-main-c29aea6.json`, made with commit c29aea6) is loaded, played
+  for a year and re-saved in the test suite. A save for a map this build does not include is
+  refused with the map's name.
 - **Loading:** damaged, truncated, foreign or newer files are rejected with a message, and the
-  current campaign is kept. No migrations exist yet; other schema versions are refused rather
-  than loaded incorrectly.
+  current campaign is kept. Other schema versions are refused rather than loaded incorrectly.
 
 ## Balance assumptions and evidence
 

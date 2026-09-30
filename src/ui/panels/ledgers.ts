@@ -21,7 +21,7 @@ import { checkCommand } from '../../sim/commands';
 import { adminCapacity, frontierLoad, overextension } from '../../sim/integration';
 import { maxMorale, nationStrength } from '../../sim/military';
 import { describeEffects } from '../../sim/modifiers';
-import { policyProblem, policySwitchCost, researchProblem, researchRate } from '../../sim/progression';
+import { policyProblem, policySwitchCost, researchProblem, researchRate, techCost } from '../../sim/progression';
 import { fnv1a } from '../../sim/save';
 import {
   aliveNations,
@@ -46,7 +46,7 @@ import { allScores, victoryRules, dominatedRegions, influence, influenceByPartne
 import { computeWarScore, evaluatePeace, goalOptions, provinceCost, scoreFor, termsCost, declareWarProblem } from '../../sim/war';
 import type { App } from '../app';
 import { action, bar, button, h, rebuild, row, setChildren } from '../dom';
-import { fmt, men, signed } from '../format';
+import { fmt, men, plural, signed } from '../format';
 import { downloadText } from '../storage';
 import { confirmDialog } from './dialogs';
 import { section, shield } from './common';
@@ -316,7 +316,7 @@ function militaryLedger(app: App): HTMLElement {
           return h(
             'div',
             { class: 'group-card' },
-            h('div', { class: 'gc-head' }, h('span', { class: 'grp big' }, String(g)), h('b', { class: 'grow' }, `Group ${g}`), h('span', { class: 'small muted' }, `${list.length} armies · ${list.reduce((n, a) => n + a.regiments.length, 0)} regiments`), sel),
+            h('div', { class: 'gc-head' }, h('span', { class: 'grp big' }, String(g)), h('b', { class: 'grow' }, `Group ${g}`), h('span', { class: 'small muted' }, `${plural(list.length, 'army', 'armies')} · ${plural(list.reduce((n, a) => n + a.regiments.length, 0), 'regiment')}`), sel),
             ...list.map((a) => armyRow(app, a)),
           );
         }),
@@ -414,11 +414,11 @@ function researchLedger(app: App): HTMLElement {
         const card = h(
           'div',
           { class: `card ${done ? 'done' : ''} ${current ? 'current' : ''} ${locked ? 'locked' : ''}`, style: 'margin:6px 0' },
-          h('h4', null, t.name, ' ', h('span', { class: 'tag' }, `Tier ${t.tier} · ${t.cost} pts`)),
+          h('h4', null, t.name, ' ', h('span', { class: 'tag' }, `Tier ${t.tier} · ${techCost(sim, t.id)} pts`)),
           h('p', { class: 'small' }, describeEffects(t.effects).join(' · ')),
           h('p', { class: 'small muted' }, t.description),
           t.requires.length ? h('p', { class: 'small muted' }, `Requires ${t.requires.map((r) => TECHS[r].name).join(', ')}`) : null,
-          done ? h('span', { class: 'tag good' }, 'Researched') : current ? h('div', null, bar(n.research.progress, t.cost, 'info'), h('span', { class: 'small' }, `${Math.floor(n.research.progress)}/${t.cost} · ~${Math.max(0, Math.ceil((t.cost - n.research.progress) / Math.max(0.1, rate)))} months`)) : action('Research this', `~${Math.ceil(t.cost / Math.max(0.1, rate))} months at the current rate`, () => app.do({ type: 'research', tech: t.id }), prob),
+          done ? h('span', { class: 'tag good' }, 'Researched') : current ? h('div', null, bar(n.research.progress, techCost(sim, t.id), 'info'), h('span', { class: 'small' }, `${Math.floor(n.research.progress)}/${techCost(sim, t.id)} · ~${Math.max(0, Math.ceil((techCost(sim, t.id) - n.research.progress) / Math.max(0.1, rate)))} months`)) : action('Research this', `~${Math.ceil(techCost(sim, t.id) / Math.max(0.1, rate))} months at the current rate`, () => app.do({ type: 'research', tech: t.id }), prob),
         );
         return card;
       }),

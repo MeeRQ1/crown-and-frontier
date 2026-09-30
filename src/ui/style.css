@@ -369,6 +369,7 @@ input[type='checkbox'] { accent-color: var(--seal); width: 1.1em; height: 1.1em;
 .switch { display: flex; align-items: center; gap: var(--s4); cursor: pointer; }
 .settings-grid { display: grid; grid-template-columns: 1fr auto; gap: var(--s4) var(--s6); align-items: center; }
 .settings-grid .hint { grid-column: 1 / -1; margin-top: -4px; font-size: var(--fs-sm); color: var(--text-3); }
+.settings-grid > input, .settings-grid > .segmented, .settings-grid > .row, .settings-grid > select { justify-self: end; }
 
 /* ── HUD (top bar) ───────────────────────────────────────────────────────── */
 .hud {

@@ -29,6 +29,11 @@ export function buildAldmereScenario(): ScenarioDef {
     description: 'Fourteen realms across a continent of passes, rivers and open frontier.',
     blurb: 'The standard campaign: about 300 provinces, several fronts for every realm, and long marches.',
     startYear: 1640,
+    // fourteen realms share the land: dominance is a smaller share than on the Reach
+    // (thresholds scaled from the Reach's multiple of an average realm; see DESIGN.md)
+    victory: { territorialRegions: 6, territorialShare: 0.18, economicShare: 0.18, diplomaticInfluencePerRealm: 0.85 },
+    // larger realms research faster; the tree should last a 60-year campaign
+    researchCostMul: 1.35,
     nations: ALDMERE_NATIONS,
     regions: ALDMERE_REGIONS,
     straits: data.straits,
