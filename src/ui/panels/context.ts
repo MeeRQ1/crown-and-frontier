@@ -2,7 +2,7 @@
 
 import { C, TERRAIN, UNITS } from '../../sim/config';
 import { forecastBattle } from '../../sim/combat';
-import { activeProjects, buildProblem, buildSlots, devCap, PROJECT_LABELS, projectCost } from '../../sim/construction';
+import { activeProjects, buildProblem, buildSlots, devCap, devMax, PROJECT_LABELS, projectCost } from '../../sim/construction';
 import { coalitionAgainst, fabricateProblem } from '../../sim/diplomacy';
 import { debtStage, integrationFactor, provinceCrowns, provinceSupplies, reserveCap } from '../../sim/economy';
 import { integrationRate, overextension, unrestTarget } from '../../sim/integration';
@@ -115,7 +115,7 @@ function provinceView(app: App, pid: ProvinceId): HTMLElement {
 
   const terr = TERRAIN[def.terrain];
   const stats = [
-    row('Development', `${p.dev} / ${devCap(sim, pid)}`),
+    row('Development', `${p.dev} (terrain limit ${devCap(sim, pid)}, max ${devMax(sim, pid)} at 2.5× cost)`),
     row('Roads', `${p.infra} / ${C.construction.infraMax}`),
     row('Fort', `${p.fort} / ${C.construction.fortMax}`),
     row('Population', `${fmt(p.pop, 1)}k`),

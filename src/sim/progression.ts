@@ -79,7 +79,7 @@ export function policyProblem(sim: Sim, nid: NationId, policy: string): string |
   if (!POLICIES[policy]) return 'Unknown policy.';
   if (n.policy === policy) return 'Already the national policy.';
   const ready = n.policySince + months(POLICY_COOLDOWN_MONTHS);
-  if (sim.state.tick >= 4 && sim.state.tick < ready) return `Policy was changed recently; next change possible in ${dateOf(sim, ready).short}.`;
+  if (sim.state.tick < ready) return `Policy was changed recently; next change possible in ${dateOf(sim, ready).short}.`;
   const cost = policySwitchCost(sim, nid);
   if (n.treasury < cost) return `Changing policy costs ${cost} crowns.`;
   return null;

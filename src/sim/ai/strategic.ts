@@ -152,7 +152,9 @@ function choosePolicy(sim: Sim, nid: NationId): void {
 function treasuryReserve(sim: Sim, nid: NationId): number {
   const n = sim.state.nations[nid];
   const exp = Object.values(n.lastMonth.expenses).reduce((a, b) => a + b, 0);
-  return Math.max(30, exp * 2) + (warsOf(sim, nid).length ? 40 : 0);
+  // the army comes first: keep money for regiments still missing from the target
+  const missing = Math.max(0, n.ai.armyTarget - regimentCount(sim, nid));
+  return Math.max(30, exp * 2) + (warsOf(sim, nid).length ? 40 : 0) + Math.min(missing, 6) * 30;
 }
 
 function planConstruction(sim: Sim, nid: NationId): void {
@@ -312,33 +314,56 @@ export function rivalLeader(sim: Sim, nid: NationId): { nid: NationId; path: Vic
 
 function sideStrength(sim: Sim, nid: NationId, against: NationId): number {
   let s = nationPotential(sim, nid);
-  // defensive allies that would be called
+  // defensive allies that would be called, weighted by whether they can reach the fight
   for (const a of alliesOf(sim, nid)) {
     if (a === against || hasTreaty(sim, 'alliance', a, against) || hasTreaty(sim, 'nap', a, against)) continue;
-    s += nationPotential(sim, a) * (borders(sim, a, against) ? 0.8 : 0.4);
+    const an = sim.state.nations[a];
+    if (an.warExhaustion >= 60 || warsOf(sim, a).length >= 2) continue;
+    const reach = borders(sim, a, against) ? 0.6 : borders(sim, a, nid) ? 0.35 : 0.15;
+    s += nationPotential(sim, a) * reach * (warsOf(sim, a).length ? 0.5 : 1);
   }
   const c = coalitionAgainst(sim, against);
   if (c?.members.includes(nid)) for (const m of c.members) if (m !== nid && !alliesOf(sim, nid).includes(m)) s += nationPotential(sim, m) * 0.6;
   return s;
 }
 
-function considerWar(sim: Sim, nid: NationId): void {
+export interface WarCandidate {
+  t: NationId;
+  goal: WarGoal;
+  score: number;
+  ratio: number;
+  need: number;
+  value: number;
+  notes: string[];
+}
+
+/** Why the AI is not considering war right now (null = it may). */
+export function warGate(sim: Sim, nid: NationId): string | null {
   const st = sim.state;
   const n = st.nations[nid];
   const p = pers(sim, nid);
-  const d = diffOf(sim);
-  if (warsOf(sim, nid).length) return;
-  if (st.tick < months(C.ai.openingMonths)) return;
+  if (warsOf(sim, nid).length) return 'already at war';
+  if (st.tick < months(C.ai.openingMonths)) return 'opening phase';
   const cooldown = months(p.aggression >= 1.2 ? 12 : 24);
-  if (st.tick - n.ai.lastWarEnd < cooldown) return;
-  if (n.warExhaustion > 15 || n.treasury < 0.5 * grossIncome(n.lastMonth)) return;
-  if (st.tick >= endTick(sim) - months(18)) return; // no new wars right before the end
-  const regs = regimentCount(sim, nid);
-  if (regs < n.ai.armyTarget * 0.75) return;
+  if (st.tick - n.ai.lastWarEnd < cooldown) return 'recovering from the last war';
+  if (n.warExhaustion > 15) return 'war-weary';
+  if (n.treasury < 0.5 * grossIncome(n.lastMonth)) return 'treasury too low';
+  if (st.tick >= endTick(sim) - months(18)) return 'campaign ending';
+  if (regimentCount(sim, nid) < n.ai.armyTarget * 0.75) return 'army below target';
+  return null;
+}
+
+/** Scored war options against bordering realms (same public information as the player). */
+export function warCandidates(sim: Sim, nid: NationId): { cands: WarCandidate[]; napBlocked: Array<{ t: NationId; ratio: number; need: number }> } {
+  const st = sim.state;
+  const p = pers(sim, nid);
   const mine = nationPotential(sim, nid);
   const rival = rivalLeader(sim, nid);
-  const cands: Array<{ t: NationId; goal: WarGoal; score: number; ratio: number; need: number }> = [];
+  const cands: WarCandidate[] = [];
   const napBlocked: Array<{ t: NationId; ratio: number; need: number }> = [];
+  const worried = aliveNations(sim).filter((o) => (st.alarm[o]?.[nid] ?? 0) >= 35).length;
+  const dist = supplyDistances(sim, nid);
+  const range = C.supply.range + nationMods(sim, nid).supplyRange + 1;
   for (const t of aliveNations(sim)) {
     if (t === nid || !borders(sim, nid, t)) continue;
     const goals = goalOptions(sim, nid, t).filter((g) => g.type !== 'coalition');
@@ -348,6 +373,7 @@ function considerWar(sim: Sim, nid: NationId): void {
       if (hasTreaty(sim, 'nap', nid, t) && !hasTreaty(sim, 'alliance', nid, t)) napBlocked.push({ t, ratio: mine / Math.max(0.5, sideStrength(sim, t, nid)), need: p.warRatio });
       continue;
     }
+    const notes: string[] = [];
     const theirs = sideStrength(sim, t, nid);
     // coalition members against us would join them
     let extra = 0;
@@ -357,23 +383,43 @@ function considerWar(sim: Sim, nid: NationId): void {
     let need = p.warRatio;
     if (p.id === 'opportunist' && warsOf(sim, t).length) need *= 0.75;
     if (rival?.nid === t) need *= 0.85;
-    const alreadyBeset = warsOf(sim, t).some((w) => w.defenders.includes(t));
+    // ambition grows with long peace and as the campaign advances (for aggressive temperaments)
+    if (p.aggression >= 1) {
+      const peaceYears = Math.max(0, (st.tick - Math.max(0, st.nations[nid].ai.lastWarEnd)) / 48);
+      const progress = st.tick / Math.max(1, endTick(sim));
+      need *= Math.max(0.75, 1 - 0.02 * peaceYears - 0.15 * progress);
+    }
     let value = 0;
     for (const pid of goal.provinces) value += st.provinces[pid].dev + 3;
     if (goal.type === 'claim') value *= 1.2;
-    if (rival?.nid === t) value += 12;
-    // expanding while neighbours are alarmed invites a coalition
-    const worried = aliveNations(sim).filter((o) => (st.alarm[o]?.[nid] ?? 0) >= 35).length;
-    if (worried >= 2) value *= 0.5;
-    // piling onto a realm already defending another war: only opportunists like that
-    if (alreadyBeset && p.id !== 'opportunist') value *= 0.4;
-    // supply feasibility: goal provinces reachable by our supply network
-    const dist = supplyDistances(sim, nid);
-    const reachable = goal.provinces.filter((pid) => dist[pid] <= C.supply.range + nationMods(sim, nid).supplyRange + 1).length;
+    if (rival?.nid === t) {
+      value += 12;
+      notes.push('rival close to victory');
+    }
+    if (worried >= 2) {
+      value *= 0.6;
+      notes.push('neighbours alarmed');
+    }
+    if (warsOf(sim, t).some((w) => w.defenders.includes(t)) && p.id !== 'opportunist') {
+      value *= 0.5;
+      notes.push('already beset');
+    }
+    const reachable = goal.provinces.filter((pid) => dist[pid] <= range).length;
     if (!reachable) continue;
     const score = value * (ratio / need - 1) * p.aggression;
-    cands.push({ t, goal, score, ratio, need });
+    cands.push({ t, goal, score, ratio, need, value, notes });
   }
+  cands.sort((a, b) => b.score - a.score || (a.t < b.t ? -1 : 1));
+  return { cands, napBlocked };
+}
+
+function considerWar(sim: Sim, nid: NationId): void {
+  const st = sim.state;
+  const n = st.nations[nid];
+  const p = pers(sim, nid);
+  const d = diffOf(sim);
+  if (warGate(sim, nid)) return;
+  const { cands, napBlocked } = warCandidates(sim, nid);
   if (!cands.length || cands.every((c) => c.score < 2)) {
     // an ambitious realm may renounce a pact to prepare a war (12-month cooling-off, trust loss)
     const blocked = napBlocked.filter((b) => b.ratio >= b.need * 1.3).sort((a, b) => b.ratio - a.ratio || (a.t < b.t ? -1 : 1))[0];
@@ -384,7 +430,6 @@ function considerWar(sim: Sim, nid: NationId): void {
     }
   }
   if (!cands.length) return;
-  cands.sort((a, b) => b.score - a.score || (a.t < b.t ? -1 : 1));
   let pick = cands[0];
   if (aiRand(sim) < d.mistake) {
     const ok = cands.filter((c) => c.ratio >= c.need * 0.9);
@@ -474,7 +519,11 @@ function considerPeace(sim: Sim, nid: NationId): void {
       const budget = myAdv * 0.9 + st.nations[other].warExhaustion * 0.3 - 3;
       const provs: ProvinceId[] = [];
       let cost = 0;
+      // restraint: large annexations alarm everyone
+      const worried = aliveNations(sim).filter((o) => (st.alarm[o]?.[nid] ?? 0) >= 30).length;
+      const maxProvs = worried >= 2 ? 2 : 3;
       for (const pid of goalFirst) {
+        if (provs.length >= maxProvs) break;
         const c = provinceCost(sim, other, recvSide, pid);
         if (cost + c > budget) continue;
         provs.push(pid);
@@ -560,7 +609,8 @@ export function strategic(sim: Sim, nid: NationId): void {
     const row = (sim.state.alarm[nid] ??= {});
     row[rival.nid] = Math.min(100, (row[rival.nid] ?? 0) + 2);
     // deny a diplomatic winner our trade unless we are close friends
-    if (rival.path === 'diplomatic' && hasTreaty(sim, 'trade', nid, rival.nid) && opinion(sim, nid, rival.nid) < 60 && aiRand(sim) < 0.25) {
+    const leadStreak = sim.state.nations[rival.nid].victoryStreak.diplomatic / VICTORY_MONTHS.diplomatic;
+    if (rival.path === 'diplomatic' && leadStreak >= 0.5 && hasTreaty(sim, 'trade', nid, rival.nid) && opinion(sim, nid, rival.nid) < 60 && aiRand(sim) < 0.15) {
       issue(sim, { type: 'cancelTreaty', nation: nid, target: rival.nid, treaty: 'trade' }, `Cancelled trade with ${nationName(sim, rival.nid)} to deny them diplomatic leadership`);
     }
   }

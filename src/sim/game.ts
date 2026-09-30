@@ -2,6 +2,7 @@
 
 import { C, SCHEMA_VERSION } from './config';
 import { PERSONALITIES } from './data/personalities';
+import { POLICY_COOLDOWN_MONTHS } from './data/policies';
 import { computeLedger, reserveCap, stockpileCap, totalDev, menServing } from './economy';
 import { createArmy, newRegiment } from './military';
 import { seedState } from './rng';
@@ -97,7 +98,7 @@ export function createGame(opts: NewGameOptions = {}): Sim {
       manpower: 0,
       research: { current: null, progress: 0, done: [], funding: 1 },
       policy: pers.policies[0],
-      policySince: 0,
+      policySince: -months(POLICY_COOLDOWN_MONTHS),
       warExhaustion: 0,
       trust: C.diplomacy.trustStart,
       debtMonths: 0,

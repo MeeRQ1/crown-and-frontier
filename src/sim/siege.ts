@@ -6,7 +6,8 @@
 //   fort L : 100 progress in 10*L weeks, requires >= 2*L regiments present
 //   x (1 + 0.25 per guns regiment, max 6) x (1 + siege tech) x 0.5 if unsupplied
 //   x 2 when the legal owner (or its friend) is retaking its own province
-// At 100 the controller changes. Progress resets if the besiegers leave.
+// At 100 the controller changes (to the legal owner if the besiegers are not at
+// war with it). Progress resets if the besiegers leave.
 
 import { C } from './config';
 import { cancelRecruits } from './military';
@@ -61,7 +62,8 @@ export function siegeInfo(sim: Sim, pid: ProvinceId): SiegeInfo | null {
     rate *= 0.5;
     notes.push('Unsupplied besiegers −50%');
   }
-  const liberation = !!p.owner && isFriendly(sim, lead, p.owner);
+  // capturing land whose legal owner we are not at war with returns it to that owner
+  const liberation = !!p.owner && (isFriendly(sim, lead, p.owner) || !atWar(sim, lead, p.owner));
   if (liberation) {
     rate *= C.siege.liberateMul;
     notes.push('Liberating friendly land ×2');

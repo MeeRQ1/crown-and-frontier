@@ -9,7 +9,7 @@ export interface TerrainRules {
   defense: number; // defender bonus (reduces attacker damage)
   frontage: number; // regiments per side that can engage
   supply: number; // base supply capacity in regiments
-  devCap: number; // maximum development
+  devCap: number; // soft development cap (can be exceeded by devOvercap at a higher cost)
   cav: number; // horse effectiveness modifier
   supplyProd: number; // supplies production multiplier
   devCost: number; // development cost multiplier
@@ -122,6 +122,8 @@ export const C = {
   construction: {
     devBase: 20, // * dev * (1 + dev/4) * terrain multiplier
     devWeeks: 16,
+    devOvercap: 3, // levels allowed beyond the terrain cap
+    devOvercapMul: 2.5, // cost multiplier beyond the terrain cap
     infraBase: 40, // * (level + 1) * (1 + level/2)
     infraWeeks: 12,
     infraMax: 3,
@@ -242,15 +244,15 @@ export const C = {
   },
 
   victory: {
-    territorialRegions: 4,
-    territorialShare: 0.22,
+    territorialRegions: 3,
+    territorialShare: 0.23,
     regionHold: 0.75,
     territorialMonths: 24,
-    economicShare: 0.22,
+    economicShare: 0.25,
     economicUnrest: 25,
     economicMonths: 60,
     streakDecay: 6,
-    diplomaticInfluencePerRealm: 1.5, // influence needed per other surviving realm
+    diplomaticInfluencePerRealm: 1.25, // influence needed per other surviving realm
     diplomaticMinInfluence: 6,
     diplomaticTreatyAge: 36, // months a treaty must exist to count
     diplomaticOpinion: 40,

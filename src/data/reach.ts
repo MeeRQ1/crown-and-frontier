@@ -28,13 +28,13 @@ type Row = [
 // prettier-ignore
 const ROWS: Row[] = [
   // ── Aurel: rich western plains, open borders ─────────────────────────────
-  ['aurelon', 'Aurelon', 520, 640, 'plains', 'goods', 'aur', 7, 90, 'heartland', { infra: 2, fort: 1 }],
+  ['aurelon', 'Aurelon', 520, 640, 'plains', 'goods', 'aur', 6, 85, 'heartland', { infra: 2, fort: 1 }],
   ['westmere', 'Westmere', 340, 620, 'plains', 'grain', 'aur', 4, 55, 'heartland'],
-  ['hollin', 'Hollin', 410, 770, 'plains', 'grain', 'aur', 4, 50, 'heartland'],
+  ['hollin', 'Hollin', 410, 770, 'plains', 'grain', 'aur', 3, 45, 'heartland'],
   ['brask', 'Brask', 570, 790, 'plains', null, 'aur', 4, 45, 'heartland', { infra: 1 }],
-  ['terrow', 'Terrow', 690, 690, 'plains', null, 'aur', 4, 40, 'heartland'],
+  ['terrow', 'Terrow', 690, 690, 'plains', null, 'aur', 3, 40, 'heartland'],
   ['vantry', 'Vantry', 660, 550, 'forest', null, 'aur', 3, 30, 'heartland'],
-  ['leyfield', 'Leyfield', 500, 490, 'plains', null, 'aur', 4, 45, 'heartland', { infra: 1 }],
+  ['leyfield', 'Leyfield', 500, 490, 'plains', null, 'aur', 3, 40, 'heartland', { infra: 1 }],
   ['corbel', 'Corbel', 350, 480, 'hills', null, 'aur', 3, 30, 'heartland', { fort: 1 }],
   ['ashford', 'Ashford', 240, 770, 'plains', null, 'aur', 3, 35, 'heartland'],
   ['duncairn', 'Duncairn', 460, 900, 'hills', 'iron', 'aur', 3, 30, 'southmarch', { claims: ['ser'] }],
@@ -66,18 +66,18 @@ const ROWS: Row[] = [
   ['tamber', 'Tamber', 410, 1290, 'plains', null, 'ser', 3, 35, 'coast'],
 
   // ── Calder: scholarly lake republic holding the Kestrel Pass ─────────────
-  ['caldris', 'Caldris', 960, 550, 'plains', 'goods', 'cal', 6, 60, 'lakelands', { infra: 1, fort: 1 }],
+  ['caldris', 'Caldris', 960, 550, 'plains', 'goods', 'cal', 6, 60, 'lakelands', { infra: 1, fort: 2 }],
   ['mirewick', 'Mirewick', 830, 490, 'plains', null, 'cal', 3, 35, 'lakelands'],
   ['lakeholm', 'Lakeholm', 1020, 700, 'plains', 'grain', 'cal', 4, 35, 'lakelands'],
-  ['harrowgate', 'Harrowgate', 1060, 440, 'hills', null, 'cal', 3, 25, 'lakelands', { claims: ['vos'] }],
+  ['harrowgate', 'Harrowgate', 1060, 440, 'hills', null, 'cal', 3, 25, 'lakelands', { fort: 1, claims: ['vos'] }],
   ['sedge', 'Sedge', 930, 860, 'marsh', null, 'cal', 2, 20, 'lakelands'],
   ['tolland', 'Tolland', 1070, 860, 'forest', null, 'cal', 2, 20, 'lakelands', { claims: ['ist'] }],
   ['pellin', 'Pellin', 890, 380, 'forest', null, 'cal', 2, 20, 'lakelands'],
-  ['kestrel', 'Kestrel Pass', 1190, 700, 'mountains', null, 'cal', 1, 8, 'greyspine', { fort: 1, integ: 80, claims: ['mor'] }],
+  ['kestrel', 'Kestrel Pass', 1190, 700, 'mountains', null, 'cal', 1, 8, 'greyspine', { fort: 2, integ: 80, claims: ['mor'] }],
 
   // ── Istrel: iron-rich southern highlands, holds the Southern Gap ──────────
   ['istrenne', 'Istrenne', 960, 1060, 'hills', 'iron', 'ist', 5, 45, 'highlands', { infra: 1, fort: 2 }],
-  ['ardel', 'Ardel', 800, 990, 'hills', null, 'ist', 3, 30, 'highlands', { claims: ['aur'] }],
+  ['ardel', 'Ardel', 800, 990, 'hills', null, 'ist', 4, 35, 'highlands', { fort: 1, claims: ['aur'] }],
   ['corvo', 'Corvo', 1100, 980, 'mountains', null, 'ist', 1, 12, 'highlands', { fort: 1 }],
   ['valdis', 'Valdis', 880, 1190, 'plains', 'grain', 'ist', 5, 35, 'highlands'],
   ['sarn', 'Sarn', 1040, 1210, 'hills', null, 'ist', 2, 22, 'highlands'],
@@ -203,9 +203,9 @@ export const REACH_NATIONS: NationDef[] = [
     id: 'aur', name: 'Kingdom of Aurel', short: 'Aurel', adjective: 'Aurelian', color: '#3f6fc4',
     capital: 'aurelon', personality: 'commercial', emblem: 'sun',
     summary: 'Rich, populous plains with open borders on every side.',
-    strength: 'Fertile heartland: +10% crown income.',
+    strength: 'Fertile heartland: +20% supply production.',
     constraint: 'Burgher realm: -25% military reserve.',
-    traits: { incomeMul: 0.1, manpowerMul: -0.25 },
+    traits: { supplyProdMul: 0.2, manpowerMul: -0.25 },
   },
   {
     id: 'vos', name: 'Margraviate of Vostmark', short: 'Vostmark', adjective: 'Vostic', color: '#a8323e',
@@ -228,8 +228,8 @@ export const REACH_NATIONS: NationDef[] = [
     capital: 'caldris', personality: 'defensive', emblem: 'book',
     summary: 'Scholarly lake republic guarding the Kestrel Pass.',
     strength: 'Academies: +25% research.',
-    constraint: 'Small levy: -20% manpower.',
-    traits: { researchMul: 0.25, manpowerMul: -0.2 },
+    constraint: 'Merchant council: -10% crown income.',
+    traits: { researchMul: 0.25, incomeMul: -0.1 },
   },
   {
     id: 'ist', name: 'Duchy of Istrel', short: 'Istrel', adjective: 'Istrelan', color: '#7d4fb0',
@@ -243,9 +243,9 @@ export const REACH_NATIONS: NationDef[] = [
     id: 'dre', name: 'Principality of Drevenholt', short: 'Drevenholt', adjective: 'Drevish', color: '#3e8a3a',
     capital: 'drevholm', personality: 'opportunist', emblem: 'tree',
     summary: 'Populous forest principality with a frontier to the east.',
-    strength: 'Forest folk: +25% manpower.',
+    strength: 'Forest folk: +15% manpower.',
     constraint: 'Backwoods: development costs 20% more.',
-    traits: { manpowerMul: 0.25, devCostMul: 0.2 },
+    traits: { manpowerMul: 0.15, devCostMul: 0.2 },
   },
   {
     id: 'mor', name: 'Kingdom of Morvaine', short: 'Morvaine', adjective: 'Morvish', color: '#d8742a',

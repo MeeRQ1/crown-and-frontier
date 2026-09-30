@@ -2,7 +2,7 @@
 // Returns a list of violations (empty = consistent).
 
 import { C, UNITS } from './config';
-import { devCap } from './construction';
+import { devMax } from './construction';
 import { maxMorale } from './military';
 import { atWar, hasTreaty, type Sim } from './state';
 
@@ -30,7 +30,7 @@ export function checkInvariants(sim: Sim): string[] {
     if (p.owner && p.controller && p.owner !== p.controller && !atWar(sim, p.owner, p.controller)) out.push(`${pid}: occupied by ${p.controller} without a war against ${p.owner}`);
     if (p.integration < 0 || p.integration > 100) out.push(`${pid}: integration ${p.integration}`);
     if (p.unrest < 0 || p.unrest > 100) out.push(`${pid}: unrest ${p.unrest}`);
-    if (p.dev < 1 || p.dev > devCap(sim, pid)) out.push(`${pid}: dev ${p.dev}`);
+    if (p.dev < 1 || p.dev > devMax(sim, pid)) out.push(`${pid}: dev ${p.dev}`);
     if (p.infra < 0 || p.infra > C.construction.infraMax) out.push(`${pid}: infra ${p.infra}`);
     if (p.fort < 0 || p.fort > C.construction.fortMax) out.push(`${pid}: fort ${p.fort}`);
     if (!(p.pop > 0)) out.push(`${pid}: pop ${p.pop}`);

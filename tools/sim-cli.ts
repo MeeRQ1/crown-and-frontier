@@ -52,6 +52,8 @@ interface RunResult {
   warMonthsAvg: number;
   peaces: number;
   forcedPeaces: number;
+  coalitions: number;
+  coalitionWars: number;
   battles: number;
   eliminations: string[];
   nations: Record<string, { startProv: number; endProv: number; peakProv: number; alive: boolean; score: number; wars: number; battlesWon: number; battlesLost: number; bankruptcies: number; idleShare: number; techs: number; maxStreak: string }>;
@@ -67,6 +69,8 @@ function runOne(seed: number, difficulty: Difficulty, years: number): RunResult 
   const warStart = new Map<string, number>();
   const warLengths: number[] = [];
   let forced = 0;
+  let coalitions = 0;
+  let coalitionWars = 0;
   const invariantFailures: string[] = [];
   let tMax = 0;
   const t0 = performance.now();
@@ -89,6 +93,8 @@ function runOne(seed: number, difficulty: Difficulty, years: number): RunResult 
     for (const note of st.notifications) {
       if (note.id <= seenNotes) continue;
       if (note.kind === 'peace' && /forces a white peace/.test(note.text) && note.nation) forced++;
+      if (note.kind === 'coalition' && note.priority === 'urgent') coalitions++;
+      if (note.kind === 'war' && note.nation === null && /Coalition War/.test(note.text)) coalitionWars++;
     }
     seenNotes = st.notifications.length ? st.notifications[st.notifications.length - 1].id : seenNotes;
     if (st.tick % 480 === 0) {
@@ -156,6 +162,8 @@ function runOne(seed: number, difficulty: Difficulty, years: number): RunResult 
     warMonthsAvg: warLengths.length ? warLengths.reduce((a, b) => a + b, 0) / warLengths.length : 0,
     peaces: Object.values(st.nations).reduce((s, n) => s + n.stats.peacesMade, 0) / 2,
     forcedPeaces: forced,
+    coalitions,
+    coalitionWars,
     battles,
     eliminations: sim.world.nationIds.filter((n) => !st.nations[n].alive),
     nations,
@@ -198,6 +206,7 @@ lines.push(`Winners: ${Object.entries(wins).map(([k, v]) => `${k} ${v}`).join(',
 lines.push(`Victory paths: ${Object.entries(paths).map(([k, v]) => `${k} ${v}`).join(', ')}`);
 const avg = (f: (r: RunResult) => number) => results.reduce((s, r) => s + f(r), 0) / Math.max(1, results.length);
 lines.push(`Average campaign length: ${avg((r) => r.endYear - 1640).toFixed(1)} years; wars per campaign ${avg((r) => r.wars).toFixed(1)}; average war ${avg((r) => r.warMonthsAvg).toFixed(1)} months; peace treaties ${avg((r) => r.peaces).toFixed(1)}; forced peaces ${avg((r) => r.forcedPeaces).toFixed(1)}; battles ${avg((r) => r.battles).toFixed(0)}.`);
+lines.push(`Coalitions formed per campaign: ${avg((r) => r.coalitions).toFixed(1)}; coalition wars: ${avg((r) => r.coalitionWars).toFixed(1)}.`);
 lines.push(`Eliminations per campaign: ${avg((r) => r.eliminations.length).toFixed(2)}; bankruptcies per campaign: ${avg((r) => Object.values(r.nations).reduce((s, n) => s + n.bankruptcies, 0)).toFixed(2)}.`);
 lines.push(`Performance: ${avg((r) => r.msPerTickAvg).toFixed(2)} ms/tick average, ${Math.max(...results.map((r) => r.msPerTickMax)).toFixed(0)} ms worst tick, heap ≈ ${Math.max(...results.map((r) => r.heapMB)).toFixed(0)} MB.`);
 const inv = results.filter((r) => r.invariantFailures.length);

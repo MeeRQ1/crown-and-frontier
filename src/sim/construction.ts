@@ -3,7 +3,8 @@
 // (2 + 1 per 10 provinces + technology). Costs are paid up front; cancelling
 // refunds 50%. Projects pause while a province is occupied or in revolt.
 //
-// Development: 20 * dev * (1 + dev/4) * terrain factor crowns, 16 weeks (needs integration >= 40)
+// Development: 20 * dev * (1 + dev/4) * terrain factor crowns, 16 weeks (needs integration >= 40);
+//              beyond the terrain's cap (up to +3) each level costs 2.5x
 // Roads:       40 * (level+1) * (1 + level/2), 12 weeks, max 3
 // Fort:        60 * (level+1) * (1 + level/2) crowns + 10 supplies, 16 weeks, max 3, upkeep 1/level/month
 // Charter:     20 + 6*dev crowns, 8 weeks: +25 integration (frontier provinces below 90)
@@ -43,7 +44,12 @@ export function projectCost(sim: Sim, nid: NationId, pid: ProvinceId, kind: Proj
   const terr = TERRAIN[sim.world.prov[pid].terrain];
   switch (kind) {
     case 'dev':
-      return { crowns: Math.round(C.construction.devBase * p.dev * (1 + p.dev / 4) * terr.devCost * Math.max(0.3, 1 + m.devCost)), supplies: 0, manpower: 0, weeks: C.construction.devWeeks };
+      return {
+        crowns: Math.round(C.construction.devBase * p.dev * (1 + p.dev / 4) * terr.devCost * Math.max(0.3, 1 + m.devCost) * (p.dev >= terr.devCap ? C.construction.devOvercapMul : 1)),
+        supplies: 0,
+        manpower: 0,
+        weeks: C.construction.devWeeks,
+      };
     case 'infra':
       return { crowns: Math.round(C.construction.infraBase * (p.infra + 1) * (1 + p.infra / 2) * Math.max(0.3, 1 + m.infraCost)), supplies: 0, manpower: 0, weeks: C.construction.infraWeeks };
     case 'fort': {
@@ -67,8 +73,14 @@ export function projectCost(sim: Sim, nid: NationId, pid: ProvinceId, kind: Proj
   }
 }
 
+/** Soft cap from terrain; development beyond it costs 2.5x. */
 export function devCap(sim: Sim, pid: ProvinceId): number {
   return TERRAIN[sim.world.prov[pid].terrain].devCap;
+}
+
+/** Absolute maximum development. */
+export function devMax(sim: Sim, pid: ProvinceId): number {
+  return devCap(sim, pid) + C.construction.devOvercap;
 }
 
 export function buildProblem(sim: Sim, nid: NationId, pid: ProvinceId, kind: ProjectKind): string | null {
@@ -88,7 +100,7 @@ export function buildProblem(sim: Sim, nid: NationId, pid: ProvinceId, kind: Pro
     if (p.controller !== nid) return 'The province is occupied.';
     if (p.revoltUntil > st.tick) return 'The province is in revolt.';
     if (kind === 'dev') {
-      if (p.dev >= devCap(sim, pid)) return `Development is at the ${TERRAIN[sim.world.prov[pid].terrain].label.toLowerCase()} limit (${devCap(sim, pid)}).`;
+      if (p.dev >= devMax(sim, pid)) return `Development is at its maximum (${devMax(sim, pid)}).`;
       if (p.integration < C.integration.developMin) return `Integrate the province first (${Math.floor(p.integration)}/${C.integration.developMin}).`;
     }
     if (kind === 'infra' && p.infra >= C.construction.infraMax) return 'Roads are already at the maximum level.';
@@ -150,7 +162,7 @@ export function weeklyConstruction(sim: Sim): void {
     p.project = null;
     switch (pr.kind) {
       case 'dev':
-        p.dev = Math.min(devCap(sim, pid), p.dev + 1);
+        p.dev = Math.min(devMax(sim, pid), p.dev + 1);
         notify(sim, pr.nation, 'low', 'build', `${provName(sim, pid)} has developed to level ${p.dev}.`, { province: pid });
         break;
       case 'infra':

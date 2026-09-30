@@ -27,7 +27,7 @@ export const PERSONALITIES: Record<Personality, PersonalityDef> = {
   expansionist: {
     id: 'expansionist', label: 'Expansionist',
     description: 'Seeks land. Fights when it has a clear edge and integrates conquests.',
-    warRatio: 1.25, aggression: 1.4, armyBudget: [0.4, 0.7],
+    warRatio: 1.15, aggression: 1.4, armyBudget: [0.4, 0.7],
     research: { arms: 1.4, statecraft: 1.1, civics: 0.6 }, victory: 'territorial',
     treaty: { nap: 0.6, trade: 0.6, alliance: 0.8 },
     policies: ['levy', 'frontier', 'commerce'],
@@ -36,7 +36,7 @@ export const PERSONALITIES: Record<Personality, PersonalityDef> = {
   defensive: {
     id: 'defensive', label: 'Defensive',
     description: 'Builds forts and alliances; fights mostly when attacked.',
-    warRatio: 1.9, aggression: 0.5, armyBudget: [0.35, 0.65],
+    warRatio: 1.8, aggression: 0.5, armyBudget: [0.35, 0.65],
     research: { arms: 1.0, statecraft: 1.1, civics: 1.1 }, victory: 'economic',
     treaty: { nap: 1.3, trade: 1.0, alliance: 1.3 },
     policies: ['fortress', 'academy', 'commerce'],
@@ -45,7 +45,7 @@ export const PERSONALITIES: Record<Personality, PersonalityDef> = {
   commercial: {
     id: 'commercial', label: 'Commercial',
     description: 'Invests in development and trade; wars must pay for themselves.',
-    warRatio: 1.6, aggression: 0.7, armyBudget: [0.3, 0.6],
+    warRatio: 1.45, aggression: 0.7, armyBudget: [0.3, 0.6],
     research: { arms: 0.8, statecraft: 1.5, civics: 1.0 }, victory: 'economic',
     treaty: { nap: 1.0, trade: 1.6, alliance: 0.9 },
     policies: ['commerce', 'academy', 'frontier'],
@@ -54,7 +54,7 @@ export const PERSONALITIES: Record<Personality, PersonalityDef> = {
   opportunist: {
     id: 'opportunist', label: 'Opportunist',
     description: 'Strikes rivals that are already at war or exhausted.',
-    warRatio: 1.35, aggression: 1.1, armyBudget: [0.35, 0.7],
+    warRatio: 1.2, aggression: 1.1, armyBudget: [0.35, 0.7],
     research: { arms: 1.2, statecraft: 1.1, civics: 0.8 }, victory: 'territorial',
     treaty: { nap: 0.9, trade: 0.9, alliance: 0.9 },
     policies: ['levy', 'commerce', 'frontier'],
@@ -63,7 +63,7 @@ export const PERSONALITIES: Record<Personality, PersonalityDef> = {
   diplomat: {
     id: 'diplomat', label: 'Diplomat',
     description: 'Builds a web of partners and avoids wars of conquest.',
-    warRatio: 2.2, aggression: 0.4, armyBudget: [0.3, 0.6],
+    warRatio: 2.0, aggression: 0.4, armyBudget: [0.3, 0.6],
     research: { arms: 0.7, statecraft: 1.0, civics: 1.6 }, victory: 'diplomatic',
     treaty: { nap: 1.4, trade: 1.5, alliance: 1.4 },
     policies: ['concord', 'commerce', 'academy'],

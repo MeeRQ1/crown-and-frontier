@@ -490,7 +490,11 @@ export function relocateArmies(sim: Sim): void {
   for (const id of Object.keys(st.armies).sort()) {
     const a = st.armies[id];
     if (!a || canEnter(sim, a.nation, a.location)) {
-      if (a && a.path.length && !canEnter(sim, a.nation, a.path[a.path.length - 1])) a.path = [];
+      if (a && a.path.length && !a.retreating && !canEnter(sim, a.nation, a.path[a.path.length - 1])) {
+        notify(sim, a.nation, 'normal', 'move', `${a.name} halted: the peace closed its route to ${provName(sim, a.path[a.path.length - 1])}.`, { army: a.id, province: a.location });
+        a.path = [];
+        a.progress = 0;
+      }
       continue;
     }
     const hops = sim.world.hops[a.location];

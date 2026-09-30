@@ -83,7 +83,7 @@ function recruit(sim: Sim, nid: NationId): void {
     return;
   }
   const comp = PERSONALITIES[n.ai.personality].composition;
-  const buffer = Math.max(15, grossIncome(n.lastMonth) * (war ? 0.3 : 0.8));
+  const buffer = Math.max(15, grossIncome(n.lastMonth) * (war ? 0.2 : 0.4));
   for (let i = 0; i < d.recruitPerWeek; i++) {
     if (total >= n.ai.armyTarget) return;
     const want = (['foot', 'horse', 'guns'] as UnitType[])

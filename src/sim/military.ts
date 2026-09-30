@@ -108,7 +108,7 @@ export function cancelRecruits(sim: Sim, pid: ProvinceId, nid?: NationId): numbe
   return n;
 }
 
-export function newRegiment(sim: Sim, type: UnitType, men = C.regimentSize): Regiment {
+export function newRegiment(sim: Sim, type: UnitType, men: number = C.regimentSize): Regiment {
   sim.state.counters.regiment++;
   return { id: `r${sim.state.counters.regiment}`, type, men };
 }

@@ -13,7 +13,7 @@ export interface TechDef {
   description: string;
 }
 
-const TIER_COST = { 1: 100, 2: 190, 3: 300 } as const;
+const TIER_COST = { 1: 100, 2: 200, 3: 350 } as const;
 
 function tech(id: string, name: string, branch: Branch, tier: 1 | 2 | 3, requires: string[], effects: ModEffects, description: string): TechDef {
   return { id, name, branch, tier, cost: TIER_COST[tier], requires, effects, description };

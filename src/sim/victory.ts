@@ -1,14 +1,14 @@
 // Victory paths, evaluated monthly for every realm (player and AI alike).
 //
-// Territorial dominance: own and control >= 75% of the provinces in 4 regions
-//   AND >= 22% of all provinces, held for 24 months.
+// Territorial dominance: own and control >= 75% of the provinces in 3 regions
+//   AND >= 23% of all provinces, held for 24 months.
 // Economic prosperity: integrated development (dev of controlled provinces with
-//   integration >= 75, not in revolt) >= 22% of the world's development, with
+//   integration >= 75, not in revolt) >= 25% of the world's development, with
 //   dev-weighted unrest <= 25, a non-negative treasury, no bankruptcy and no
 //   province under enemy occupation — held for 60 months.
 // Diplomatic leadership: influence from established treaties (at least 36 months
 //   old, partner's opinion of us >= 40): alliance 2, trade agreement 1. Needs
-//   1.5 influence per other surviving realm (min 6), trust >= 65 and no
+//   1.25 influence per other surviving realm (min 6), trust >= 65 and no
 //   offensive war — held for 60 months. New treaties do not count, so treaty
 //   cycling is useless; rivals may cancel trade with a realm close to winning.
 // Each month a condition fails, its timer loses 6 months (not a full reset).
@@ -164,13 +164,13 @@ export function campaignScore(sim: Sim, nid: NationId): number {
   if (!n.alive) return 0;
   const vp = victoryProgress(sim, nid);
   const provinces = ownedProvinces(sim, nid).length;
-  let s = provinces * 2 + integratedDev(sim, nid) + n.research.done.length * 3 + influence(sim, nid) * 3 + Math.min(2000, Math.max(0, n.treasury)) / 100;
+  let s = provinces * 3 + integratedDev(sim, nid) * 0.6 + n.research.done.length * 3 + influence(sim, nid) * 3 + Math.min(2000, Math.max(0, n.treasury)) / 100;
   for (const k of ['territorial', 'economic', 'diplomatic'] as VictoryPath[]) s += (vp[k].streak / vp[k].required) * 20 + vp[k].progress * 10;
   return Math.round(s * 10) / 10;
 }
 
 export const SCORE_FORMULA =
-  'Score = 2 × provinces + integrated development + 3 × technologies + 3 × diplomatic influence + min(treasury, 2000)/100 + for each victory path (20 × timer fraction + 10 × condition progress).';
+  'Score = 3 × provinces + 0.6 × integrated development + 3 × technologies + 3 × diplomatic influence + min(treasury, 2000)/100 + for each victory path (20 × timer fraction + 10 × condition progress).';
 
 export function monthlyVictory(sim: Sim): void {
   const st = sim.state;
