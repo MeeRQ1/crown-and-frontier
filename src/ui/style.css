@@ -174,7 +174,7 @@ kbd {
 }
 .serif { font-family: var(--serif); }
 .sc { font-family: var(--serif-sc); letter-spacing: 0.08em; }
-.scroll { overflow-y: auto; scrollbar-width: thin; scrollbar-color: var(--ink-600) transparent; }
+.scroll { overflow-y: auto; overscroll-behavior: contain; scrollbar-width: thin; scrollbar-color: var(--ink-600) transparent; }
 .scroll::-webkit-scrollbar { width: 8px; }
 .scroll::-webkit-scrollbar-thumb { background: var(--ink-600); border-radius: 4px; }
 svg.ico { width: 1.25em; height: 1.25em; flex: none; stroke: currentColor; fill: none; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; vertical-align: -0.22em; }
@@ -850,7 +850,9 @@ canvas.map.dragging { cursor: grabbing; }
   .setup .preview { min-height: 42vh; flex: none; }
   .screen .veil { background: linear-gradient(180deg, rgba(11, 16, 21, 0.55) 0%, rgba(11, 16, 21, 0.95) 45%); }
   .menu-wrap { justify-content: flex-end; }
-  .tutorial { top: auto; bottom: 64px; }
+  .tutorial { top: var(--s3); padding: var(--s4) var(--s5); }
+  /* during the tutorial the coach mark owns the top edge; toasts move above the mode bar */
+  .stage:has(> .tutorial:not(.hidden)) .toasts { top: auto; bottom: 120px; }
 }
 @media (max-height: 560px) and (min-width: 761px) {
   .rail button { height: calc(40px * var(--scale)); font-size: 0; gap: 0; }

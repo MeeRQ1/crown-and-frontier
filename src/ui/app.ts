@@ -46,6 +46,8 @@ export interface UIState {
   dockOpen: boolean;
   dockItem: string | null;
   attentionOpen: boolean;
+  /** legend panel open (starts closed on phones, where it would cover the map) */
+  legendOpen: boolean;
 }
 
 const RAIL: Array<{ tab: LedgerTab; label: string; icon: Parameters<typeof icon>[0]; key: string; desk?: boolean }> = [
@@ -83,7 +85,7 @@ export class App {
   highlight: ProvinceId[] | null = null;
   ui: UIState = this.freshUI();
   /** centre on this province once the panels have laid out (so it lands in the free area) */
-  private pendingCenter: ProvinceId | null = null;
+  private pendingCenter: { pid: ProvinceId; zoomPx?: number; instant?: boolean } | null = null;
 
   private acc = 0;
   private lastFrame = 0;
@@ -131,6 +133,23 @@ export class App {
     this.mode = (MODES.some((m) => m.id === this.settings.mapMode) ? this.settings.mapMode : 'political') as MapMode;
     this.applySettings();
     installTips();
+    // inside an iframe, a wheel over the game must never scroll the host page:
+    // panels scroll themselves (contained), everything else zooms the map
+    root.addEventListener(
+      'wheel',
+      (e) => {
+        const t = e.target as HTMLElement | null;
+        const scroller = t?.closest('.scroll, .screen-scroll, .modal > .body, .setup .col, .page') as HTMLElement | null;
+        if (scroller && scroller.scrollHeight > scroller.clientHeight + 1) return;
+        e.preventDefault();
+        if (this.renderer && t && !t.closest('.hud') && this.stageEl?.contains(t) && t !== this.canvas) {
+          const r = this.canvas.getBoundingClientRect();
+          this.renderer.camera.zoomAt(e.clientX - r.left, e.clientY - r.top, Math.exp(-e.deltaY * (e.deltaMode === 1 ? 0.05 : 0.0016)));
+          this.mapDirty = true;
+        }
+      },
+      { passive: false },
+    );
     window.addEventListener('keydown', (e) => this.onKey(e));
     document.addEventListener('visibilitychange', () => this.onVisibility());
     window.addEventListener('pagehide', () => void this.autosave(true));
@@ -147,7 +166,7 @@ export class App {
   }
 
   private freshUI(): UIState {
-    return { peace: null, split: {}, ledgerTab: null, diploTarget: null, logFilter: 'all', inspectorPeek: false, presentationOpen: false, dockOpen: false, dockItem: null, attentionOpen: false };
+    return { peace: null, split: {}, ledgerTab: null, diploTarget: null, logFilter: 'all', inspectorPeek: false, presentationOpen: false, dockOpen: false, dockItem: null, attentionOpen: false, legendOpen: this.settings?.showLegend ?? true };
   }
 
   get player(): NationId | null {
@@ -224,12 +243,11 @@ export class App {
     this.ui = this.freshUI();
     this.buildGameDom(geometry);
     this.hideScreen();
-    const cam = this.renderer!.camera;
+    if (this.isPhone()) this.ui.legendOpen = false;
     const cap = this.player ? sim.state.nations[this.player].capital : null;
-    if (cap) {
-      const c = this.renderer!.provinceCenter(cap);
-      cam.centerOn(c.x, c.y, cam.zoomForProvincePx(96), false);
-    } else cam.fit(false);
+    // centred after the first layout pass, so panels already count as covered
+    if (cap) this.pendingCenter = { pid: cap, zoomPx: 96, instant: true };
+    else this.renderer!.camera.fit(false);
     this.tutorial = tutorial && this.player ? new Tutorial(this) : null;
     this.speed = 0;
     this.refresh();
@@ -311,23 +329,40 @@ export class App {
     this.mapDirty = true;
   }
 
+  isPhone(): boolean {
+    return (this.stageEl?.getBoundingClientRect().width ?? window.innerWidth) <= 760;
+  }
+
   /** Tell the camera which parts of the map are covered by panels. */
   private updateInsets(): void {
     const cam = this.renderer?.camera;
     if (!cam || !this.stageEl) return;
     const s = this.stageEl.getBoundingClientRect();
-    const phone = s.width <= 760;
-    const rail = this.railEl.getBoundingClientRect();
+    const open = (el: HTMLElement | null, cls = 'closed') => !!el && !el.classList.contains(cls) && el.getBoundingClientRect().height > 0;
     const ins = { left: 0, right: 0, top: 0, bottom: 0 };
-    if (phone) {
-      ins.bottom = rail.height;
-      if (!this.inspectorEl.classList.contains('closed')) ins.bottom += this.inspectorEl.getBoundingClientRect().height;
+    // bottom: whatever sits lowest-first along the bottom edge (rail on phones, mode bar and legend)
+    let bottomEdge = s.bottom;
+    const lower = (el: HTMLElement | null) => {
+      if (el && el.getBoundingClientRect().height > 0) bottomEdge = Math.min(bottomEdge, el.getBoundingClientRect().top);
+    };
+    if (this.isPhone()) {
+      lower(this.railEl);
+      if (open(this.inspectorEl)) lower(this.inspectorEl);
+      lower(this.modesEl.firstElementChild as HTMLElement | null);
     } else {
-      ins.left = rail.right - s.left + 8;
-      if (!this.drawerEl.classList.contains('closed')) ins.left = this.drawerEl.getBoundingClientRect().right - s.left + 8;
-      if (!this.inspectorEl.classList.contains('closed')) ins.right = s.right - this.inspectorEl.getBoundingClientRect().left + 8;
-      ins.bottom = 52;
+      ins.left = this.railEl.getBoundingClientRect().right - s.left + 8;
+      if (open(this.drawerEl)) ins.left = this.drawerEl.getBoundingClientRect().right - s.left + 8;
+      if (open(this.inspectorEl)) ins.right = s.right - this.inspectorEl.getBoundingClientRect().left + 8;
+      bottomEdge = s.bottom - 52;
     }
+    ins.bottom = Math.max(0, s.bottom - bottomEdge);
+    // top: the tutorial coach mark when it sits at the top of the stage
+    if (open(this.tutorialEl, 'hidden')) {
+      const t = this.tutorialEl.getBoundingClientRect();
+      if (t.top - s.top < s.height / 3) ins.top = t.bottom - s.top + 8;
+    }
+    // never let panels claim more than two thirds of the map in either direction
+    ins.bottom = Math.min(ins.bottom, s.height * 0.66 - ins.top);
     cam.insets = ins;
   }
 
@@ -440,7 +475,12 @@ export class App {
     if (this.pendingCenter) {
       const p = this.pendingCenter;
       this.pendingCenter = null;
-      this.centerOn(p);
+      if (p.instant && this.renderer) {
+        const c = this.renderer.provinceCenter(p.pid);
+        const cam = this.renderer.camera;
+        cam.centerOn(c.x, c.y, cam.zoomForProvincePx(p.zoomPx ?? 96), false);
+        this.mapDirty = true;
+      } else this.centerOn(p.pid, p.zoomPx);
     }
   }
 
@@ -576,7 +616,7 @@ export class App {
     this.selectedArmy = null;
     this.moveMode = false;
     this.ui.inspectorPeek = false;
-    if (pid && center) this.pendingCenter = pid;
+    if (pid && center) this.pendingCenter = { pid };
     this.refresh();
   }
 
@@ -588,7 +628,7 @@ export class App {
     if (id && this.sim?.state.armies[id]) {
       this.selectedProvince = null;
       if (this.sim.state.armies[id].nation === this.player) this.orderArmy = id;
-      if (center) this.pendingCenter = this.sim.state.armies[id].location;
+      if (center) this.pendingCenter = { pid: this.sim.state.armies[id].location };
     }
     this.refresh();
   }

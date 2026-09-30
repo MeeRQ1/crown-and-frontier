@@ -193,15 +193,18 @@ async function main(): Promise<void> {
       });
       record('Audio starts only after a user gesture, without errors', audio !== 'none', `AudioContext state: ${audio}`);
       await page.keyboard.press('d');
-      const diplo = await page.locator('.modal h2', { hasText: 'Diplomacy' }).count();
+      await page.waitForTimeout(150);
+      const diplo = await page.locator('.drawer:not(.closed) h2', { hasText: 'Diplomacy' }).count();
       await page.keyboard.press('Escape');
-      record('Keyboard: D opens Diplomacy, Esc closes', diplo === 1);
+      await page.waitForTimeout(150);
+      const closed = await page.locator('.drawer.closed').count();
+      record('Keyboard: D opens Diplomacy, Esc closes', diplo === 1 && closed === 1);
       // save to a slot, return to the menu, load it back
       const tick = await page.evaluate(() => (window as any).cnf.sim.state.tick);
-      await page.getByRole('button', { name: 'Menu' }).click();
+      await page.getByRole('button', { name: 'Game menu' }).click();
       await page.getByText('Save to slot-1').click();
       await page.waitForTimeout(300);
-      await page.getByRole('button', { name: 'Menu' }).click();
+      await page.getByRole('button', { name: 'Game menu' }).click();
       const [download] = await Promise.all([page.waitForEvent('download'), page.getByText('Export to file').click()]);
       const exportPath = join('reports', 'tmp', 'export.json');
       mkdirSync(join('reports', 'tmp'), { recursive: true });
@@ -214,7 +217,7 @@ async function main(): Promise<void> {
       const loaded = await page.evaluate(() => (window as any).cnf.sim.state.tick);
       record('Save to a slot and load it back', loaded === tick, `tick ${tick} → ${loaded}`);
       // import the exported file
-      await page.getByRole('button', { name: 'Menu' }).click();
+      await page.getByRole('button', { name: 'Game menu' }).click();
       const [chooser] = await Promise.all([page.waitForEvent('filechooser'), page.getByText('Import file…').click()]);
       await chooser.setFiles(exportPath);
       await page.waitForTimeout(500);
@@ -222,7 +225,7 @@ async function main(): Promise<void> {
       record('Export to file and import it again', imported === tick, `exported ${readFileSync(exportPath).length} bytes`);
       // a damaged import keeps the current campaign
       writeFileSync(join('reports', 'tmp', 'broken.json'), readFileSync(exportPath, 'utf8').slice(0, 5000));
-      await page.getByRole('button', { name: 'Menu' }).click();
+      await page.getByRole('button', { name: 'Game menu' }).click();
       const [chooser2] = await Promise.all([page.waitForEvent('filechooser'), page.getByText('Import file…').click()]);
       await chooser2.setFiles(join('reports', 'tmp', 'broken.json'));
       await page.waitForTimeout(400);
@@ -284,8 +287,8 @@ async function main(): Promise<void> {
       await page.waitForTimeout(200);
       const res = await page.evaluate(() => ({
         overflow: document.documentElement.scrollWidth > innerWidth || document.documentElement.scrollHeight > innerHeight,
-        topbar: document.querySelector('.topbar')!.getBoundingClientRect().height,
-        modalFits: document.querySelector('.modal')!.getBoundingClientRect().bottom <= innerHeight + 1,
+        topbar: document.querySelector('.hud')!.getBoundingClientRect().height,
+        modalFits: document.querySelector('.drawer')!.getBoundingClientRect().bottom <= innerHeight + 1,
       }));
       record(`Layout ${w}×${hgt} (UI scale ${scale})`, !res.overflow && res.modalFits && problems.length === 0, `top bar ${Math.round(res.topbar)} px${res.overflow ? '; page overflows' : ''}${res.modalFits ? '' : '; ledger taller than the window'}`);
       await page.evaluate(() => (window as any).cnf.updateSettings({ uiScale: 1 }));
@@ -304,7 +307,7 @@ async function main(): Promise<void> {
       await page.waitForTimeout(400);
       const p = await page.evaluate(() => {
         const app = (window as any).cnf;
-        const c = app.renderer.constructor.provinceCenter('westmere');
+        const c = app.renderer.provinceCenter('westmere');
         const s = app.renderer.camera.toScreen(c.x, c.y);
         const r = app.canvas.getBoundingClientRect();
         return { x: s.x + r.left, y: s.y + r.top + 14 };

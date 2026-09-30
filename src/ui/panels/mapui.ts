@@ -18,8 +18,13 @@ export function renderModes(app: App): void {
       bar.appendChild(b);
     });
     bar.appendChild(h('span', { class: 'sep' }));
-    const leg = h('button', { class: app.settings.showLegend ? 'active' : '', type: 'button', 'aria-pressed': app.settings.showLegend ? 'true' : 'false', 'aria-label': 'Show legend', 'data-fk': 'legend' }, icon('info'));
-    leg.addEventListener('click', () => app.updateSettings({ showLegend: !app.settings.showLegend }));
+    const leg = h('button', { class: app.ui.legendOpen ? 'active' : '', type: 'button', 'aria-pressed': app.ui.legendOpen ? 'true' : 'false', 'aria-label': 'Show legend', 'data-fk': 'legend' }, icon('info'));
+    leg.addEventListener('click', () => {
+      app.ui.legendOpen = !app.ui.legendOpen;
+      // the preference is remembered on larger screens only; phones start with it folded
+      if (!app.isPhone()) app.updateSettings({ showLegend: app.ui.legendOpen });
+      app.refresh();
+    });
     tip(leg, 'Show or hide the legend and explanation for the current map mode');
     bar.appendChild(leg);
     const pres = h('button', { class: app.ui.presentationOpen ? 'active' : '', type: 'button', 'aria-pressed': app.ui.presentationOpen ? 'true' : 'false', 'aria-label': 'Map presentation', 'data-fk': 'presentation' }, icon('layers'));
@@ -31,7 +36,7 @@ export function renderModes(app: App): void {
     bar.appendChild(pres);
     const kids: HTMLElement[] = [];
     if (app.ui.presentationOpen) kids.push(presentationPanel(app));
-    else if (app.settings.showLegend) kids.push(legend(app));
+    else if (app.ui.legendOpen) kids.push(legend(app));
     kids.push(bar);
     setChildren(el, ...kids);
   });
