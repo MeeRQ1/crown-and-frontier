@@ -43,10 +43,10 @@ Last updated at the release-candidate checkpoint (schema 1, version 0.1.0).
 | Requirement | Module(s) | Status | Evidence |
 |---|---|---|---|
 | Diplomacy: relations, NAP, trade, alliance, war, peace, explained acceptance | `diplomacy.ts`, `war.ts` | ✅ | diplomacy tests; acceptance-reasons test |
-| Coalitions reacting to expansion | `diplomacy.ts`, `ai/strategic.ts` | ✅ | 6.8 coalitions and 5.2 coalition wars per campaign |
+| Coalitions reacting to expansion | `diplomacy.ts`, `ai/strategic.ts` | ✅ | 4.4 coalitions and 1.0 coalition war per campaign (alarm now comes from conquest and territorial or economic bids only) |
 | War goals, war score, exhaustion, separate peace, no unresolvable wars | `war.ts` | ✅ | 0 forced peaces in 30 campaigns; separate-peace test |
 | Events with conditions, cooldowns, affordability, no save-scumming | `events.ts`, `data/events.ts` | ✅ | events tests (determinism, cooldowns, defaults) |
-| Three distinct victory paths, visible progress, simultaneous and limit rules | `victory.ts`, Victory ledger | ✅ | victory tests; campaigns ended by territorial (5), diplomatic (2), economic (1) and score (22) |
+| Three distinct victory paths, visible progress, simultaneous and limit rules | `victory.ts`, Victory ledger | ✅ | victory tests; campaigns ended by territorial (2), diplomatic (3), economic (2) and score (23) |
 | Understandable defeat; capital loss not instant; post-result continuation | `victory.ts`, `war.ts`, end screen | ✅ | elimination and capital relocation code; end screen |
 
 ### AI
@@ -82,7 +82,7 @@ Last updated at the release-candidate checkpoint (schema 1, version 0.1.0).
    - ✅ Research branches compete (about 9 of 18 techs by year 20).
    - ✅ Treaties change legal actions (pact, truce and alliance tests).
    - ✅ Save/load works mid-war.
-3. **Credible opponents.** ✅ The AI fights on several fronts, ends bad wars (51 peace treaties per campaign,
+3. **Credible opponents.** ✅ The AI fights on several fronts, ends bad wars (49 peace treaties per campaign,
    0 forced), reacts to expansion (coalitions) and pursues victory (rival reactions). 🟡 Winners are
    still concentrated (see below).
 4. **Release candidate.** ✅ Tutorial, settings, reports, persistence hardening, static delivery and
@@ -167,15 +167,18 @@ myself. I did not play it in the browser.
 
 ## Known issues and limitations
 
-- **Balance.** In AI-only play Aurel (14/30) and Tarsk (11/30) win most campaigns, and 22 of 30 end
-  at the time limit on score. Calder, Istrel and Fenward usually shrink. Serennes (a diplomat) keeps
-  armies idle during 34% of its war weeks: its fronts are usually beyond supply reach. Economic
-  victory is now rare (1/30) since Aurel's starting development was lowered. These samples are
-  diagnostic, not proof of balance, and **no human has played a full campaign yet**.
+- **Balance.** In AI-only play Aurel (12/30) and Tarsk (11/30) win most campaigns, and 23 of 30 end
+  at the time limit on score. Each victory path wins only 2–3 of 30. Morvaine, Istrel, Vostmark and
+  Calder usually end smaller. Serennes (a diplomat) keeps armies idle during 31% of its war weeks: its
+  fronts are usually beyond supply reach. These samples are diagnostic, not proof of balance, and
+  **no one other than me has played a campaign**. Mine was played through the command API, not the
+  browser (see above).
+- **Late-game money.** Treasuries of 500–1,500 crowns build up after year 20. Once development and
+  research run out there is little left to buy (seen both in AI batches and in my campaign).
 - **AI.** It has no naval or strait-crossing strategy beyond normal pathing. It does not anticipate
   the enemy's reinforcements in forecasts. Allies that join defensive wars far from home rarely
   contribute troops.
-- **Performance.** A worst-case simulation week took 35–123 ms in CLI batches. That is fine at normal
+- **Performance.** A worst-case simulation week took 56 ms in the latest CLI batch (35–123 ms in earlier ones). That is fine at normal
   speed, but at the fastest speed a rare slow week may skip a frame.
 - **Browsers.** Only Chromium was verified. Firefox and Safari are untested; iOS Safari may partition
   or clear storage in iframes.
@@ -199,7 +202,7 @@ myself. I did not play it in the browser.
 - **Working state:** all commands below pass locally.
   ```bash
   npm ci && npm run typecheck && npm test && npm run build && npm run package && npm run verify:web
-  npm run sim -- --seeds 1-10 --difficulty all --years 40 --out reports/ai-campaigns.md   # about 17 minutes
+  npm run sim -- --seeds 1-10 --difficulty all --years 40 --out reports/ai-campaigns.md   # about 3 minutes here
   ```
 - **Unresolved failures:** none.
 - **Next concrete task:** gather external playtest notes, then the balance pass above. Change numbers in

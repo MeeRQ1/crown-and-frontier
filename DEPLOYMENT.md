@@ -87,8 +87,8 @@ rendering. They are **not** Chromebook measurements.
 
 - Map drawing averages about 1–2 ms per frame at 1366×768, and the page holds 60 fps while
   simulating at the fastest speed.
-- One simulation week (99 provinces, 9 realms, AI included) takes about 4 ms on average in Node.
-  Rare worst-case weeks took 35–120 ms across batches. That is far below the 1-second interval at normal speed and the
+- One simulation week (99 provinces, 9 realms, AI included) takes about 3–4 ms on average in Node.
+  Rare worst-case weeks took 35–123 ms across batches (56 ms in the latest). That is far below the 1-second interval at normal speed and the
   167 ms interval at the fastest speed.
 - The JavaScript heap stays at about 10 MB in the browser.
 - The bundle is about 170 KB gzipped (the JavaScript includes the map geometry). The first

@@ -388,5 +388,5 @@ share, performance). Observations that drove the tuning:
 - **Alliance deterrence froze the map:** fixed by weighting allies by reach and adding restlessness.
 - **Then too hard to win diplomatically:** once rival wariness replaced alarm, no AI realm won diplomatically in 30 campaigns. Every broken streak was a partner's opinion slipping below 40 under small stacked penalties (border friction, claims, alarm from the diplomat's own conquests, wariness). The partner threshold is now 35.
 - **Remaining skew:** Aurel's plains economy and Tarsk's steppe geography win most AI-only
-  campaigns. Small defensive realms (Calder, Istrel, Fenward) tend to shrink. See STATUS.md.
+  campaigns. Istrel and Calder tend to shrink, as do Morvaine and Vostmark between their larger neighbours. See STATUS.md.
   These are small samples and diagnostic, not proof of balance.

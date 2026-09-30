@@ -105,8 +105,9 @@ simulation replays deterministically.
 
 ## Known limitations
 
-- **Balance:** tuned against AI-only campaigns only. Aurel and Tarsk win most of them, and small
-  defensive realms tend to shrink. No external players have tested it yet.
+- **Balance:** tuned against AI-only campaigns and one player-style campaign of my own (see
+  STATUS.md). Aurel and Tarsk win most AI-only campaigns, and small defensive realms tend to
+  shrink. No external players have tested it yet.
 - **Fog of war:** not implemented. All information is public to everyone, AI included.
 - **Browsers verified:** only headless Chromium 141, on desktop and emulated phone viewports. Firefox,
   Safari, real Chromebooks and real touch devices are untested.
