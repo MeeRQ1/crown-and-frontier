@@ -55,6 +55,10 @@ export interface NationDef {
   strength: string;
   constraint: string;
   traits: NationTraits;
+  /** kind of starting position, shown when choosing a realm */
+  startType?: string;
+  /** how forgiving the start is for a new player */
+  rating?: 'recommended' | 'standard' | 'challenging';
   /** heraldry (presentation only): field, ordinary and charge */
   arms?: { field: string; ordinary: string; ordinaryTincture: string; charge: string; chargeTincture: string };
 }

@@ -87,6 +87,17 @@ export class Camera {
     this.go(this.target(cx, cy, z), animate);
   }
 
+  /** Fit a world rectangle into the uncovered part of the view. */
+  fitRect(minX: number, minY: number, maxX: number, maxY: number, animate = true, pad = 1.15): void {
+    const i = this.insets;
+    const fw = Math.max(160, this.vw - i.left - i.right);
+    const fh = Math.max(160, this.vh - i.top - i.bottom);
+    const w = Math.max(1, (maxX - minX) * pad);
+    const h = Math.max(1, (maxY - minY) * pad);
+    const z = Math.max(this.minZoom, Math.min(this.maxZoom, Math.min(fw / w, fh / h)));
+    this.go(this.target((minX + maxX) / 2, (minY + maxY) / 2, z), animate);
+  }
+
   toWorld(sx: number, sy: number) {
     return { x: (sx - this.offX) / this.zoom, y: (sy - this.offY) / this.zoom };
   }

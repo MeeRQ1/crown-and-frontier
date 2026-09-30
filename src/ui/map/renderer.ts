@@ -40,6 +40,8 @@ export interface RenderState {
   reducedMotion: boolean;
   player: NationId | null;
   presentation: Presentation;
+  /** draw a gold outline around this realm (campaign setup) */
+  outlineRealm?: NationId | null;
 }
 
 export interface Marker {
@@ -60,6 +62,9 @@ interface Rect {
 interface RealmShape {
   union: Path2D;
   border: Path2D;
+  /** full outline including coasts */
+  outline: Path2D;
+  bbox: [number, number, number, number];
   label: { x: number; y: number; angle: number; len: number; wid: number; bend: number } | null;
 }
 
@@ -93,6 +98,12 @@ export class MapRenderer {
     this.geo = geoIndex(geometry);
     this.camera = new Camera(this.geo.bounds, this.geo.provScale);
     this.base = new BaseMap(this.geo, terrainOf);
+  }
+
+  /** World bounding box of a realm's provinces (after the last draw). */
+  realmBBox(sim: Sim, nid: NationId): [number, number, number, number] | null {
+    this.ensureRealms(sim);
+    return this.realms.get(nid)?.bbox ?? null;
   }
 
   provinceCenter(id: ProvinceId): { x: number; y: number } {
@@ -245,6 +256,19 @@ export class MapRenderer {
     ctx.lineWidth = (bstyle === 'strong' ? 2.6 : bstyle === 'subtle' ? 1.3 : 1.9) * px;
     ctx.lineJoin = 'round';
     ctx.stroke(realmBorder);
+    if (rs.outlineRealm) {
+      const r = this.realms.get(rs.outlineRealm);
+      if (r) {
+        ctx.save();
+        ctx.strokeStyle = 'rgba(20, 16, 12, 0.7)';
+        ctx.lineWidth = 5 * px;
+        ctx.stroke(r.outline);
+        ctx.strokeStyle = '#f2d48a';
+        ctx.lineWidth = 2.6 * px;
+        ctx.stroke(r.outline);
+        ctx.restore();
+      }
+    }
 
     // 4. straits and fords, roads
     this.drawStraits(sim, px, tier);
@@ -357,23 +381,36 @@ export class MapRenderer {
       if (!st.nations[nid].alive) continue;
       const union = new Path2D();
       const border = new Path2D();
+      const outline = new Path2D();
+      const bbox: [number, number, number, number] = [Infinity, Infinity, -Infinity, -Infinity];
       let any = false;
       let sig = '';
       for (const pid of sim.world.provIds) {
         if (owner(pid) !== nid) continue;
         any = true;
         sig += `${pid},`;
-        union.addPath(this.geo.provs.get(pid)!.path);
+        const pg = this.geo.provs.get(pid)!;
+        union.addPath(pg.path);
+        bbox[0] = Math.min(bbox[0], pg.bbox[0]);
+        bbox[1] = Math.min(bbox[1], pg.bbox[1]);
+        bbox[2] = Math.max(bbox[2], pg.bbox[2]);
+        bbox[3] = Math.max(bbox[3], pg.bbox[3]);
         for (const e of this.geo.edgesOf.get(pid) ?? []) {
-          if (e.coast) continue;
+          if (e.coast) {
+            outline.addPath(e.path);
+            continue;
+          }
           const other = e.a === pid ? e.b : e.a;
-          if (owner(other) !== nid) border.addPath(e.path);
+          if (owner(other) !== nid) {
+            border.addPath(e.path);
+            outline.addPath(e.path);
+          }
         }
       }
       if (!any) continue;
       let lab = this.labelCache.get(nid);
       if (!lab || lab.sig !== sig) this.labelCache.set(nid, (lab = { sig, label: this.realmLabel(sim, nid) }));
-      this.realms.set(nid, { union, border, label: lab.label });
+      this.realms.set(nid, { union, border, outline, bbox, label: lab.label });
     }
   }
 

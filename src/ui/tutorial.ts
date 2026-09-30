@@ -34,7 +34,7 @@ function suggestProject(app: App): { pid: string; kind: ProjectKind } | { reason
 
 const STEPS: Step[] = [
   {
-    title: 'Welcome to the Reach',
+    title: 'Welcome',
     text: (app) => {
       const d = app.sim!.world.nationDefs[app.player!];
       return [`You rule the ${d.name}. ${d.summary} The game is paused: nothing happens until you press ▶ or Space, so take your time.`];

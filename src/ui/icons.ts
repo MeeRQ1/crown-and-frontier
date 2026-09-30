@@ -2,6 +2,7 @@
 // Paths are plain SVG path data so the map canvas can draw them via Path2D.
 
 export const ICONS = {
+  dice: 'M6 4h12a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2zM8.6 8.6h.01M15.4 8.6h.01M12 12h.01M8.6 15.4h.01M15.4 15.4h.01',
   crown: 'M3.5 17.5 5 8l4.2 4.2L12 5.5l2.8 6.7L19 8l1.5 9.5zM4.5 20.5h15',
   treasury: 'M4 7c0-1.66 3.58-3 8-3s8 1.34 8 3-3.58 3-8 3-8-1.34-8-3zM4 7v5c0 1.66 3.58 3 8 3s8-1.34 8-3V7M4 12v5c0 1.66 3.58 3 8 3s8-1.34 8-3v-5',
   supplies: 'M8.5 5h7l-1.8 3c3 1.2 5.3 4.2 5.3 8a4 4 0 0 1-4 4H9a4 4 0 0 1-4-4c0-3.8 2.3-6.8 5.3-8zM9.5 12.5h5M12 10v5',

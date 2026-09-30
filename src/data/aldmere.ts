@@ -13,51 +13,70 @@ const reach = (id: string) => REACH_NATIONS.find((n) => n.id === id)!;
 export const ALDMERE_NATIONS: NationDef[] = [
   {
     ...reach('aur'),
+    startType: 'Wealthy heartland',
+    rating: 'recommended',
     capital: 'aurelon',
     summary: 'The richest plains of the west, crossed by the Vess and open on three sides.',
   },
   {
     ...reach('vos'),
+    startType: 'Exposed frontier',
+    rating: 'standard',
     capital: 'vostburg',
     summary: 'Upland march between the Carrow clans, Aurel and the Northgate.',
   },
   {
     ...reach('ser'),
+    startType: 'Maritime trader',
+    rating: 'standard',
     capital: 'serenna',
     summary: 'Merchant ports of the south-west coast and the Serene Isles.',
   },
   {
     ...reach('cal'),
+    startType: 'Compact defensive',
+    rating: 'standard',
     capital: 'caldris',
     summary: 'Scholarly lake republic holding the Kestrel Pass through the Greyspine.',
   },
   {
     ...reach('ist'),
+    startType: 'Mountain fortress',
+    rating: 'standard',
     capital: 'istrenne',
     summary: 'Fortified highlands commanding the Southern Gap and the Littoral road.',
   },
   {
     ...reach('dre'),
+    startType: 'Frontier to settle',
+    rating: 'standard',
     capital: 'drevholm',
     summary: 'Populous forests between the Greyspine and the Frostfangs, with the northern wilds beyond.',
   },
   {
     ...reach('mor'),
+    startType: 'Crossroads, many borders',
+    rating: 'challenging',
     capital: 'morvay',
     summary: 'Iron hill kingdom at the crossroads of the east, bordered on every side.',
   },
   {
     ...reach('fen'),
+    startType: 'Small and sheltered',
+    rating: 'challenging',
     capital: 'fenhold',
     summary: 'A small compact of marsh towns on the north-east coast, hard to invade.',
   },
   {
     ...reach('tar'),
+    startType: 'Vast and loosely held',
+    rating: 'standard',
     capital: 'kharsa',
     summary: 'The vast southern steppe: many provinces, thinly held, long roads.',
   },
   {
     id: 'car', name: 'Clanholds of Carrow', short: 'Carrow', adjective: 'Carrowan', color: '#6d7f2c',
+    startType: 'Compact defensive', rating: 'standard',
     capital: 'duncarrow', personality: 'defensive', emblem: 'mountain',
     summary: 'Highland clans behind the Hoarfells: poor, proud and hard to reach.',
     strength: 'Clan levies: +25% manpower.',
@@ -67,6 +86,7 @@ export const ALDMERE_NATIONS: NationDef[] = [
   },
   {
     id: 'hra', name: 'Jarldom of Hrafnmark', short: 'Hrafnmark', adjective: 'Hrafnic', color: '#445b9e',
+    startType: 'Exposed coast', rating: 'challenging',
     capital: 'hrafnvik', personality: 'opportunist', emblem: 'star',
     summary: 'A cold northern peninsula and its isles, exposed on a long coast.',
     strength: 'Longships: sea crossings cost no extra movement.',
@@ -76,6 +96,7 @@ export const ALDMERE_NATIONS: NationDef[] = [
   },
   {
     id: 'sol', name: 'Principality of Solmarre', short: 'Solmarre', adjective: 'Solmarran', color: '#c24f6b',
+    startType: 'Wealthy peninsula', rating: 'standard',
     capital: 'solmarre', personality: 'diplomat', emblem: 'wheat',
     summary: 'A wealthy vineyard peninsula with one land border worth defending.',
     strength: 'Terraced vineyards: development costs 20% less.',
@@ -85,6 +106,7 @@ export const ALDMERE_NATIONS: NationDef[] = [
   },
   {
     id: 'les', name: 'Kingdom of Lessia', short: 'Lessia', adjective: 'Lessian', color: '#5f9fd6',
+    startType: 'Wealthy centre, open borders', rating: 'standard',
     capital: 'lessara', personality: 'commercial', emblem: 'key',
     summary: 'The Aldwater valley: the wealthiest land of the continent, with seven neighbours.',
     strength: 'River barges: +15% crown income.',
@@ -94,6 +116,7 @@ export const ALDMERE_NATIONS: NationDef[] = [
   },
   {
     id: 'ash', name: 'Wardenry of the Ashmark', short: 'Ashmark', adjective: 'Ashen', color: '#8e3a59',
+    startType: 'Exposed frontier', rating: 'standard',
     capital: 'emberwatch', personality: 'expansionist', emblem: 'tower',
     summary: 'Frontier wardens on the east coast, facing the steppe and the unclaimed Ember Coast.',
     strength: 'Wardens: +30% integration speed.',

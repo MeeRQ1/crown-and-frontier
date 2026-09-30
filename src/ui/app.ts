@@ -25,7 +25,7 @@ import { attention, renderHud } from './panels/hud';
 import { renderInspector } from './panels/inspector';
 import { renderLedger, type LedgerTab } from './panels/ledgers';
 import { Minimap, renderModes, renderNavCluster } from './panels/mapui';
-import { openMenuDialog, renderEndScreen, renderMenu } from './screens';
+import { openMenuDialog, renderEndScreen, renderMenu, screenCleanup } from './screens';
 import { loadSettings, saveSettings, type UISettings } from './settings';
 import { downloadText, SaveStore } from './storage';
 import { Tutorial } from './tutorial';
@@ -209,6 +209,7 @@ export class App {
   }
 
   hideScreen(): void {
+    if (this.screenEl) screenCleanup.get(this.screenEl)?.();
     this.screenEl?.remove();
     this.screenEl = null;
   }
