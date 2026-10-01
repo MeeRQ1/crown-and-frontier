@@ -3,7 +3,7 @@ import { applyCommand, checkCommand } from '../src/sim/commands';
 import { evaluateTreaty, monthlyDiplomacy, opinionParts, signTreaty } from '../src/sim/diplomacy';
 import { checkInvariants } from '../src/sim/invariants';
 import { siegeInfo } from '../src/sim/siege';
-import { atWar, hasTreaty, months, truceUntil } from '../src/sim/state';
+import { atWar, bump, hasTreaty, months, truceUntil } from '../src/sim/state';
 import { runTicks, step } from '../src/sim/tick';
 import { applyPeace, declareWar, evaluatePeace, joinWar, returnStrandedArmies, transferProvince } from '../src/sim/war';
 import { addArmy, lineGame } from './helpers';
@@ -30,6 +30,7 @@ describe('sieges and occupation', () => {
     declareWar(sim, 'a', 'b', { type: 'conquest', provinces: ['b3'] });
     sim.state.provinces.b1.fort = 1;
     sim.state.provinces.b1.controller = 'a';
+    bump(sim); // direct edit: refresh derived lookups
     addArmy(sim, 'b', 'b1', { foot: 2 });
     expect(siegeInfo(sim, 'b1')!.liberation).toBe(true);
     expect(siegeInfo(sim, 'b1')!.weeklyRate).toBeCloseTo(20, 6);
@@ -111,6 +112,7 @@ describe('diplomacy and wars', () => {
     const sim = lineGame();
     const w = declareWar(sim, 'a', 'b', { type: 'conquest', provinces: ['b3'] });
     sim.state.provinces.b3.controller = 'a';
+    bump(sim); // direct edit: refresh derived lookups
     applyPeace(sim, w.id, 'a', 'b', { mode: 'demand', provinces: ['b3'], gold: 0 });
     expect(sim.state.provinces.b3.owner).toBe('a');
     expect(sim.state.provinces.b3.integration).toBe(10);

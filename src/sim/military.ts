@@ -7,6 +7,7 @@
 
 import { C, UNITS } from './config';
 import { poolCap, removePopulation } from './economy';
+import { touchArmies } from './index';
 import { nationMods } from './modifiers';
 import { armiesAt, armiesOf, atWar, bump, enemiesOf, isFriendly, notify, provName, type Sim } from './state';
 import { supplyAt, supplyStatus } from './supply';
@@ -141,6 +142,7 @@ export function createArmy(sim: Sim, nid: NationId, loc: ProvinceId, regiments: 
     task: null,
   };
   st.armies[id] = a;
+  touchArmies(sim);
   return a;
 }
 
@@ -155,6 +157,7 @@ export function removeArmy(sim: Sim, id: ArmyId): void {
     }
   }
   delete sim.state.armies[id];
+  touchArmies(sim);
   for (const nid in sim.state.nations) delete sim.state.nations[nid].ai.objectives[id];
 }
 

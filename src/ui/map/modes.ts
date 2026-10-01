@@ -135,13 +135,12 @@ export function buildContext(sim: Sim, mode: MapMode, viewer: NationId | null): 
     const hostile = enemiesOf(sim, viewer);
     const threat: Record<ProvinceId, number> = {};
     let max = 0;
-    const hops = sim.world.hops;
     const hostileArmies = Object.values(st.armies).filter((a) => hostile.includes(a.nation));
     for (const pid of sim.world.provIds) {
       if (st.provinces[pid].owner !== viewer) continue;
       let t = 0;
       for (const a of hostileArmies) {
-        const d = hops[pid][a.location];
+        const d = sim.world.hop(pid, a.location);
         if (d !== undefined && d <= 2) t += armyStrength(sim, a) * (d === 0 ? 1.2 : d === 1 ? 1 : 0.6);
       }
       threat[pid] = t;

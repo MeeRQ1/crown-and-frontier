@@ -121,8 +121,12 @@ export interface World {
   straitSet: Set<string>;
   /** key `${a}|${b}` with a<b → river border */
   riverSet: Set<string>;
-  /** all-pairs hop distances (unweighted graph), for AI/proximity heuristics */
-  hops: Record<ProvinceId, Record<ProvinceId, number>>;
+  /**
+   * Hop distance between two provinces over borders and straits (undefined if
+   * one cannot reach the other), for AI and proximity heuristics. Backed by a
+   * compact all-pairs matrix built once per map.
+   */
+  hop(a: ProvinceId, b: ProvinceId): number | undefined;
 }
 
 // ───────────────────────────── Dynamic state ────────────────────────────────

@@ -168,6 +168,7 @@ function planConstruction(sim: Sim, nid: NationId): void {
   while (activeProjects(sim, nid).length < buildSlots(sim, nid) && guard++ < 4) {
     const budget = n.treasury - treasuryReserve(sim, nid);
     if (budget <= 20) return;
+    const known = { slots: buildSlots(sim, nid), active: activeProjects(sim, nid).length };
     const cands: Array<{ pid: ProvinceId; kind: ProjectKind; v: number }> = [];
     let forts = 0;
     for (const pid of ownedProvinces(sim, nid)) forts += st.provinces[pid].fort;
@@ -182,7 +183,7 @@ function planConstruction(sim: Sim, nid: NationId): void {
         return !!o && o !== nid && (atWar(sim, nid, o) || opinion(sim, o, nid) < -10 || o === threat);
       });
       for (const kind of ['dev', 'infra', 'fort', 'charter'] as ProjectKind[]) {
-        if (buildProblem(sim, nid, pid, kind)) continue;
+        if (buildProblem(sim, nid, pid, kind, known)) continue;
         const cost = projectCost(sim, nid, pid, kind).crowns;
         if (cost > budget) continue;
         let v = 0;
@@ -199,7 +200,7 @@ function planConstruction(sim: Sim, nid: NationId): void {
       }
     }
     for (const pid of sim.world.provIds) {
-      if (st.provinces[pid].owner || buildProblem(sim, nid, pid, 'settle')) continue;
+      if (st.provinces[pid].owner || buildProblem(sim, nid, pid, 'settle', known)) continue;
       const cost = projectCost(sim, nid, pid, 'settle').crowns;
       if (cost > budget) continue;
       const res = sim.world.prov[pid].resource ? 0.5 : 0;

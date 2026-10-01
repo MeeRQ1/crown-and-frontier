@@ -11,6 +11,7 @@
 
 import { TERRAIN } from './config';
 import { CostHeap } from './heap';
+import { armiesIn, touchArmies } from './index';
 import { nationMods } from './modifiers';
 import { atWar, hasAccess, isFriendly, notify, provName, type Sim } from './state';
 import type { Army, NationId, ProvinceId } from './types';
@@ -117,10 +118,7 @@ export function etaWeeks(sim: Sim, a: Army, path: ProvinceId[], progress = 0): n
 }
 
 export function hostilePinned(sim: Sim, a: Army): boolean {
-  for (const id in sim.state.armies) {
-    const o = sim.state.armies[id];
-    if (o.location === a.location && !o.retreating && atWar(sim, a.nation, o.nation)) return true;
-  }
+  for (const o of armiesIn(sim, a.location)) if (!o.retreating && atWar(sim, a.nation, o.nation)) return true;
   return false;
 }
 
@@ -157,6 +155,7 @@ export function weeklyMovement(sim: Sim): void {
       a.progress = Math.min(a.progress - cost, 1);
       a.lastMove = { from: a.location, tick: st.tick };
       a.location = next;
+      touchArmies(sim);
       a.path.shift();
       a.stationary = 0;
       if (a.path.length === 0) {

@@ -11,6 +11,7 @@
 
 import { C } from './config';
 import { cancelRecruits } from './military';
+import { armiesIn } from './index';
 import { nationMods } from './modifiers';
 import { atWar, bump, isFriendly, nationName, notify, provName, type Sim } from './state';
 import { supplyStatus } from './supply';
@@ -25,15 +26,14 @@ export interface SiegeInfo {
   notes: string[];
 }
 
-export function siegeInfo(sim: Sim, pid: ProvinceId): SiegeInfo | null {
+export function siegeInfo(sim: Sim, pid: ProvinceId, battleAt?: Set<ProvinceId>): SiegeInfo | null {
   const st = sim.state;
   const p = st.provinces[pid];
   if (!p.controller) return null;
-  if (Object.values(st.battles).some((b) => b.province === pid)) return null;
+  if (battleAt ? battleAt.has(pid) : Object.values(st.battles).some((b) => b.province === pid)) return null;
   const present: Army[] = [];
-  for (const id of Object.keys(st.armies).sort()) {
-    const a = st.armies[id];
-    if (a.location === pid && !a.retreating && !a.battle && a.path.length === 0 && atWar(sim, a.nation, p.controller)) present.push(a);
+  for (const a of [...armiesIn(sim, pid)].sort((x, y) => (x.id < y.id ? -1 : x.id > y.id ? 1 : 0))) {
+    if (!a.retreating && !a.battle && a.path.length === 0 && atWar(sim, a.nation, p.controller)) present.push(a);
   }
   if (!present.length) return null;
   // lead besieger: the nation with the most regiments present
@@ -84,11 +84,13 @@ export function setController(sim: Sim, pid: ProvinceId, ctrl: NationId | null):
 /** Weekly siege progress for all provinces (province id order). */
 export function weeklySieges(sim: Sim): void {
   const st = sim.state;
+  const battleAt = new Set(Object.values(st.battles).map((b) => b.province));
   for (const pid of sim.world.provIds) {
     const p = st.provinces[pid];
-    const info = siegeInfo(sim, pid);
+    // only provinces with armies standing in them can be besieged
+    const info = armiesIn(sim, pid).length ? siegeInfo(sim, pid, battleAt) : null;
     if (!info) {
-      if (p.siege && !Object.values(st.battles).some((b) => b.province === pid)) p.siege = null;
+      if (p.siege && !battleAt.has(pid)) p.siege = null;
       continue;
     }
     if (!p.siege || p.siege.nation !== info.nation) p.siege = { nation: info.nation, progress: 0 };

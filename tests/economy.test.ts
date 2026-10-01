@@ -1,3 +1,4 @@
+import { bump } from '../src/sim/state';
 import { describe, expect, it } from 'vitest';
 import { applyCommand, checkCommand } from '../src/sim/commands';
 import { computeLedger, debtStage, menServing, monthlyEconomy, poolCap, reserveCap } from '../src/sim/economy';
@@ -85,6 +86,7 @@ describe('economy', () => {
     const before = computeLedger(sim, 'b').income['Provincial taxes'];
     declareWar(sim, 'a', 'b', { type: 'conquest', provinces: ['b3'] });
     sim.state.provinces.b3.controller = 'a';
+    bump(sim); // direct edit: refresh derived lookups
     const after = computeLedger(sim, 'b').income['Provincial taxes'];
     expect(after).toBeLessThan(before);
     expect(computeLedger(sim, 'a').income['War contributions']).toBeGreaterThan(0);

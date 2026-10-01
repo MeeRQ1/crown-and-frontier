@@ -14,7 +14,7 @@ describe('scenario', () => {
     expect(validateScenario(w.scenario)).toEqual([]);
     expect(w.provIds.length).toBeGreaterThanOrEqual(80);
     expect(w.nationIds.length).toBeGreaterThanOrEqual(8);
-    for (const p of w.provIds) expect(Object.keys(w.hops[p]).length).toBe(w.provIds.length);
+    for (const p of w.provIds) expect(w.provIds.every((q) => w.hop(p, q) !== undefined)).toBe(true);
     const sim = createGame({ seed: 1, playerNation: null });
     for (const n of w.nationIds) {
       const neighbours = w.nationIds.filter((o) => o !== n && borders(sim, n, o));

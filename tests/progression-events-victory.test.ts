@@ -8,7 +8,7 @@ import { defaultChoice, eventCtx, monthlyEvents } from '../src/sim/events';
 import { createGame } from '../src/sim/game';
 import { computeMods } from '../src/sim/modifiers';
 import { monthlyResearch } from '../src/sim/progression';
-import { months } from '../src/sim/state';
+import { bump, months } from '../src/sim/state';
 import { runTicks } from '../src/sim/tick';
 import { monthlyVictory, victoryProgress } from '../src/sim/victory';
 import { transferProvince } from '../src/sim/war';
@@ -98,6 +98,7 @@ describe('victory', () => {
     for (const p of ['b1', 'b2', 'b3', 'c1', 'c2']) transferProvince(sim, p, 'a');
     sim.state.provinces.m1.owner = 'a';
     sim.state.provinces.m1.controller = 'a';
+    bump(sim); // direct edit: refresh derived lookups
     expect(victoryProgress(sim, 'a').territorial.met).toBe(true);
     for (let m = 0; m < 23; m++) monthlyVictory(sim);
     expect(sim.state.result).toBeNull();
@@ -140,6 +141,7 @@ describe('victory', () => {
     sim.state.nations.b.victoryStreak.economic = 59;
     sim.state.provinces.m1.owner = 'a';
     sim.state.provinces.m1.controller = 'a';
+    bump(sim); // direct edit: refresh derived lookups
     // both meet economic conditions? force by stubbing the thresholds via state: give both high dev share
     for (const p of Object.values(sim.state.provinces)) p.unrest = 0;
     monthlyVictory(sim);

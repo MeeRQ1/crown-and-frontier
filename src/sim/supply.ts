@@ -12,6 +12,8 @@
 // Supplied >= 0.8 > Strained >= 0.4 > Unsupplied.
 
 import { C, TERRAIN } from './config';
+import { CostHeap } from './heap';
+import { armiesIn } from './index';
 import { nationMods } from './modifiers';
 import { isFriendly, type Sim } from './state';
 import type { Army, NationId, ProvinceId } from './types';
@@ -62,32 +64,26 @@ export function supplyDistances(sim: Sim, nid: NationId): Record<ProvinceId, num
 
   const dist: Record<ProvinceId, number> = {};
   const friendly = (pid: ProvinceId) => isFriendly(sim, nid, sim.state.provinces[pid].controller);
-  const open: Array<[number, ProvinceId]> = [];
+  const open = new CostHeap();
   for (const pid of sim.world.provIds) {
     dist[pid] = Infinity;
     if (friendly(pid) && isSupplySource(sim, pid)) {
       dist[pid] = 0;
-      open.push([0, pid]);
+      open.push(0, pid);
     }
   }
-  // Dijkstra through friendly-controlled provinces (small graph: linear minimum scan).
-  while (open.length) {
-    let bi = 0;
-    for (let i = 1; i < open.length; i++) {
-      const x = open[i];
-      const y = open[bi];
-      if (x[0] < y[0] || (x[0] === y[0] && x[1] < y[1])) bi = i;
-    }
-    const [d, cur] = open[bi];
-    open[bi] = open[open.length - 1];
-    open.pop();
+  // Dijkstra through friendly-controlled provinces; the heap's (cost, id)
+  // order makes the visiting order independent of insertion order.
+  while (open.size) {
+    const d = open.peekCost();
+    const cur = open.pop();
     if (d > dist[cur]) continue;
     for (const nb of sim.world.prov[cur].neighbors) {
       const nd = d + stepCost(sim, nb);
       if (nd < dist[nb]) {
         dist[nb] = nd;
         // only friendly provinces relay supply further
-        if (friendly(nb)) open.push([nd, nb]);
+        if (friendly(nb)) open.push(nd, nb);
       }
     }
   }
@@ -122,10 +118,7 @@ export function supplyAt(sim: Sim, nid: NationId, pid: ProvinceId, extraRegiment
   const connected = inRange && stock > 0;
   const capacity = provinceSupplyCapacity(sim, nid, pid);
   let load = extraRegiments;
-  for (const id in sim.state.armies) {
-    const a = sim.state.armies[id];
-    if (a.location === pid && isFriendly(sim, nid, a.nation)) load += a.regiments.length;
-  }
+  for (const a of armiesIn(sim, pid)) if (isFriendly(sim, nid, a.nation)) load += a.regiments.length;
   load = Math.max(1, load);
   const level = connected ? Math.min(1, (2 * capacity) / load) : Math.min(0.6, (C.supply.disconnectedMul * capacity) / load);
   const reasons: string[] = [];

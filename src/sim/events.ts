@@ -5,6 +5,7 @@
 
 import { C } from './config';
 import { EVENT_MAP, EVENTS, type EventCtx } from './data/events';
+import { nextMemoEpoch } from './index';
 import { intRange, nextFloat } from './rng';
 import { months, notify, type Sim } from './state';
 import type { NationId, PendingEvent } from './types';
@@ -28,6 +29,8 @@ export function resolveEvent(sim: Sim, nid: NationId, instance: string, choice: 
   const def = EVENT_MAP[pe.event];
   const ctx = eventCtx(sim, nid, pe);
   def.choices[choice].apply(ctx);
+  // event effects may change province output directly
+  nextMemoEpoch();
   n.pendingEvents = n.pendingEvents.filter((e) => e.id !== instance);
   if (n.isPlayer) notify(sim, nid, 'low', 'event', `${def.title}: ${def.choices[choice].label}.`);
 }

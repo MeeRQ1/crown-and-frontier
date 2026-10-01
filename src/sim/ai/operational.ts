@@ -35,11 +35,10 @@ function regimentsByType(sim: Sim, nid: NationId): Record<UnitType, number> {
 }
 
 function hopsToEnemy(sim: Sim, nid: NationId, pid: ProvinceId): number {
-  const h = sim.world.hops[pid];
   let best = 99;
   for (const q of sim.world.provIds) {
     const c = sim.state.provinces[q].controller;
-    if (c && atWar(sim, nid, c)) best = Math.min(best, h[q] ?? 99);
+    if (c && atWar(sim, nid, c)) best = Math.min(best, sim.world.hop(pid, q) ?? 99);
   }
   return best;
 }
@@ -183,7 +182,7 @@ function peaceOps(sim: Sim, nid: NationId, armies: Army[]): void {
     // detach one regiment from the nearest army with at least 3 regiments
     const donor = free
       .filter((a) => a.regiments.length >= 3 && !a.battle && !a.retreating)
-      .sort((a, b) => (sim.world.hops[a.location][pid] ?? 99) - (sim.world.hops[b.location][pid] ?? 99) || (a.id < b.id ? -1 : 1))[0];
+      .sort((a, b) => (sim.world.hop(a.location, pid) ?? 99) - (sim.world.hop(b.location, pid) ?? 99) || (a.id < b.id ? -1 : 1))[0];
     if (!donor) break;
     const type: UnitType = donor.regiments.some((r) => r.type === 'foot') ? 'foot' : donor.regiments[0].type;
     const r = issue(sim, { type: 'split', nation: nid, army: donor.id, counts: { [type]: 1 } });
@@ -335,7 +334,7 @@ function warOps(sim: Sim, nid: NationId, armies: Army[]): void {
   const covered = new Map<ProvinceId, number>();
   for (const a of armies) {
     if (!st.armies[a.id] || !assigned.has(a.id)) continue;
-    const post = posts.find((p) => p.post === a.location || (sim.world.hops[p.post]?.[a.location] ?? 99) <= 1);
+    const post = posts.find((p) => p.post === a.location || (sim.world.hop(p.post, a.location) ?? 99) <= 1);
     if (post) covered.set(post.post, (covered.get(post.post) ?? 0) + armyStrength(sim, a));
   }
   for (const a of armies) {
@@ -389,7 +388,7 @@ export function frontPosts(sim: Sim, nid: NationId): Array<{ enemy: NationId; po
     for (const a of armiesOf(sim, e)) {
       if (a.retreating) continue;
       let d = 99;
-      for (const p of border) d = Math.min(d, sim.world.hops[a.location]?.[p] ?? 99);
+      for (const p of border) d = Math.min(d, sim.world.hop(a.location, p) ?? 99);
       if (d <= 3) {
         threat += armyStrength(sim, a);
         near.push(a.location);
@@ -399,7 +398,7 @@ export function frontPosts(sim: Sim, nid: NationId): Array<{ enemy: NationId; po
     // the post: closest border province to their armies, preferring forts and development
     const score = (p: ProvinceId) => {
       let d = 99;
-      for (const q of near) d = Math.min(d, sim.world.hops[p]?.[q] ?? 99);
+      for (const q of near) d = Math.min(d, sim.world.hop(p, q) ?? 99);
       return d * 3 - st.provinces[p].fort * 2 - st.provinces[p].dev * 0.3;
     };
     const post = [...border].sort((x, y) => score(x) - score(y) || (x < y ? -1 : 1))[0];

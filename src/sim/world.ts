@@ -59,22 +59,38 @@ export function buildWorld(s: ScenarioDef): World {
   for (const p of s.provinces) (regionProvinces[p.region] ??= []).push(p.id);
   const straitSet = new Set(s.straits.map(([a, b]) => edgeKey(a, b)));
   const riverSet = new Set((s.rivers ?? []).map(([a, b]) => edgeKey(a, b)));
-  const hops: World['hops'] = {};
-  for (const src of provIds) {
-    const d: Record<ProvinceId, number> = { [src]: 0 };
-    const q = [src];
-    for (let i = 0; i < q.length; i++) {
-      const c = q[i];
-      for (const n of prov[c].neighbors) {
-        if (d[n] === undefined) {
-          d[n] = d[c] + 1;
-          q.push(n);
+  // all-pairs hop distances: one breadth-first search per province into a flat matrix
+  const n = provIds.length;
+  const index = new Map(provIds.map((id, i) => [id, i]));
+  const adj = provIds.map((id) => prov[id].neighbors.map((nb) => index.get(nb)).filter((x): x is number => x !== undefined));
+  const UNREACHED = 0xffff;
+  const matrix = new Uint16Array(n * n).fill(UNREACHED);
+  const queue = new Int32Array(n);
+  for (let src = 0; src < n; src++) {
+    const row = src * n;
+    matrix[row + src] = 0;
+    let head = 0;
+    let tail = 0;
+    queue[tail++] = src;
+    while (head < tail) {
+      const c = queue[head++];
+      const dc = matrix[row + c];
+      for (const nb of adj[c]) {
+        if (matrix[row + nb] === UNREACHED) {
+          matrix[row + nb] = dc + 1;
+          queue[tail++] = nb;
         }
       }
     }
-    hops[src] = d;
   }
-  return { scenario: s, prov, provIds, nationDefs, nationIds: s.nations.map((n) => n.id), regionProvinces, straitSet, riverSet, hops };
+  const hop = (a: ProvinceId, b: ProvinceId): number | undefined => {
+    const i = index.get(a);
+    const j = index.get(b);
+    if (i === undefined || j === undefined) return undefined;
+    const v = matrix[i * n + j];
+    return v === UNREACHED ? undefined : v;
+  };
+  return { scenario: s, prov, provIds, nationDefs, nationIds: s.nations.map((n) => n.id), regionProvinces, straitSet, riverSet, hop };
 }
 
 export function getWorld(scenarioId: string): World {

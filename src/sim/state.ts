@@ -1,6 +1,7 @@
 // Core state access helpers shared by all simulation modules.
 
 import { C } from './config';
+import { armiesIn, armiesOfNation, controlledBy, hostilePair, memoize, ownedBy, sameSidePair, treatyPair } from './index';
 import type {
   Army,
   ArmyId,
@@ -66,29 +67,19 @@ export function aliveNations(sim: Sim): NationId[] {
 }
 
 export function ownedProvinces(sim: Sim, nid: NationId): ProvinceId[] {
-  return sim.world.provIds.filter((p) => sim.state.provinces[p].owner === nid);
+  return [...ownedBy(sim, nid)];
 }
 
 export function controlledProvinces(sim: Sim, nid: NationId): ProvinceId[] {
-  return sim.world.provIds.filter((p) => sim.state.provinces[p].controller === nid);
+  return [...controlledBy(sim, nid)];
 }
 
 export function armiesOf(sim: Sim, nid: NationId): Army[] {
-  const out: Army[] = [];
-  for (const id in sim.state.armies) {
-    const a = sim.state.armies[id];
-    if (a.nation === nid) out.push(a);
-  }
-  return out;
+  return [...armiesOfNation(sim, nid)];
 }
 
 export function armiesAt(sim: Sim, pid: ProvinceId): Army[] {
-  const out: Army[] = [];
-  for (const id in sim.state.armies) {
-    const a = sim.state.armies[id];
-    if (a.location === pid) out.push(a);
-  }
-  return out;
+  return [...armiesIn(sim, pid)];
 }
 
 export function army(sim: Sim, id: ArmyId): Army | undefined {
@@ -126,12 +117,7 @@ export function sideOf(w: War, nid: NationId): 'attacker' | 'defender' | null {
 
 /** Two nations are hostile when they are on opposite sides of any active war. */
 export function atWar(sim: Sim, a: NationId, b: NationId): boolean {
-  if (a === b) return false;
-  for (const id in sim.state.wars) {
-    const w = sim.state.wars[id];
-    if ((w.attackers.includes(a) && w.defenders.includes(b)) || (w.defenders.includes(a) && w.attackers.includes(b))) return true;
-  }
-  return false;
+  return hostilePair(sim, a, b);
 }
 
 export function enemiesOf(sim: Sim, nid: NationId): NationId[] {
@@ -144,7 +130,7 @@ export function enemiesOf(sim: Sim, nid: NationId): NationId[] {
 }
 
 export function hasTreaty(sim: Sim, type: TreatyType, a: NationId, b: NationId): boolean {
-  return sim.state.treaties.some((t) => t.type === type && ((t.a === a && t.b === b) || (t.a === b && t.b === a)));
+  return treatyPair(sim, type, a, b);
 }
 
 export function treatyPartners(sim: Sim, type: TreatyType, nid: NationId): NationId[] {
@@ -171,12 +157,7 @@ export function truceUntil(sim: Sim, a: NationId, b: NationId): number {
 export function isFriendly(sim: Sim, a: NationId, b: NationId | null): boolean {
   if (!b) return false;
   if (a === b) return true;
-  if (hasTreaty(sim, 'alliance', a, b)) return true;
-  for (const id in sim.state.wars) {
-    const w = sim.state.wars[id];
-    if ((w.attackers.includes(a) && w.attackers.includes(b)) || (w.defenders.includes(a) && w.defenders.includes(b))) return true;
-  }
-  return false;
+  return treatyPair(sim, 'alliance', a, b) || sameSidePair(sim, a, b);
 }
 
 /** Marks derived caches (supply network etc.) stale after a control/diplomatic change. */
@@ -225,17 +206,19 @@ export function borders(sim: Sim, a: NationId, b: NationId): boolean {
 
 /** Shortest hop distance between any province of a and any of b (Infinity if none). */
 export function nationDistance(sim: Sim, a: NationId, b: NationId): number {
-  const pa = ownedProvinces(sim, a);
-  const pb = ownedProvinces(sim, b);
-  let best = Infinity;
-  for (const x of pa) {
-    const h = sim.world.hops[x];
-    for (const y of pb) {
-      const d = h[y];
-      if (d !== undefined && d < best) best = d;
+  // depends only on ownership: remembered for the week and revision
+  return memoize(sim, 'nationDistance', `${a}|${b}`, () => {
+    const pa = ownedBy(sim, a);
+    const pb = ownedBy(sim, b);
+    let best = Infinity;
+    for (const x of pa) {
+      for (const y of pb) {
+        const d = sim.world.hop(x, y);
+        if (d !== undefined && d < best) best = d;
+      }
     }
-  }
-  return best;
+    return best;
+  });
 }
 
 // ───────────────────────────── Notifications ────────────────────────────────

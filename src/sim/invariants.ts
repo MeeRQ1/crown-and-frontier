@@ -4,6 +4,7 @@
 import { C, UNITS } from './config';
 import { devMax } from './construction';
 import { maxMorale } from './military';
+import { checkIndexes } from './index';
 import { atWar, hasTreaty, type Sim } from './state';
 
 function scanFinite(v: unknown, path: string, out: string[]): void {
@@ -77,6 +78,7 @@ export function checkInvariants(sim: Sim): string[] {
       if (hasTreaty(sim, 'nap', a, d)) out.push(`${wid}: pact partners ${a}/${d} at war`);
     }
   }
+  out.push(...checkIndexes(sim));
   const seen = new Set<string>();
   for (const t of st.treaties) {
     const k = `${t.type}|${[t.a, t.b].sort().join('|')}`;

@@ -7,6 +7,7 @@
 //           pool can never exceed reserve minus men already serving (no double counting).
 
 import { C, TERRAIN, UNITS } from './config';
+import { memoize, ownedBy } from './index';
 import { nationMods } from './modifiers';
 import { armiesOf, clamp, controlledProvinces, months, notify, ownedProvinces, treatyPartners, type Sim } from './state';
 import { armySupplyInfo } from './supply';
@@ -99,8 +100,12 @@ export function researchFundingCost(gross: number, level: 0 | 1 | 2 | 3): number
 
 /** Crowns another nation gains from a trade agreement with `partner`. */
 export function tradeValue(sim: Sim, nid: NationId, partner: NationId): number {
-  let partnerIncome = 0;
-  for (const pid of ownedProvinces(sim, partner)) partnerIncome += provinceCrowns(sim, pid);
+  // province output changes only between weeks or with a revision bump
+  const partnerIncome = memoize(sim, 'partnerIncome', partner, () => {
+    let v = 0;
+    for (const pid of ownedBy(sim, partner)) v += provinceCrowns(sim, pid);
+    return v;
+  });
   return (C.economy.tradeBase + C.economy.tradeShare * partnerIncome) * Math.max(0, 1 + nationMods(sim, nid).trade);
 }
 

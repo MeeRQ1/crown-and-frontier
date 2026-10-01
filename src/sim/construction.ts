@@ -11,8 +11,9 @@
 // Settle:      50 crowns, 500 men, 20 supplies, 16 weeks; unclaimed province next to our land
 
 import { C, TERRAIN } from './config';
+import { ownedBy } from './index';
 import { nationMods } from './modifiers';
-import { bump, notify, ownedProvinces, provName, type Sim } from './state';
+import { bump, notify, provName, type Sim } from './state';
 import type { NationId, ProjectKind, ProvinceId } from './types';
 
 export const PROJECT_LABELS: Record<ProjectKind, string> = {
@@ -31,7 +32,7 @@ export interface ProjectCost {
 }
 
 export function buildSlots(sim: Sim, nid: NationId): number {
-  return C.construction.slotsBase + Math.floor(ownedProvinces(sim, nid).length / C.construction.slotsPerProvinces) + nationMods(sim, nid).buildSlots;
+  return C.construction.slotsBase + Math.floor(ownedBy(sim, nid).length / C.construction.slotsPerProvinces) + nationMods(sim, nid).buildSlots;
 }
 
 export function activeProjects(sim: Sim, nid: NationId): ProvinceId[] {
@@ -83,7 +84,11 @@ export function devMax(sim: Sim, pid: ProvinceId): number {
   return devCap(sim, pid) + C.construction.devOvercap;
 }
 
-export function buildProblem(sim: Sim, nid: NationId, pid: ProvinceId, kind: ProjectKind): string | null {
+/**
+ * Why a project cannot start (null = it can). A planner checking many
+ * provinces at once may pass the realm's slot count and active projects.
+ */
+export function buildProblem(sim: Sim, nid: NationId, pid: ProvinceId, kind: ProjectKind, known?: { slots: number; active: number }): string | null {
   const st = sim.state;
   const n = st.nations[nid];
   const p = st.provinces[pid];
@@ -107,8 +112,8 @@ export function buildProblem(sim: Sim, nid: NationId, pid: ProvinceId, kind: Pro
     if (kind === 'fort' && p.fort >= C.construction.fortMax) return 'The fort is already at the maximum level.';
     if (kind === 'charter' && p.integration >= 90) return 'The province is already well integrated (charters need integration below 90).';
   }
-  const slots = buildSlots(sim, nid);
-  if (activeProjects(sim, nid).length >= slots) return `All ${slots} construction slots are in use.`;
+  const slots = known?.slots ?? buildSlots(sim, nid);
+  if ((known?.active ?? activeProjects(sim, nid).length) >= slots) return `All ${slots} construction slots are in use.`;
   const cost = projectCost(sim, nid, pid, kind);
   if (n.treasury < cost.crowns) return `Needs ${cost.crowns} crowns (treasury ${Math.floor(n.treasury)}).`;
   if (n.supplies < cost.supplies) return `Needs ${cost.supplies} supplies.`;

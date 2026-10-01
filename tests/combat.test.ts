@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { forecastBattle } from '../src/sim/combat';
-import { armiesAt } from '../src/sim/state';
+import { armiesAt, bump } from '../src/sim/state';
 import { step } from '../src/sim/tick';
 import { declareWar } from '../src/sim/war';
 import { addArmy, lineGame, totalMen } from './helpers';
@@ -28,6 +28,7 @@ describe('combat — worked examples', () => {
     const sim = atWarGame();
     sim.state.provinces.m1.owner = 'b';
     sim.state.provinces.m1.controller = 'b';
+    bump(sim); // direct edit: refresh derived lookups
     sim.state.provinces.m1.integration = 100;
     sim.state.provinces.m1.fort = 1;
     const att = addArmy(sim, 'a', 'm1', { foot: 9 });

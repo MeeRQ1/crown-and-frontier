@@ -27,6 +27,7 @@
 import { C, TERRAIN, UNITS } from './config';
 import { removePopulation, reserveCap } from './economy';
 import { maxMorale, removeArmy } from './military';
+import { armiesIn } from './index';
 import { nationMods } from './modifiers';
 import { canEnter, isRiver } from './movement';
 import { range } from './rng';
@@ -546,9 +547,8 @@ export function retreatTarget(sim: Sim, a: Army, from: ProvinceId): ProvinceId |
   for (const nb of [...sim.world.prov[from].neighbors].sort()) {
     if (!canEnter(sim, a.nation, nb)) continue;
     let enemy = false;
-    for (const id in sim.state.armies) {
-      const o = sim.state.armies[id];
-      if (o.location === nb && !o.retreating && atWar(sim, a.nation, o.nation)) {
+    for (const o of armiesIn(sim, nb)) {
+      if (!o.retreating && atWar(sim, a.nation, o.nation)) {
         enemy = true;
         break;
       }

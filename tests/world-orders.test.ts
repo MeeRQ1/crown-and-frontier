@@ -1,4 +1,5 @@
 import { readFileSync } from 'node:fs';
+import { touchArmies } from '../src/sim/index';
 import { describe, expect, it } from 'vitest';
 import { applyCommand, checkCommand } from '../src/sim/commands';
 import { forecastBattle } from '../src/sim/combat';
@@ -6,7 +7,7 @@ import { createGame } from '../src/sim/game';
 import { checkInvariants } from '../src/sim/invariants';
 import { findPath, moveCost, STRAIT_COST } from '../src/sim/movement';
 import { deserialize, serialize } from '../src/sim/save';
-import { ownedProvinces } from '../src/sim/state';
+import { bump, ownedProvinces } from '../src/sim/state';
 import { step } from '../src/sim/tick';
 import { declareWar } from '../src/sim/war';
 import { edgeKey, getWorld, validateScenario } from '../src/sim/world';
@@ -106,8 +107,10 @@ describe('rivers', () => {
     expect(f.factors.some((x) => /river/i.test(x))).toBe(true);
     // the same fight from the far side of b3 (not across the river) has no river factor
     sim.state.armies[att.id].location = 'b1';
+    touchArmies(sim); // direct edit: refresh derived lookups
     expect(forecastBattle(sim, 'b3', [att], [def]).factors.some((x) => /river/i.test(x))).toBe(false);
     sim.state.armies[att.id].location = 'a3';
+    touchArmies(sim); // direct edit: refresh derived lookups
     expect(applyCommand(sim, { type: 'move', nation: 'a', army: att.id, dest: 'b3' }).ok).toBe(true);
     for (let i = 0; i < 4 && !Object.keys(sim.state.battles).length; i++) step(sim, { noAI: true });
     const b = Object.values(sim.state.battles)[0];
@@ -138,6 +141,7 @@ describe('army groups and standing orders', () => {
     expect(a.location).toBe('a1');
     // pushed away (as after a retreat), it returns on its own
     a.location = 'a3';
+    touchArmies(sim); // direct edit: refresh derived lookups
     a.path = [];
     for (let i = 0; i < 8; i++) step(sim, { noAI: true });
     expect(a.location).toBe('a1');
@@ -153,6 +157,7 @@ describe('army groups and standing orders', () => {
     applyCommand(sim, { type: 'setOrder', nation: 'a', army: a.id, order: { kind: 'station', province: 'a3' } });
     declareWar(sim, 'b', 'a', { type: 'conquest', provinces: ['a3'] });
     sim.state.provinces.a3.controller = 'b';
+    bump(sim); // direct edit: refresh derived lookups
     step(sim, { noAI: true });
     expect(a.order).toBeNull();
     expect(sim.state.notifications.some((n) => n.nation === 'a' && /no longer stationed/.test(n.text))).toBe(true);
