@@ -235,8 +235,10 @@ function planConstruction(sim: Sim, nid: NationId): void {
           const smallBase = factoriesNow + pendingFactories < 2 + Math.floor(owned.length / 6);
           if (!fuelled && !smallBase) continue;
           const coal = fuelled ? 1 : C.industry.unpowered;
+          // a realm with no industry at all makes no materiel: its first factory comes first
+          const none = factoriesNow + pendingFactories === 0 ? 4 : 1;
           const wantMateriel = n.materiel < materielCap(sim, nid) * 0.5 ? 1.3 : 1;
-          v = ((2.2 * (0.25 + 0.75 * pr.integration / 100) * coal * wantMateriel) / cost) * 100 * (p.id === 'commercial' || n.ai.goal.victory === 'economic' ? 1.2 : 1);
+          v = ((2.2 * (0.25 + 0.75 * pr.integration / 100) * coal * wantMateriel * none) / cost) * 100 * (p.id === 'commercial' || n.ai.goal.victory === 'economic' ? 1.2 : 1);
         }
         if (kind === 'port') v = ports === 0 ? ((3 * (pr.dev + 2)) / cost) * 100 : ((0.6 * coastShare) / cost) * 100;
         if (kind === 'airfield') v = ((2.5 * (n.capital === pid ? 2 : 1) * (border ? 1.4 : 1) * (pr.dev + 2) * 0.3) / cost) * 100;

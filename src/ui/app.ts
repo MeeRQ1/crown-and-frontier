@@ -1435,8 +1435,10 @@ export class App {
       else if (this.ui.presentationOpen) {
         this.ui.presentationOpen = false;
         this.refresh();
-      } else if (this.selectedArmy || this.selectedProvince || this.selectedFleet || this.selectedZone || this.selectedWing) this.clearSelection();
+      }
+      // an open ledger sits above the map: it closes before the map selection is cleared
       else if (this.ui.ledgerTab) this.closeLedger();
+      else if (this.selectedArmy || this.selectedProvince || this.selectedFleet || this.selectedZone || this.selectedWing) this.clearSelection();
       else this.openMenu();
       e.preventDefault();
       return;

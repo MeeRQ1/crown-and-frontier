@@ -70,16 +70,42 @@ priorities is in [AUDIT.md](AUDIT.md). The era and content decisions are in
   weeks in the browser on the Reach, Aldmere and the 900-province map
   (`reports/perf/web-stageB.md`).
 
-**C**
-- Map packages v1 and v2 upgrade to v3 with sea zones (tests). The validator covers sea zones and
-  ports.
-- Naval invasion, blockade, and air superiority affecting land combat are each covered by
-  worked-example tests (like today's combat tests) and a browser flow.
-- AI batches show every realm with a coast building and using fleets, and every realm
-  past era III using aircraft (system-usage counts).
-- The combat matrix has no composition that wins every pairing on every terrain.
-- Benchmarks are re-run. Revisit the worker decision if a standard-map p99 week exceeds
-  25 ms.
+**C (done)**
+- [x] Map packages v1 and v2 upgrade to v3 with sea zones: a v2 package and the v1 package
+  inside the Stage A custom-map save fixture both gain the Reach's sea zones and ports
+  (`tests/naval.test.ts`, `tests/saves-maps.test.ts`). The validator refuses unknown
+  zones, one-way adjacency and ports off the coast, with reasons.
+- [x] Worked examples (`tests/worked-sea-air.test.ts`, DESIGN.md): a landing fights at 75%
+  (Amphibious Warfare halves the penalty); two enemy cruisers blockade a one-zone port
+  (crowns −25%, sea trade with an island realm −19%, overland trade untouched) and one
+  defending cruiser lifts it; ground support turns a held line into an attacker's win, enemy
+  air superiority cuts the support to 40%. Browser flows: a blockade read from the sea-zone
+  card, fleet card and Military ledger; ground support and air superiority chosen on the map
+  and read from the attack forecast; an army shipped by "Ship by sea" and landed.
+- [x] AI batches (10 seeds per map, `reports/stage-c/`): every realm past era III built
+  wings and flew missions (85 of 85 on the Reach, 97 of 97 on Aldmere); every coastal
+  realm built ships (77/77, 129/129); 74 of 74 and 127 of 128 realms that fought a coastal
+  enemy while coastal used their fleets. The exception: Vostmark (Aldmere seed 10), whose
+  one cruiser stayed in port against Hrafnmark's stronger fleet. Realms never at war with a
+  coastal realm while coastal themselves are listed as builders only (the Reach: Calder ×2,
+  Fenward; Aldmere: Istrel). No invariant failures.
+- [x] Combat matrix (`tools/matrix.ts`, `tests/matrix.test.ts`,
+  `reports/stage-c/combat-matrix.md`): no army composition wins every pairing on every
+  terrain, around 1890 or with the whole tree; no fleet wins every pairing, and each fleet
+  type wins at least one (carriers lost all four until they were given the opening strike).
+- [x] Benchmarks re-run (`reports/perf/stageC-*.md`, `web-stageC.md`): Aldmere 7.97 and
+  7.66 ms a week on average, p99 21.3 and 19.1 ms (under 25 ms, so the worker decision
+  stands); the Reach 2.8–3.4 ms; 36 of 36 weeks at fastest speed in the browser on the
+  Reach, Aldmere and the 900-province map. Three speed-ups to supply and the naval AI are
+  rule-identical (`reports/perf/rulecheck-stageC-speedups.json`).
+- [x] Fuzzer with naval and air orders: 0 findings on the Reach (seeds 1–7, 10 years),
+  Aldmere (seeds 1–2, 8 years) and with the whole tree (`--tech all`). 35 of 35 browser
+  checks and 143 unit tests pass.
+- Stage B checks on the same batches: trade 14.5% and 12.3% of income at year 25;
+  treasury 3.53× and 2.63×; 45% and 31% of the tree; nothing finished more than 4 years
+  early; industry in 86 of 87 and 139 of 140 surviving realms at the end (the exceptions:
+  Tarsk on the Reach lost its only factory in its last war and went bankrupt; Drevenholt on
+  Aldmere was down to one province).
 
 **D**
 - At least three new fictional maps validate, have their own campaign style and pass AI

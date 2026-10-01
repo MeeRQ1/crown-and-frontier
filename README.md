@@ -153,10 +153,10 @@ that the final state matches.
 ## Known limitations
 
 - **Balance:** tuned against AI-only campaigns on both maps (see STATUS.md and
-  `reports/stage-b/`). Under the industrial rules (10 seeds per map) the wins spread across
-  six realms on the Reach; on Aldmere, Morvaine and Tarsk win 4 of 10 each and Lessia 2.
-  Hrafnmark and some other small or exposed realms shrink on average. No external players
-  have tested either map yet.
+  `reports/stage-c/`). With navies and air forces (10 seeds per map) the richest heartlands
+  win most often again: Lessia 6 of 10 on Aldmere, Aurel 5 of 10 on the Reach. Hrafnmark
+  and some other small or exposed realms shrink on average. Balance across realms is
+  planned for Stage F. No external players have tested either map yet.
 - **Fog of war:** not implemented. All information is public to everyone, AI included.
 - **Browsers verified:** only headless Chromium 141, on desktop and emulated phone viewports. Firefox,
   Safari, real Chromebooks and real touch devices are untested.

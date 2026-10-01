@@ -677,8 +677,8 @@ default and disclosed in the setup screen and the game menu.
 ## Balance assumptions and evidence
 
 The numbers above were tuned against AI-only campaigns (`npm run sim`). The latest batches
-are in `reports/stage-b/` (10 seeds per map at normal difficulty, with the system-usage
-section); the 30-campaign batches from before the industrial rules remain in
+are in `reports/stage-c/` (10 seeds per map at normal difficulty, with the system-usage
+section; Stage B's are in `reports/stage-b/`); the 30-campaign batches from before the industrial rules remain in
 `reports/ai-campaigns-aldmere.md` and `reports/ai-campaigns.md`. They record seeds,
 difficulties, winners, war counts, bankruptcies, idle-army share and performance.
 Observations that drove the tuning:
@@ -728,4 +728,26 @@ Observations that drove the tuning:
   - Oil, rubber, nitrates and iron were never short in these batches: before armour (1916)
     and before fleets and aircraft (Stage C) little burns them. Coal is the binding
     resource in Stage B.
+- **Stage C, navy and air** (`reports/stage-c/`, 10 seeds per map; the combat matrix in
+  `reports/stage-c/combat-matrix.md`):
+  - Carrier groups lost every equal-cost pairing at first. Carriers now strike before the
+    guns close (enemy guns at 30% and 60% in the first two rounds), anti-aircraft fire
+    halves a strike at 20 points instead of 10, carrier air is 7 and cruiser guns 3.5.
+    Every fleet type now wins at least one pairing and none wins all.
+  - At first only a third of the realms past era III flew aircraft: the AI rarely
+    researched Aviation and its first wings were reconnaissance that idled at peace. Aviation
+    is now weighted up, fighters lead the mix once known, and at peace fighters and
+    reconnaissance watch the capital and the most threatened border. Every such realm now
+    flies missions.
+  - Fleets at peace keep station off the realm they plan to fight, off claimed coasts, on
+    a strait beside their shores, or off a rival navy's home waters.
+  - Bankruptcies tripled on Aldmere in the first batch (a collapsing realm kept a large
+    army). A broke AI now stands down its smallest army when bankruptcy is about four
+    months away at the current deficit; bankruptcies are back to 0.2 per campaign on both
+    maps.
+  - Winners: Aldmere Lessia 6, Morvaine 3, Solmarre 1; the Reach Aurel 5, Fenward 2,
+    Serennes, Morvaine and Drevenholt 1 each. The richest heartlands win most often again
+    (Stage B spread the wins more). Balance across realms is Stage F's work.
+  - Armour stays rare (0.1–0.3% of regiment-months) because Tanks arrives in 1916, late in
+    most campaigns; oil and rubber are still never short.
 
