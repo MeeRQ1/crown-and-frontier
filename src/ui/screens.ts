@@ -587,7 +587,7 @@ export function openMenuDialog(app: App): void {
         app.showScreen(renderHowTo(app));
       }, { icon: 'help' }),
     ),
-    h('p', { class: 'small muted', style: 'margin-top:12px' }, `Saves are stored in this browser (${app.store.mode}); export to keep a copy elsewhere. Save format ${SCHEMA_VERSION}.`),
+    h('p', { class: 'small muted', style: 'margin-top:12px' }, `Saves are stored in this browser (${app.store.mode}); export to keep a copy elsewhere. Game version ${__APP_VERSION__}, save format ${SCHEMA_VERSION}.`),
   ];
   const resume = button('Resume', () => close(), { cls: 'primary' });
   const quit = button('Save and quit to menu', () => {

@@ -9,6 +9,7 @@ import { applyCommand, checkCommand } from '../src/sim/commands';
 import { SCHEMA_VERSION } from '../src/sim/config';
 import { diagnosticBundle, replayBundle } from '../src/sim/diagnostics';
 import { createGame } from '../src/sim/game';
+import { FORMAT1_MAPS } from '../src/sim/migrate';
 import { checkInvariants } from '../src/sim/invariants';
 import { fnv1a, readSave, SAVE_LIMIT_BYTES, serialize } from '../src/sim/save';
 import { step } from '../src/sim/tick';
@@ -86,6 +87,13 @@ describe('save format', () => {
     const again = readSave(serialize(sim));
     expect(JSON.parse(serialize(sim)).schema).toBe(SCHEMA_VERSION);
     expect(again.notices).toEqual([]);
+  });
+
+  it('format-1 saves are pinned to revision 1 of the built-in maps', () => {
+    // revision 1 is still the current revision of both built-in maps; when a later
+    // stage revises a map, this expectation moves to the conversion tests
+    expect(FORMAT1_MAPS.reach).toEqual(mapFingerprint('reach'));
+    expect(FORMAT1_MAPS.aldmere).toEqual(mapFingerprint('aldmere'));
   });
 
   it('a format-1 save that names an unknown map is refused, not guessed', () => {

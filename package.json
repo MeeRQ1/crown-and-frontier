@@ -1,6 +1,6 @@
 {
   "name": "crown-and-frontier",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "private": true,
   "description": "Crown & Frontier: a single-player browser grand strategy game about integrating a frontier realm.",
   "type": "module",

@@ -851,7 +851,9 @@ function victoryLedger(app: App): HTMLElement {
     economic: `Integrated development (dev of provinces at integration ≥75) of ≥${Math.round(victoryRules(sim).economicShare * 100)}% of the world's, with average unrest ≤${C.victory.economicUnrest}, no debt or bankruptcy and none of your land occupied — for ${VICTORY_MONTHS.economic} months.`,
     diplomatic: `Influence from treaties at least ${C.victory.diplomaticTreatyAge / 12} years old with partners whose opinion of you is ≥${C.victory.diplomaticOpinion} (alliance 2, trade 1): ${victoryRules(sim).diplomaticInfluencePerRealm} per other surviving realm; trust ≥${C.victory.diplomaticTrust}; no offensive war — for ${VICTORY_MONTHS.diplomatic} months.`,
   };
-  const mine = me ? victoryProgress(sim, me) : null;
+  // one evaluation per realm serves all three path cards
+  const progress = new Map(alive.map((n) => [n, victoryProgress(sim, n)]));
+  const mine = me ? (progress.get(me) ?? victoryProgress(sim, me)) : null;
   const infl = me ? influenceByPartner(sim, me) : {};
   return h(
     'div',
@@ -870,7 +872,7 @@ function victoryLedger(app: App): HTMLElement {
           k === 'diplomatic' && me && Object.keys(infl).length ? h('p', { class: 'small muted' }, `Partners: ${Object.entries(infl).map(([n, v]) => `${nationName(sim, n)} ${v}`).join(', ')} (need ${influenceNeeded(sim, me)}, have ${influence(sim, me)})`) : null,
           h('h4', { style: 'margin-top:8px' }, 'Leaders'),
           ...alive
-            .map((n) => ({ n, p: victoryProgress(sim, n)[k] }))
+            .map((n) => ({ n, p: progress.get(n)![k] }))
             .sort((a, b) => b.p.streak - a.p.streak || b.p.progress - a.p.progress)
             .slice(0, 4)
             .map(({ n, p }) => row(h('span', null, shield(app, n), ' ', nationName(sim, n)), `${Math.round(p.progress * 100)}%${p.streak ? ` · held ${p.streak} mo` : ''}`)),
@@ -912,7 +914,8 @@ function logLedger(app: App): HTMLElement {
   const reports = sim.state.reports.filter((r) => !me || r.attackerNations.includes(me) || r.defenderNations.includes(me)).slice(-30).reverse();
   const bugReport = () => {
     const st = sim.state;
-    const report = diagnosticBundle(sim, { build: import.meta.env?.MODE ?? 'unknown', userAgent: navigator.userAgent });
+    const build = `${typeof __APP_VERSION__ === 'string' ? __APP_VERSION__ : 'dev'} (${import.meta.env?.MODE ?? 'unknown'})`;
+    const report = diagnosticBundle(sim, { build, userAgent: navigator.userAgent });
     downloadText(`crown-and-frontier-bug-${st.settings.seed}-${st.tick}.json`, JSON.stringify(report, null, 1));
   };
   return h(
