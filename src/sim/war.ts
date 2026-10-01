@@ -25,7 +25,9 @@ import {
   type OpinionPart,
 } from './diplomacy';
 import { poolCap, stockpileCap } from './economy';
+import { removeAir } from './air';
 import { cancelRecruits, removeArmy } from './military';
+import { removeNavy } from './naval';
 import { pruneBattles } from './combat';
 import { touchArmies } from './index';
 import { nationMods } from './modifiers';
@@ -531,6 +533,7 @@ export function relocateArmies(sim: Sim): void {
   const st = sim.state;
   for (const id of Object.keys(st.armies).sort()) {
     const a = st.armies[id];
+    if (a?.embarked) continue; // at sea: its fleet decides where it lands
     if (!a || canEnter(sim, a.nation, a.location)) {
       if (a && a.path.length && !a.retreating && !canEnter(sim, a.nation, a.path[a.path.length - 1])) {
         notify(sim, a.nation, 'normal', 'move', `${a.name} halted: the peace closed its route to ${provName(sim, a.path[a.path.length - 1])}.`, { army: a.id, province: a.location });
@@ -627,6 +630,8 @@ export function eliminate(sim: Sim, nid: NationId, by: NationId | null): void {
   n.eliminatedTick = st.tick;
   n.capital = null;
   for (const a of armiesOf(sim, nid)) removeArmy(sim, a.id);
+  removeNavy(sim, nid);
+  removeAir(sim, nid);
   for (const pid of sim.world.provIds) {
     const p = st.provinces[pid];
     p.recruits = p.recruits.filter((r) => r.nation !== nid);

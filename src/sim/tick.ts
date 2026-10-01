@@ -2,12 +2,14 @@
 //
 //  1. Proposal expiry            (calls to arms honoured by default)
 //  2. AI decisions               (same command path as the player)
-//  3. Standing orders, then movement & arrivals (id order; pinned armies stay)
-//  4. Battle detection + one combat round per battle (retreats begin)
+//  3. Standing orders; the navy (fleet movement, naval battles, landings,
+//     repair); then army movement & arrivals (id order; pinned armies stay)
+//  4. Air (rebasing, mission upkeep, air combat), then battle detection +
+//     one combat round per battle (retreats begin)
 //  5. Sieges & occupation        (control changes -> supply network invalidated)
 //  6. Army care                  (supply recomputed on the new map: attrition,
 //                                 morale recovery, reinforcement)
-//  7. Recruitment & construction progress
+//  7. Recruitment, shipyards, airfields & construction progress
 //  8. War score refresh
 //  9. End of month (every 4th week): economy -> research -> integration/unrest
 //     -> diplomacy -> wars (exhaustion, forced peace) -> events -> victory
@@ -18,7 +20,9 @@ import { runAI } from './ai/ai';
 import { weeklyCombat, detectBattles } from './combat';
 import { weeklyProposals } from './commands';
 import { weeklyConstruction } from './construction';
+import { weeklyAir, weeklyHangars } from './air';
 import { monthlyEconomy } from './economy';
+import { weeklyNaval, weeklyShipyards } from './naval';
 import { monthlyEvents } from './events';
 import { monthlyIntegration } from './integration';
 import { weeklyArmyCare, weeklyRecruitment } from './military';
@@ -67,14 +71,20 @@ export function step(sim: Sim, opts: StepOptions = {}): void {
   phase('proposals', () => weeklyProposals(sim));
   if (!opts.noAI) phase('ai', () => runAI(sim, prof));
   phase('orders', () => weeklyOrders(sim));
+  phase('naval', () => weeklyNaval(sim));
   phase('movement', () => weeklyMovement(sim));
+  phase('air', () => weeklyAir(sim));
   phase('battles', () => {
     detectBattles(sim);
     weeklyCombat(sim);
   });
   phase('sieges', () => weeklySieges(sim));
   phase('armyCare', () => weeklyArmyCare(sim));
-  phase('recruitment', () => weeklyRecruitment(sim));
+  phase('recruitment', () => {
+    weeklyRecruitment(sim);
+    weeklyShipyards(sim);
+    weeklyHangars(sim);
+  });
   phase('construction', () => weeklyConstruction(sim));
   phase('warScores', () => weeklyWarScores(sim));
   if ((st.tick + 1) % WEEKS_PER_MONTH === 0) {

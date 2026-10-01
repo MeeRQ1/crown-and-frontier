@@ -9,11 +9,11 @@
 //   3  the industrial age: new unit roster, resources, industry, research eras
 
 import { checkMapObject } from '../maps/validate';
-import { mapChecksum } from '../maps/format';
+import { mapChecksum, type MapPackage } from '../maps/format';
 import { C, SCHEMA_VERSION, STRATEGIC } from './config';
 import { LEGACY_TECHS, startingTechs } from './data/techs';
 import { emptyFlows } from './economy';
-import { defaultFactories } from './game';
+import { defaultFactories, emptyForceStats } from './game';
 import type { MapFingerprint } from './types';
 import { getWorld, isBuiltinMap, mapFingerprint, mapScenarioPart, scenarioIds } from './world';
 
@@ -102,6 +102,12 @@ const STEPS: Record<number, Step> = {
       if (cmd?.type === 'recruit') cmd.unit = unit(cmd.unit);
       if (cmd?.type === 'split' && cmd.counts) cmd.counts = Object.fromEntries(Object.entries(cmd.counts).map(([k, v]) => [unit(k), v]));
     }
+    // navy and air: ports from the (current) map, empty docks and airfields; the
+    // home squadrons are raised once the map is loaded (save.ts)
+    const mapPorts = new Map<string, number>();
+    const defs = save.mapPackage && typeof save.mapPackage === 'object' ? (save.mapPackage as MapPackage).provinces : typeof st.scenarioId === 'string' && scenarioIds().includes(st.scenarioId) ? getWorld(st.scenarioId).scenario.provinces : [];
+    for (const p of defs) if (p.port) mapPorts.set(p.id, p.port);
+    addForceDefaults(st, (pid) => mapPorts.get(pid) ?? 0);
     st.schema = 3;
     save.schema = 3;
     const tick = typeof st.tick === 'number' ? st.tick : 0;
@@ -109,10 +115,31 @@ const STEPS: Record<number, Step> = {
     notices.push(
       `This campaign was made with the 17th-century rules (save format 2) and was converted to the industrial age (format 3). ` +
         `Foot became infantry, horse cavalry and guns artillery; researched technologies were mapped to their nearest equivalents in the new tree; ` +
-        `factories, resource stockpiles and materiel were added; and the calendar now begins in ${startYear}, so the campaign continues in ${year}.`,
+        `factories, resource stockpiles and materiel were added; every coastal realm received ports and a home squadron (fleets and air forces are new); ` +
+        `and the calendar now begins in ${startYear}, so the campaign continues in ${year}.`,
     );
   },
 };
+
+/**
+ * Adds the navy and air state to a converted save: no fleets or wings yet (the
+ * home squadrons are raised after loading, `pendingFleets`), ports from the map,
+ * empty slipways and hangars, and zero counters.
+ */
+export function addForceDefaults(st: Record<string, any>, portOf: (pid: string) => number): void {
+  st.fleets = {};
+  st.wings = {};
+  st.counters = { ...st.counters, fleet: 0, ship: 0, wing: 0 };
+  for (const p of Object.values<any>(st.provinces ?? {})) {
+    p.port = p.owner ? portOf(p.id) : 0;
+    p.airfield = 0;
+    p.dock = [];
+    p.hangar = [];
+  }
+  for (const n of Object.values<any>(st.nations ?? {})) n.stats = { ...emptyForceStats(), ...n.stats };
+  for (const a of Object.values<any>(st.armies ?? {})) delete a.embarked;
+  st.pendingFleets = true;
+}
 
 /**
  * Brings a parsed save up to the current format. Returns the notices to show

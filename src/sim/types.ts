@@ -9,6 +9,9 @@ export type WarId = string;
 export type TechId = string;
 export type PolicyId = string;
 export type EventId = string;
+export type ZoneId = string;
+export type FleetId = string;
+export type WingId = string;
 
 export type Terrain = 'plains' | 'forest' | 'hills' | 'mountains' | 'marsh' | 'steppe';
 /** Strategic resources mined or grown in provinces; food is the realm's provisions stockpile. */
@@ -17,7 +20,11 @@ export type ResourceKind = 'food' | StrategicResource;
 /** A province's deposit (one at most). */
 export type Resource = ResourceKind | null;
 export type UnitType = 'infantry' | 'cavalry' | 'artillery' | 'engineers' | 'armour';
-export type ProjectKind = 'dev' | 'infra' | 'fort' | 'charter' | 'settle' | 'factory';
+export type ProjectKind = 'dev' | 'infra' | 'fort' | 'charter' | 'settle' | 'factory' | 'port' | 'airfield';
+export type ShipType = 'transport' | 'screen' | 'cruiser' | 'capital' | 'submarine' | 'carrier';
+export type WingType = 'recon' | 'fighter' | 'attack' | 'bomber';
+/** What an air wing does over its target area. */
+export type AirMission = 'idle' | 'superiority' | 'support' | 'interdiction' | 'bombing' | 'recon';
 export type Personality = 'expansionist' | 'defensive' | 'commercial' | 'opportunist' | 'diplomat';
 export type Difficulty = 'easy' | 'normal' | 'hard';
 export type VictoryPath = 'territorial' | 'economic' | 'diplomatic';
@@ -83,6 +90,20 @@ export interface ProvinceDef {
   neighbors: ProvinceId[];
   /** factory levels at the start (default: derived from development) */
   factories?: number;
+  /** port level at the start (coastal provinces only; format 3) */
+  port?: number;
+}
+
+/** A sea zone: the node fleets move between (map format 3). */
+export interface SeaZoneDef {
+  id: ZoneId;
+  name: string;
+  /** neighbouring sea zones */
+  neighbors: ZoneId[];
+  /** provinces on this zone's coast: they can hold ports, launch and receive landings */
+  coasts: ProvinceId[];
+  /** straits whose crossing this zone commands */
+  straits?: Array<[ProvinceId, ProvinceId]>;
 }
 
 export interface RegionDef {
@@ -107,6 +128,8 @@ export interface ScenarioDef {
   straits: Array<[ProvinceId, ProvinceId]>;
   /** borders that are rivers: attacking across one gives the defender a bonus */
   rivers?: Array<[ProvinceId, ProvinceId]>;
+  /** sea zones (map format 3; none on older test scenarios) */
+  seaZones?: SeaZoneDef[];
   /** optional per-map victory thresholds (defaults in config) */
   victory?: Partial<{ territorialRegions: number; territorialShare: number; economicShare: number; diplomaticInfluencePerRealm: number; diplomaticMinInfluence: number }>;
   /** short blurb for the campaign picker */
@@ -127,6 +150,15 @@ export interface World {
   straitSet: Set<string>;
   /** key `${a}|${b}` with a<b → river border */
   riverSet: Set<string>;
+  /** sea zones by id, in map order */
+  zones: Record<ZoneId, SeaZoneDef>;
+  zoneIds: ZoneId[];
+  /** the sea zones each coastal province touches (sorted); absent for inland provinces */
+  provZones: Record<ProvinceId, ZoneId[]>;
+  /** key `${a}|${b}` with a<b → the zone that commands that strait */
+  straitZone: Map<string, ZoneId>;
+  /** hop distance between two sea zones (undefined if unconnected) */
+  zoneHop(a: ZoneId, b: ZoneId): number | undefined;
   /**
    * Hop distance between two provinces over borders and straits (undefined if
    * one cannot reach the other), for AI and proximity heuristics. Backed by a
@@ -168,6 +200,68 @@ export interface ProvinceState {
   revoltUntil: number; // tick until which the province is in revolt (0 = none)
   lastOwnerChange: number;
   recruits: RecruitOrder[];
+  /** port level 0–3 (coastal provinces): shipbuilding and repair */
+  port: number;
+  /** airfield level 0–2: bases for air wings */
+  airfield: number;
+  /** ships under construction in this port */
+  dock: ShipOrder[];
+  /** air wings under construction at this airfield */
+  hangar: WingOrder[];
+}
+
+export interface ShipOrder {
+  nation: NationId;
+  ship: ShipType;
+  weeksLeft: number;
+}
+
+export interface WingOrder {
+  nation: NationId;
+  wing: WingType;
+  weeksLeft: number;
+}
+
+export interface Ship {
+  id: string;
+  type: ShipType;
+  /** condition 0–100: damage lowers fighting value; 0 sinks */
+  hp: number;
+}
+
+export interface Fleet {
+  id: FleetId;
+  nation: NationId;
+  name: string;
+  /** the sea zone it is in */
+  zone: ZoneId;
+  /** remaining route, path[0] is the next zone */
+  path: ZoneId[];
+  /** movement points towards path[0] */
+  progress: number;
+  ships: Ship[];
+  /** home port (repairs, new ships, where it returns after a lost battle) */
+  home: ProvinceId | null;
+  /** armies carried (embarked) */
+  cargo: ArmyId[];
+  /** where the cargo lands when the fleet reaches a zone on that coast */
+  landing: ProvinceId | null;
+  /** AI assignment tag */
+  task: string | null;
+}
+
+export interface AirWing {
+  id: WingId;
+  nation: NationId;
+  name: string;
+  type: WingType;
+  /** airfield province it flies from */
+  base: ProvinceId;
+  /** 0–100: losses lower it, the base replenishes it with materiel */
+  strength: number;
+  mission: AirMission;
+  /** centre of the mission area (the province and its neighbours; bombing: the province) */
+  target: ProvinceId | null;
 }
 
 export interface RecruitOrder {
@@ -205,6 +299,10 @@ export interface Army {
   lastMove?: { from: ProvinceId; tick: number };
   /** player's army group (1–9), for grouped orders and quick selection */
   group?: number | null;
+  /** carried by this fleet: at sea, out of every land phase until it lands */
+  embarked?: FleetId | null;
+  /** tick it came ashore from the sea (amphibious landing penalty that week) */
+  landed?: number;
   /** standing order kept between marches */
   order?: ArmyOrder | null;
 }
@@ -256,6 +354,8 @@ export interface BattleReport {
   rounds: number;
   factors: string[];
   outcome: string;
+  /** a naval battle: `province` holds the sea zone id */
+  sea?: boolean;
 }
 
 export interface WarGoal {
@@ -391,6 +491,8 @@ export interface AIState {
   rally: ProvinceId | null;
   lastPeaceTry: Record<string, number>;
   lastProposal: Record<string, number>;
+  /** a planned landing: gather a force at `port`, carry it to `target` */
+  invasion?: { target: ProvinceId; port: ProvinceId; since: number } | null;
 }
 
 export interface NationStats {
@@ -406,6 +508,16 @@ export interface NationStats {
   peakProvinces: number;
   idleArmyWeeks: number;
   armyWeeks: number;
+  /** navy and air (system-usage counts) */
+  shipsBuilt: number;
+  shipsSunk: number;
+  shipsLost: number;
+  navalBattles: number;
+  landings: number;
+  blockadeWeeks: number;
+  wingsBuilt: number;
+  airMissionWeeks: number;
+  bombingWeeks: number;
 }
 
 export interface NationState {
@@ -534,6 +646,8 @@ export interface GameState {
   provinces: Record<ProvinceId, ProvinceState>;
   nations: Record<NationId, NationState>;
   armies: Record<ArmyId, Army>;
+  fleets: Record<FleetId, Fleet>;
+  wings: Record<WingId, AirWing>;
   battles: Record<string, Battle>;
   wars: Record<WarId, War>;
   treaties: Treaty[];
@@ -548,7 +662,7 @@ export interface GameState {
   proposals: Proposal[];
   reports: BattleReport[];
   notifications: Notification[];
-  counters: { army: number; battle: number; war: number; treaty: number; note: number; proposal: number; event: number; regiment: number; coalition: number };
+  counters: { army: number; battle: number; war: number; treaty: number; note: number; proposal: number; event: number; regiment: number; coalition: number; fleet: number; ship: number; wing: number };
   result: GameResult | null;
   continueAfterResult: boolean;
   diagnostics: AIDiagnostic[];
@@ -569,6 +683,20 @@ export type Command =
   | { type: 'merge'; nation: NationId; armies: ArmyId[] }
   | { type: 'disband'; nation: NationId; army: ArmyId }
   | { type: 'build'; nation: NationId; province: ProvinceId; project: ProjectKind }
+  | { type: 'buildShip'; nation: NationId; province: ProvinceId; ship: ShipType }
+  | { type: 'cancelShip'; nation: NationId; province: ProvinceId }
+  | { type: 'moveFleet'; nation: NationId; fleet: FleetId; zone: ZoneId }
+  | { type: 'stopFleet'; nation: NationId; fleet: FleetId }
+  | { type: 'mergeFleets'; nation: NationId; fleets: FleetId[] }
+  | { type: 'splitFleet'; nation: NationId; fleet: FleetId; ships: string[] }
+  | { type: 'disbandFleet'; nation: NationId; fleet: FleetId }
+  /** carry armies standing on a coast by sea and land them on another coast */
+  | { type: 'shipArmies'; nation: NationId; armies: ArmyId[]; fleet: FleetId; dest: ProvinceId }
+  | { type: 'buildWing'; nation: NationId; province: ProvinceId; wing: WingType }
+  | { type: 'cancelWing'; nation: NationId; province: ProvinceId }
+  | { type: 'airMission'; nation: NationId; wing: WingId; mission: AirMission; target: ProvinceId | null }
+  | { type: 'rebaseWing'; nation: NationId; wing: WingId; base: ProvinceId }
+  | { type: 'disbandWing'; nation: NationId; wing: WingId }
   | { type: 'cancelBuild'; nation: NationId; province: ProvinceId }
   | { type: 'research'; nation: NationId; tech: TechId }
   | { type: 'funding'; nation: NationId; level: 0 | 1 | 2 | 3 }

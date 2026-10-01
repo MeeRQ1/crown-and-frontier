@@ -69,6 +69,25 @@ export interface Mods {
   syntheticNitrates: number;
   syntheticOil: number;
   syntheticRubber: number;
+  // navy and air
+  navalAttack: number;
+  capitalAttack: number;
+  antiSub: number;
+  fleetSpeed: number;
+  shipCost: number;
+  portCost: number;
+  repair: number;
+  /** 1 once oil-fired boilers replace coal (cruisers, battleships, screens, transports) */
+  oilFiring: number;
+  /** cuts the amphibious landing penalty by this share */
+  landing: number;
+  /** enemy blockades cost us this much less */
+  blockadeResist: number;
+  carrierAir: number;
+  airAttack: number;
+  airRange: number;
+  /** enemy bombing over our land is this much weaker; flak this much stronger */
+  airDefence: number;
 }
 
 export type ModEffects = Partial<Mods>;
@@ -133,6 +152,20 @@ export const MOD_LABELS: Record<keyof Mods, [string, 'pct' | 'flat' | 'neg']> = 
   syntheticNitrates: ['Synthetic nitrates per factory (from coal)', 'flat'],
   syntheticOil: ['Synthetic fuel per factory (from coal)', 'flat'],
   syntheticRubber: ['Synthetic rubber per factory (from coal)', 'flat'],
+  navalAttack: ['Naval gunnery', 'pct'],
+  capitalAttack: ['Battleship gunnery', 'pct'],
+  antiSub: ['Anti-submarine warfare', 'pct'],
+  fleetSpeed: ['Fleet speed', 'pct'],
+  shipCost: ['Shipbuilding cost', 'pct'],
+  portCost: ['Port cost', 'pct'],
+  repair: ['Ship repair', 'pct'],
+  oilFiring: ['Oil-fired boilers (ships burn oil, not coal)', 'flat'],
+  landing: ['Amphibious landing penalty', 'neg'],
+  blockadeResist: ['Losses to enemy blockades', 'neg'],
+  carrierAir: ['Carrier air strikes', 'pct'],
+  airAttack: ['Air combat', 'pct'],
+  airRange: ['Air range (provinces)', 'flat'],
+  airDefence: ['Enemy bombing over our land', 'neg'],
 };
 
 export function emptyMods(): Mods {

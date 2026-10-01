@@ -37,7 +37,8 @@ function armyIndex(sim: Sim): ArmyIndex {
   // insertion order of state.armies, exactly as a full scan would visit them
   for (const id in st.armies) {
     const a = st.armies[id];
-    (at.get(a.location) ?? at.set(a.location, []).get(a.location)!).push(a);
+    // armies aboard a fleet are at sea: in no province
+    if (!a.embarked) (at.get(a.location) ?? at.set(a.location, []).get(a.location)!).push(a);
     (of.get(a.nation) ?? of.set(a.nation, []).get(a.nation)!).push(a);
   }
   ix = { key, at, of };

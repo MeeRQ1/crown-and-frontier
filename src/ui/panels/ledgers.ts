@@ -1,6 +1,6 @@
 // Modal ledgers opened from the navigation bar.
 
-import { C, RESOURCE_INFO, STRATEGIC, UNITS, UNIT_TYPES } from '../../sim/config';
+import { C, forceLabel, RESOURCE_INFO, STRATEGIC, UNITS, UNIT_TYPES } from '../../sim/config';
 import { activeProjects, buildSlots, PROJECT_LABELS } from '../../sim/construction';
 import { PERSONALITIES } from '../../sim/data/personalities';
 import { POLICIES, POLICY_COOLDOWN_MONTHS, POLICY_LIST } from '../../sim/data/policies';
@@ -548,7 +548,7 @@ function researchLedger(app: App): HTMLElement {
       'div',
       { class: `card ${done ? 'done' : ''} ${current ? 'current' : ''} ${locked ? 'locked' : ''}`, style: 'margin:6px 0' },
       h('h4', null, t.name, ' ', h('span', { class: 'tag' }, `${t.year} · ${cost} pts`), ' ', when),
-      t.unlocks ? h('p', { class: 'small good' }, `Unlocks ${UNITS[t.unlocks].plural.toLowerCase()}.`) : null,
+      t.unlocks ? h('p', { class: 'small good' }, `Unlocks ${forceLabel(t.unlocks).toLowerCase()}.`) : null,
       h('p', { class: 'small' }, describeEffects(t.effects).join(' · ')),
       h('p', { class: 'small muted' }, t.description),
       t.requires.length ? h('p', { class: 'small muted' }, `Requires ${t.requires.map((r) => TECHS[r].name).join(', ')}`) : null,

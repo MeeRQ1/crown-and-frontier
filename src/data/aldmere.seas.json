@@ -1,0 +1,548 @@
+{
+ "zones": [
+  {
+   "id": "sea-1",
+   "name": "Skerry Minor Roads",
+   "neighbors": [
+    "sea-11",
+    "sea-2"
+   ],
+   "coasts": [
+    "achnavar",
+    "ardcraig",
+    "balmorra",
+    "grayholm",
+    "kilbrenn",
+    "skerrin",
+    "skerryminor"
+   ],
+   "straits": [
+    [
+     "kilbrenn",
+     "skerryminor"
+    ],
+    [
+     "skerrin",
+     "skerryminor"
+    ]
+   ]
+  },
+  {
+   "id": "sea-2",
+   "name": "Drumlee Approaches",
+   "neighbors": [
+    "sea-1",
+    "sea-3"
+   ],
+   "coasts": [
+    "achnavar",
+    "benmore",
+    "drumlee",
+    "eisenau",
+    "grayholm",
+    "grimhold",
+    "ironcrag"
+   ],
+   "straits": [
+    [
+     "drumlee",
+     "grayholm"
+    ],
+    [
+     "eisenau",
+     "grayholm"
+    ]
+   ]
+  },
+  {
+   "id": "sea-3",
+   "name": "The Grey Sea",
+   "neighbors": [
+    "sea-2",
+    "sea-4"
+   ],
+   "coasts": [
+    "grimhold",
+    "kaltwasser",
+    "ostrin",
+    "wendel"
+   ]
+  },
+  {
+   "id": "sea-4",
+   "name": "Ulfsey Channel",
+   "neighbors": [
+    "sea-3",
+    "sea-5"
+   ],
+   "coasts": [
+    "eyrholm",
+    "hvitfell",
+    "soltun",
+    "stormhavn",
+    "ulfsey"
+   ],
+   "straits": [
+    [
+     "ostrin",
+     "ulfsey"
+    ],
+    [
+     "soltun",
+     "ulfsey"
+    ]
+   ]
+  },
+  {
+   "id": "sea-5",
+   "name": "Tjornes Roads",
+   "neighbors": [
+    "sea-4",
+    "sea-9"
+   ],
+   "coasts": [
+    "kaldvik",
+    "stormhavn",
+    "tjornes"
+   ]
+  },
+  {
+   "id": "sea-6",
+   "name": "Varsk Roads",
+   "neighbors": [
+    "sea-7",
+    "sea-9"
+   ],
+   "coasts": [
+    "brimsey",
+    "coldreach",
+    "ravenmoor",
+    "stonewatch",
+    "varsk"
+   ],
+   "straits": [
+    [
+     "brimsey",
+     "stonewatch"
+    ],
+    [
+     "brimsey",
+     "varsk"
+    ]
+   ]
+  },
+  {
+   "id": "sea-7",
+   "name": "Sunderby Approaches",
+   "neighbors": [
+    "sea-6",
+    "sea-8"
+   ],
+   "coasts": [
+    "coldreach",
+    "hollowmere",
+    "lumivaara",
+    "sunderby",
+    "varjola"
+   ]
+  },
+  {
+   "id": "sea-8",
+   "name": "The Pale Sea",
+   "neighbors": [
+    "sea-10",
+    "sea-7"
+   ],
+   "coasts": [
+    "duskfell",
+    "hollowmere",
+    "kaamos",
+    "tuulikki",
+    "whitefell"
+   ]
+  },
+  {
+   "id": "sea-9",
+   "name": "Brimsey Waters",
+   "neighbors": [
+    "sea-5",
+    "sea-6"
+   ],
+   "coasts": [
+    "birchwold",
+    "brimsey",
+    "dubrava",
+    "kaldvik",
+    "mirosk",
+    "tarnwood",
+    "vargoy"
+   ],
+   "straits": [
+    [
+     "brimsey",
+     "kaldvik"
+    ]
+   ]
+  },
+  {
+   "id": "sea-10",
+   "name": "Dijkhaven Approaches",
+   "neighbors": [
+    "sea-12",
+    "sea-13",
+    "sea-8"
+   ],
+   "coasts": [
+    "dijkhaven",
+    "duskfell",
+    "eelbrook",
+    "sluis"
+   ]
+  },
+  {
+   "id": "sea-11",
+   "name": "Tullach Waters",
+   "neighbors": [
+    "sea-1",
+    "sea-15"
+   ],
+   "coasts": [
+    "ardcraig",
+    "brennmoor",
+    "innisfarr",
+    "muckleness",
+    "tullach"
+   ]
+  },
+  {
+   "id": "sea-12",
+   "name": "Eelbrook Bight",
+   "neighbors": [
+    "sea-10",
+    "sea-13"
+   ],
+   "coasts": [
+    "ashfort",
+    "cinderfell",
+    "cressing",
+    "eelbrook",
+    "emberwatch",
+    "veendam"
+   ]
+  },
+  {
+   "id": "sea-13",
+   "name": "The Ember Sea",
+   "neighbors": [
+    "sea-10",
+    "sea-12",
+    "sea-16"
+   ],
+   "coasts": [
+    "charwood",
+    "kilnmoor",
+    "wardenhall"
+   ]
+  },
+  {
+   "id": "sea-14",
+   "name": "Rosendale Waters",
+   "neighbors": [
+    "sea-15",
+    "sea-17"
+   ],
+   "coasts": [
+    "corbel",
+    "rosendale",
+    "vessford"
+   ]
+  },
+  {
+   "id": "sea-15",
+   "name": "Sorrel Bight",
+   "neighbors": [
+    "sea-11",
+    "sea-14"
+   ],
+   "coasts": [
+    "corbel",
+    "muckleness",
+    "sorrel",
+    "verrin",
+    "westfold",
+    "westmere"
+   ]
+  },
+  {
+   "id": "sea-16",
+   "name": "Cindersand Waters",
+   "neighbors": [
+    "sea-13",
+    "sea-18"
+   ],
+   "coasts": [
+    "cindersand",
+    "corran",
+    "emberpoint",
+    "kilnmoor"
+   ],
+   "straits": [
+    [
+     "cindersand",
+     "emberpoint"
+    ],
+    [
+     "corran",
+     "kilnmoor"
+    ]
+   ]
+  },
+  {
+   "id": "sea-17",
+   "name": "The Western Main",
+   "neighbors": [
+    "sea-14",
+    "sea-19"
+   ],
+   "coasts": [
+    "lissan",
+    "merrow",
+    "rosendale"
+   ]
+  },
+  {
+   "id": "sea-18",
+   "name": "Scaldwater Approaches",
+   "neighbors": [
+    "sea-16",
+    "sea-29"
+   ],
+   "coasts": [
+    "driftmoor",
+    "emberpoint",
+    "saltcliff",
+    "scaldwater"
+   ]
+  },
+  {
+   "id": "sea-19",
+   "name": "Varrow Bight",
+   "neighbors": [
+    "sea-17",
+    "sea-23",
+    "sea-24"
+   ],
+   "coasts": [
+    "belmare",
+    "kell",
+    "marisca",
+    "merand",
+    "varrow"
+   ],
+   "straits": [
+    [
+     "marisca",
+     "varrow"
+    ]
+   ]
+  },
+  {
+   "id": "sea-20",
+   "name": "Ostra Roads",
+   "neighbors": [
+    "sea-21",
+    "sea-24"
+   ],
+   "coasts": [
+    "calvi",
+    "corsaro",
+    "kell",
+    "ostra",
+    "sanarrigo"
+   ]
+  },
+  {
+   "id": "sea-21",
+   "name": "The Serene Sea",
+   "neighbors": [
+    "sea-20",
+    "sea-24",
+    "sea-25"
+   ],
+   "coasts": [
+    "castelnau",
+    "sanarrigo",
+    "serrat",
+    "sirena"
+   ]
+  },
+  {
+   "id": "sea-22",
+   "name": "Ulgari Approaches",
+   "neighbors": [
+    "sea-27",
+    "sea-28"
+   ],
+   "coasts": [
+    "kharsa",
+    "khesh",
+    "sulit",
+    "ulgari"
+   ]
+  },
+  {
+   "id": "sea-23",
+   "name": "Belmare Approaches",
+   "neighbors": [
+    "sea-19",
+    "sea-24"
+   ],
+   "coasts": [
+    "belmare",
+    "torrevene"
+   ]
+  },
+  {
+   "id": "sea-24",
+   "name": "Isola Brava Approaches",
+   "neighbors": [
+    "sea-19",
+    "sea-20",
+    "sea-21",
+    "sea-23"
+   ],
+   "coasts": [
+    "isolabrava",
+    "kell",
+    "marisca"
+   ],
+   "straits": [
+    [
+     "isolabrava",
+     "marisca"
+    ]
+   ]
+  },
+  {
+   "id": "sea-25",
+   "name": "Almena Channel",
+   "neighbors": [
+    "sea-21",
+    "sea-30"
+   ],
+   "coasts": [
+    "almena",
+    "cabolume",
+    "mirabel",
+    "santaval",
+    "serrat"
+   ]
+  },
+  {
+   "id": "sea-26",
+   "name": "Phaedon Bight",
+   "neighbors": [
+    "sea-27",
+    "sea-30"
+   ],
+   "coasts": [
+    "mirasol",
+    "oliveira",
+    "phaedon",
+    "velaxis"
+   ]
+  },
+  {
+   "id": "sea-27",
+   "name": "Ertugai Bight",
+   "neighbors": [
+    "sea-22",
+    "sea-26",
+    "sea-28",
+    "sea-30"
+   ],
+   "coasts": [
+    "ertugai",
+    "velaxis",
+    "zhorun"
+   ]
+  },
+  {
+   "id": "sea-28",
+   "name": "Bozkir Waters",
+   "neighbors": [
+    "sea-22",
+    "sea-27",
+    "sea-29"
+   ],
+   "coasts": [
+    "bozkir",
+    "khesh",
+    "tashkul"
+   ]
+  },
+  {
+   "id": "sea-29",
+   "name": "The Sunward Sea",
+   "neighbors": [
+    "sea-18",
+    "sea-28"
+   ],
+   "coasts": [
+    "kyzylar",
+    "sarybel",
+    "ulantai"
+   ]
+  },
+  {
+   "id": "sea-30",
+   "name": "Isla Clara Approaches",
+   "neighbors": [
+    "sea-25",
+    "sea-26",
+    "sea-27"
+   ],
+   "coasts": [
+    "islaclara",
+    "mirasol",
+    "sierradorada"
+   ],
+   "straits": [
+    [
+     "islaclara",
+     "mirasol"
+    ],
+    [
+     "islaclara",
+     "velaxis"
+    ]
+   ]
+  }
+ ],
+ "ports": {
+  "almena": 1,
+  "cabolume": 1,
+  "calvi": 1,
+  "corbel": 1,
+  "emberwatch": 2,
+  "islaclara": 1,
+  "kell": 1,
+  "kharsa": 2,
+  "lissan": 1,
+  "merand": 1,
+  "mirasol": 1,
+  "oliveira": 1,
+  "ostra": 1,
+  "santaval": 1,
+  "sierradorada": 1,
+  "varrow": 1,
+  "velaxis": 1,
+  "westmere": 1,
+  "ardcraig": 1,
+  "birchwold": 1,
+  "eyrholm": 1,
+  "castelnau": 1,
+  "cressing": 1,
+  "eisenau": 1
+ }
+}

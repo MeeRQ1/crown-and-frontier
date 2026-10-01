@@ -9,7 +9,7 @@
 // Policies: switching costs 20 + half a month's income (free in the first month)
 // and is locked for 24 months after each change.
 
-import { C, UNITS } from './config';
+import { C, forceLabel } from './config';
 import { POLICIES, POLICY_COOLDOWN_MONTHS } from './data/policies';
 import { TECHS } from './data/techs';
 import { grossIncome, integrationFactor } from './economy';
@@ -82,7 +82,7 @@ export function monthlyResearch(sim: Sim): void {
       n.research.progress -= cost;
       n.research.done.push(cur);
       n.research.current = null;
-      notify(sim, nid, 'normal', 'research', `Research complete: ${t.name}.${t.unlocks ? ` We can now raise ${UNITS[t.unlocks].plural.toLowerCase()}.` : ''} Choose the next technology.`);
+      notify(sim, nid, 'normal', 'research', `Research complete: ${t.name}.${t.unlocks ? ` We can now build ${forceLabel(t.unlocks).toLowerCase()}.` : ''} Choose the next technology.`);
     }
   }
 }

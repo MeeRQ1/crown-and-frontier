@@ -13,10 +13,28 @@ is kept for its evidence. Where a stage changed a fact, it is corrected in place
 |---|---|
 | A · Foundations | **Done in this branch** (draft pull request, not merged) |
 | B · Industrial economy and research | **Done in this branch** (same draft pull request) |
-| C · War on land, at sea and in the air | Not started |
+| C · War on land, at sea and in the air | **In progress** (checkpoint: simulation and AI committed; interface, tests, measurements and docs next) |
 | D · Maps, editor, real-world map | Not started |
 | E · Diplomacy, settlements, national focus | Not started |
 | F · Onboarding, balance, delivery | Not started |
+
+**Stage C checkpoint (in progress, not finished):**
+- Done and committed: map format 3 with sea zones and ports (generated from each map's
+  coastline, `src/maps/seazones.ts`; built-in maps at revision 3; formats 1 and 2 upgrade
+  on import); fleets (transports, torpedo boats, cruisers, battleships, submarines,
+  carriers), shipyards, naval battles, sea control of straits, blockades, armies carried
+  by sea with landings (`src/sim/naval.ts`); airfields, air wings and missions
+  (superiority, support, interdiction, bombing, reconnaissance) with their effects on
+  battles, supply, movement and industry (`src/sim/air.ts`); 19 naval and air
+  technologies (73 in all); fuel and upkeep; naval and air AI including planned
+  invasions (`src/sim/ai/navy.ts`); the format 2 → 3 conversion adds ports and home
+  squadrons. The 108 existing tests pass.
+- Next, in order: (1) the interface: sea zones and fleets on the map, fleet, zone and air
+  wing cards, ship and wing building in province cards, "ship by sea" and air-mission
+  targeting, a navy and air section in the Military ledger; (2) tests for sea zones,
+  naval combat, invasions, blockades, straits, air superiority, and worked examples;
+  (3) the combat matrix, AI batches with system usage, benchmarks and browser flows;
+  (4) docs and the Stage C commit.
 
 **Stage B delivered:**
 - **The industrial age:** Aldmere starts in 1880 (40/60/70 years), the Reach in 1895

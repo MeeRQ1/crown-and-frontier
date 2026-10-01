@@ -5,7 +5,7 @@ import { applyCommand } from '../commands';
 import { armiesIn, memoize } from '../index';
 import { CostHeap } from '../heap';
 import { armyStrength } from '../military';
-import { canEnter, moveCost } from '../movement';
+import { canEnter, moveCost, stepClosed } from '../movement';
 import { nextFloat } from '../rng';
 import { atWar, diag, type Sim } from '../state';
 import type { Army, CommandResult, Difficulty, NationId, ProvinceId, RealmCommand } from '../types';
@@ -77,7 +77,7 @@ function computeReach(sim: Sim, nid: NationId, from: ProvinceId): Reach {
     if (done.has(cur)) continue;
     done.add(cur);
     for (const nb of sim.world.prov[cur].neighbors) {
-      if (done.has(nb) || !canEnter(sim, nid, nb)) continue;
+      if (done.has(nb) || !canEnter(sim, nid, nb) || stepClosed(sim, nid, cur, nb)) continue;
       const nd = dist[cur] + moveCost(sim, cur, nb, nid);
       if (dist[nb] === undefined || nd < dist[nb]) {
         dist[nb] = nd;

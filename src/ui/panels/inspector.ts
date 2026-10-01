@@ -197,7 +197,7 @@ function provinceCard(app: App, pid: ProvinceId): HTMLElement[] {
       items.push(bar(p.project.progress, p.project.total, 'info', 'Project progress'));
       if (p.project.nation === me) items.push(button('Cancel project (50% refund)', () => app.do({ type: 'cancelBuild', province: pid }), { cls: 'small' }));
     } else {
-      const kinds: ProjectKind[] = p.owner === me ? ['dev', 'infra', 'factory', 'fort', 'charter'] : ['settle'];
+      const kinds: ProjectKind[] = p.owner === me ? ['dev', 'infra', 'factory', 'fort', 'charter', ...(sim.world.provZones[pid] ? (['port'] as ProjectKind[]) : []), ...(sim.state.nations[me].research.done.includes('aviation') ? (['airfield'] as ProjectKind[]) : [])] : ['settle'];
       const what: Record<ProjectKind, string> = {
         dev: '+1 development: more crowns, food and research, and room for factories',
         infra: '+1 railway: faster marches, more supply, faster integration',
@@ -205,6 +205,8 @@ function provinceCard(app: App, pid: ProvinceId): HTMLElement[] {
         fort: '+1 fort: must be besieged, defence bonus, supply source',
         charter: `+${C.construction.charterGain} integration, −10 unrest`,
         settle: 'Claim this land as a new frontier province',
+        port: '+1 port: a slipway for shipbuilding, faster repairs for fleets off this coast',
+        airfield: `+1 airfield: base for ${C.air.wingsPerAirfield} air wings`,
       };
       items.push(
         h(

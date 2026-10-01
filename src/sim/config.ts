@@ -2,7 +2,7 @@
 // Units: time in ticks (1 tick = 1 week, 4 weeks = 1 month, 12 months = 1 year),
 // money in crowns, supplies in wagons, manpower in men, population in thousands.
 
-import type { StrategicResource, Terrain, UnitType } from './types';
+import type { ShipType, StrategicResource, Terrain, UnitType, WingType } from './types';
 
 export interface TerrainRules {
   move: number; // movement points needed to enter
@@ -90,6 +90,129 @@ export const UNITS: Record<UnitType, UnitRules> = {
 };
 
 export const UNIT_TYPES = Object.keys(UNITS) as UnitType[];
+
+export interface ShipRules {
+  label: string;
+  plural: string;
+  abbr: string;
+  requires: string | null;
+  cost: number;
+  materiel: number;
+  resources: Partial<Record<StrategicResource, number>>;
+  weeks: number;
+  upkeep: number;
+  /** fuel per month at sea: coal-fired until Oil-Fired Boilers, oil after (submarines and carriers always oil) */
+  fuel: number;
+  oil: boolean;
+  /** firepower against surface ships, torpedoes, anti-submarine, anti-aircraft and air strike */
+  gun: number;
+  torpedo: number;
+  antiSub: number;
+  aa: number;
+  air: number;
+  /** how much damage it takes to sink (and how big a target it is) */
+  hull: number;
+  /** zones per week */
+  speed: number;
+  /** regiments carried */
+  capacity: number;
+  description: string;
+}
+
+export const SHIPS: Record<ShipType, ShipRules> = {
+  transport: {
+    label: 'Transport', plural: 'Transports', abbr: 'Tr', requires: null,
+    cost: 20, materiel: 15, resources: { iron: 2 }, weeks: 10, upkeep: 0.6, fuel: 0.1, oil: false,
+    gun: 0, torpedo: 0, antiSub: 0, aa: 0, air: 0, hull: 2, speed: 1, capacity: 2,
+    description: 'Carries two regiments across the sea. Defenceless: escort it.',
+  },
+  screen: {
+    label: 'Torpedo boat', plural: 'Torpedo boats', abbr: 'Sc', requires: 'torpedo_boats',
+    cost: 25, materiel: 20, resources: { iron: 3 }, weeks: 12, upkeep: 0.8, fuel: 0.15, oil: false,
+    gun: 1, torpedo: 1, antiSub: 3, aa: 0.5, air: 0, hull: 2, speed: 2, capacity: 0,
+    description: 'Screens (torpedo boats, later destroyers): hunt submarines and shield transports and carriers.',
+  },
+  cruiser: {
+    label: 'Cruiser', plural: 'Cruisers', abbr: 'Cr', requires: null,
+    cost: 45, materiel: 40, resources: { iron: 6 }, weeks: 20, upkeep: 1.5, fuel: 0.3, oil: false,
+    gun: 3, torpedo: 0.5, antiSub: 1, aa: 1, air: 0, hull: 4, speed: 2, capacity: 0,
+    description: 'Fast and versatile: patrols, blockades and escorts.',
+  },
+  capital: {
+    label: 'Battleship', plural: 'Battleships', abbr: 'Bb', requires: null,
+    cost: 90, materiel: 90, resources: { iron: 14 }, weeks: 36, upkeep: 3, fuel: 0.6, oil: false,
+    gun: 8, torpedo: 0, antiSub: 0, aa: 2, air: 0, hull: 12, speed: 1.5, capacity: 0,
+    description: 'Capital ships (ironclads, then dreadnoughts): the heaviest guns afloat, the decisive surface fight.',
+  },
+  submarine: {
+    label: 'Submarine', plural: 'Submarines', abbr: 'Ss', requires: 'submarines',
+    cost: 35, materiel: 30, resources: { iron: 4 }, weeks: 16, upkeep: 1, fuel: 0.15, oil: true,
+    gun: 0.3, torpedo: 4, antiSub: 0, aa: 0, air: 0, hull: 2, speed: 1.5, capacity: 0,
+    description: 'Unseen torpedoes against capital ships and transports; only screens and cruisers can hunt them. Blockades without holding the sea.',
+  },
+  carrier: {
+    label: 'Carrier', plural: 'Carriers', abbr: 'Cv', requires: 'naval_aviation',
+    cost: 100, materiel: 100, resources: { iron: 12, rubber: 2 }, weeks: 40, upkeep: 3.5, fuel: 0.5, oil: true,
+    gun: 0.5, torpedo: 0, antiSub: 1, aa: 3, air: 6, hull: 9, speed: 1.5, capacity: 0,
+    description: 'Strikes first from the air before the guns can reach; needs screens around it.',
+  },
+};
+export const SHIP_TYPES = Object.keys(SHIPS) as ShipType[];
+
+export interface WingRules {
+  label: string;
+  plural: string;
+  abbr: string;
+  requires: string;
+  cost: number;
+  materiel: number;
+  resources: Partial<Record<StrategicResource, number>>;
+  weeks: number;
+  upkeep: number;
+  /** oil per month */
+  fuel: number;
+  /** air combat, ground attack and bombing value at full strength */
+  air: number;
+  ground: number;
+  bomb: number;
+  /** range in province hops from its base */
+  range: number;
+  missions: Array<'superiority' | 'support' | 'interdiction' | 'bombing' | 'recon'>;
+  description: string;
+}
+
+export const WINGS: Record<WingType, WingRules> = {
+  recon: {
+    label: 'Reconnaissance wing', plural: 'Reconnaissance wings', abbr: 'Re', requires: 'aviation',
+    cost: 20, materiel: 15, resources: { rubber: 1 }, weeks: 6, upkeep: 0.6, fuel: 0.05,
+    air: 0.5, ground: 0, bomb: 0, range: 3, missions: ['recon'],
+    description: 'Spotters over the front: better fire for our armies, and screens find submarines in nearby waters.',
+  },
+  fighter: {
+    label: 'Fighter wing', plural: 'Fighter wings', abbr: 'Fi', requires: 'fighters',
+    cost: 30, materiel: 25, resources: { rubber: 1, iron: 1 }, weeks: 8, upkeep: 1, fuel: 0.15,
+    air: 3, ground: 0.5, bomb: 0, range: 3, missions: ['superiority', 'support'],
+    description: 'Wins the sky: holds air superiority, shoots down bombers and halves enemy ground support.',
+  },
+  attack: {
+    label: 'Ground-attack wing', plural: 'Ground-attack wings', abbr: 'At', requires: 'ground_attack',
+    cost: 35, materiel: 30, resources: { rubber: 1, iron: 2 }, weeks: 10, upkeep: 1.2, fuel: 0.2,
+    air: 1, ground: 3, bomb: 0.5, range: 3, missions: ['support', 'interdiction'],
+    description: 'Close support for battles, or interdiction of enemy supply and movement.',
+  },
+  bomber: {
+    label: 'Bomber wing', plural: 'Bomber wings', abbr: 'Bo', requires: 'strategic_bombing',
+    cost: 50, materiel: 45, resources: { rubber: 2, iron: 3 }, weeks: 14, upkeep: 1.8, fuel: 0.3,
+    air: 0.8, ground: 1, bomb: 3, range: 5, missions: ['bombing', 'interdiction'],
+    description: 'Strikes factories far behind the front; needs fighters to survive against defended skies.',
+  },
+};
+export const WING_TYPES = Object.keys(WINGS) as WingType[];
+
+/** Plural name of a regiment, ship or air wing type. */
+export function forceLabel(kind: string): string {
+  return (UNITS as Record<string, { plural: string }>)[kind]?.plural ?? (SHIPS as Record<string, { plural: string }>)[kind]?.plural ?? (WINGS as Record<string, { plural: string }>)[kind]?.plural ?? kind;
+}
 export const STRATEGIC: StrategicResource[] = ['coal', 'iron', 'oil', 'rubber', 'nitrates'];
 
 export const RESOURCE_INFO: Record<StrategicResource | 'food', { label: string; price: number; use: string }> = {
@@ -203,6 +326,14 @@ export const C = {
     factoryWeeks: 20,
     factoryMax: 5,
     factoryMinIntegration: 50,
+    portBase: 50, // * (level + 1)
+    portIron: 4,
+    portWeeks: 16,
+    portMax: 3,
+    airfieldBase: 40, // * (level + 1)
+    airfieldIron: 3,
+    airfieldWeeks: 12,
+    airfieldMax: 2,
     fortWeeks: 16,
     fortMax: 3,
     fortUpkeep: 1, // crowns / month per level
@@ -269,6 +400,54 @@ export const C = {
     /** armour without fuel and artillery without shells fight at this share */
     unfuelled: 0.5,
     noShells: 0.6,
+  },
+
+  naval: {
+    /** hit points removed per point of fire, before the target's hull */
+    damage: 32,
+    rounds: 3,
+    /** a side withdraws once its fighting value falls below this share of its start */
+    withdrawAt: 0.5,
+    /** transports and carriers behind enough screens and cruisers are this much harder to hit */
+    screened: 0.3,
+    /** repair per week per port level, in a zone on the coast of our port */
+    repair: 6,
+    /** damage per week beyond this many zones from a friendly port */
+    rangeZones: 4,
+    attrition: 2,
+    /** blockade: hostile power needed against our surface power (×) */
+    blockadeRatio: 2,
+    /** a blockaded province loses this share of its crowns */
+    blockadeIncome: 0.25,
+    /** attackers coming ashore fire at this share on the week they land */
+    landing: 0.75,
+    unfuelled: 0.6,
+    startFleetPorts: 3,
+  },
+
+  air: {
+    /** strength lost per week against enemy air power (scaled by the air balance) */
+    combatLoss: 10,
+    /** superiority: our air power at least this multiple of theirs */
+    superiority: 1.5,
+    /** ground support: + share of firepower per point of support (cap) */
+    supportPer: 0.12,
+    supportMax: 0.4,
+    /** enemy superiority cuts our support and interdiction to this share */
+    contested: 0.4,
+    recon: 0.05,
+    interdictSupply: 0.15,
+    interdictSupplyMax: 0.4,
+    interdictMove: 0.1,
+    interdictMoveMax: 0.3,
+    /** industry lost in a bombed province per point of bombing (cap) */
+    bombIndustry: 0.25,
+    bombIndustryMax: 0.6,
+    /** anti-aircraft fire of forts: strength lost per week per fort level */
+    flak: 2,
+    replenish: 8,
+    replenishMateriel: 0.3,
+    wingsPerAirfield: 2,
   },
 
   siege: {

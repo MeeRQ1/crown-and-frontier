@@ -13,6 +13,8 @@ import { TERRAIN, UNITS } from './config';
 import { CostHeap } from './heap';
 import { armiesIn, touchArmies } from './index';
 import { nationMods } from './modifiers';
+import { interdiction } from './air';
+import { straitBlocked } from './naval';
 import { atWar, hasAccess, isFriendly, notify, provName, type Sim } from './state';
 import type { Army, NationId, ProvinceId } from './types';
 import { edgeKey } from './world';
@@ -42,6 +44,11 @@ export function moveCost(sim: Sim, from: ProvinceId, to: ProvinceId, nid?: Natio
   let c = t * (1 - 0.12 * infra);
   if (sim.world.straitSet.has(edgeKey(from, to))) c += Math.max(0, STRAIT_COST + (nid ? nationMods(sim, nid).straitCost : 0));
   return c;
+}
+
+/** Is the step from `a` to `b` closed to `nid` (a strait held by enemy warships)? */
+export function stepClosed(sim: Sim, nid: NationId, a: ProvinceId, b: ProvinceId): boolean {
+  return sim.world.straitSet.has(edgeKey(a, b)) && straitBlocked(sim, nid, a, b);
 }
 
 /** True when the border between two provinces is a river. */
@@ -82,6 +89,7 @@ export function findPath(sim: Sim, nid: NationId, from: ProvinceId, to: Province
       if (done.has(nb)) continue;
       if (avoid && avoid.has(nb) && nb !== to) continue;
       if (!canEnter(sim, nid, nb)) continue;
+      if (stepClosed(sim, nid, cur, nb)) continue;
       const nd = dist[cur] + moveCost(sim, cur, nb, nid);
       if (dist[nb] === undefined || nd < dist[nb]) {
         dist[nb] = nd;
@@ -128,13 +136,14 @@ export function weeklyMovement(sim: Sim): void {
   for (const id of ids) {
     const a = st.armies[id];
     if (!a) continue;
+    if (a.embarked) continue; // at sea: the fleet carries it
     if (a.battle || a.path.length === 0) {
       a.stationary++;
       continue;
     }
     if (!a.retreating && hostilePinned(sim, a)) continue;
     let next = a.path[0];
-    if (!a.retreating && !canEnter(sim, a.nation, next)) {
+    if (!a.retreating && (!canEnter(sim, a.nation, next) || stepClosed(sim, a.nation, a.location, next))) {
       const dest = a.path[a.path.length - 1];
       const re = findPath(sim, a.nation, a.location, dest);
       if (!re || re.path.length === 0) {
@@ -148,7 +157,7 @@ export function weeklyMovement(sim: Sim): void {
       a.progress = 0;
       next = a.path[0];
     }
-    a.progress += armySpeed(sim, a);
+    a.progress += armySpeed(sim, a) * (1 - interdiction(sim, a.location, a.nation).move);
     const cost = moveCost(sim, a.location, next, a.nation);
     if (a.progress >= cost) {
       a.progress = Math.min(a.progress - cost, 1);

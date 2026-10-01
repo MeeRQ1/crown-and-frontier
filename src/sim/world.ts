@@ -135,7 +135,40 @@ export function buildWorld(s: ScenarioDef): World {
     const v = matrix[i * n + j];
     return v === UNREACHED ? undefined : v;
   };
-  return { scenario: s, prov, provIds, nationDefs, nationIds: s.nations.map((n) => n.id), regionProvinces, straitSet, riverSet, hop };
+  // sea zones: coasts by province, strait control, and zone-to-zone hops
+  const zones: World['zones'] = {};
+  const zoneIds = (s.seaZones ?? []).map((z) => z.id);
+  for (const z of s.seaZones ?? []) zones[z.id] = z;
+  const provZones: World['provZones'] = {};
+  for (const z of s.seaZones ?? []) for (const p of z.coasts) (provZones[p] ??= []).push(z.id);
+  for (const list of Object.values(provZones)) list.sort();
+  const straitZone = new Map<string, string>();
+  for (const z of s.seaZones ?? []) for (const [a, b] of z.straits ?? []) straitZone.set(edgeKey(a, b), z.id);
+  const zIndex = new Map(zoneIds.map((id, i) => [id, i]));
+  const zn = zoneIds.length;
+  const zMatrix = new Uint16Array(zn * zn).fill(UNREACHED);
+  for (let src = 0; src < zn; src++) {
+    const row = src * zn;
+    zMatrix[row + src] = 0;
+    const q = [src];
+    for (let h = 0; h < q.length; h++) {
+      const c = q[h];
+      for (const nb of zones[zoneIds[c]].neighbors) {
+        const j = zIndex.get(nb);
+        if (j === undefined || zMatrix[row + j] !== UNREACHED) continue;
+        zMatrix[row + j] = zMatrix[row + c] + 1;
+        q.push(j);
+      }
+    }
+  }
+  const zoneHop = (a: string, b: string): number | undefined => {
+    const i = zIndex.get(a);
+    const j = zIndex.get(b);
+    if (i === undefined || j === undefined) return undefined;
+    const v = zMatrix[i * zn + j];
+    return v === UNREACHED ? undefined : v;
+  };
+  return { scenario: s, prov, provIds, nationDefs, nationIds: s.nations.map((n) => n.id), regionProvinces, straitSet, riverSet, hop, zones, zoneIds, provZones, straitZone, zoneHop };
 }
 
 export function getWorld(scenarioId: string): World {

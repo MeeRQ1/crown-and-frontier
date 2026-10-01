@@ -11,7 +11,7 @@ type Loader = () => Promise<MapGeometry>;
 
 const LOADERS: Record<string, Loader> = {};
 for (const id of BUILTIN_MAPS) {
-  LOADERS[id] = async () => drawnFromPackage({ id, straits: builtinScenario(id as BuiltinMapId).straits, geometry: await builtinGeometry(id as BuiltinMapId) });
+  LOADERS[id] = async () => drawnFromPackage({ id, straits: builtinScenario(id as BuiltinMapId).straits, seaZones: builtinScenario(id as BuiltinMapId).seaZones, geometry: await builtinGeometry(id as BuiltinMapId) });
 }
 
 const loaded = new Map<string, Promise<MapGeometry>>();

@@ -15,7 +15,9 @@ import { C, TERRAIN } from './config';
 import { CostHeap } from './heap';
 import { armiesIn } from './index';
 import { nationMods } from './modifiers';
+import { fleetEpoch, straitBlocked } from './naval';
 import { isFriendly, type Sim } from './state';
+import { edgeKey } from './world';
 import type { Army, NationId, ProvinceId } from './types';
 
 export type SupplyStatus = 'supplied' | 'strained' | 'unsupplied';
@@ -58,7 +60,8 @@ export function supplyDistances(sim: Sim, nid: NationId): Record<ProvinceId, num
     per = new Map();
     distCache.set(sim.state, per);
   }
-  const key = `${sim.state.tick}|${sim.state.rev}`;
+  // sea control changes which straits carry supply
+  const key = `${sim.state.tick}|${sim.state.rev}|${fleetEpoch(sim)}`;
   const hit = per.get(nid);
   if (hit && hit.key === key) return hit.dist;
 
@@ -79,6 +82,7 @@ export function supplyDistances(sim: Sim, nid: NationId): Record<ProvinceId, num
     const cur = open.pop();
     if (d > dist[cur]) continue;
     for (const nb of sim.world.prov[cur].neighbors) {
+      if (sim.world.straitSet.has(edgeKey(cur, nb)) && straitBlocked(sim, nid, cur, nb)) continue;
       const nd = d + stepCost(sim, nb);
       if (nd < dist[nb]) {
         dist[nb] = nd;

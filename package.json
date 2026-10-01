@@ -18,6 +18,7 @@
     "examples": "tsx tools/combat-examples.ts",
     "check": "npm run typecheck && npm test && npm run build && npm run package && npm run verify:web",
     "genworld": "tsx tools/genworld.ts",
+    "genseas": "tsx tools/genseas.ts",
     "genstress": "tsx tools/genstress.ts",
     "bench": "node --expose-gc --import tsx tools/bench.ts",
     "bench:web": "tsx tools/bench-web.ts",

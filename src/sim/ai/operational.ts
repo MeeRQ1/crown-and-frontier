@@ -26,6 +26,7 @@ import {
 import { supplyAt, supplyDistances } from '../supply';
 import type { Army, NationId, ProvinceId, UnitType } from '../types';
 import { diffOf, hostileArmiesAt, issue, pathVia, reachFrom, sumStrength, threatAround, type Reach } from './common';
+import { navalOps } from './navy';
 
 function regimentsByType(sim: Sim, nid: NationId): Record<UnitType, number> {
   const out: Record<UnitType, number> = { infantry: 0, cavalry: 0, artillery: 0, engineers: 0, armour: 0 };
@@ -432,8 +433,9 @@ export function frontPosts(sim: Sim, nid: NationId): Array<{ enemy: NationId; po
 /** Weekly operational pass for one AI realm. */
 export function operational(sim: Sim, nid: NationId): void {
   recruit(sim, nid);
+  navalOps(sim, nid);
   const armies = armiesOf(sim, nid)
-    .filter((a) => !a.battle && !a.retreating)
+    .filter((a) => !a.battle && !a.retreating && !a.embarked && a.task !== 'invasion')
     .sort((a, b) => (a.id < b.id ? -1 : 1));
   if (!armies.length) return;
   if (enemiesOf(sim, nid).length) warOps(sim, nid, armies);

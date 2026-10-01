@@ -5,6 +5,7 @@
 // disbanding returns survivors to the pool (capped by the reserve), and
 // casualties leave the system permanently (and reduce population).
 
+import { interdiction } from './air';
 import { C, RESOURCE_INFO, UNITS, UNIT_TYPES } from './config';
 import { TECHS } from './data/techs';
 import { poolCap, removePopulation } from './economy';
@@ -331,8 +332,14 @@ export function weeklyArmyCare(sim: Sim): void {
   for (const id of ids) {
     const a = st.armies[id];
     if (!a) continue;
+    if (a.embarked) {
+      // at sea: fed from the ships' stores, no attrition and no replacements
+      a.supply = 1;
+      continue;
+    }
     const info = supplyAt(sim, a.nation, a.location, 0, false);
-    a.supply = info.level;
+    // enemy aircraft interdicting the province cut what reaches the army
+    a.supply = Math.max(0, info.level - interdiction(sim, a.location, a.nation).supply);
     const n = st.nations[a.nation];
     const mods = nationMods(sim, a.nation);
     const mm = maxMorale(sim, a.nation);
@@ -342,7 +349,7 @@ export function weeklyArmyCare(sim: Sim): void {
       if (a.path.length === 0 && !a.battle && a.stationary >= 8 && isFriendly(sim, a.nation, st.provinces[a.location].controller)) n.stats.idleArmyWeeks++;
     }
     if (a.battle) continue;
-    const status = supplyStatus(info.level);
+    const status = supplyStatus(a.supply);
     if (status === 'unsupplied') {
       const rate = C.supply.attrition * Math.max(0.1, 1 + mods.attrition);
       let lost = 0;

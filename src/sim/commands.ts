@@ -2,7 +2,8 @@
 // checkCommand() never mutates state; applyCommand() validates first and
 // leaves state untouched when it fails (returning a player-readable reason).
 
-import { C } from './config';
+import { buildWingProblem, cancelWing, inRange, missionProblem, MISSION_LABELS, rebaseProblem, startWing } from './air';
+import { C, SHIPS, WINGS } from './config';
 import { buildProblem, cancelProblem, cancelProject, startProject } from './construction';
 import {
   cancelTreaty,
@@ -26,11 +27,31 @@ import {
 import { choiceProblem, resolveEvent } from './events';
 import { cancelRecruits, disbandProblem, doDisband, doMerge, doSplit, mergeProblem, orderRecruit, recruitProblem, splitProblem } from './military';
 import { enterProblem, findPath, stationProblem } from './movement';
+import {
+  buildShipProblem,
+  cancelShip,
+  disbandFleetProblem,
+  fleetOrderProblem,
+  mergeFleets,
+  mergeFleetsProblem,
+  moveFleet,
+  moveFleetProblem,
+  removeFleet,
+  shipArmies,
+  shipArmiesProblem,
+  splitFleet,
+  splitFleetProblem,
+  startShip,
+} from './naval';
 import { policyProblem, researchProblem, setPolicy } from './progression';
 import { serialize } from './save';
 import { nationName, notify, type Sim } from './state';
 import type { Command, CommandResult } from './types';
 import { answerCallToArms, applyPeace, declareWar, declareWarProblem, evaluatePeace, goalOptions, peaceProblem } from './war';
+
+function atSeaProblem(sim: Sim, fleet: string): string {
+  return `The army is at sea aboard ${sim.state.fleets[fleet]?.name ?? 'a fleet'}; it takes orders again once it lands.`;
+}
 
 export function checkCommand(sim: Sim, cmd: Command): string | null {
   const st = sim.state;
@@ -50,6 +71,7 @@ export function checkCommand(sim: Sim, cmd: Command): string | null {
     case 'move': {
       const a = st.armies[cmd.army];
       if (!a || a.nation !== cmd.nation) return 'Not your army.';
+      if (a.embarked) return atSeaProblem(sim, a.embarked);
       if (!st.provinces[cmd.dest]) return 'Unknown province.';
       if (a.battle) return 'The army is engaged in battle and cannot manoeuvre.';
       if (a.retreating) return 'The army is retreating and cannot take orders until it arrives.';
@@ -70,6 +92,7 @@ export function checkCommand(sim: Sim, cmd: Command): string | null {
       const a = st.armies[cmd.army];
       if (!a || a.nation !== cmd.nation) return 'Not your army.';
       if (!cmd.order) return null;
+      if (a.embarked) return atSeaProblem(sim, a.embarked);
       if (cmd.order.kind !== 'station') return 'Unknown order.';
       const sp = stationProblem(sim, cmd.nation, cmd.order.province);
       if (sp) return sp;
@@ -83,11 +106,45 @@ export function checkCommand(sim: Sim, cmd: Command): string | null {
       return null;
     }
     case 'split':
+      if (st.armies[cmd.army]?.embarked) return atSeaProblem(sim, st.armies[cmd.army].embarked!);
       return splitProblem(sim, cmd.nation, cmd.army, cmd.counts);
-    case 'merge':
+    case 'merge': {
+      const sea = cmd.armies.map((id) => st.armies[id]?.embarked).find((x) => x);
+      if (sea) return atSeaProblem(sim, sea);
       return mergeProblem(sim, cmd.nation, cmd.armies);
+    }
     case 'disband':
+      if (st.armies[cmd.army]?.embarked) return atSeaProblem(sim, st.armies[cmd.army].embarked!);
       return disbandProblem(sim, cmd.nation, cmd.army);
+    case 'buildShip':
+      return buildShipProblem(sim, cmd.nation, cmd.province, cmd.ship);
+    case 'cancelShip':
+      return st.provinces[cmd.province]?.dock.some((o) => o.nation === cmd.nation) ? null : 'No ships of ours on the slipways here.';
+    case 'moveFleet':
+      return moveFleetProblem(sim, cmd.nation, cmd.fleet, cmd.zone);
+    case 'stopFleet':
+      return fleetOrderProblem(sim, cmd.nation, cmd.fleet);
+    case 'mergeFleets':
+      return mergeFleetsProblem(sim, cmd.nation, cmd.fleets);
+    case 'splitFleet':
+      return splitFleetProblem(sim, cmd.nation, cmd.fleet, cmd.ships);
+    case 'disbandFleet':
+      return disbandFleetProblem(sim, cmd.nation, cmd.fleet);
+    case 'shipArmies':
+      return shipArmiesProblem(sim, cmd.nation, cmd.armies, cmd.fleet, cmd.dest);
+    case 'buildWing':
+      return buildWingProblem(sim, cmd.nation, cmd.province, cmd.wing);
+    case 'cancelWing':
+      return st.provinces[cmd.province]?.hangar.some((o) => o.nation === cmd.nation) ? null : 'No air wings of ours in training here.';
+    case 'airMission':
+      if (!(cmd.mission in MISSION_LABELS)) return 'Unknown mission.';
+      return missionProblem(sim, cmd.nation, cmd.wing, cmd.mission, cmd.target);
+    case 'rebaseWing':
+      return rebaseProblem(sim, cmd.nation, cmd.wing, cmd.base);
+    case 'disbandWing': {
+      const w = st.wings[cmd.wing];
+      return w && w.nation === cmd.nation ? null : 'Not our air wing.';
+    }
     case 'build':
       return buildProblem(sim, cmd.nation, cmd.province, cmd.project);
     case 'cancelBuild':
@@ -214,6 +271,59 @@ export function applyCommand(sim: Sim, cmd: Command): CommandResult {
     case 'build':
       startProject(sim, cmd.nation, cmd.province, cmd.project);
       return { ok: true };
+    case 'buildShip':
+      startShip(sim, cmd.nation, cmd.province, cmd.ship);
+      return { ok: true, message: `${SHIPS[cmd.ship].label} laid down.` };
+    case 'cancelShip':
+      cancelShip(sim, cmd.nation, cmd.province);
+      return { ok: true, message: 'Ship cancelled; materiel and resources returned (crowns are lost).' };
+    case 'moveFleet':
+      moveFleet(sim, cmd.fleet, cmd.zone);
+      return { ok: true };
+    case 'stopFleet': {
+      const f = st.fleets[cmd.fleet];
+      f.path = [];
+      f.progress = 0;
+      return { ok: true };
+    }
+    case 'mergeFleets': {
+      const f = mergeFleets(sim, cmd.fleets);
+      return { ok: true, message: `Merged into ${f.name}.` };
+    }
+    case 'splitFleet': {
+      const f = splitFleet(sim, cmd.fleet, cmd.ships);
+      return { ok: true, message: `${f.name} formed.` };
+    }
+    case 'disbandFleet':
+      removeFleet(sim, st.fleets[cmd.fleet], false);
+      return { ok: true, message: 'Fleet paid off.' };
+    case 'shipArmies':
+      shipArmies(sim, cmd.nation, cmd.armies, cmd.fleet, cmd.dest);
+      return { ok: true, message: `Troops embarked for ${sim.world.prov[cmd.dest].name}.` };
+    case 'buildWing':
+      startWing(sim, cmd.nation, cmd.province, cmd.wing);
+      return { ok: true, message: `${WINGS[cmd.wing].label} in training.` };
+    case 'cancelWing':
+      cancelWing(sim, cmd.nation, cmd.province);
+      return { ok: true, message: 'Training cancelled; materiel and resources returned (crowns are lost).' };
+    case 'airMission': {
+      const w = st.wings[cmd.wing];
+      w.mission = cmd.mission;
+      w.target = cmd.mission === 'idle' ? null : cmd.target;
+      return { ok: true };
+    }
+    case 'rebaseWing': {
+      const w = st.wings[cmd.wing];
+      w.base = cmd.base;
+      if (w.target && !inRange(sim, w, w.target)) {
+        w.mission = 'idle';
+        w.target = null;
+      }
+      return { ok: true };
+    }
+    case 'disbandWing':
+      delete st.wings[cmd.wing];
+      return { ok: true, message: 'Air wing disbanded.' };
     case 'cancelBuild':
       cancelProject(sim, cmd.province);
       return { ok: true, message: 'Project cancelled; half the cost refunded.' };

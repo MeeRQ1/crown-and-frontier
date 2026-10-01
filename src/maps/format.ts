@@ -8,15 +8,19 @@
 // map's own content revision; saves record the map id, revision and checksum so
 // a map that changes later can never silently reinterpret an old campaign.
 
-import type { NationDef, ProvinceDef, RegionDef } from '../sim/types';
+import type { NationDef, ProvinceDef, RegionDef, SeaZoneDef } from '../sim/types';
+
+export type { SeaZoneDef };
 
 export const MAP_FORMAT = 'crown-frontier-map';
 /**
  * 1: first format (17th-century resources: grain, iron, horses, goods).
  * 2: industrial deposits (food, coal, iron, oil, rubber, nitrates) and factories.
- * Older packages are upgraded on import (validate.ts).
+ * 3: sea zones (with coasts, adjacency and strait control) and ports.
+ * Older packages are upgraded on import (validate.ts; sea zones are generated
+ * from the drawn coastline by seazones.ts).
  */
-export const MAP_FORMAT_VERSION = 2;
+export const MAP_FORMAT_VERSION = 3;
 
 /** Reserved border ids for edges that touch no province. */
 export const SEA = '~sea';
@@ -73,6 +77,16 @@ export interface MapLabelDef {
   angle?: number;
 }
 
+/** The drawn half of the sea zones. */
+export interface SeaGeometry {
+  /** zone ordinal (1-based, in `seaZones` order; 0 = not sea) per cell, run-length encoded */
+  grid: { x0: number; y0: number; cell: number; w: number; h: number; rle: string };
+  /** where a zone's name and fleets are drawn */
+  anchors: Record<string, { cx: number; cy: number }>;
+  /** smoothed borders between neighbouring zones */
+  borders: Array<{ a: string; b: string; pts: number[] }>;
+}
+
 export interface MapGeometryData {
   bounds: { minX: number; minY: number; maxX: number; maxY: number };
   /** label anchor and area of each province */
@@ -82,6 +96,8 @@ export interface MapGeometryData {
   /** impassable areas drawn on the map: mountain ranges and lakes */
   waste: Array<{ kind: string; poly: number[] }>;
   labels?: MapLabelDef[];
+  /** sea zones as drawn (format 3) */
+  seas?: SeaGeometry;
 }
 
 export interface MapPackage {
@@ -99,6 +115,8 @@ export interface MapPackage {
   provinces: ProvinceDef[];
   straits: Array<[string, string]>;
   rivers: Array<[string, string]>;
+  /** sea zones fleets move between (format 3) */
+  seaZones: SeaZoneDef[];
   geometry: MapGeometryData;
 }
 
@@ -129,8 +147,9 @@ function canonicalJson(v: unknown): string {
  * invalidate saves, while any change a campaign depends on does. Key order does
  * not matter (a sanitised copy of a package has the same checksum).
  */
-export function mapChecksum(pkg: Pick<MapPackage, 'id' | 'revision' | 'rules' | 'regions' | 'nations' | 'provinces' | 'straits' | 'rivers'>): string {
+export function mapChecksum(pkg: Pick<MapPackage, 'id' | 'revision' | 'rules' | 'regions' | 'nations' | 'provinces' | 'straits' | 'rivers' | 'seaZones'>): string {
   const canon = canonicalJson({
+    seaZones: pkg.seaZones,
     id: pkg.id,
     revision: pkg.revision,
     rules: pkg.rules,
@@ -163,5 +182,7 @@ export interface DrawnMap {
   waste: Array<{ kind: string; poly: number[] }>;
   straits: Array<[string, string]>;
   labels?: MapLabelDef[];
+  seas?: SeaGeometry;
+  seaZones: SeaZoneDef[];
 }
 

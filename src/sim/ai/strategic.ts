@@ -40,6 +40,7 @@ import type { NationId, PeaceTerms, ProjectKind, ProvinceId, TreatyType, Victory
 import { VICTORY_MONTHS } from '../victory';
 import { canJoin, evaluatePeace, goalOptions, provinceCost, scoreFor, termsCost } from '../war';
 import { aiRand, diffOf, issue } from './common';
+import { coastalShare, navalStrategy, planInvasion } from './navy';
 
 const AVG_UPKEEP = 1.45;
 const AVG_SUPPLY = 0.62;
@@ -124,6 +125,9 @@ function chooseResearch(sim: Sim, nid: NationId): void {
     for (const r of short) if (TECH_HELPS[r]?.includes(t.id)) s *= 1.6;
     if (t.effects.industry || t.effects.factoryCost) s *= 1.15;
     if (t.unlocks) s *= 1.2;
+    // a navy matters to coastal realms; aircraft are new arms worth having
+    if (t.branch === 'naval') s *= 0.6 + coastalShare(sim, nid);
+    if (t.branch === 'air' && t.unlocks) s *= 1.3;
     if (n.ai.goal.victory === 'diplomatic' && t.branch === 'society' && (t.effects.opinion || t.effects.envoys)) s *= 1.3;
     if (n.ai.goal.victory === 'economic' && (t.branch === 'industry' || t.effects.integration)) s *= 1.2;
     s *= 1 + (aiRand(sim) - 0.5) * 0.2;
@@ -652,6 +656,8 @@ export function strategic(sim: Sim, nid: NationId): void {
   choosePolicy(sim, nid);
   considerPeace(sim, nid);
   planConstruction(sim, nid);
+  navalStrategy(sim, nid, treasuryReserve(sim, nid));
+  planInvasion(sim, nid);
   diplomacy(sim, nid);
   considerWar(sim, nid);
   // rivals close to victory make everyone nervous

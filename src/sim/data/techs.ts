@@ -5,7 +5,7 @@
 // the start year. Naval and air technologies are listed with Stage C content.
 
 import type { ModEffects } from '../modifiers';
-import type { UnitType } from '../types';
+import type { ShipType, UnitType, WingType } from '../types';
 
 export type Branch = 'land' | 'naval' | 'air' | 'industry' | 'society';
 export type Era = 1 | 2 | 3 | 4 | 5;
@@ -21,7 +21,7 @@ export interface TechDef {
   requires: string[];
   effects: ModEffects;
   /** a regiment, ship or wing this technology allows the realm to build */
-  unlocks?: UnitType;
+  unlocks?: UnitType | ShipType | WingType;
   description: string;
 }
 
@@ -35,7 +35,7 @@ export const ERAS: Record<Era, { name: string; year: number }> = {
 
 const ERA_COST: Record<Era, number> = { 1: 150, 2: 220, 3: 320, 4: 440, 5: 560 };
 
-function tech(id: string, name: string, branch: Branch, era: Era, year: number, requires: string[], effects: ModEffects, description: string, unlocks?: UnitType): TechDef {
+function tech(id: string, name: string, branch: Branch, era: Era, year: number, requires: string[], effects: ModEffects, description: string, unlocks?: UnitType | ShipType | WingType): TechDef {
   return { id, name, branch, era, year, cost: ERA_COST[era], requires, effects, description, ...(unlocks ? { unlocks } : {}) };
 }
 
@@ -61,6 +61,7 @@ export const TECH_LIST: TechDef[] = [
   tech('public_schooling', 'Public Schooling', 'society', 1, 1875, [], { research: 0.15 }, 'Literate recruits, clerks and engineers.'),
   tech('civil_service', 'Civil Service', 'society', 1, 1878, ['telegraph_network'], { unrest: -4, adminCapacity: 1 }, 'Examined officials govern by rule, not favour.'),
   tech('consular_service', 'Consular Service', 'society', 1, 1880, [], { envoys: 1, relationGain: 0.25 }, 'Consuls in every port and capital.'),
+  tech('torpedo_boats', 'Torpedo Boats', 'naval', 1, 1876, [], { antiSub: 0.1 }, 'Small, fast boats with self-propelled torpedoes screen the fleet.', 'screen'),
 
   // ── Era II · Steel & Breech ─────────────────────────────────────────────
   tech('engineering_corps', 'Engineering Corps', 'land', 2, 1885, ['rail_logistics'], { siege: 0.2 }, 'Sappers, bridging trains and field railways.', 'engineers'),
@@ -75,6 +76,9 @@ export const TECH_LIST: TechDef[] = [
   tech('conscription', 'Universal Conscription', 'society', 2, 1885, ['civil_service'], { manpower: 0.2, manpowerRegen: 0.2 }, 'Every young man serves; reservists return when called.'),
   tech('mass_press', 'Mass Press', 'society', 2, 1890, ['public_schooling'], { research: 0.1, relationGain: 0.15, integration: 0.1 }, 'Cheap newspapers in every town.'),
   tech('social_insurance', 'Social Insurance', 'society', 2, 1895, ['civil_service'], { unrest: -4, popGrowth: 0.15 }, 'Pensions and accident insurance calm the factory towns.'),
+  tech('steel_warships', 'Steel Warships', 'naval', 2, 1885, [], { navalAttack: 0.15, shipCost: -0.1 }, 'Steel hulls and breech-loading naval rifles.'),
+  tech('naval_bases', 'Naval Bases', 'naval', 2, 1890, [], { portCost: -0.25, repair: 0.5 }, 'Coaling stations and dry docks along the coast.'),
+  tech('pre_dreadnoughts', 'Pre-Dreadnought Battleships', 'naval', 2, 1892, ['steel_warships'], { capitalAttack: 0.2 }, 'Armoured battleships with mixed-calibre turrets.'),
   tech('arbitration', 'International Arbitration', 'society', 2, 1897, ['consular_service'], { alarmGen: -0.25, trustGain: 0.5, opinion: 5 }, 'Disputes go to tribunals before they go to war.'),
 
   // ── Era III · Dreadnought & Engine ──────────────────────────────────────
@@ -86,6 +90,10 @@ export const TECH_LIST: TechDef[] = [
   tech('rubber_plantations', 'Plantation Science', 'industry', 3, 1903, ['refrigeration'], { rubberOutput: 0.4, supplyProd: 0.1 }, 'Scientific estates for rubber and food.'),
   tech('turbines', 'Steam Turbines', 'industry', 3, 1904, ['electrification'], { factoryCoal: -0.2 }, 'More power from every ton of coal.'),
   tech('assembly_line', 'Assembly Line', 'industry', 3, 1910, ['electrification'], { industry: 0.2, factoryCost: -0.15 }, 'Moving lines and interchangeable parts.'),
+  tech('submarines', 'Submarines', 'naval', 3, 1904, ['torpedo_boats'], {}, 'Diesel boats that strike unseen.', 'submarine'),
+  tech('dreadnoughts', 'Dreadnoughts', 'naval', 3, 1906, ['pre_dreadnoughts'], { capitalAttack: 0.35 }, 'All-big-gun turbine battleships make every older fleet obsolete.'),
+  tech('aviation', 'Aviation', 'air', 3, 1908, [], {}, 'Heavier-than-air flight: reconnaissance machines and the first airfields.', 'recon'),
+  tech('oil_firing', 'Oil-Fired Boilers', 'naval', 3, 1910, ['steel_warships'], { oilFiring: 1, fleetSpeed: 0.25 }, 'Faster, longer-ranged ships that burn oil instead of coal.'),
   tech('mass_politics', 'Mass Politics', 'society', 3, 1902, ['mass_press'], { integration: 0.15, unrest: -3 }, 'Parties and unions bind the new provinces to the state.'),
   tech('reserve_system', 'Reserve System', 'society', 3, 1906, ['conscription'], { manpower: 0.15, reinforce: 0.25 }, 'Trained reservists fill the ranks within days.'),
   tech('entente_diplomacy', 'Entente Diplomacy', 'society', 3, 1907, ['arbitration'], { envoys: 1, opinion: 5 }, 'Understandings between friendly crowns.'),
@@ -99,9 +107,20 @@ export const TECH_LIST: TechDef[] = [
   tech('propaganda', 'Propaganda Ministry', 'society', 4, 1918, ['mass_politics'], { warExhaustion: -0.25, unrest: -2 }, 'Posters, newsreels and censors keep the home front steady.'),
   tech('league_of_crowns', 'League of Crowns', 'society', 4, 1920, ['entente_diplomacy'], { alarmDecay: 0.5, opinion: 10 }, 'A standing congress of realms.'),
   tech('standardisation', 'Standardisation', 'industry', 4, 1921, ['war_economy'], { upkeep: -0.1, factoryCost: -0.1 }, 'One calibre, one gauge, one spare part.'),
+  tech('fighters', 'Fighters', 'air', 4, 1915, ['aviation'], {}, 'Armed scouts become hunters of other aircraft.', 'fighter'),
+  tech('amphibious_warfare', 'Amphibious Warfare', 'naval', 4, 1915, ['naval_bases'], { landing: 0.5 }, 'Landing craft, beach parties and naval gunfire support.'),
+  tech('ground_attack', 'Ground Attack', 'air', 4, 1916, ['fighters'], {}, 'Armoured aircraft strafe trenches and columns.', 'attack'),
+  tech('strategic_bombing', 'Strategic Bombing', 'air', 4, 1917, ['aviation'], {}, 'Multi-engine bombers reach the factories behind the front.', 'bomber'),
+  tech('convoys', 'Convoy System', 'naval', 4, 1917, ['submarines'], { antiSub: 0.4, blockadeResist: 0.3 }, 'Escorted convoys and depth charges blunt the submarine war.'),
+  tech('naval_aviation', 'Naval Aviation', 'naval', 4, 1918, ['dreadnoughts'], {}, 'Flight decks put aircraft to sea.', 'carrier'),
   tech('combined_arms', 'Combined Arms', 'land', 4, 1922, ['tanks', 'storm_tactics'], { attack: 0.1, armourAttack: 0.15 }, 'Infantry, guns and tanks attack as one.'),
 
   // ── Era V · Mechanised ──────────────────────────────────────────────────
+  tech('sonar', 'Sonar', 'naval', 5, 1925, ['convoys'], { antiSub: 0.5 }, 'Sound ranging finds submarines under the waves.'),
+  tech('all_metal_aircraft', 'All-Metal Monoplanes', 'air', 5, 1928, ['fighters'], { airAttack: 0.25, airRange: 1 }, 'Stressed-skin monoplanes: faster, further, better armed.'),
+  tech('fleet_carriers', 'Fleet Carriers', 'naval', 5, 1930, ['naval_aviation'], { carrierAir: 0.4 }, 'Large carriers with dive and torpedo bombers.'),
+  tech('air_defence', 'Air Defence', 'air', 5, 1933, ['all_metal_aircraft'], { airDefence: 0.4 }, 'Flak belts, observers and interceptor control.'),
+  tech('radar', 'Radar', 'air', 5, 1936, ['air_defence'], { airAttack: 0.2, airDefence: 0.2 }, 'Radio location sees raiders coming a hundred miles away.'),
   tech('synthetic_fuel', 'Synthetic Fuel', 'industry', 5, 1927, ['haber_process'], { syntheticOil: 0.25 }, 'Coal hydrogenated into petrol.'),
   tech('mechanised', 'Mechanised Infantry', 'land', 5, 1928, ['combined_arms'], { moveSpeed: 0.15, infantryAttack: 0.1, armourAttack: 0.15 }, 'Infantry rides into battle beside the tanks.'),
   tech('welfare_state', 'Welfare State', 'society', 5, 1928, ['social_insurance'], { unrest: -5, popGrowth: 0.2 }, 'Health, housing and schooling for all.'),

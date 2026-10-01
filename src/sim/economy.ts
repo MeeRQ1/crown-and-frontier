@@ -7,20 +7,27 @@
 //            supply lines eat it (the `supplies` stockpile, shown as Food).
 // Resources: a deposit yields (coal 4, others 3, + dev/4) * efficiency * modifiers a
 //            month; stockpiles are capped (40 + 3 per dev).
-// Industry:  industrial capacity (IC) = sum(factories * efficiency) * coal factor *
-//            (1 + modifiers); factories burn 0.6 coal per level a month and run at the
-//            share of coal available. Materiel += IC * 4 + workshops (0.15 per
+// Industry:  industrial capacity (IC) = sum(factories * efficiency * (1 - bombing)) *
+//            coal factor * (1 + modifiers); factories burn 0.6 coal per level a month and
+//            run at 30% + 70% x the share of coal available. Materiel += IC * 4 + workshops (0.15 per
 //            integrated dev) up to the cap; output beyond the cap is sold as
 //            manufactured goods (0.35 crowns each).
 // Trade:     each trade agreement moves resources each month from a partner's
 //            surplus (above 40% of its cap after its own use) to the other's need
 //            (below 40%), at a fixed price per unit; plus 1 crown of commerce each.
+//            Enemy blockades shrink sea trade by the blockaded share of each coast
+//            (realms with a land border trade overland); a blockaded province
+//            loses a quarter of its crowns.
+// Navy/air:  ships and air wings cost upkeep; ships burn coal (oil after Oil-Fired
+//            Boilers; submarines and carriers always oil), aircraft burn oil.
 // Reserve:   military-age men = pop*40 per thousand * (0.2+0.8*integration); the manpower
 //            pool can never exceed reserve minus men already serving (no double counting).
 
+import { airFuel, airUpkeep, bombingLoss } from './air';
 import { C, RESOURCE_INFO, STRATEGIC, TERRAIN, UNITS } from './config';
 import { armiesOfNation, memoize, ownedBy } from './index';
 import { nationMods, type Mods } from './modifiers';
+import { fleetFuel, fleetUpkeep, provinceBlockaded, tradeOpen } from './naval';
 import { armiesOf, clamp, controlledProvinces, enemiesOf, months, notify, ownedProvinces, treatyPartners, type Sim } from './state';
 import { armySupplyInfo } from './supply';
 import type { MonthlyLedger, NationId, ProvinceId, ResourceFlow, StrategicResource, UnitType } from './types';
@@ -47,7 +54,11 @@ export function provinceBaseCrowns(sim: Sim, pid: ProvinceId): number {
 }
 
 export function provinceCrowns(sim: Sim, pid: ProvinceId): number {
-  return provinceBaseCrowns(sim, pid) * provinceEfficiency(sim, pid);
+  const v = provinceBaseCrowns(sim, pid) * provinceEfficiency(sim, pid);
+  if (v <= 0 || !sim.world.provZones[pid] || !provinceBlockaded(sim, pid)) return v;
+  // an enemy blockade cuts the coast's trade
+  const owner = sim.state.provinces[pid].owner!;
+  return v * (1 - C.naval.blockadeIncome * Math.max(0, 1 - nationMods(sim, owner).blockadeResist));
 }
 
 /** Food a province yields its owner each month. */
@@ -113,7 +124,7 @@ export function effectiveFactories(sim: Sim, nid: NationId): number {
   let f = 0;
   for (const pid of ownedBy(sim, nid)) {
     const p = sim.state.provinces[pid];
-    if (p.factories) f += p.factories * provinceEfficiency(sim, pid);
+    if (p.factories) f += p.factories * provinceEfficiency(sim, pid) * (1 - bombingLoss(sim, pid));
   }
   return f;
 }
@@ -166,6 +177,10 @@ export function resourcePlan(sim: Sim, nid: NationId): ResourcePlan {
     }
     const factoryCoal = factories * C.industry.coalPerFactory * Math.max(0.2, 1 + m.factoryCoal);
     need.coal += factoryCoal + synthCoal;
+    // fleets burn coal (oil after Oil-Fired Boilers); aircraft burn oil
+    const fuel = fleetFuel(sim, nid);
+    need.coal += fuel.coal;
+    need.oil += fuel.oil + airFuel(sim, nid);
     const atWar = enemiesOf(sim, nid).length > 0;
     for (const a of armiesOfNation(sim, nid)) {
       for (const r of a.regiments) {
@@ -237,7 +252,8 @@ export function tradeFlows(sim: Sim): TradeLine[] {
           const B = get(to);
           const offer = A.surplus[res] - A.keep[res];
           const want = B.keep[res] - B.surplus[res];
-          const amount = Math.min(offer, want);
+          // enemy blockades choke sea trade (land neighbours trade overland)
+          const amount = Math.min(offer, want) * tradeOpen(sim, from, to);
           if (amount < 0.5) continue;
           const price = RESOURCE_INFO[res].price * Math.max(0.5, 1 + nationMods(sim, from).trade);
           lines.push({ res, from, to, amount, price });
@@ -363,7 +379,8 @@ export function computeLedger(sim: Sim, nid: NationId, trade: TradeLine[] = trad
       else resources[line.res].imported += line.amount;
     }
   }
-  const pacts = treatyPartners(sim, 'trade', nid).length;
+  let pacts = 0;
+  for (const o of treatyPartners(sim, 'trade', nid)) pacts += tradeOpen(sim, nid, o);
   if (pacts) income['Commerce'] = pacts * C.economy.tradeCommerce * Math.max(0, 1 + mods.trade);
   if (sales) income['Resource sales'] = sales;
 
@@ -398,6 +415,10 @@ export function computeLedger(sim: Sim, nid: NationId, trade: TradeLine[] = trad
     else foraging += use;
   }
   expenses['Army upkeep'] = upkeep;
+  const navy = fleetUpkeep(sim, nid);
+  if (navy) expenses['Fleet upkeep'] = navy;
+  const airUp = airUpkeep(sim, nid);
+  if (airUp) expenses['Air wing upkeep'] = airUp;
 
   let forts = 0;
   for (const pid of ownedProvinces(sim, nid)) forts += sim.state.provinces[pid].fort;

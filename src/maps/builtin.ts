@@ -7,9 +7,15 @@
 import aldmereProvinces from '../data/aldmere.provinces.json';
 import { ALDMERE_LABELS, ALDMERE_NATIONS, ALDMERE_REGIONS } from '../data/aldmere';
 import reachAdjacency from '../data/reach.adjacency.json';
+import aldmereSeas from '../data/aldmere.seas.json';
 import { REACH_LABELS, REACH_NATIONS, REACH_PROVINCES, REACH_REGIONS, STRAITS } from '../data/reach';
-import type { ProvinceDef } from '../sim/types';
-import { MAP_FORMAT, MAP_FORMAT_VERSION, type MapGeometryData, type MapPackage, type MapScenarioPart } from './format';
+import reachSeas from '../data/reach.seas.json';
+import type { ProvinceDef, SeaZoneDef } from '../sim/types';
+import { MAP_FORMAT, MAP_FORMAT_VERSION, type MapGeometryData, type MapPackage, type MapScenarioPart, type SeaGeometry } from './format';
+
+/** Sea zones and starting ports, generated from each map's coastline by `npm run genseas`. */
+type SeaData = { zones: SeaZoneDef[]; ports: Record<string, number> };
+const withPorts = (provinces: ProvinceDef[], seas: SeaData): ProvinceDef[] => provinces.map((p) => (seas.ports[p.id] ? { ...p, port: seas.ports[p.id] } : p));
 
 export const BUILTIN_MAPS = ['aldmere', 'reach'] as const;
 export type BuiltinMapId = (typeof BUILTIN_MAPS)[number];
@@ -20,8 +26,8 @@ function aldmereScenario(): MapScenarioPart {
     format: MAP_FORMAT,
     version: MAP_FORMAT_VERSION,
     id: 'aldmere',
-    // 2: the industrial age (deposits, factories, start year 1880)
-    revision: 2,
+    // 2: the industrial age (deposits, factories, start year 1880); 3: sea zones and ports
+    revision: 3,
     meta: {
       name: 'Aldmere',
       description: 'Fourteen realms across a continent of passes, rivers and open frontier.',
@@ -43,9 +49,10 @@ function aldmereScenario(): MapScenarioPart {
     },
     regions: ALDMERE_REGIONS,
     nations: ALDMERE_NATIONS,
-    provinces: data.provinces,
+    provinces: withPorts(data.provinces, aldmereSeas as SeaData),
     straits: data.straits,
     rivers: data.rivers,
+    seaZones: (aldmereSeas as SeaData).zones,
   };
 }
 
@@ -55,8 +62,8 @@ function reachScenario(): MapScenarioPart {
     format: MAP_FORMAT,
     version: MAP_FORMAT_VERSION,
     id: 'reach',
-    // 2: the industrial age (deposits, factories, start year 1895)
-    revision: 2,
+    // 2: the industrial age (deposits, factories, start year 1895); 3: sea zones and ports
+    revision: 3,
     meta: {
       name: 'The Reach',
       description: 'Nine crowns and an unsettled frontier divided by the Greyspine mountains.',
@@ -70,9 +77,13 @@ function reachScenario(): MapScenarioPart {
     rules: { startYear: 1895, campaignYears: { options: [25, 40, 60], default: 40 } },
     regions: REACH_REGIONS,
     nations: REACH_NATIONS,
-    provinces: REACH_PROVINCES.map((p) => ({ ...p, neighbors: [...(neighbors[p.id] ?? [])] })),
+    provinces: withPorts(
+      REACH_PROVINCES.map((p) => ({ ...p, neighbors: [...(neighbors[p.id] ?? [])] })),
+      reachSeas as SeaData,
+    ),
     straits: STRAITS,
     rivers: [],
+    seaZones: (reachSeas as SeaData).zones,
   };
 }
 
@@ -98,17 +109,17 @@ type RawGeometry = {
 /** The drawn half of a built-in map (a separate download). */
 export async function builtinGeometry(id: BuiltinMapId): Promise<MapGeometryData> {
   if (id === 'aldmere') {
-    const { default: g } = await import('../data/aldmere.map.json');
-    return toGeometry(g as unknown as RawGeometry, ALDMERE_LABELS);
+    const [{ default: g }, { default: seas }] = await Promise.all([import('../data/aldmere.map.json'), import('../data/aldmere.seamap.json')]);
+    return toGeometry(g as unknown as RawGeometry, ALDMERE_LABELS, seas as unknown as SeaGeometry | null);
   }
-  const { default: g } = await import('../data/reach.map.json');
-  return toGeometry(g as unknown as RawGeometry, REACH_LABELS);
+  const [{ default: g }, { default: seas }] = await Promise.all([import('../data/reach.map.json'), import('../data/reach.seamap.json')]);
+  return toGeometry(g as unknown as RawGeometry, REACH_LABELS, seas as unknown as SeaGeometry | null);
 }
 
-function toGeometry(raw: RawGeometry, labels: MapGeometryData['labels']): MapGeometryData {
+function toGeometry(raw: RawGeometry, labels: MapGeometryData['labels'], seas: SeaGeometry | null): MapGeometryData {
   const centers: MapGeometryData['centers'] = {};
   for (const [id, p] of Object.entries(raw.provinces)) centers[id] = { cx: p.cx, cy: p.cy, area: p.area };
-  return { bounds: raw.bounds, centers, edges: raw.edges, waste: raw.waste, labels };
+  return { bounds: raw.bounds, centers, edges: raw.edges, waste: raw.waste, labels, ...(seas ? { seas } : {}) };
 }
 
 /** A whole built-in map as a package (for validation, export and tools). */

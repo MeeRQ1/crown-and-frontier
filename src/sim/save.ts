@@ -11,7 +11,8 @@
 
 import { SCHEMA_VERSION } from './config';
 import { checkInvariants } from './invariants';
-import { MigrationError, migrateSave, type RawSave } from './migrate';
+import { addForceDefaults, MigrationError, migrateSave, type RawSave } from './migrate';
+import { startingFleets } from './naval';
 import { dateOf, type Sim } from './state';
 import type { GameState, MapFingerprint } from './types';
 import { customMapPackage, getWorld, isBuiltinMap, mapFingerprint, mapScenarioPart, registerMapScenario, scenarioIds } from './world';
@@ -156,6 +157,18 @@ export function readSave(text: string): LoadedSave {
     if (!world.prov[a.location] || !st.nations[a.nation]) throw new SaveError(`Army ${id} references a missing province or realm.`);
   }
   const sim: Sim = { world, state: st };
+  // fleets and air forces: a converted 17th-century save gets its home squadrons
+  // now that its map is loaded; a save from a development build of format 3
+  // that predates them gets the same, with a notice
+  const raw = st as unknown as Record<string, unknown>;
+  if (!raw.fleets || !raw.wings) {
+    addForceDefaults(raw, (pid) => world.prov[pid]?.port ?? 0);
+    notices.push('This save was made before fleets and air forces existed. Every coastal realm received ports and a home squadron; nothing else changed.');
+  }
+  if (raw.pendingFleets) {
+    delete raw.pendingFleets;
+    startingFleets(sim);
+  }
   const problems = checkInvariants(sim);
   if (problems.length) throw new SaveError(`The save is inconsistent: ${problems.slice(0, 3).join('; ')}.`);
   // bug reports from this campaign replay from the state as loaded

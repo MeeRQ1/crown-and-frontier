@@ -8,7 +8,7 @@
 import { mkdirSync, writeFileSync } from 'node:fs';
 import { dirname } from 'node:path';
 import { MAP_FORMAT, MAP_FORMAT_VERSION, sizeFor, type MapPackage } from '../src/maps/format';
-import { validateMapPackage } from '../src/maps/validate';
+import { addSeaZones, validateMapPackage } from '../src/maps/validate';
 import type { NationDef, Personality, ProvinceDef, RegionDef, Resource, Terrain } from '../src/sim/types';
 import { buildMap, fillSea, mulberry, pointInPoly, type Pt, type Seed } from './mapgen/core';
 
@@ -216,14 +216,16 @@ const pkg: MapPackage = {
     mechanics: [],
     origin: 'generated',
   },
-  rules: { startYear: 1640, campaignYears: { options: [40, 60], default: 60 }, researchCostMul: 2 },
+  rules: { startYear: 1870, campaignYears: { options: [40, 60, 80], default: 60 }, researchCostMul: 2 },
   regions,
   nations,
   provinces,
   straits: [],
   rivers: [],
+  seaZones: [],
   geometry: { bounds: B, centers, edges, waste: built.waste },
 };
+addSeaZones(pkg);
 const check = validateMapPackage(pkg);
 mkdirSync(dirname(out), { recursive: true });
 writeFileSync(out, JSON.stringify(pkg));

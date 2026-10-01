@@ -11,6 +11,8 @@
 // Factory:     80 * (level+1) crowns + 10 iron, 20 weeks, max min(5, 1 + dev/2) (needs integration >= 50)
 // Charter:     20 + 6*dev crowns, 8 weeks: +25 integration (frontier provinces below 90)
 // Settle:      50 crowns, 500 men, 20 food, 16 weeks; unclaimed province next to our land
+// Port:        50 * (level+1) crowns + 4 iron, 16 weeks, max 3; coastal provinces (shipyards, repairs)
+// Airfield:    40 * (level+1) crowns + 3 iron, 12 weeks, max 2; needs Aviation (2 air wings per level)
 
 import { C, TERRAIN } from './config';
 import { ownedBy } from './index';
@@ -25,6 +27,8 @@ export const PROJECT_LABELS: Record<ProjectKind, string> = {
   factory: 'Build factory',
   charter: 'Grant charters',
   settle: 'Settle',
+  port: 'Build port',
+  airfield: 'Build airfield',
 };
 
 export interface ProjectCost {
@@ -96,6 +100,10 @@ export function projectCost(sim: Sim, nid: NationId, pid: ProvinceId, kind: Proj
         manpower: C.construction.settleManpower,
         weeks: C.construction.settleWeeks,
       };
+    case 'port':
+      return { crowns: Math.round(C.construction.portBase * (p.port + 1) * Math.max(0.3, 1 + m.portCost)), supplies: 0, iron: C.construction.portIron, manpower: 0, weeks: C.construction.portWeeks };
+    case 'airfield':
+      return { crowns: Math.round(C.construction.airfieldBase * (p.airfield + 1)), supplies: 0, iron: C.construction.airfieldIron, manpower: 0, weeks: C.construction.airfieldWeeks };
   }
 }
 
@@ -140,6 +148,14 @@ export function buildProblem(sim: Sim, nid: NationId, pid: ProvinceId, kind: Pro
       if (p.integration < C.construction.factoryMinIntegration) return `Integrate the province first (${Math.floor(p.integration)}/${C.construction.factoryMinIntegration}).`;
     }
     if (kind === 'charter' && p.integration >= 90) return 'The province is already well integrated (charters need integration below 90).';
+    if (kind === 'port') {
+      if (!sim.world.provZones[pid]) return 'Only a province on the coast of a sea zone can have a port.';
+      if (p.port >= C.construction.portMax) return 'The port is already at the maximum level.';
+    }
+    if (kind === 'airfield') {
+      if (!n.research.done.includes('aviation')) return 'Airfields need the Aviation technology.';
+      if (p.airfield >= C.construction.airfieldMax) return 'The airfield is already at the maximum level.';
+    }
   }
   const slots = known?.slots ?? buildSlots(sim, nid);
   if ((known?.active ?? activeProjects(sim, nid).length) >= slots) return `All ${slots} construction slots are in use.`;
@@ -214,6 +230,14 @@ export function weeklyConstruction(sim: Sim): void {
         p.fort = Math.min(C.construction.fortMax, p.fort + 1);
         notify(sim, pr.nation, 'low', 'build', `The fort at ${provName(sim, pid)} is now level ${p.fort}.`, { province: pid });
         bump(sim);
+        break;
+      case 'port':
+        p.port = Math.min(C.construction.portMax, p.port + 1);
+        notify(sim, pr.nation, 'low', 'build', `The port of ${provName(sim, pid)} is now level ${p.port}.`, { province: pid });
+        break;
+      case 'airfield':
+        p.airfield = Math.min(C.construction.airfieldMax, p.airfield + 1);
+        notify(sim, pr.nation, 'low', 'build', `The airfield at ${provName(sim, pid)} is now level ${p.airfield}.`, { province: pid });
         break;
       case 'charter':
         p.integration = Math.min(100, p.integration + C.construction.charterGain);

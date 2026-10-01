@@ -20,10 +20,11 @@ export function scenarioFromPackage(pkg: MapScenarioPart): ScenarioDef {
     straits: pkg.straits.map(([a, b]) => [a, b] as [string, string]),
     rivers: pkg.rivers.map(([a, b]) => [a, b] as [string, string]),
     provinces: pkg.provinces.map((p) => ({ ...p, claims: [...p.claims], neighbors: [...p.neighbors] })),
+    seaZones: (pkg.seaZones ?? []).map((z) => ({ ...z, neighbors: [...z.neighbors], coasts: [...z.coasts], ...(z.straits ? { straits: z.straits.map(([a, b]) => [a, b] as [string, string]) } : {}) })),
   };
 }
 
-export function drawnFromPackage(pkg: Pick<MapPackage, 'id' | 'straits' | 'geometry'>): DrawnMap {
+export function drawnFromPackage(pkg: Pick<MapPackage, 'id' | 'straits' | 'geometry' | 'seaZones'>): DrawnMap {
   const g = pkg.geometry;
   const byProv = new Map<string, MapPackage['geometry']['edges']>();
   for (const e of g.edges) {
@@ -31,5 +32,5 @@ export function drawnFromPackage(pkg: Pick<MapPackage, 'id' | 'straits' | 'geome
   }
   const provinces: DrawnMap['provinces'] = {};
   for (const [id, c] of Object.entries(g.centers)) provinces[id] = { poly: ringFromEdges(id, byProv.get(id) ?? []), cx: c.cx, cy: c.cy, area: c.area };
-  return { id: pkg.id, bounds: { ...g.bounds }, provinces, edges: g.edges, waste: g.waste, straits: pkg.straits, labels: g.labels };
+  return { id: pkg.id, bounds: { ...g.bounds }, provinces, edges: g.edges, waste: g.waste, straits: pkg.straits, labels: g.labels, seas: g.seas, seaZones: pkg.seaZones ?? [] };
 }

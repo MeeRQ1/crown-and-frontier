@@ -8,8 +8,9 @@
 // allowed. parseMapPackage() does both, with size limits, for imported text.
 
 import { TERRAIN } from '../sim/config';
-import type { NationDef, NationTraits, ProvinceDef, RegionDef, Resource, Terrain } from '../sim/types';
-import { MAP_FORMAT, MAP_FORMAT_VERSION, NON_PROVINCE_SIDES, type MapEdge, type MapLabelDef, type MapPackage } from './format';
+import type { NationDef, NationTraits, ProvinceDef, RegionDef, Resource, SeaZoneDef, Terrain } from '../sim/types';
+import { MAP_FORMAT, MAP_FORMAT_VERSION, NON_PROVINCE_SIDES, SEA, type MapEdge, type MapLabelDef, type MapPackage, type SeaGeometry } from './format';
+import { decodeGrid, generateSeaZones } from './seazones';
 import { degenerate, loopsFromEdges } from './rings';
 import { industrialDeposit, LEGACY_RESOURCES, type LegacyResource } from './deposits';
 import { CHARGE_NAMES, LEGACY_TRAITS, ORDINARY_NAMES, PERSONALITY_IDS, RESOURCES, TERRAINS, TINCTURE_NAMES, TRAIT_BOUNDS } from './vocab';
@@ -40,6 +41,8 @@ export const MAP_LIMITS = {
   nameLength: 60,
   textLength: 600,
   coordinate: 100000,
+  seaZones: 400,
+  seaCells: 1_000_000,
 };
 
 const ID = /^[a-z0-9][a-z0-9_-]{0,39}$/;
@@ -150,7 +153,7 @@ function readResource(r: Reader, v: unknown, version: number, terrain: Terrain, 
 }
 
 /** Rebuilds a package from untrusted data with only known, well-typed fields. */
-export function normalizeMapPackage(raw: unknown): { pkg: MapPackage; errors: MapIssue[] } {
+export function normalizeMapPackage(raw: unknown): { pkg: MapPackage; errors: MapIssue[]; fromVersion: number } {
   const r = new Reader();
   const o = r.obj(raw, 'The map file');
   if (o.format !== MAP_FORMAT) r.err('format', 'This is not a Crown & Frontier map package (missing "format": "crown-frontier-map").');
@@ -193,6 +196,7 @@ export function normalizeMapPackage(raw: unknown): { pkg: MapPackage; errors: Ma
     provinces: [],
     straits: [],
     rivers: [],
+    seaZones: [],
     geometry: { bounds: { minX: 0, minY: 0, maxX: 1, maxY: 1 }, centers: {}, edges: [], waste: [] },
   };
   if (rules.victory !== undefined) {
@@ -262,6 +266,7 @@ export function normalizeMapPackage(raw: unknown): { pkg: MapPackage; errors: Ma
       neighbors: r.arr(po.neighbors ?? [], 'Neighbours', 64).map((nb) => r.id(nb, 'Neighbour', pid)),
     };
     if (po.factories !== undefined) p.factories = r.int(po.factories, 'Factories', 0, 5, pid);
+    if (version >= 3 && po.port !== undefined) p.port = r.int(po.port, 'Port', 0, 3, pid);
     pkg.provinces.push(p);
   }
   for (const x of r.arr(o.straits ?? [], 'Straits', 2000)) {
@@ -271,6 +276,26 @@ export function normalizeMapPackage(raw: unknown): { pkg: MapPackage; errors: Ma
   for (const x of r.arr(o.rivers ?? [], 'Rivers', 6000)) {
     const pr = r.pair(x, 'River border');
     if (pr) pkg.rivers.push(pr);
+  }
+  if (version >= 3) {
+    for (const x of r.arr(o.seaZones ?? [], 'Sea zones', MAP_LIMITS.seaZones)) {
+      const zo = r.obj(x, 'Sea zone');
+      const zid = r.id(zo.id, 'Sea zone id');
+      const z: SeaZoneDef = {
+        id: zid,
+        name: r.str(zo.name, 'Sea zone name', MAP_LIMITS.nameLength, zid),
+        neighbors: r.arr(zo.neighbors ?? [], 'Sea zone neighbours', 64).map((n) => r.id(n, 'Neighbouring sea zone', zid)),
+        coasts: r.arr(zo.coasts ?? [], 'Coasts', 400).map((c) => r.id(c, 'Coastal province', zid)),
+      };
+      if (zo.straits !== undefined) {
+        z.straits = [];
+        for (const s of r.arr(zo.straits, 'Straits commanded', 200)) {
+          const pr = r.pair(s, 'Strait commanded');
+          if (pr) z.straits.push(pr);
+        }
+      }
+      pkg.seaZones.push(z);
+    }
   }
   const g = r.obj(o.geometry, 'Map geometry');
   const b = r.obj(g.bounds, 'Map bounds');
@@ -327,7 +352,41 @@ export function normalizeMapPackage(raw: unknown): { pkg: MapPackage; errors: Ma
     }
     pkg.geometry.labels = labels;
   }
-  return { pkg, errors: r.errors };
+  if (version >= 3 && g.seas !== undefined) {
+    const so = r.obj(g.seas, 'Sea zone drawing');
+    const gr = r.obj(so.grid, 'Sea grid');
+    const seas: SeaGeometry = {
+      grid: {
+        x0: r.num(gr.x0, 'Sea grid x', -MAP_LIMITS.coordinate, MAP_LIMITS.coordinate),
+        y0: r.num(gr.y0, 'Sea grid y', -MAP_LIMITS.coordinate, MAP_LIMITS.coordinate),
+        cell: r.num(gr.cell, 'Sea grid cell', 0.5, 10000),
+        w: r.int(gr.w, 'Sea grid width', 1, 10000),
+        h: r.int(gr.h, 'Sea grid height', 1, 10000),
+        rle: r.str(gr.rle, 'Sea grid', 4_000_000),
+      },
+      anchors: {},
+      borders: [],
+    };
+    if (seas.grid.w * seas.grid.h > MAP_LIMITS.seaCells) r.err('limit', `The sea grid has ${seas.grid.w * seas.grid.h} cells; at most ${MAP_LIMITS.seaCells} are allowed.`);
+    const an = r.obj(so.anchors ?? {}, 'Sea zone anchors');
+    for (const [k, v] of Object.entries(an).slice(0, MAP_LIMITS.seaZones)) {
+      if (!ID.test(k)) {
+        r.err('id', `Sea zone anchor for invalid id "${k.slice(0, 40)}".`);
+        continue;
+      }
+      const c = r.obj(v, 'Sea zone anchor', k);
+      seas.anchors[k] = { cx: r.num(c.cx, 'Anchor x', -MAP_LIMITS.coordinate, MAP_LIMITS.coordinate, k), cy: r.num(c.cy, 'Anchor y', -MAP_LIMITS.coordinate, MAP_LIMITS.coordinate, k) };
+    }
+    for (const x of r.arr(so.borders ?? [], 'Sea zone borders', 20000)) {
+      const bo = r.obj(x, 'Sea zone border');
+      const pts = r.points(bo.pts, 'Sea zone border');
+      points += pts.length;
+      seas.borders.push({ a: r.str(bo.a, 'Sea zone', 40), b: r.str(bo.b, 'Sea zone', 40), pts });
+    }
+    if (points > MAP_LIMITS.points) r.err('limit', `The map has ${points} coordinates; at most ${MAP_LIMITS.points} are allowed.`);
+    pkg.geometry.seas = seas;
+  }
+  return { pkg, errors: r.errors, fromVersion: version };
 }
 
 function key(a: string, b: string): string {
@@ -482,6 +541,46 @@ export function validateMapPackage(pkg: MapPackage): MapCheck {
   }
   for (const id of Object.keys(centers)) if (!provById.has(id)) warn('geometry', `A centre is defined for "${id}", which is not a province.`, id);
 
+  // sea zones and ports
+  const zoneById = new Map<string, SeaZoneDef>();
+  for (const z of pkg.seaZones) {
+    if (zoneById.has(z.id)) err('duplicate', `Sea zone id "${z.id}" is used twice.`, z.id);
+    if (provById.has(z.id)) err('duplicate', `Sea zone id "${z.id}" is also a province id.`, z.id);
+    zoneById.set(z.id, z);
+  }
+  const coastal = new Set<string>();
+  for (const z of pkg.seaZones) {
+    if (!z.name) err('value', `Sea zone "${z.id}" needs a name.`, z.id);
+    if (new Set(z.neighbors).size !== z.neighbors.length) err('duplicate', `${z.name || z.id} lists a neighbouring zone twice.`, z.id);
+    for (const nb of z.neighbors) {
+      const q = zoneById.get(nb);
+      if (nb === z.id) err('adjacency', `${z.name || z.id} lists itself as a neighbour.`, z.id);
+      else if (!q) err('reference', `${z.name || z.id} borders an unknown sea zone "${nb}".`, z.id);
+      else if (!q.neighbors.includes(z.id)) err('adjacency', `${z.name || z.id} borders ${q.name || q.id}, but not the other way round: sea zone borders must be two-way.`, z.id);
+    }
+    for (const c of z.coasts) {
+      if (!provById.has(c)) err('reference', `${z.name || z.id} lists an unknown coastal province "${c}".`, z.id);
+      coastal.add(c);
+    }
+    for (const [a, b] of z.straits ?? []) if (!straitSet.has(key(a, b))) err('reference', `${z.name || z.id} commands a strait ${a}–${b} that the map does not have.`, z.id);
+  }
+  for (const p of pkg.provinces) if ((p.port ?? 0) > 0 && !coastal.has(p.id)) err('port', `${p.name || p.id} has a port but is not on the coast of any sea zone.`, p.id);
+  if (pkg.seaZones.length) {
+    const seaSides = new Set<string>();
+    for (const e of edges) {
+      if (e.a === SEA) seaSides.add(e.b);
+      if (e.b === SEA) seaSides.add(e.a);
+    }
+    const dry = pkg.provinces.filter((p) => seaSides.has(p.id) && !coastal.has(p.id));
+    if (dry.length) warn('coast', `${dry.length} province(s) touch the sea but no sea zone (${dry.slice(0, 4).map((p) => p.name || p.id).join(', ')}${dry.length > 4 ? ', …' : ''}); fleets cannot reach them.`, dry[0].id);
+    const seas = pkg.geometry.seas;
+    if (seas) {
+      const { w, h, rle } = seas.grid;
+      if (!decodeGrid(rle, w * h, pkg.seaZones.length)) err('geometry', 'The sea zone grid is damaged or does not match the zones.');
+      for (const z of pkg.seaZones) if (!seas.anchors[z.id]) warn('geometry', `${z.name || z.id} has no drawn anchor.`, z.id);
+    } else warn('geometry', 'The sea zones have no drawing; fleets will be drawn at their coasts.');
+  }
+
   // strategic accessibility: one connected world
   if (pkg.provinces.length >= 2) {
     const seen = new Set<string>([pkg.provinces[0].id]);
@@ -517,8 +616,21 @@ export function parseMapPackage(text: string): { pkg: MapPackage | null; check: 
 
 /** Sanitises and validates an already-parsed package (a file, or a map embedded in a save). */
 export function checkMapObject(raw: unknown): { pkg: MapPackage | null; check: MapCheck } {
-  const { pkg, errors } = normalizeMapPackage(raw);
+  const { pkg, errors, fromVersion } = normalizeMapPackage(raw);
   if (errors.length) return { pkg: null, check: { ok: false, errors, warnings: [] } };
-  const check = validateMapPackage(pkg);
+  let check = validateMapPackage(pkg);
+  if (check.ok && fromVersion < 3) {
+    // formats 1 and 2 have no sea zones: derive them from the drawn coastline
+    addSeaZones(pkg);
+    check = validateMapPackage(pkg);
+  }
   return { pkg: check.ok ? pkg : null, check };
+}
+
+/** Generates sea zones, starting ports and their drawing for a package without them. */
+export function addSeaZones(pkg: MapPackage): void {
+  const seas = generateSeaZones(pkg);
+  pkg.seaZones = seas.zones;
+  pkg.provinces = pkg.provinces.map((p) => (seas.ports[p.id] ? { ...p, port: seas.ports[p.id] } : p));
+  pkg.geometry.seas = seas.drawn;
 }

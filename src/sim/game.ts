@@ -6,6 +6,7 @@ import { PERSONALITIES } from './data/personalities';
 import { POLICY_COOLDOWN_MONTHS } from './data/policies';
 import { computeLedger, emptyFlows, materielCap, menServing, reserveCap, resourceCap, stockpileCap, totalDev } from './economy';
 import { createArmy, newRegiment } from './military';
+import { startingFleets } from './naval';
 import { seedState } from './rng';
 import { months, ownedProvinces, type Sim } from './state';
 import type { Difficulty, GameState, MonthlyLedger, NationId, NationState, Regiment, Settings, UnitType } from './types';
@@ -56,6 +57,8 @@ export function createGame(opts: NewGameOptions = {}): Sim {
     provinces: {},
     nations: {},
     armies: {},
+    fleets: {},
+    wings: {},
     battles: {},
     wars: {},
     treaties: [],
@@ -68,7 +71,7 @@ export function createGame(opts: NewGameOptions = {}): Sim {
     proposals: [],
     reports: [],
     notifications: [],
-    counters: { army: 0, battle: 0, war: 0, treaty: 0, note: 0, proposal: 0, event: 0, regiment: 0, coalition: 0 },
+    counters: { army: 0, battle: 0, war: 0, treaty: 0, note: 0, proposal: 0, event: 0, regiment: 0, coalition: 0, fleet: 0, ship: 0, wing: 0 },
     result: null,
     continueAfterResult: false,
     diagnostics: [],
@@ -93,6 +96,10 @@ export function createGame(opts: NewGameOptions = {}): Sim {
       revoltUntil: 0,
       lastOwnerChange: 0,
       recruits: [],
+      port: p.owner && world.provZones[p.id] ? (p.port ?? 0) : 0,
+      airfield: 0,
+      dock: [],
+      hangar: [],
     };
   }
   const known = startingTechs(world.scenario.startYear);
@@ -151,6 +158,7 @@ export function createGame(opts: NewGameOptions = {}): Sim {
         peakProvinces: 0,
         idleArmyWeeks: 0,
         armyWeeks: 0,
+        ...emptyForceStats(),
       },
       armyCounter: 0,
     };
@@ -190,6 +198,12 @@ export function createGame(opts: NewGameOptions = {}): Sim {
     } else createArmy(sim, nid, cap, regiments);
     n.manpower = Math.round(Math.max(0, reserve - menServing(sim, nid)) * C.population.startPoolShare);
   }
+  startingFleets(sim);
   for (const nid of world.nationIds) st.nations[nid].lastMonth = computeLedger(sim, nid);
   return sim;
+}
+
+/** Navy and air counters of a realm's statistics (all zero). */
+export function emptyForceStats() {
+  return { shipsBuilt: 0, shipsSunk: 0, shipsLost: 0, navalBattles: 0, landings: 0, blockadeWeeks: 0, wingsBuilt: 0, airMissionWeeks: 0, bombingWeeks: 0 };
 }

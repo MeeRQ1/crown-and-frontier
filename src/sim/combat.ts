@@ -30,6 +30,7 @@
 // province without enemies (friendly ground and short supply lines preferred);
 // with no legal retreat they surrender.
 
+import { airCombatBonus } from './air';
 import { C, TERRAIN, UNITS } from './config';
 import { isShort, removePopulation, reserveCap } from './economy';
 import { maxMorale, removeArmy } from './military';
@@ -55,6 +56,8 @@ interface ArmySnap {
   maxMorale: number;
   supply: number;
   stationary: number;
+  /** came ashore from the sea this week (amphibious landing) */
+  landed: boolean;
   regs: RegSnap[];
 }
 export interface SideSnap {
@@ -69,6 +72,7 @@ export function snapArmy(sim: Sim, a: Army): ArmySnap {
     maxMorale: maxMorale(sim, a.nation),
     supply: a.supply,
     stationary: a.stationary,
+    landed: !!a.embarked || a.landed === sim.state.tick,
     regs: a.regiments.map((r) => ({ type: r.type, men: r.men, key: r.id })),
   };
 }
@@ -160,6 +164,7 @@ function sideCalc(sim: Sim, pid: ProvinceId, s: SideSnap, enemyAntiCav = 0): Sid
   let fire = 0;
   let unfuelled = false;
   let noShells = false;
+  let landing = false;
   for (const e of [...f, ...g]) {
     const nat = e.army.nation;
     const m = nationMods(sim, nat);
@@ -179,6 +184,10 @@ function sideCalc(sim: Sim, pid: ProvinceId, s: SideSnap, enemyAntiCav = 0): Sid
     if (e.reg.type === 'artillery' && isShort(sim, nat, 'nitrates')) {
       v *= C.combat.noShells;
       noShells = true;
+    }
+    if (e.army.landed) {
+      v *= 1 - (1 - C.naval.landing) * Math.max(0, 1 - m.landing);
+      landing = true;
     }
     v = Math.max(0, v);
     engaged.push({ army: e.army, reg: e.reg, weight: e.reg.men * (u.role === 'support' ? 0.5 : 1), fire: v });
@@ -200,6 +209,16 @@ function sideCalc(sim: Sim, pid: ProvinceId, s: SideSnap, enemyAntiCav = 0): Sid
   if (armourMen > 0 && terr.armour !== 0) notes.push(`Armour ${terr.armour > 0 ? 'favoured' : 'hampered'} by ${terr.label.toLowerCase()} ${terr.armour > 0 ? '+' : ''}${Math.round(terr.armour * 100)}%`);
   if (unfuelled) notes.push(`Armour short of oil −${Math.round((1 - C.combat.unfuelled) * 100)}%`);
   if (noShells) notes.push(`Artillery short of shells −${Math.round((1 - C.combat.noShells) * 100)}%`);
+  if (landing) {
+    const pen = (1 - C.naval.landing) * Math.max(0, 1 - nationMods(sim, s.armies[0].nation).landing);
+    notes.push(`Landing from the sea −${Math.round(pen * 100)}%`);
+  }
+  // the air over the battlefield
+  const air = airCombatBonus(sim, pid, [...new Set(s.armies.map((a) => a.nation))]);
+  if (air.mul !== 1) {
+    fire *= air.mul;
+    notes.push(...air.notes);
+  }
   if (reserveRegs > 0) notes.push(`Frontage ${terr.frontage}: ${reserveRegs} regiment(s) held in reserve`);
   const supplyWorst = Math.min(...s.armies.map((a) => a.supply));
   if (s.armies.length && supplyStatus(supplyWorst) !== 'supplied') notes.push(`${supplyStatus(supplyWorst) === 'strained' ? 'Strained' : 'Unsupplied'} troops ${supplyStatus(supplyWorst) === 'strained' ? '−10%' : '−25%'}`);
