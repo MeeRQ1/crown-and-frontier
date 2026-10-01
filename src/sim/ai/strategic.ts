@@ -20,6 +20,7 @@ import {
   armiesOf,
   atWar,
   borders,
+  dateOf,
   diag,
   nationDistance,
   enemiesOf,
@@ -452,7 +453,8 @@ function considerWar(sim: Sim, nid: NationId): void {
   }
   const threshold = 2;
   if (pick.score < threshold) {
-    if (pick.score > 0 && (st.tick / 4) % 12 === 0)
+    // once a year per realm (strategic turns are staggered across the weeks of a month)
+    if (pick.score > 0 && dateOf(sim).month === 0)
       diag(sim, nid, 'strategic', `War considered but not worth it`, cands.slice(0, 3).map((c) => `${nationName(sim, c.t)}: ratio ${c.ratio.toFixed(2)}/${c.need.toFixed(2)} score ${c.score.toFixed(1)}`));
     // prepare: fabricate a claim on the best target if we lack one
     if (p.aggression >= 1 && !claimsOn(sim, nid, pick.t).length) {

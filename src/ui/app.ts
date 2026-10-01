@@ -85,6 +85,8 @@ export class App {
   hoverProvince: ProvinceId | null = null;
   moveMode = false;
   mode: MapMode = 'political';
+  /** the map mode a ledger replaced (restored when it closes, unless the player chose another) */
+  private ledgerMode: { before: MapMode; shown: MapMode } | null = null;
   focusNation: NationId | null = null;
   highlight: ProvinceId[] | null = null;
   ui: UIState = this.freshUI();
@@ -840,8 +842,11 @@ export class App {
     this.ui.ledgerTab = tab;
     this.drawerEl.classList.remove('closed');
     // the diplomacy map shows our relations; the chosen realm is outlined
-    if (tab === 'diplomacy' && this.mode !== 'diplomacy') this.setMode('diplomacy');
-    if (tab === 'wars' && this.mode === 'political') this.setMode('military');
+    const show: MapMode | null = tab === 'diplomacy' && this.mode !== 'diplomacy' ? 'diplomacy' : tab === 'wars' && this.mode === 'political' ? 'military' : null;
+    if (show) {
+      this.ledgerMode = { before: this.ledgerMode?.before ?? this.mode, shown: show };
+      this.setMode(show);
+    }
     renderLedger(this);
     this.updateInsets();
     this.refresh();
@@ -854,6 +859,9 @@ export class App {
     this.drawerEl.classList.add('closed');
     setChildren(this.drawerEl);
     this.focusNation = null;
+    const lm = this.ledgerMode;
+    this.ledgerMode = null;
+    if (lm && this.mode === lm.shown) this.setMode(lm.before);
     this.canvas.focus({ preventScroll: true });
     this.updateInsets();
     this.refresh();

@@ -80,6 +80,33 @@ describe('diplomacy and wars', () => {
     expect(checkCommand(sim, { type: 'declareWar', nation: 'a', target: 'c', goal: { type: 'conquest', provinces: ['c2'] } })).toMatch(/Truce/);
   });
 
+  // Stage A fix: offers about a war outlived its end (or a separate peace) until they expired.
+  it('a peace removes offers and calls to arms that no longer apply', () => {
+    const sim = lineGame();
+    const w = declareWar(sim, 'a', 'b', { type: 'conquest', provinces: ['b3'] });
+    joinWar(sim, w, 'c', 'defender');
+    const offer = (from: string, to: string) => ({ id: `pr-${from}${to}`, kind: 'peace' as const, from, to, tick: 0, expires: 100, war: w.id, terms: { mode: 'white' as const, provinces: [], gold: 0 } });
+    sim.state.proposals.push(offer('c', 'a'), offer('b', 'a'));
+    sim.state.proposals.push({ id: 'pr-call', kind: 'callToArms', from: 'b', to: 'c', tick: 0, expires: 100, war: w.id });
+    // c leaves by a separate peace: its own offer goes, b's stays
+    applyPeace(sim, w.id, 'a', 'c', { mode: 'white', provinces: [], gold: 0 });
+    expect(sim.state.proposals.map((p) => p.id).sort()).toEqual(['pr-ba', 'pr-call']);
+    // the war ends: nothing about it remains
+    applyPeace(sim, w.id, 'b', 'a', { mode: 'white', provinces: [], gold: 0 });
+    expect(sim.state.wars[w.id]).toBeUndefined();
+    expect(sim.state.proposals).toEqual([]);
+  });
+
+  it('a player alarmed by a neighbour is told once a year that a coalition is possible', () => {
+    const sim = lineGame({ playerNation: 'a' });
+    // the player (a) and one AI realm (b) are alarmed about c: a coalition is possible
+    sim.state.alarm.b = { ...(sim.state.alarm.b ?? {}), c: 80 };
+    sim.state.alarm.a = { ...(sim.state.alarm.a ?? {}), c: 80 };
+    runTicks(sim, 48 * 2, { noAI: true });
+    const notes = sim.state.notifications.filter((n) => n.nation === 'a' && n.kind === 'coalition' && /join a coalition/.test(n.text));
+    expect(notes.length).toBe(2);
+  });
+
   it('a secondary defender is not held to the war goal, but allies left fighting resent a separate peace', () => {
     const sim = lineGame();
     signTreaty(sim, 'alliance', 'b', 'c');

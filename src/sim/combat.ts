@@ -509,12 +509,7 @@ export function weeklyCombat(sim: Sim): void {
     for (const aid in r.lossesByArmy) {
       const arm = attArmies.find((x) => x.id === aid) ?? defArmies.find((x) => x.id === aid);
       if (!arm) continue;
-      const l = r.lossesByArmy[aid];
-      const n = st.nations[arm.nation];
-      n.stats.menLost += l;
-      removePopulation(sim, arm.nation, l);
-      const rc = Math.max(5000, reserveCap(sim, arm.nation));
-      n.warExhaustion = Math.min(100, n.warExhaustion + (l / rc) * C.war.exhaustionPerLossShare * Math.max(0.1, 1 + nationMods(sim, arm.nation).warExhaustion));
+      recordLosses(sim, arm.nation, r.lossesByArmy[aid]);
     }
     b.rounds.push({
       round: b.rounds.length + 1,
@@ -526,6 +521,18 @@ export function weeklyCombat(sim: Sim): void {
     const out = checkEnd(att, def, b.attStartMen, b.defStartMen, b.rounds.length);
     if (out) endBattle(sim, b, out);
   }
+}
+
+/**
+ * Men a realm loses in battle (fighting, pursuit or surrender): they count in
+ * its statistics, leave its population and add to its war exhaustion.
+ */
+function recordLosses(sim: Sim, nid: NationId, men: number): void {
+  const n = sim.state.nations[nid];
+  n.stats.menLost += men;
+  removePopulation(sim, nid, men);
+  const rc = Math.max(5000, reserveCap(sim, nid));
+  n.warExhaustion = Math.min(100, n.warExhaustion + (men / rc) * C.war.exhaustionPerLossShare * Math.max(0.1, 1 + nationMods(sim, nid).warExhaustion));
 }
 
 function writeBack(sim: Sim, snap: ArmySnap): void {
@@ -599,8 +606,7 @@ function endBattle(sim: Sim, b: Battle, winner: 'attacker' | 'defender'): void {
         }
         return true;
       });
-      st.nations[a.nation].stats.menLost += lost;
-      removePopulation(sim, a.nation, lost);
+      recordLosses(sim, a.nation, lost);
       if (winner === 'attacker') b.defLosses += lost;
       else b.attLosses += lost;
     }
@@ -642,8 +648,7 @@ function endBattle(sim: Sim, b: Battle, winner: 'attacker' | 'defender'): void {
     if (!to) {
       let men = 0;
       for (const r of a.regiments) men += r.men;
-      st.nations[a.nation].stats.menLost += men;
-      removePopulation(sim, a.nation, men);
+      recordLosses(sim, a.nation, men);
       if (winner === 'attacker') b.defLosses += men;
       else b.attLosses += men;
       surrendered.push(`${a.name} (${nationName(sim, a.nation)})`);

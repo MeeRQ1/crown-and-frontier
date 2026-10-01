@@ -10,6 +10,7 @@
 // war with it). Progress resets if the besiegers leave.
 
 import { C } from './config';
+import { poolCap } from './economy';
 import { cancelRecruits } from './military';
 import { armiesIn } from './index';
 import { nationMods } from './modifiers';
@@ -75,10 +76,16 @@ export function siegeInfo(sim: Sim, pid: ProvinceId, battleAt?: Set<ProvinceId>)
 export function setController(sim: Sim, pid: ProvinceId, ctrl: NationId | null): void {
   const p = sim.state.provinces[pid];
   if (p.controller === ctrl) return;
+  const lostByOwner = p.owner !== null && p.controller === p.owner;
   p.controller = ctrl;
   p.siege = null;
   if (p.recruits.length) cancelRecruits(sim, pid);
   bump(sim);
+  // an occupied province no longer adds to its owner's reserve
+  if (lostByOwner) {
+    const n = sim.state.nations[p.owner!];
+    if (n?.alive) n.manpower = Math.min(n.manpower, poolCap(sim, p.owner!));
+  }
 }
 
 /** Weekly siege progress for all provinces (province id order). */

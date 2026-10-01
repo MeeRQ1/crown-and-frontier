@@ -5,6 +5,7 @@ import { computeLedger, debtStage, menServing, monthlyEconomy, poolCap, reserveC
 import { armySupplyInfo } from '../src/sim/supply';
 import { runTicks } from '../src/sim/tick';
 import { declareWar } from '../src/sim/war';
+import { setController } from '../src/sim/siege';
 import { addArmy, lineGame, totalMen } from './helpers';
 
 describe('economy', () => {
@@ -60,6 +61,23 @@ describe('economy', () => {
     sim.state.nations.a.manpower = 0;
     runTicks(sim, 48 * 6, { noAI: true });
     expect(sim.state.nations.a.manpower).toBeLessThanOrEqual(poolCap(sim, 'a') + 1);
+  });
+
+  // Stage A fix: the monthly settlement used to keep a pool that was already above
+  // the cap, so a shrinking reserve (occupation, lost integration) never shrank it.
+  it('a shrinking reserve shrinks a full manpower pool', () => {
+    const sim = lineGame();
+    const a = sim.state.nations.a;
+    a.manpower = poolCap(sim, 'a');
+    // occupation: the occupied province stops adding to the reserve at once
+    declareWar(sim, 'b', 'a', { type: 'conquest', provinces: ['a3'] });
+    setController(sim, 'a3', 'b');
+    expect(a.manpower).toBeLessThanOrEqual(poolCap(sim, 'a') + 1e-6);
+    // lost integration: the next monthly settlement trims the pool
+    for (const pid of ['a1', 'a2']) sim.state.provinces[pid].integration = 30;
+    expect(a.manpower).toBeGreaterThan(poolCap(sim, 'a'));
+    monthlyEconomy(sim);
+    expect(a.manpower).toBeLessThanOrEqual(poolCap(sim, 'a') + 1e-6);
   });
 
   it('debt is telegraphed in stages before bankruptcy', () => {

@@ -482,9 +482,27 @@ export function applyPeace(sim: Sim, warId: string, proposer: NationId, target: 
     }
   }
   notify(sim, null, 'low', 'peace', `${nationName(sim, proposer)} and ${nationName(sim, target)} made peace: ${desc}.`);
+  dropStaleProposals(sim);
   relocateArmies(sim);
   pruneBattles(sim);
   bump(sim);
+}
+
+/**
+ * Removes peace offers and calls to arms that a peace has made meaningless: the
+ * war is over, or the realm that sent or received the offer has left it.
+ */
+export function dropStaleProposals(sim: Sim): void {
+  const st = sim.state;
+  st.proposals = st.proposals.filter((p) => {
+    if (p.kind !== 'peace' && p.kind !== 'callToArms') return true;
+    const w = st.wars[p.war!];
+    if (!w) return false;
+    if (p.kind === 'callToArms') return sideOf(w, p.from) !== null;
+    const a = sideOf(w, p.from);
+    const b = sideOf(w, p.to);
+    return a !== null && b !== null && a !== b;
+  });
 }
 
 /** Ends a war outright with a white peace (forced settlements, eliminated leaders). */
@@ -502,6 +520,7 @@ export function endWar(sim: Sim, warId: string, reason: string): void {
   }
   delete st.wars[warId];
   bump(sim);
+  dropStaleProposals(sim);
   relocateArmies(sim);
   pruneBattles(sim);
   bump(sim);

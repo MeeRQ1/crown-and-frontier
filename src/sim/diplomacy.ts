@@ -17,6 +17,7 @@ import {
   borders,
   bump,
   clamp,
+  dateOf,
   enemiesOf,
   hasTreaty,
   months,
@@ -474,7 +475,8 @@ function updateCoalitions(sim: Sim): void {
     }
     for (const n of alarmed) {
       if (st.nations[n].isPlayer && !(c?.members.includes(n)) && (aiAlarmed.length >= 1 || c)) {
-        if ((st.tick / 4) % 12 === 0)
+        // once a year, in January (the monthly settlement runs in the last week of a month)
+        if (dateOf(sim).month === 0)
           notify(sim, n, 'normal', 'coalition', `Alarm about ${nationName(sim, target)} is high: you may join a coalition against them (Diplomacy).`);
       }
     }

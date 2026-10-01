@@ -6,6 +6,9 @@ import { declareWar } from '../src/sim/war';
 import { addArmy, lineGame, totalMen } from './helpers';
 import { checkInvariants } from '../src/sim/invariants';
 import { maxMorale } from '../src/sim/military';
+import { C } from '../src/sim/config';
+import { reserveCap } from '../src/sim/economy';
+import { nationMods } from '../src/sim/modifiers';
 
 function atWarGame() {
   const sim = lineGame();
@@ -90,6 +93,44 @@ describe('combat — live battles', () => {
     for (let i = 0; i < 10 && sim.state.armies[trapped.id]; i++) step(sim, { noAI: true });
     expect(sim.state.armies[trapped.id]).toBeUndefined();
     expect(sim.state.notifications.some((n) => n.kind === 'surrender' && n.nation === 'b')).toBe(true);
+  });
+
+  // Stage A fix: men lost to pursuit and surrender used to count in the statistics
+  // but not in war exhaustion, so a rout cost the loser less than a long fight.
+  it('every man lost in battle adds to war exhaustion, including pursuit and surrender', () => {
+    const lastWeek = (setup: (sim: ReturnType<typeof atWarGame>) => string) => {
+      const sim = atWarGame();
+      const loser = setup(sim);
+      let ex = 0;
+      let lost = 0;
+      for (let i = 0; i < 12 && sim.state.reports.length === 0; i++) {
+        ex = sim.state.nations.b.warExhaustion;
+        lost = sim.state.nations.b.stats.menLost;
+        step(sim, { noAI: true });
+      }
+      expect(sim.state.reports.length).toBe(1);
+      const men = sim.state.nations.b.stats.menLost - lost;
+      const expected = (men / Math.max(5000, reserveCap(sim, 'b'))) * C.war.exhaustionPerLossShare * Math.max(0.1, 1 + nationMods(sim, 'b').warExhaustion);
+      return { gained: sim.state.nations.b.warExhaustion - ex, expected, men, gone: !sim.state.armies[loser] };
+    };
+    // surrounded: the beaten army surrenders
+    const trapped = lastWeek((sim) => {
+      const t = addArmy(sim, 'b', 'a3', { foot: 2 });
+      addArmy(sim, 'a', 'a3', { foot: 8 });
+      addArmy(sim, 'a', 'a2', { foot: 2 });
+      addArmy(sim, 'a', 'b3', { foot: 2 });
+      return t.id;
+    });
+    expect(trapped.gone).toBe(true);
+    expect(trapped.men).toBeGreaterThan(1000);
+    expect(trapped.gained).toBeGreaterThan(trapped.expected * 0.9);
+    // routed in the open: the winners' horse pursue
+    const routed = lastWeek((sim) => {
+      const r = addArmy(sim, 'b', 'b1', { foot: 3 });
+      addArmy(sim, 'a', 'b1', { foot: 4, horse: 8 });
+      return r.id;
+    });
+    expect(routed.gained).toBeGreaterThan(routed.expected * 0.9);
   });
 
   it('armies arriving during a battle join the right side', () => {

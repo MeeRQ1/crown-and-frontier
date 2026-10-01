@@ -221,7 +221,9 @@ export function monthlyEconomy(sim: Sim): void {
       notify(sim, nid, 'urgent', 'supplies', 'Supply stockpile exhausted: armies on supply lines are short of supplies until production recovers.');
     }
     n.supplies = Math.min(n.supplies, cap);
-    n.manpower = clamp(n.manpower + ledger.manpowerIn, 0, Math.max(n.manpower, poolCap(sim, nid)));
+    // the pool never exceeds the reserve minus the men serving: a shrinking reserve
+    // (occupation, lost integration, casualties) shrinks it too
+    n.manpower = clamp(n.manpower + ledger.manpowerIn, 0, poolCap(sim, nid));
     n.lastMonth = ledger;
 
     if (n.treasury < 0) n.debtMonths++;

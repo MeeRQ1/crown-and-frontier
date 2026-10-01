@@ -232,8 +232,10 @@ function runOne(seed: number, findings: Finding[], record?: string[]): { hashes:
       for (const x of sim.world.nationIds) {
         const ns = sim.state.nations[x];
         if (!ns.alive) continue;
+        // the pool is trimmed to the cap at the monthly settlement; population and
+        // integration settle after it in the same month and may lower the cap a little
         const cap = poolCap(sim, x);
-        if (ns.manpower > cap + 1) findings.push({ seed, tick: sim.state.tick, what: `soft: ${x} manpower pool ${Math.round(ns.manpower)} exceeds reserve minus serving ${Math.round(cap)}` });
+        if (ns.manpower > cap * 1.02 + 50) findings.push({ seed, tick: sim.state.tick, what: `soft: ${x} manpower pool ${Math.round(ns.manpower)} exceeds reserve minus serving ${Math.round(cap)}` });
       }
       for (const p of sim.state.proposals) {
         if ((p.kind === 'peace' || p.kind === 'callToArms') && !sim.state.wars[p.war!]) findings.push({ seed, tick: sim.state.tick, what: `proposal ${p.id} (${p.kind}) refers to an ended war` });

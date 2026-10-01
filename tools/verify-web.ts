@@ -150,6 +150,14 @@ async function mapChoice(browser: Browser, base: string): Promise<void> {
   await page.waitForTimeout(900);
   const z1 = await page.evaluate(() => (window as any).cnf.renderer.camera.zoom);
   record('Keyboard: Shift+2 shows the Terrain map; F fits the whole map', mode === 'terrain' && z1 < z0, `mode ${mode}, zoom ${z0.toFixed(3)} → ${z1.toFixed(3)}`);
+  // the Diplomacy ledger shows the diplomacy map while it is open, then puts the player's map back
+  await page.keyboard.press('KeyD');
+  await page.waitForTimeout(150);
+  const during = await page.evaluate(() => (window as any).cnf.mode);
+  await page.keyboard.press('Escape');
+  await page.waitForTimeout(150);
+  const after = await page.evaluate(() => (window as any).cnf.mode);
+  record('Closing Diplomacy restores the map mode it replaced', during === 'diplomacy' && after === 'terrain', `${mode} → ${during} → ${after}`);
   await page.close();
 }
 
