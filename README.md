@@ -60,8 +60,10 @@ this if you try.
   browsing or managed-device (school) policies may erase them. Export anything you care about.
 - **Damaged files:** truncated, modified or foreign save files are rejected with an explanation, and
   your current campaign is kept.
-- **Each save keeps its map.** Campaigns started on the Reach, including saves from the previous
-  release, load on the Reach. The save format is unchanged (schema 1), so no conversion is needed.
+- **Each save keeps its map.** A save records exactly which map and map revision it was played
+  on. Saves of imported maps carry the map with them.
+- **Older saves are converted, never discarded.** Saves from earlier releases (format 1) are
+  converted to the current format (2) when loaded, and the game says so.
 
 ## Develop
 
@@ -80,6 +82,11 @@ npm run examples       # worked combat examples from the real combat code
 npm run genworld       # regenerate Aldmere from tools/aldmere.spec.ts (deterministic)
 npm run genmap         # regenerate the Reach's geometry (byte-identical to the checked-in file)
 npm run check          # typecheck + tests + build + package + verify:web
+npm run fuzz -- --scenario aldmere --seeds 1-3 --years 8   # random legal/illegal commands + invariants
+npm run bench -- --scenario aldmere --seeds 1-2 --years 30 # simulation benchmarks (tick percentiles, phases, heap)
+npm run bench:web -- --maps reach,aldmere                   # browser benchmarks on dist/ (after npm run build)
+npm run rulecheck -- --compare <record.json>                # prove a refactor changed no rule
+npm run genstress -- --provinces 900                        # generated large map package for scaling tests
 ```
 
 `verify:web` needs Chromium for Playwright. Run `npx playwright install chromium` once, unless your
@@ -92,8 +99,12 @@ src/sim/        headless simulation — no DOM; runs in tests and CLI tools
   types.ts      state and command types        config.ts   every tunable number
   commands.ts   the single validation boundary for player AND AI actions
   tick.ts       fixed weekly tick order        game.ts     new-game setup
+  index.ts      derived lookups (armies by province, provinces by owner, relations)
   economy, construction, integration, military, movement, supply, combat, siege,
-  war, diplomacy, progression, events, victory, invariants, save
+  war, diplomacy, progression, events, victory, invariants,
+  save, migrate (save formats), diagnostics + replay (bug reports)
+src/maps/       map package format, validator (imports are sanitised and size-limited),
+                built-in maps as packages, conversion to the simulation and renderer
   ai/           strategic, operational/execution layers and difficulty profiles
   data/         technologies, policies, personalities, events
 src/data/       both maps: realms and regions (aldmere.ts, reach.ts), generated province data
@@ -101,15 +112,16 @@ src/data/       both maps: realms and regions (aldmere.ts, reach.ts), generated 
 src/ui/         map renderer (map/), design system (style.css), HUD, inspector, ledgers,
                 dialogs, screens, tutorial, storage, audio
 tools/          map generators (mapgen/core.ts shared), AI campaign runner, realm tracer,
-                ZIP packager, web verifier, combat examples
+                ZIP packager, web verifier, combat examples, benchmarks, fuzzer, rule check
 tests/          Vitest suites
 e2e/            scripted browser playthrough (development helper)
-reports/        generated evidence: AI campaign statistics, web verification
+reports/        generated evidence: AI campaign statistics, web verification, perf/ benchmarks
 ```
 
-**Reporting bugs:** Chronicle ledger (**L**) → *Export bug report*. The file contains the seed, settings,
-your command log, recent notifications and AI diagnostics. Given the same seed and commands, the
-simulation replays deterministically.
+**Reporting bugs:** Chronicle ledger (**L**) → *Export bug report*. The file contains the settings,
+the starting point (a fresh game, or the save the campaign was loaded from), your commands since
+then, recent notifications and AI diagnostics. `npx tsx tools/replay.ts <file>` replays it and checks
+that the final state matches.
 
 ## Documentation
 
@@ -117,21 +129,24 @@ simulation replays deterministically.
 - [DEPLOYMENT.md](DEPLOYMENT.md): GitHub Pages, other hosts, the ZIP, embedding, and browser compatibility.
 - [STATUS.md](STATUS.md): the requirement ledger, acceptance checks, known limitations and next steps.
 - [docs/REDESIGN.md](docs/REDESIGN.md): the interface and world redesign: diagnosis, direction and what was built.
+- [docs/expansion/](docs/expansion/): the strategic depth expansion, with the Stage A audit
+  ([AUDIT.md](docs/expansion/AUDIT.md)), the plan and requirement ledger
+  ([PLAN.md](docs/expansion/PLAN.md)) and the setting decision ([SETTING.md](docs/expansion/SETTING.md)).
 - [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md): the three bundled OFL fonts (licences ship in
   `licenses/`) and the development tools. No other third-party code or assets ship in the game.
 
 ## Known limitations
 
 - **Balance:** tuned against AI-only campaigns on both maps (see STATUS.md). The richest
-  heartland wins most often: Lessia on Aldmere (13 of 30) and Aurel on the Reach (15 of 30).
+  heartland wins most often: Lessia on Aldmere (15 of 30) and Aurel on the Reach (15 of 30).
   Some small or exposed realms shrink on average. No external players have tested either
   map yet.
 - **Fog of war:** not implemented. All information is public to everyone, AI included.
 - **Browsers verified:** only headless Chromium 141, on desktop and emulated phone viewports. Firefox,
   Safari, real Chromebooks and real touch devices are untested.
-- **Out of scope:** naval warfare, multiplayer, espionage, dynasties and production chains.
-- **Save format:** schema 1. This version only added optional fields; a future format change
-  will need a migration.
+- **Out of scope for now:** naval and air warfare, resources and industry are planned in the
+  expansion stages (docs/expansion/PLAN.md). Multiplayer, espionage and dynasties are out of scope.
+- **Save format:** 2. Format-1 saves are converted on load.
 
 ## Licence
 

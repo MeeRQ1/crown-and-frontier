@@ -113,7 +113,9 @@ changes outcomes: `step()` is a pure function of state.
   32% of gross income for ×1.0 / 1.4 / 1.8 / 2.2 research), and 2% interest on debt.
 - **Military reserve:** pop × 40 men per thousand × (0.2 + 0.8 × integration).
   The **manpower pool** can never exceed reserve minus men already serving
-  (regiments plus recruits in training), so soldiers are never double-counted. Recruiting moves 1,000
+  (regiments plus recruits in training), so soldiers are never double-counted. A shrinking
+  reserve shrinks the pool. It is trimmed to the cap at every monthly settlement, and at once
+  when an owner loses control of a province. Recruiting moves 1,000
   men from the pool into training. Reinforcement moves men from the pool into regiments
   (10% of the missing men per week, only when supplied on friendly ground).
   Disbanding returns survivors to the pool up to its limit. Casualties are
@@ -216,10 +218,10 @@ join the side they are friendly with and whose opponent they are at war with. Th
   casualties (at most 15% of the loser). Losers retreat to an adjacent enterable province with
   no enemies, preferring friendly ground and short supply lines. **With no legal
   retreat they surrender**, and all their men are lost.
-- **Accounting:** regiments below 100 men dissolve and their remainder counts as casualties;
-  every casualty is removed from the population. War score gains ±(2 + loss
-  difference/1000, capped at 10) per battle, and war exhaustion rises with losses
-  relative to the reserve.
+- **Accounting:** regiments below 100 men dissolve and their remainder counts as casualties.
+  Every casualty, whether from fighting, pursuit or surrender, is removed from the population and
+  raises war exhaustion by 40 × casualties / max(5,000, reserve). War score gains ±(2 + loss
+  difference/1000, capped at 10) per battle.
 
 **Forecasts** replay the same round function three times with unlucky, even and lucky
 rolls, without touching the gameplay RNG. The result is "Likely victory",
@@ -273,7 +275,8 @@ province and counts toward war score.
   - **Demands:** accepted when their cost ≤ the score in the proposer's favour + 0.4 × the target's exhaustion (+20 if it has no army left) − stubbornness.
   - **Concessions:** accepted when they cover about 70% of the receiver's advantage.
   Every term of this evaluation is listed in the peace builder before sending.
-  A separate peace with the opposing war leader removes one participant.
+  A separate peace with the opposing war leader removes one participant. Any peace removes
+  the pending peace offers and calls to arms that no longer apply.
 - **Unresolvable wars cannot happen:** a white peace is forced after 8 years, or after 3 years
   with the score within ±10. A side holding ≥ 90 for 12 months imposes its war goal.
 - **Territorial transfer:** the ceded province goes to the receiver at integration 10 (25 with a claim)
@@ -410,8 +413,8 @@ already there.
 **Stability.** Commitment bonuses keep plans from flip-flopping; emergencies reassign armies at once.
 
 **Diagnostics** go to `state.diagnostics` (the last 400): chosen research, policies, war candidates with
-ratios and scores, declarations, peace attempts, army objectives, attacks held back by
-forecasts, and rejected orders. They are included in bug reports.
+ratios and scores (once a year per realm), declarations, peace attempts, army objectives,
+attacks held back by forecasts, and rejected orders. They are included in bug reports.
 
 | Personality | War ratio | Aggression | Preferred path | Realms |
 |---|---|---|---|---|
@@ -437,19 +440,27 @@ default and disclosed in the setup screen and the game menu.
   noise) lives only in the UI. A test forbids `Math.random` and wall-clock time in `src/sim`.
 - **Reproducibility:** the same seed, settings and command sequence reproduce identical states.
   Tests assert this, and that a game saved mid-war continues exactly like the original.
-- **Save format:** versioned (`schema: 1`) and checksummed JSON of the complete state, including
-  movement progress, battles, queues, treaties, events and AI commitments.
-- **Saves keep their map.** Every save records its `scenarioId`; loading rebuilds that map's
-  world, so a Reach campaign always loads on the Reach and its province ids are never
-  interpreted against Aldmere. The Reach's geometry and adjacency are byte-identical to the
-  previous release. New state added by this version is optional (`army.group`,
-  `army.order`, `army.lastMove`, `battle.river`), so older saves load unchanged and the
-  schema stays at 1: no migration is needed. A save written by the previous release
-  (`tests/fixtures/reach-save-main-c29aea6.json`, made with commit c29aea6) is loaded, played
-  for a year and re-saved in the test suite. A save for a map this build does not include is
-  refused with the map's name.
-- **Loading:** damaged, truncated, foreign or newer files are rejected with a message, and the
-  current campaign is kept. Other schema versions are refused rather than loaded incorrectly.
+- **Save format 2** (`src/sim/save.ts`): versioned and checksummed JSON of the complete state,
+  including movement progress, battles, queues, treaties, events and AI commitments.
+- **Saves keep their map.** The state records the map's fingerprint: its id, content revision and
+  a checksum of its gameplay content (`src/maps/format.ts`). A save whose map has changed
+  since then loads only if the provinces and realms are the same, with a notice. Otherwise it is
+  refused with both revision numbers. A save of a map that does not ship with the game embeds
+  the whole map package. On load, the package is sanitised and validated like an import. It must
+  not reuse a built-in id and must match the recorded checksum.
+- **Migrations** (`src/sim/migrate.ts`) convert older formats step by step and say so. Format 1
+  (the first two releases) becomes format 2 by recording the built-in map's fingerprint. The
+  test suite converts a save from the first release (`tests/fixtures/reach-save-main-c29aea6.json`,
+  commit c29aea6), plays it for a year and saves it again. The browser checks import the same
+  file and expect the notice.
+- **Loading:** damaged, truncated, foreign, newer or oversized (> 20 MB) files are rejected with a
+  message, and the current campaign is kept.
+- **Bug reports** (`src/sim/diagnostics.ts`) replay exactly. A campaign started in the session
+  replays from a fresh game with the same settings. A campaign loaded from a save replays from
+  that save, carried in the report as a checkpoint. When the player command log reaches 2,000
+  entries, it rolls over to a new checkpoint instead of dropping early commands. Playing on
+  after the result is a logged command. `npx tsx tools/replay.ts <report>` checks the final
+  state checksum.
 
 ## Balance assumptions and evidence
 
@@ -477,8 +488,8 @@ Observations that drove the tuning:
   realm's weight (floor 5), so this is the same share of a realm as 3 or 4 provinces on the
   Reach. The rule was left as it is.
 - **Remaining skew:** the richest heartland wins most AI-only campaigns on both maps:
-  - Aldmere: Lessia 13 of 30, Tarsk 7, Aurel 5.
-  - The Reach: Aurel 15 of 30, Tarsk 8.
+  - Aldmere: Lessia 15 of 30, Aurel 7, Tarsk 5 (13, 5 and 7 before Stage A's rule fixes).
+  - The Reach: Aurel 15 of 30, Tarsk 11 (15 and 8 before).
 
   On Aldmere, Hrafnmark, Vostmark, the Ashmark and Carrow shrink on average. Serennes, Istrel
   and Solmarre rarely go to war. See STATUS.md for the tables. These are small samples and
