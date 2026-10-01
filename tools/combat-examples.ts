@@ -2,6 +2,7 @@
 // combat code (deterministic forecast: unlucky / even / lucky rolls).
 //   npx tsx tools/combat-examples.ts
 
+import { UNIT_TYPES } from '../src/sim/config';
 import { forecastBattle } from '../src/sim/combat';
 import { createGame } from '../src/sim/game';
 import { createArmy, newRegiment } from '../src/sim/military';
@@ -14,7 +15,7 @@ void lineScenario;
 
 function army(sim: Sim, nid: string, pid: string, units: Partial<Record<UnitType, number>>) {
   const regs = [];
-  for (const t of ['foot', 'horse', 'guns'] as UnitType[]) for (let i = 0; i < (units[t] ?? 0); i++) regs.push(newRegiment(sim, t));
+  for (const t of UNIT_TYPES) for (let i = 0; i < (units[t] ?? 0); i++) regs.push(newRegiment(sim, t));
   return createArmy(sim, nid, pid, regs);
 }
 
@@ -35,31 +36,66 @@ function show(title: string, f: ReturnType<typeof forecastBattle>) {
 // 1. comparable armies on plains
 {
   const sim = fresh();
-  const a = army(sim, 'a', 'b1', { foot: 6, horse: 2 });
-  const d = army(sim, 'b', 'b1', { foot: 6, horse: 2 });
-  show('1. Comparable armies on plains (6 foot + 2 horse each)', forecastBattle(sim, 'b1', [a], [d]));
+  const a = army(sim, 'a', 'b1', { infantry: 6, cavalry: 2 });
+  const d = army(sim, 'b', 'b1', { infantry: 6, cavalry: 2 });
+  show('1. Comparable armies on plains (6 infantry + 2 cavalry each)', forecastBattle(sim, 'b1', [a], [d]));
 }
 // 2. smaller supplied, entrenched defender in mountains with a fort
 {
   const sim = fresh();
   Object.assign(sim.state.provinces.m1, { owner: 'b', controller: 'b', integration: 100, fort: 1 });
-  const a = army(sim, 'a', 'm1', { foot: 9 });
-  const d = army(sim, 'b', 'm1', { foot: 5 });
+  const a = army(sim, 'a', 'm1', { infantry: 9 });
+  const d = army(sim, 'b', 'm1', { infantry: 5 });
   d.stationary = 6;
-  show('2. 5 entrenched foot in fortified mountains vs 9 foot', forecastBattle(sim, 'm1', [a], [d]));
+  show('2. 5 entrenched infantry in fortified mountains vs 9 infantry', forecastBattle(sim, 'm1', [a], [d]));
   const sim2 = fresh();
-  const a2 = army(sim2, 'a', 'b1', { foot: 9 });
-  const d2 = army(sim2, 'b', 'b1', { foot: 5 });
+  const a2 = army(sim2, 'a', 'b1', { infantry: 9 });
+  const d2 = army(sim2, 'b', 'b1', { infantry: 5 });
   show('2b. The same armies on open plains', forecastBattle(sim2, 'b1', [a2], [d2]));
 }
 // 3. larger unsupplied attacker
 {
   const sim = fresh();
-  const a = army(sim, 'a', 'b1', { foot: 8 });
-  const d = army(sim, 'b', 'b1', { foot: 6 });
+  const a = army(sim, 'a', 'b1', { infantry: 8 });
+  const d = army(sim, 'b', 'b1', { infantry: 6 });
   d.stationary = 3;
   a.supply = 1;
-  show('3a. 8 supplied foot attack 6 dug-in foot on plains', forecastBattle(sim, 'b1', [a], [d]));
+  show('3a. 8 supplied infantry attack 6 dug-in infantry on plains', forecastBattle(sim, 'b1', [a], [d]));
   a.supply = 0.2;
   show('3b. The same attack, attackers unsupplied (20% supply)', forecastBattle(sim, 'b1', [a], [d]));
+}
+// 4. machine guns against a cavalry charge
+{
+  const sim = fresh();
+  const a = army(sim, 'a', 'b1', { infantry: 2, cavalry: 6 });
+  const d = army(sim, 'b', 'b1', { infantry: 6 });
+  show('4a. 2 infantry + 6 cavalry attack 6 infantry on plains', forecastBattle(sim, 'b1', [a], [d]));
+  sim.state.nations.b.research.done.push('machine_guns');
+  sim.state.tick++; // modifiers are cached per week
+  show('4b. The same, the defenders have Machine Guns', forecastBattle(sim, 'b1', [a], [d]));
+}
+// 5. armour against a fortified, entrenched line
+{
+  const sim = fresh();
+  sim.state.provinces.b1.fort = 2;
+  const d = army(sim, 'b', 'b1', { infantry: 6 });
+  d.stationary = 6;
+  const inf = army(sim, 'a', 'b1', { infantry: 8 });
+  show('5a. 8 infantry attack 6 entrenched infantry behind a level-2 fort (plains)', forecastBattle(sim, 'b1', [inf], [d]));
+  const tanks = army(sim, 'a', 'b1', { infantry: 5, armour: 3 });
+  show('5b. 5 infantry + 3 armour against the same line', forecastBattle(sim, 'b1', [tanks], [d]));
+  sim.state.nations.a.shortages = ['oil'];
+  show('5c. The same armour without oil', forecastBattle(sim, 'b1', [tanks], [d]));
+}
+
+
+// 6–8. The navy and the air arm (tools/sea-air-examples.ts)
+{
+  const { airExamples, blockadeExamples, describeExample, invasionExamples } = await import('./sea-air-examples');
+  console.log('\n## Naval invasion');
+  for (const e of invasionExamples()) console.log('\n' + describeExample(e).join('\n'));
+  console.log('\n## Blockade');
+  for (const e of blockadeExamples()) console.log('\n' + describeExample(e).join('\n'));
+  console.log('\n## Air superiority and ground support');
+  for (const e of airExamples()) console.log('\n' + describeExample(e).join('\n'));
 }

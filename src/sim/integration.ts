@@ -14,18 +14,19 @@
 // A realm beyond capacity is overextended: slower integration and more unrest.
 
 import { C } from './config';
+import { armiesIn, ownedBy } from './index';
 import { nationMods } from './modifiers';
 import { chance } from './rng';
-import { clamp, months, notify, ownedProvinces, provName, type Sim } from './state';
+import { clamp, months, notify, provName, type Sim } from './state';
 import type { NationId, ProvinceId } from './types';
 
 export function adminCapacity(sim: Sim, nid: NationId): number {
-  return C.integration.capacityBase + C.integration.capacityPerProvince * ownedProvinces(sim, nid).length + nationMods(sim, nid).adminCapacity;
+  return C.integration.capacityBase + C.integration.capacityPerProvince * ownedBy(sim, nid).length + nationMods(sim, nid).adminCapacity;
 }
 
 export function frontierLoad(sim: Sim, nid: NationId): number {
   let l = 0;
-  for (const pid of ownedProvinces(sim, nid)) l += 1 - sim.state.provinces[pid].integration / 100;
+  for (const pid of ownedBy(sim, nid)) l += 1 - sim.state.provinces[pid].integration / 100;
   return l;
 }
 
@@ -38,10 +39,7 @@ export function overextension(sim: Sim, nid: NationId): number {
 export function garrisoned(sim: Sim, pid: ProvinceId): boolean {
   const owner = sim.state.provinces[pid].owner;
   if (!owner) return false;
-  for (const id in sim.state.armies) {
-    const a = sim.state.armies[id];
-    if (a.location === pid && a.nation === owner && a.path.length === 0 && !a.battle) return true;
-  }
+  for (const a of armiesIn(sim, pid)) if (a.nation === owner && a.path.length === 0 && !a.battle) return true;
   return false;
 }
 
@@ -70,7 +68,7 @@ export function integrationRate(sim: Sim, pid: ProvinceId): IntegrationBreakdown
   if (p.claims.includes(nid)) mul('Rightful claim', 1 + C.integration.claimBonus);
   if (garrisoned(sim, pid)) mul('Garrisoned', 1 + C.integration.garrisonBonus);
   const cap = st.nations[nid].capital;
-  const hops = cap ? (sim.world.hops[cap][pid] ?? 10) : 10;
+  const hops = cap ? (sim.world.hop(cap, pid) ?? 10) : 10;
   mul(`${hops} step(s) from the capital`, Math.max(C.integration.distanceFloor, 1 - C.integration.distancePenalty * hops));
   mul('Realm modifiers', Math.max(0.1, 1 + nationMods(sim, nid).integration));
   mul(`Unrest ${Math.round(p.unrest)}`, 1 - p.unrest / 200);

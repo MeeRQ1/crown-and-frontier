@@ -1,16 +1,142 @@
 # Status
 
-Last updated at the redesign checkpoint: the living-atlas interface and the expanded standard
-world (save schema 1, version 0.2.0). The previous release is `main` at c29aea6.
+Last updated at **Stage C of the strategic depth expansion** (save format 3, map format 3).
+Stages A, B and C are done in this branch. **This is not the finished expansion:** the map
+library and editor, new maps and the real-world map, peace settlements and focus trees are
+planned in Stages D–F ([docs/expansion/PLAN.md](docs/expansion/PLAN.md)). The
+rest of this file below the expansion section describes the redesign release (0.2.0) and
+is kept for its evidence. Where a stage changed a fact, it is corrected in place.
+
+## Expansion progress
+
+| Stage | Status |
+|---|---|
+| A · Foundations | **Done in this branch** (draft pull request, not merged) |
+| B · Industrial economy and research | **Done in this branch** (same draft pull request) |
+| C · War on land, at sea and in the air | **In progress** (checkpoint: simulation and AI committed; interface, tests, measurements and docs next) |
+| D · Maps, editor, real-world map | Not started |
+| E · Diplomacy, settlements, national focus | Not started |
+| F · Onboarding, balance, delivery | Not started |
+
+**Stage C delivered:**
+- **Sea zones and map format 3.** Zones are generated from each map's coastline
+  (`src/maps/seazones.ts`; Aldmere 30 zones, the Reach 13) and stored in the package with
+  ports. Format 1 and 2 packages get them on import. The validator checks zones, coasts,
+  adjacency, strait control and ports.
+- **Navy** (`src/sim/naval.ts`): ports and slipways; transports, torpedo boats,
+  cruisers, battleships, submarines and carriers; fleets sailing between zones; three-round
+  battles; straits closed by sea control; blockades of crowns and sea trade; armies carried by
+  sea and landing under fire; fuel, repair and wear.
+- **Air** (`src/sim/air.ts`): airfields; reconnaissance, fighter, ground-attack and bomber
+  wings; superiority, ground support, interdiction, bombing and reconnaissance missions
+  affecting battles, supply, movement and industry.
+- **Research:** 19 naval and air technologies (73 in all).
+- **AI** (`src/sim/ai/navy.ts`): fleets by temperament and coastline, peacetime
+  stations, sorties, blockades and planned invasions; wings by mix; missions over battles,
+  objectives and the border.
+- **Interface:** fleets and missions on the map, fleet, sea-zone and wing cards, ports and
+  airfields in province cards, "Ship by sea" and mission targeting, the Military ledger's
+  Navy and air section, Help.
+- **Saves:** format 3 extended; saves from before fleets get ports, home squadrons and a
+  notice.
+- **Fixes:** troops at sea no longer fight in the port they left (found by the fuzzer); a
+  broke AI stands down its smallest army when bankruptcy is about four months away; a
+  realm with no industry ranks its first factory highly.
+
+**Stage C measurements** (details in PLAN.md "C (done)"):
+- 143 Vitest tests pass (35 more than Stage B: naval 17, air 8, worked sea and air examples
+  7, the combat matrix 2, save and map upgrades 1).
+- 35 of 35 browser checks pass in headless Chromium 141 (new: a blockade, ground support
+  under enemy and then friendly air superiority, and a landing, all through the interface;
+  Esc now closes an open ledger before it clears the map selection).
+- Benchmarks (`reports/perf/stageC-*.md`, `web-stageC.md`): Aldmere 8.0 and 7.7 ms a week
+  on average (p99 21.3 and 19.1 ms), the Reach 2.8–3.4 ms; 36 of 36 weeks at fastest speed
+  in the browser on all three maps. The worker decision is unchanged.
+- AI batches, 10 seeds per map (`reports/stage-c/`): no invariant failures. Air: every
+  realm past era III built wings and flew missions (85/85, 97/97). Navy: every coastal realm
+  built ships (77/77, 129/129); 74 of 74 and 127 of 128 that fought a coastal enemy used
+  their fleets (the exception: Vostmark's single cruiser stayed in port against Hrafnmark's
+  stronger fleet).
+- Combat matrix (`reports/stage-c/combat-matrix.md`): no army composition wins every
+  pairing on every terrain at either technology level, and no fleet wins every pairing.
+- Fuzzer, now issuing naval and air orders too: 0 findings on the Reach (seeds 1–7, 10
+  years), Aldmere (seeds 1–2, 8 years), and with the whole tree from the start (`--tech
+  all`: the Reach seeds 1–3, Aldmere seeds 1–2). An earlier run found troops at sea fighting
+  in the port they left; that is fixed with a regression test.
+- Screenshots: `docs/screenshots/stage-c/`.
+
+**Stage B delivered:**
+- **The industrial age:** Aldmere starts in 1880 (40/60/70 years), the Reach in 1895
+  (25/40/60). Era texts, events (factory strikes, mine disasters, oil booms), nation traits
+  and the tutorial were rewritten for the era.
+- **Six resources:** food plus coal, iron, oil, rubber and nitrates from province deposits,
+  with stockpiles, shortages and their effects. Map format 2 carries the deposits and
+  factories; the built-in maps are at revision 2.
+- **Industry:** factories (a construction project), coal, materiel, and surplus sold as
+  manufactured goods. Units cost materiel and resources; replacements cost materiel.
+- **Trade** exchanges real resource surpluses at fixed prices, plus a little commerce. It
+  replaces the flat income bonus.
+- **Research:** a 54-technology tree in five eras for land, industry and society, with
+  horizon years (15% dearer per year early, at most 10 years early).
+- **Land roster:** infantry, cavalry, artillery, engineers and armour, data-driven. Machine
+  guns cut cavalry; armour breaks through forts and trenches; engineers dig in faster,
+  besiege faster and bridge rivers; armour without oil and artillery without nitrates fight
+  weaker.
+- **AI** for every Stage B system: factories gated on its own coal, resource-aware
+  research, unit mix, trade treaties by value. AI reports now include a system-usage
+  section (`tools/usage.ts`).
+- **Save format 3:** formats 1 and 2 convert with a notice; a save that cannot convert
+  stays listed with its reason and can be exported from the load screen.
+- **Interface:** an Industry & Trade ledger (I), research by era, resource and factory rows
+  on province cards, recruit costs, start years on the setup screen.
+
+**Stage B measurements** (details in PLAN.md "B (done)"):
+- 108 Vitest tests pass (20 more than Stage A, among them 14 for industry, resources, trade and the roster, and 3 for format-2 conversion).
+- 31 of 31 browser checks pass (new: format-2 conversion notice; an unconvertible save
+  listed, refused with a reason and exported).
+- AI batches, 10 seeds per map (`reports/stage-b/`): every Stage B check passes, no
+  invariant failures.
+- Benchmarks (`reports/perf/stageB-*.md`, `web-stageB.md`): Aldmere 8.5 and 7.2 ms a week
+  on average (p99 21.4 and 16.8 ms), the Reach 2.3–3.6 ms; 36 of 36 weeks at fastest speed
+  in the browser on all three maps. The worker decision is unchanged.
+- Fuzzer: 0 findings on the Reach (seeds 1–7, 10 years) and Aldmere (seeds 1–2, 8 years).
+- Screenshots: `docs/screenshots/stage-b/` (setup with start years, Industry ledger,
+  research by era, province card, format-2 conversion notice).
+
+**Checkpoint for continuing:**
+- **Working state:** all of these pass at the end of Stage C.
+  ```bash
+  npm ci && npm run typecheck && npm test && npm run build && npm run package && npm run verify:web
+  npm run fuzz -- --scenario reach --seeds 1-7 --years 10 && npm run fuzz -- --scenario aldmere --seeds 1-2 --years 8
+  npm run fuzz -- --scenario reach --seeds 1-3 --years 10 --tech all
+  npx tsx tools/matrix.ts --out reports/stage-c/combat-matrix.md
+  ```
+- **Unresolved failures:** none known.
+- **Known gaps** (tracked for later stages):
+  - Oil, rubber, nitrates and iron are still never short in AI batches; coal is the
+    binding resource.
+  - The richest heartlands win most AI campaigns again: Lessia 6 of 10 on Aldmere, Aurel
+    5 of 10 on the Reach (Stage B: Morvaine and Tarsk 4 each; six winners on the Reach).
+    Balance is Stage F's work.
+  - Hrafnmark still shrinks on Aldmere.
+  - A small coal exporter can draw most of its income from trade, although the average is
+    12–15%.
+  - No deposit or sea-control map mode yet (cards and ledgers show both); Stage F adds
+    them with the other map modes.
+  - Armour stays rare in AI armies (0.1–0.3% of regiment-months): Tanks arrives in 1916,
+    late in most campaigns.
+- **Requirement status:** PLAN.md's ledger lists every requirement with its stage and
+  status. Nothing has been dropped.
+- **Next steps:** Stage D, in the order listed at the end of PLAN.md.
 
 ## Evidence, kept separate
 
 | Kind | What was done | Where |
 |---|---|---|
-| Automated tests | 66 Vitest tests. The 53 from the previous release still pass, plus new ones: Aldmere's validity, connectivity and homelands; fortified passes; river borders and the river combat rule; Hrafnmark's straits; five AI years on Aldmere; army groups, station orders and waypoints; front detection for multi-front wars; and a real save from the previous release that loads on the Reach, plays a year and re-saves | `tests/`, `npm test` |
-| AI-only campaigns | 30 campaigns on each map (seeds 1–10 × easy/normal/hard): Aldmere 60 years, the Reach 40 years | `reports/ai-campaigns-aldmere.md`, `reports/ai-campaigns.md`, `npm run sim` |
-| Browser verification | 27 automated checks, all passing, in headless Chromium 141. Covered: site root and project sub-path (both starting Aldmere), unpacked ZIP, choosing the Reach and a realm in setup, map-mode and navigation keys, iframe (resize, wheel isolation), hidden tab, audio gating, keyboard, slot save/load, export/import, damaged import, blocked storage, five laptop sizes and UI scaling, phone touch, and a performance probe | `reports/web-verification.md`, `npm run verify:web` |
-| Screenshots | Before (previous release) and after, from the same scripted tour (Calder, seed 7, 30 weeks), at 1366×768 and 390×844: the Reach (matching pairs) and Aldmere | `docs/screenshots/`, `e2e/capture.mjs` |
+| Automated tests | **Stage C: 143 Vitest tests** (naval, air, worked sea and air examples, the combat matrix, map upgrades). **Stage B: 108 Vitest tests** (resources, industry, trade, roster, format-2 conversion). **Stage A: 88 Vitest tests** (22 new: the regression tests, save format and migration, map packages, bug-report replays). At the redesign: 66 Vitest tests. The 53 from the previous release still pass, plus new ones: Aldmere's validity, connectivity and homelands; fortified passes; river borders and the river combat rule; Hrafnmark's straits; five AI years on Aldmere; army groups, station orders and waypoints; front detection for multi-front wars; and a real save from the previous release that loads on the Reach, plays a year and re-saves | `tests/`, `npm test` |
+| AI-only campaigns | **Stage C:** 10 campaigns per map at normal difficulty, with navy and air usage (`reports/stage-c/`). **Stage B:** 10 campaigns per map at normal difficulty with system usage (`reports/stage-b/`). Before: 30 campaigns on each map (seeds 1–10 × easy/normal/hard): Aldmere 60 years, the Reach 40 years | `reports/ai-campaigns-aldmere.md`, `reports/ai-campaigns.md`, `npm run sim` |
+| Browser verification | **Stage C: 35 automated checks, all passing** (blockade, air superiority, landing). **Stage B: 31 automated checks, all passing** (format-2 conversion; unconvertible save kept and exportable). **Stage A: 29 automated checks, all passing** (new: map mode restored after Diplomacy; a format-1 save converted on import with a notice). At the redesign: 27 automated checks, all passing, in headless Chromium 141. Covered: site root and project sub-path (both starting Aldmere), unpacked ZIP, choosing the Reach and a realm in setup, map-mode and navigation keys, iframe (resize, wheel isolation), hidden tab, audio gating, keyboard, slot save/load, export/import, damaged import, blocked storage, five laptop sizes and UI scaling, phone touch, and a performance probe | `reports/web-verification.md`, `npm run verify:web` |
+| Screenshots | **Stage A:** the conversion notice for a format-1 save (`docs/screenshots/stage-a/format1-save-converted.png`). At the redesign: before (previous release) and after, from the same scripted tour (Calder, seed 7, 30 weeks), at 1366×768 and 390×844: the Reach (matching pairs) and Aldmere | `docs/screenshots/`, `e2e/capture.mjs` |
 | Flows I exercised by script, with screenshots reviewed | Menu → setup (both maps, several realms) → campaign; every ledger at laptop and phone size; army groups and orders; attention list and decisions mid-war; settings, how to play, load; menu, setup and ledgers at phone size | `.scratch` scripts during development; `e2e/capture.mjs` |
 | External player feedback | **None.** No one but me has played the redesign. | — |
 
@@ -95,7 +221,18 @@ that is noted below.
 ## Balance on the two maps
 
 Both batches are AI-only (every realm run by the AI), seeds 1–10 at each of easy, normal and
-hard. The full tables are in `reports/ai-campaigns-aldmere.md` and `reports/ai-campaigns.md`.
+hard. The table below is from the redesign release (0.2.0).
+
+**Re-run after Stage A's rule fixes** (same seeds and settings; full tables in
+`reports/ai-campaigns-aldmere.md` and `reports/ai-campaigns.md`, no invariant failures):
+- **Aldmere:** Lessia 15, Aurel 7, Tarsk 5, Fenward 1, Morvaine 1, Solmarre 1. 16 of 30
+  were won by a victory path (economic 9, territorial 5, diplomatic 2) and 14 on score at the
+  limit. 48 wars and 315 battles per campaign; no eliminations.
+- **The Reach:** Aurel 15, Tarsk 11, Serennes 2, Fenward 1, Drevenholt 1. 9 of 30 were won by
+  a path (territorial 6, economic 2, diplomatic 1) and 21 on score. 29 wars and 101 battles
+  per campaign.
+- The skew towards the richest heartland is unchanged. Stage A fixed bugs and did not
+  re-balance; balance work is planned for Stages B–F (docs/expansion/PLAN.md).
 
 | | Aldmere (60 years) | The Reach (40 years) | The Reach, previous release |
 |---|---|---|---|
@@ -149,11 +286,11 @@ Three other skews remain:
   Ashmark (15 → 11.8) and Carrow (13 → 11.9) lose ground on average.
 - **Passive realms:** Serennes, Istrel and Solmarre declare almost no wars.
 - **Victory thresholds:** I did not lower them to force more path victories; 17 of 30 Aldmere
-  campaigns still end on score at the limit.
+  campaigns still ended on score at the limit in 0.2.0 (14 of 30 after Stage A).
 
 ## Known issues and limitations
 
-- **Balance:** Lessia wins 13 of 30 AI-only campaigns on Aldmere and Aurel 15 of 30 on the Reach: the
+- **Balance:** Lessia wins 15 of 30 AI-only campaigns on Aldmere and Aurel 15 of 30 on the Reach (after Stage A; 13 and 15 in 0.2.0): the
   richest heartland wins most often on both maps. Hrafnmark, Vostmark, the Ashmark and Carrow
   shrink on average. The investigation and the rejected fixes are under *Balance on the two
   maps*. These are AI-only samples, not proof of balance, and **no one
@@ -163,8 +300,9 @@ Three other skews remain:
   rarely take part in the continent's wars unless attacked.
 - **Late-game money:** AI treasuries pile up (tens of thousands of crowns by year 60 on
   Aldmere) once development caps and the tech tree run out. Crowns have no late-game sink.
-- **Slow weeks:** a rare simulation week takes 40–70 ms on Aldmere, which can drop a frame at
-  the fastest speed.
+- **Slow weeks:** after Stage A, a simulation week on Aldmere averages about 6 ms with a p99
+  of 16 ms, and the slowest week in 30 years was 42 ms (it was 40–77 ms before). See
+  `reports/perf/`.
 - **Browsers:** only Chromium was verified. There was no Firefox or Safari run, and no real
   Chromebook or touch device.
 - **Army glide:** armies move along their route by progress between weeks. There is no

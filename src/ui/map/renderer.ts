@@ -5,11 +5,13 @@
 // Lettering and markers are placed in screen space, by zoom tier, with
 // collision checks so nothing overlaps.
 
-import { TERRAIN } from '../../sim/config';
+import { activeMission } from '../../sim/air';
+import { SHIPS, TERRAIN } from '../../sim/config';
 import { maxMorale } from '../../sim/military';
+import { fleetsIn, subPower, surfacePower } from '../../sim/naval';
 import { moveCost } from '../../sim/movement';
 import { atWar, isFriendly, menOf, type Sim } from '../../sim/state';
-import type { Army, NationId, ProvinceId } from '../../sim/types';
+import type { Army, Fleet, NationId, ProvinceId } from '../../sim/types';
 import { drawShield } from '../heraldry';
 import { iconPath } from '../icons';
 import { BaseMap, PALETTE, type TerrainDetail } from './basemap';
@@ -42,6 +44,13 @@ export interface RenderState {
   presentation: Presentation;
   /** draw a gold outline around this realm (campaign setup) */
   outlineRealm?: NationId | null;
+  /** navy and air selections */
+  selectedFleet?: string | null;
+  selectedZone?: string | null;
+  selectedWing?: string | null;
+  /** route preview for the selected fleet (sea zones) */
+  fleetPreview?: string[] | null;
+  fleetPreviewLabel?: string | null;
 }
 
 export interface Marker {
@@ -88,6 +97,7 @@ export class MapRenderer {
   readonly geo: GeoIndex;
   readonly base: BaseMap;
   markers: Marker[] = [];
+  fleetMarkers: Array<{ fleet: string; x: number; y: number; w: number; h: number }> = [];
   battleMarkers: Array<{ battle: string; province: ProvinceId; x: number; y: number; r: number }> = [];
   dpr = 1;
   width = 0;
@@ -152,6 +162,25 @@ export class MapRenderer {
       if (sx >= m.x - 4 && sx <= m.x + m.w + 4 && sy >= m.y - 4 && sy <= m.y + m.h + 4) return m.army;
     }
     return null;
+  }
+
+  /** Sea zone under a screen point (CSS pixels), if it is not on land. */
+  zoneAt(sx: number, sy: number): string | null {
+    const w = this.camera.toWorld(sx, sy);
+    if (this.geo.provinceAt(w.x, w.y)) return null;
+    return this.geo.zoneAt(w.x, w.y);
+  }
+
+  fleetAt(sx: number, sy: number): string | null {
+    for (let i = this.fleetMarkers.length - 1; i >= 0; i--) {
+      const m = this.fleetMarkers[i];
+      if (sx >= m.x - 4 && sx <= m.x + m.w + 4 && sy >= m.y - 4 && sy <= m.y + m.h + 4) return m.fleet;
+    }
+    return null;
+  }
+
+  zoneCenter(id: string): { x: number; y: number } {
+    return this.geo.zoneAnchors.get(id) ?? { x: 0, y: 0 };
   }
 
   battleAt(sx: number, sy: number): { battle: string; province: ProvinceId } | null {
@@ -283,7 +312,8 @@ export class MapRenderer {
       }
     }
 
-    // 4. straits and fords, roads
+    // 4. sea zones, straits and fords, roads
+    this.drawSeaZones(sim, rs, tier, px);
     this.drawStraits(sim, px, tier);
     if (tier === 'close' || rs.mode === 'supply') this.drawRoads(sim, px, visible);
 
@@ -348,13 +378,15 @@ export class MapRenderer {
     const pos = new Map<string, { x: number; y: number }>();
     for (const a of armies) pos.set(a.id, this.armyPos(sim, a));
     for (const a of armies) {
-      if (!a.path.length || a.id === rs.selectedArmy) continue;
+      if (a.embarked || !a.path.length || a.id === rs.selectedArmy) continue;
       const mine = a.nation === rs.player;
       const hostile = rs.player ? atWar(sim, rs.player, a.nation) : false;
       if (!mine && !hostile) continue;
       if (tier === 'far' && !hostile) continue;
       this.drawRoute(pos.get(a.id)!, a.path, mine ? 'rgba(240, 226, 190, 0.75)' : 'rgba(214, 72, 52, 0.9)', px, true, a.retreating ? 0.5 : 1);
     }
+    this.drawFleetRoutes(sim, rs, tier, px);
+    this.drawAirMissions(sim, rs, tier, px);
     const sel = rs.selectedArmy ? sim.state.armies[rs.selectedArmy] : undefined;
     if (sel?.path.length) this.drawRoute(pos.get(sel.id)!, sel.path, '#f2d48a', px, false, 1.35);
     if (sel && rs.previewPath?.length) this.drawRoute(pos.get(sel.id)!, rs.previewPath, rs.previewBad ? 'rgba(230, 110, 90, 0.95)' : 'rgba(255, 244, 214, 0.95)', px, true, 1.2);
@@ -364,11 +396,21 @@ export class MapRenderer {
     this.placed = [];
     this.blocked = [];
     this.markers = [];
+    this.fleetMarkers = [];
     this.battleMarkers = [];
     const t = now / 1000;
     this.drawBattles(sim, rs, t);
     this.drawSites(sim, rs, tier, visible);
     this.drawArmies(sim, rs, tier, pos);
+    this.drawFleets(sim, rs, tier);
+    this.drawWings(sim, rs, tier);
+    this.drawZoneNames(sim, rs, tier);
+    const fsel = rs.selectedFleet ? sim.state.fleets[rs.selectedFleet] : undefined;
+    if (fsel && rs.fleetPreview?.length && rs.fleetPreviewLabel) {
+      const end = this.zoneCenter(rs.fleetPreview[rs.fleetPreview.length - 1]);
+      const s = cam.toScreen(end.x, end.y);
+      this.pill(s.x, s.y - 34, rs.fleetPreviewLabel, '#1a242f', '#f6e7c1');
+    }
     if (sel && rs.previewPath?.length && rs.previewLabel) {
       const end = this.provinceCenter(rs.previewPath[rs.previewPath.length - 1]);
       const s = cam.toScreen(end.x, end.y);
@@ -680,6 +722,290 @@ export class MapRenderer {
   }
 
   /** Army position, gliding between provinces as it marches. */
+  // ───────────────────────────── sea and air ──────────────────────────────
+
+  /** Zone borders (world space); in the military mode, who holds each zone. */
+  private drawSeaZones(sim: Sim, rs: RenderState, tier: Tier, px: number): void {
+    const geo = this.geo;
+    if (!geo.zoneIds.length) return;
+    const ctx = this.ctx;
+    const me = rs.player;
+    ctx.save();
+    if ((rs.mode === 'military' && me) || rs.selectedZone) ctx.clip(geo.seaClip(), 'evenodd');
+    if (rs.mode === 'military' && me) {
+      for (const z of geo.zoneIds) {
+        let ours = 0;
+        let theirs = 0;
+        for (const f of fleetsIn(sim, z)) {
+          const p = surfacePower(f) + subPower(f) * 0.5;
+          if (f.nation === me || isFriendly(sim, me, f.nation)) ours += p;
+          else if (atWar(sim, me, f.nation)) theirs += p;
+        }
+        if (ours <= 0 && theirs <= 0) continue;
+        const path = geo.zonePath(z);
+        if (!path) continue;
+        ctx.save();
+        ctx.globalAlpha = 0.28;
+        ctx.fillStyle = theirs <= 0 ? '#3f7fb8' : ours <= 0 ? '#b8452f' : ours >= theirs ? '#5d79a8' : '#a25a3c';
+        ctx.fill(path);
+        ctx.restore();
+      }
+    }
+    if (rs.selectedZone) {
+      const path = geo.zonePath(rs.selectedZone);
+      if (path) {
+        ctx.save();
+        ctx.globalAlpha = 0.2;
+        ctx.fillStyle = '#f2d48a';
+        ctx.fill(path);
+        ctx.restore();
+      }
+    }
+    ctx.restore();
+    ctx.save();
+    ctx.strokeStyle = tier === 'far' ? 'rgba(214, 230, 236, 0.22)' : 'rgba(214, 230, 236, 0.4)';
+    ctx.lineWidth = (tier === 'far' ? 1 : 1.3) * px;
+    ctx.setLineDash([7 * px, 6 * px]);
+    ctx.stroke(geo.zoneBorders);
+    ctx.restore();
+  }
+
+  /** A fleet's position on the map: its zone anchor, partway to the next zone when sailing. */
+  fleetPos(f: Fleet): { x: number; y: number } {
+    const here = this.zoneCenter(f.zone);
+    if (!f.path.length || f.progress <= 0) return here;
+    const next = this.zoneCenter(f.path[0]);
+    const u = Math.max(0, Math.min(0.85, f.progress));
+    return { x: here.x + (next.x - here.x) * u, y: here.y + (next.y - here.y) * u };
+  }
+
+  private seaRoute(from: { x: number; y: number }, zones: string[], color: string, px: number, dashed: boolean, weight: number): void {
+    const ctx = this.ctx;
+    ctx.save();
+    ctx.strokeStyle = 'rgba(12, 16, 20, 0.55)';
+    ctx.lineWidth = (3.6 * weight + 2) * px;
+    ctx.lineCap = 'round';
+    ctx.lineJoin = 'round';
+    const path = new Path2D();
+    path.moveTo(from.x, from.y);
+    for (const z of zones) {
+      const c = this.zoneCenter(z);
+      path.lineTo(c.x, c.y);
+    }
+    ctx.stroke(path);
+    ctx.strokeStyle = color;
+    ctx.lineWidth = 2.4 * weight * px;
+    if (dashed) ctx.setLineDash([8 * px, 6 * px]);
+    ctx.stroke(path);
+    ctx.restore();
+  }
+
+  private drawFleetRoutes(sim: Sim, rs: RenderState, tier: Tier, px: number): void {
+    const me = rs.player;
+    for (const f of Object.values(sim.state.fleets)) {
+      if (!f.path.length || f.id === rs.selectedFleet) continue;
+      const mine = f.nation === me;
+      const hostile = me ? atWar(sim, me, f.nation) : false;
+      if (!mine && !hostile) continue;
+      if (tier === 'far' && !hostile) continue;
+      this.seaRoute(this.fleetPos(f), f.path, mine ? 'rgba(190, 220, 240, 0.75)' : 'rgba(214, 72, 52, 0.85)', px, true, 0.9);
+    }
+    const sel = rs.selectedFleet ? sim.state.fleets[rs.selectedFleet] : undefined;
+    if (sel?.path.length) this.seaRoute(this.fleetPos(sel), sel.path, '#f2d48a', px, false, 1.2);
+    if (sel && rs.fleetPreview?.length) this.seaRoute(this.fleetPos(sel), rs.fleetPreview, 'rgba(255, 244, 214, 0.95)', px, true, 1.1);
+    // the beach a fleet with troops is heading for
+    if (sel?.landing) {
+      const p = this.geo.provs.get(sel.landing);
+      if (p) {
+        this.ctx.save();
+        this.ctx.setLineDash([5 * px, 4 * px]);
+        this.ctx.strokeStyle = '#f2d48a';
+        this.ctx.lineWidth = 2.2 * px;
+        this.ctx.stroke(p.path);
+        this.ctx.restore();
+      }
+    }
+  }
+
+  private drawAirMissions(sim: Sim, rs: RenderState, tier: Tier, px: number): void {
+    if (tier === 'far') return;
+    const ctx = this.ctx;
+    const me = rs.player;
+    for (const w of Object.values(sim.state.wings)) {
+      if (!w.target || w.mission === 'idle') continue;
+      const mine = w.nation === me;
+      const hostile = me ? atWar(sim, me, w.nation) : false;
+      const selected = w.id === rs.selectedWing;
+      if (!selected && !mine && !hostile) continue;
+      if (!activeMission(sim, w)) continue;
+      const a = this.provinceCenter(w.base);
+      const b = this.provinceCenter(w.target);
+      const mx = (a.x + b.x) / 2;
+      const my = (a.y + b.y) / 2 - Math.hypot(b.x - a.x, b.y - a.y) * 0.18;
+      ctx.save();
+      ctx.strokeStyle = selected ? '#f2d48a' : mine ? 'rgba(200, 225, 245, 0.7)' : 'rgba(214, 72, 52, 0.75)';
+      ctx.lineWidth = (selected ? 2.2 : 1.5) * px;
+      ctx.setLineDash([3 * px, 4 * px]);
+      ctx.beginPath();
+      ctx.moveTo(a.x, a.y);
+      ctx.quadraticCurveTo(mx, my, b.x, b.y);
+      ctx.stroke();
+      if (selected) {
+        // the mission area: the target and its neighbours (bombing: the target)
+        const area = w.mission === 'bombing' ? [w.target] : [w.target, ...sim.world.prov[w.target].neighbors];
+        ctx.setLineDash([]);
+        ctx.fillStyle = 'rgba(242, 212, 138, 0.12)';
+        for (const id of area) {
+          const p = this.geo.provs.get(id);
+          if (p) ctx.fill(p.path);
+        }
+      }
+      ctx.restore();
+    }
+  }
+
+  private drawFleets(sim: Sim, rs: RenderState, tier: Tier): void {
+    const cam = this.camera;
+    const me = rs.player;
+    const byZone = new Map<string, Fleet[]>();
+    for (const id of Object.keys(sim.state.fleets).sort()) {
+      const f = sim.state.fleets[id];
+      const mine = f.nation === me;
+      const hostile = me ? atWar(sim, me, f.nation) : false;
+      if (!mine && !hostile && f.id !== rs.selectedFleet && rs.presentation.armies === 'mine') continue;
+      if (!mine && !hostile && tier === 'far' && f.id !== rs.selectedFleet) continue;
+      const k = f.path.length && f.progress > 0 ? `m${f.id}` : f.zone;
+      (byZone.get(k) ?? byZone.set(k, []).get(k)!).push(f);
+    }
+    for (const list of byZone.values()) {
+      list.sort((a, b) => (a.nation === me ? -1 : 0) - (b.nation === me ? -1 : 0) || (a.id < b.id ? -1 : 1));
+      const base = this.fleetPos(list[0]);
+      const s = cam.toScreen(base.x, base.y);
+      if (s.x < -60 || s.y < -60 || s.x > this.width + 60 || s.y > this.height + 60) continue;
+      const H = tier === 'far' ? 18 : 22;
+      const widths = list.map((f) => (tier === 'far' ? 30 : 38) + String(f.ships.length).length * 7 + (f.cargo.length ? 12 : 0));
+      const total = widths.reduce((x, y) => x + y + 3, -3);
+      let x = s.x - total / 2;
+      const y = s.y - H / 2;
+      list.forEach((f, i) => {
+        this.fleetMarker(sim, f, x, y, widths[i], H, f.id === rs.selectedFleet, me);
+        this.fleetMarkers.push({ fleet: f.id, x, y, w: widths[i], h: H });
+        this.place({ x, y, w: widths[i], h: H });
+        x += widths[i] + 3;
+      });
+    }
+  }
+
+  private fleetMarker(sim: Sim, f: Fleet, x: number, y: number, w: number, h: number, selected: boolean, me: NationId | null): void {
+    const ctx = this.ctx;
+    const def = sim.world.nationDefs[f.nation];
+    const mine = f.nation === me;
+    const hostile = me ? atWar(sim, me, f.nation) : false;
+    ctx.save();
+    ctx.shadowColor = selected ? 'rgba(242, 212, 138, 0.9)' : 'rgba(0,0,0,0.45)';
+    ctx.shadowBlur = selected ? 10 : 4;
+    ctx.fillStyle = '#121a22';
+    ctx.beginPath();
+    ctx.roundRect(x, y, w, h, h / 2);
+    ctx.fill();
+    ctx.shadowColor = 'transparent';
+    ctx.fillStyle = def.color;
+    ctx.beginPath();
+    ctx.roundRect(x + 1.5, y + 1.5, h - 3, h - 3, (h - 3) / 2);
+    ctx.fill();
+    ctx.strokeStyle = selected ? '#f2d48a' : hostile ? '#ff6a52' : mine ? 'rgba(242, 212, 138, 0.85)' : 'rgba(150, 175, 195, 0.6)';
+    ctx.lineWidth = selected ? 2.2 : 1.5;
+    ctx.beginPath();
+    ctx.roundRect(x + 0.5, y + 0.5, w - 1, h - 1, h / 2);
+    ctx.stroke();
+    this.icon('ship', x + h / 2, y + h / 2, h - 7, '#fffaf0', 2);
+    ctx.fillStyle = '#e8f1f6';
+    ctx.font = `700 ${h > 20 ? 12.5 : 11}px 'Source Sans 3 Variable', sans-serif`;
+    ctx.textAlign = 'left';
+    ctx.textBaseline = 'middle';
+    ctx.fillText(String(f.ships.length), x + h + 2, y + h / 2 + 0.5);
+    if (f.cargo.length) this.icon('army', x + w - 10, y + h / 2, 11, '#f2d48a', 2);
+    // condition bar
+    const hp = f.ships.reduce((a, s) => a + s.hp, 0) / Math.max(1, f.ships.length) / 100;
+    ctx.fillStyle = 'rgba(12, 14, 16, 0.85)';
+    ctx.fillRect(x + h / 2, y + h + 1, w - h, 3);
+    ctx.fillStyle = hp > 0.6 ? '#74c07a' : hp > 0.3 ? '#e3ab3f' : '#e5604c';
+    ctx.fillRect(x + h / 2, y + h + 1, (w - h) * hp, 3);
+    ctx.restore();
+    void SHIPS;
+  }
+
+  private drawWings(sim: Sim, rs: RenderState, tier: Tier): void {
+    if (tier === 'far') return;
+    const me = rs.player;
+    const at = new Map<ProvinceId, { nation: NationId; n: number; sel: boolean }>();
+    for (const w of Object.values(sim.state.wings)) {
+      const mine = w.nation === me;
+      const hostile = me ? atWar(sim, me, w.nation) : false;
+      if (!mine && !hostile && w.id !== rs.selectedWing && rs.presentation.armies !== 'all') continue;
+      const cur = at.get(w.base) ?? { nation: w.nation, n: 0, sel: false };
+      cur.n++;
+      if (w.id === rs.selectedWing) cur.sel = true;
+      at.set(w.base, cur);
+    }
+    const ctx = this.ctx;
+    for (const [pid, v] of at) {
+      const c = this.provinceCenter(pid);
+      const s = this.camera.toScreen(c.x, c.y);
+      const x = s.x + 14;
+      const y = s.y + 4;
+      if (x < -30 || y < -30 || x > this.width + 30 || y > this.height + 30) continue;
+      const w = 32;
+      const hgt = 18;
+      ctx.save();
+      ctx.fillStyle = 'rgba(18, 26, 34, 0.92)';
+      ctx.strokeStyle = v.sel ? '#f2d48a' : v.nation === me ? 'rgba(242, 212, 138, 0.8)' : '#ff6a52';
+      ctx.lineWidth = v.sel ? 2 : 1.2;
+      ctx.beginPath();
+      ctx.roundRect(x, y, w, hgt, 5);
+      ctx.fill();
+      ctx.stroke();
+      this.icon('plane', x + 9, y + hgt / 2, 12, sim.world.nationDefs[v.nation].color, 2.2);
+      ctx.fillStyle = '#e8f1f6';
+      ctx.font = `700 11px 'Source Sans 3 Variable', sans-serif`;
+      ctx.textAlign = 'left';
+      ctx.textBaseline = 'middle';
+      ctx.fillText(String(v.n), x + 18, y + hgt / 2 + 0.5);
+      ctx.restore();
+      this.place({ x, y, w, h: hgt });
+    }
+  }
+
+  /** Zone names on open water (the map's printed sea names are not repeated). */
+  private drawZoneNames(sim: Sim, rs: RenderState, tier: Tier): void {
+    if (tier === 'far' || rs.presentation.labels === 'few') return;
+    const printed = new Set(this.geo.labels.filter((l) => l.kind === 'sea').map((l) => l.name));
+    const ctx = this.ctx;
+    ctx.save();
+    ctx.font = `italic 500 ${tier === 'close' ? 13 : 11.5}px 'Alegreya Variable', serif`;
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    for (const z of this.geo.zoneIds) {
+      const name = this.geo.zoneNames.get(z) ?? z;
+      if (printed.has(name) && z !== rs.selectedZone) continue;
+      const a = this.zoneCenter(z);
+      const s = this.camera.toScreen(a.x, a.y);
+      const y = s.y + 24;
+      const wd = ctx.measureText(name).width + 6;
+      const r = { x: s.x - wd / 2, y: y - 8, w: wd, h: 16 };
+      if (r.x < 0 || r.y < 0 || r.x + r.w > this.width || r.y + r.h > this.height) continue;
+      if (z !== rs.selectedZone && this.overlaps(r)) continue;
+      ctx.fillStyle = z === rs.selectedZone ? '#f2d48a' : 'rgba(214, 230, 236, 0.75)';
+      ctx.strokeStyle = 'rgba(14, 26, 34, 0.7)';
+      ctx.lineWidth = 3;
+      ctx.strokeText(name, s.x, y);
+      ctx.fillText(name, s.x, y);
+      this.place(r);
+    }
+    ctx.restore();
+    void sim;
+  }
+
   armyPos(sim: Sim, a: Army): { x: number; y: number } {
     const here = this.provinceCenter(a.location);
     if (!a.path.length || a.progress <= 0 || a.battle) return here;
@@ -848,7 +1174,7 @@ export class MapRenderer {
     // group stacks by rounded screen position
     const stacks = new Map<string, Army[]>();
     for (const a of Object.values(st.armies)) {
-      if (!relevant(a)) continue;
+      if (a.embarked || !relevant(a)) continue;
       const p = pos.get(a.id)!;
       const s = cam.toScreen(p.x, p.y);
       if (s.x < -60 || s.y < -60 || s.x > this.width + 60 || s.y > this.height + 60) continue;

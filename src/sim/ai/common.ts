@@ -2,12 +2,13 @@
 // single-source path search, threat estimates.
 
 import { applyCommand } from '../commands';
+import { armiesIn, memoize } from '../index';
 import { CostHeap } from '../heap';
 import { armyStrength } from '../military';
-import { canEnter, moveCost } from '../movement';
+import { canEnter, moveCost, stepClosed } from '../movement';
 import { nextFloat } from '../rng';
 import { atWar, diag, type Sim } from '../state';
-import type { Army, Command, CommandResult, Difficulty, NationId, ProvinceId } from '../types';
+import type { Army, CommandResult, Difficulty, NationId, ProvinceId, RealmCommand } from '../types';
 
 export interface DifficultyProfile {
   label: string;
@@ -44,7 +45,7 @@ export function aiRand(sim: Sim): number {
 }
 
 /** Issues an order through the shared command path; rejected orders are recorded. */
-export function issue(sim: Sim, cmd: Command, why?: string): CommandResult {
+export function issue(sim: Sim, cmd: RealmCommand, why?: string): CommandResult {
   const r = applyCommand(sim, cmd);
   if (!r.ok) diag(sim, cmd.nation, 'execution', `Rejected ${cmd.type}: ${r.reason}`);
   else if (why) diag(sim, cmd.nation, 'execution', why);
@@ -56,8 +57,16 @@ export interface Reach {
   prev: Record<ProvinceId, ProvinceId>;
 }
 
-/** Single-source cheapest movement cost to every enterable province. */
+/**
+ * Single-source cheapest movement cost to every enterable province.
+ * Remembered for the week and revision (access and roads only change with
+ * a revision bump); callers must treat the result as read-only.
+ */
 export function reachFrom(sim: Sim, nid: NationId, from: ProvinceId): Reach {
+  return memoize(sim, 'reachFrom', `${nid}|${from}`, () => computeReach(sim, nid, from));
+}
+
+function computeReach(sim: Sim, nid: NationId, from: ProvinceId): Reach {
   const dist: Record<ProvinceId, number> = { [from]: 0 };
   const prev: Record<ProvinceId, ProvinceId> = {};
   const done = new Set<ProvinceId>();
@@ -68,7 +77,7 @@ export function reachFrom(sim: Sim, nid: NationId, from: ProvinceId): Reach {
     if (done.has(cur)) continue;
     done.add(cur);
     for (const nb of sim.world.prov[cur].neighbors) {
-      if (done.has(nb) || !canEnter(sim, nid, nb)) continue;
+      if (done.has(nb) || !canEnter(sim, nid, nb) || stepClosed(sim, nid, cur, nb)) continue;
       const nd = dist[cur] + moveCost(sim, cur, nb, nid);
       if (dist[nb] === undefined || nd < dist[nb]) {
         dist[nb] = nd;
@@ -95,10 +104,7 @@ export function pathVia(r: Reach, from: ProvinceId, to: ProvinceId): ProvinceId[
 
 export function hostileArmiesAt(sim: Sim, nid: NationId, pid: ProvinceId): Army[] {
   const out: Army[] = [];
-  for (const id in sim.state.armies) {
-    const a = sim.state.armies[id];
-    if (a.location === pid && !a.retreating && atWar(sim, nid, a.nation)) out.push(a);
-  }
+  for (const a of armiesIn(sim, pid)) if (!a.retreating && atWar(sim, nid, a.nation)) out.push(a);
   return out;
 }
 

@@ -1,14 +1,16 @@
 // New-game construction.
 
-import { C, SCHEMA_VERSION } from './config';
+import { C, SCHEMA_VERSION, STRATEGIC } from './config';
+import { startingTechs } from './data/techs';
 import { PERSONALITIES } from './data/personalities';
 import { POLICY_COOLDOWN_MONTHS } from './data/policies';
-import { computeLedger, reserveCap, stockpileCap, totalDev, menServing } from './economy';
+import { computeLedger, emptyFlows, materielCap, menServing, reserveCap, resourceCap, stockpileCap, totalDev } from './economy';
 import { createArmy, newRegiment } from './military';
+import { startingFleets } from './naval';
 import { seedState } from './rng';
 import { months, ownedProvinces, type Sim } from './state';
 import type { Difficulty, GameState, MonthlyLedger, NationId, NationState, Regiment, Settings, UnitType } from './types';
-import { getWorld, validateScenario } from './world';
+import { getWorld, mapFingerprint, validateScenario } from './world';
 import { validateContent } from './content';
 
 export interface NewGameOptions {
@@ -21,7 +23,13 @@ export interface NewGameOptions {
 }
 
 function emptyLedger(): MonthlyLedger {
-  return { tick: 0, income: {}, expenses: {}, suppliesIn: {}, suppliesOut: {}, manpowerIn: 0, researchGain: 0, net: 0, netSupplies: 0 };
+  return { tick: 0, income: {}, expenses: {}, suppliesIn: {}, suppliesOut: {}, manpowerIn: 0, researchGain: 0, net: 0, netSupplies: 0, resources: emptyFlows(), industry: 0, materielIn: 0 };
+}
+
+/** Factory levels a province starts with when its map does not say: by development, plus one at the capital. */
+export function defaultFactories(dev: number, capital: boolean): number {
+  const f = (dev >= 8 ? 2 : dev >= 5 ? 1 : 0) + (capital ? 1 : 0);
+  return Math.min(C.construction.factoryMax, f);
 }
 
 export function createGame(opts: NewGameOptions = {}): Sim {
@@ -40,6 +48,7 @@ export function createGame(opts: NewGameOptions = {}): Sim {
   const st: GameState = {
     schema: SCHEMA_VERSION,
     scenarioId: world.scenario.id,
+    map: { ...mapFingerprint(world.scenario.id) },
     tick: 0,
     rev: 0,
     settings,
@@ -48,6 +57,8 @@ export function createGame(opts: NewGameOptions = {}): Sim {
     provinces: {},
     nations: {},
     armies: {},
+    fleets: {},
+    wings: {},
     battles: {},
     wars: {},
     treaties: [],
@@ -60,12 +71,13 @@ export function createGame(opts: NewGameOptions = {}): Sim {
     proposals: [],
     reports: [],
     notifications: [],
-    counters: { army: 0, battle: 0, war: 0, treaty: 0, note: 0, proposal: 0, event: 0, regiment: 0, coalition: 0 },
+    counters: { army: 0, battle: 0, war: 0, treaty: 0, note: 0, proposal: 0, event: 0, regiment: 0, coalition: 0, fleet: 0, ship: 0, wing: 0 },
     result: null,
     continueAfterResult: false,
     diagnostics: [],
     playerLog: [],
   };
+  const capitals = new Set(world.scenario.nations.map((n) => n.capital));
   for (const p of world.scenario.provinces) {
     st.provinces[p.id] = {
       id: p.id,
@@ -75,6 +87,7 @@ export function createGame(opts: NewGameOptions = {}): Sim {
       dev: p.dev,
       infra: p.infra,
       fort: p.fort,
+      factories: p.owner ? (p.factories ?? defaultFactories(p.dev, capitals.has(p.id))) : 0,
       integration: p.owner ? p.integration : 0,
       unrest: p.owner ? Math.max(0, (100 - p.integration) / 3) : 0,
       project: null,
@@ -83,8 +96,13 @@ export function createGame(opts: NewGameOptions = {}): Sim {
       revoltUntil: 0,
       lastOwnerChange: 0,
       recruits: [],
+      port: p.owner && world.provZones[p.id] ? (p.port ?? 0) : 0,
+      airfield: 0,
+      dock: [],
+      hangar: [],
     };
   }
+  const known = startingTechs(world.scenario.startYear);
   world.nationIds.forEach((nid, i) => {
     const def = world.nationDefs[nid];
     const pers = PERSONALITIES[def.personality];
@@ -97,7 +115,10 @@ export function createGame(opts: NewGameOptions = {}): Sim {
       treasury: 0,
       supplies: 0,
       manpower: 0,
-      research: { current: null, progress: 0, done: [], funding: 1 },
+      stock: { coal: 0, iron: 0, oil: 0, rubber: 0, nitrates: 0 },
+      materiel: 0,
+      shortages: [],
+      research: { current: null, progress: 0, done: [...known], funding: 1 },
       policy: pers.policies[0],
       policySince: -months(POLICY_COOLDOWN_MONTHS),
       warExhaustion: 0,
@@ -137,6 +158,7 @@ export function createGame(opts: NewGameOptions = {}): Sim {
         peakProvinces: 0,
         idleArmyWeeks: 0,
         armyWeeks: 0,
+        ...emptyForceStats(),
       },
       armyCounter: 0,
     };
@@ -149,14 +171,18 @@ export function createGame(opts: NewGameOptions = {}): Sim {
     const pers = PERSONALITIES[def.personality];
     n.treasury = 100 + 3 * totalDev(sim, nid);
     n.supplies = Math.round(stockpileCap(sim, nid) * 0.6);
+    const rcap = resourceCap(sim, nid);
+    for (const r of STRATEGIC) n.stock[r] = Math.round(rcap * C.resources.startShare);
+    n.materiel = Math.round(materielCap(sim, nid) * C.industry.startMaterielShare);
     n.stats.peakProvinces = ownedProvinces(sim, nid).length;
     const reserve = reserveCap(sim, nid);
     const regs = Math.max(5, 3 + Math.round((reserve * 0.35) / C.regimentSize));
-    let horse = Math.round(regs * pers.composition.horse);
-    const guns = Math.round(regs * pers.composition.guns);
-    if (def.traits.horseCostMul) horse += 2;
-    const foot = Math.max(1, regs - horse - guns);
-    const units: UnitType[] = [...Array(foot).fill('foot'), ...Array(horse).fill('horse'), ...Array(guns).fill('guns')];
+    let horse = Math.round(regs * pers.composition.cavalry);
+    const guns = Math.round(regs * pers.composition.artillery);
+    if (def.traits.cavalryCostMul) horse += 2;
+    const sappers = n.research.done.includes('engineering_corps') && regs >= 8 ? 1 : 0;
+    const foot = Math.max(1, regs - horse - guns - sappers);
+    const units: UnitType[] = [...Array(foot).fill('infantry'), ...Array(horse).fill('cavalry'), ...Array(guns).fill('artillery'), ...Array(sappers).fill('engineers')];
     const regiments: Regiment[] = units.map((u) => newRegiment(sim, u));
     const cap = def.capital;
     if (regiments.length >= 6) {
@@ -165,13 +191,19 @@ export function createGame(opts: NewGameOptions = {}): Sim {
       const border = owned.filter((p) => world.prov[p].neighbors.some((nb) => st.provinces[nb].owner && st.provinces[nb].owner !== nid));
       const pick = [...(border.length ? border : owned)].sort((a, b) => st.provinces[b].fort * 10 + st.provinces[b].dev - (st.provinces[a].fort * 10 + st.provinces[a].dev) || (a < b ? -1 : 1))[0];
       const second = Math.floor(regiments.length * 0.35);
-      const detached = [...regiments.filter((r) => r.type === 'foot').slice(0, second)];
+      const detached = [...regiments.filter((r) => r.type === 'infantry').slice(0, second)];
       createArmy(sim, nid, cap, regiments.filter((r) => !detached.includes(r)));
       if (pick && detached.length) createArmy(sim, nid, pick, detached);
       else if (detached.length) st.armies[Object.keys(st.armies).pop()!].regiments.push(...detached);
     } else createArmy(sim, nid, cap, regiments);
     n.manpower = Math.round(Math.max(0, reserve - menServing(sim, nid)) * C.population.startPoolShare);
   }
+  startingFleets(sim);
   for (const nid of world.nationIds) st.nations[nid].lastMonth = computeLedger(sim, nid);
   return sim;
+}
+
+/** Navy and air counters of a realm's statistics (all zero). */
+export function emptyForceStats() {
+  return { shipsBuilt: 0, shipsSunk: 0, shipsLost: 0, navalBattles: 0, landings: 0, blockadeWeeks: 0, seaWeeks: 0, wingsBuilt: 0, airMissionWeeks: 0, bombingWeeks: 0 };
 }

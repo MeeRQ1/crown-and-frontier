@@ -37,8 +37,8 @@ export function validateContent(s: ScenarioDef): string[] {
   for (const p of POLICY_LIST) for (const k of Object.keys(p.effects)) if (!(k in MOD_LABELS)) errs.push(`policy ${p.id} has unknown effect ${k}`);
   for (const [id, p] of Object.entries(PERSONALITIES)) {
     for (const pol of p.policies) if (!POLICIES[pol]) errs.push(`personality ${id} prefers unknown policy ${pol}`);
-    const c = p.composition;
-    if (Math.abs(c.foot + c.horse + c.guns - 1) > 1e-6) errs.push(`personality ${id} composition does not sum to 1`);
+    const sum = Object.values(p.composition).reduce((a, b) => a + b, 0);
+    if (Math.abs(sum - 1) > 1e-6) errs.push(`personality ${id} composition does not sum to 1`);
   }
   const evIds = new Set<string>();
   for (const e of EVENTS) {

@@ -3,7 +3,8 @@
 // straits. Coordinates are in "design units" and are scaled by SCALE when the
 // map is generated (so the drawn province size matches the Reach).
 
-import type { Resource, Terrain } from '../src/sim/types';
+import type { Terrain } from '../src/sim/types';
+import type { LegacyResource } from '../src/maps/deposits';
 import type { Pt } from './mapgen/core';
 
 export const SCALE = 0.84;
@@ -38,7 +39,7 @@ export interface FixedProv {
   region: string;
   owner: string | null;
   terrain: Terrain;
-  resource: Resource;
+  resource: LegacyResource;
   dev: number;
   pop: number;
   infra?: number;

@@ -1,0 +1,251 @@
+{
+ "zones": [
+  {
+   "id": "sea-1",
+   "name": "Skerrin Channel",
+   "neighbors": [
+    "sea-2",
+    "sea-7"
+   ],
+   "coasts": [
+    "brennmoor",
+    "grayholm",
+    "harnfeld",
+    "kaltwater",
+    "skerrin"
+   ],
+   "straits": [
+    [
+     "brennmoor",
+     "grayholm"
+    ],
+    [
+     "brennmoor",
+     "skerrin"
+    ],
+    [
+     "kaltwater",
+     "skerrin"
+    ]
+   ]
+  },
+  {
+   "id": "sea-2",
+   "name": "Wendel Bight",
+   "neighbors": [
+    "sea-1",
+    "sea-3"
+   ],
+   "coasts": [
+    "kaltwater",
+    "ostrin",
+    "wendel"
+   ]
+  },
+  {
+   "id": "sea-3",
+   "name": "The Grey Sea",
+   "neighbors": [
+    "sea-2",
+    "sea-4"
+   ],
+   "coasts": [
+    "ironcrag",
+    "ostrin",
+    "rethel",
+    "skarn"
+   ]
+  },
+  {
+   "id": "sea-4",
+   "name": "Birchwold Approaches",
+   "neighbors": [
+    "sea-3",
+    "sea-5"
+   ],
+   "coasts": [
+    "birchwold",
+    "drevholm",
+    "frostmere",
+    "sunderby"
+   ]
+  },
+  {
+   "id": "sea-5",
+   "name": "Whitefell Approaches",
+   "neighbors": [
+    "sea-4",
+    "sea-6"
+   ],
+   "coasts": [
+    "ashwood",
+    "sunderby",
+    "whitefell"
+   ]
+  },
+  {
+   "id": "sea-6",
+   "name": "Hollowmere Sound",
+   "neighbors": [
+    "sea-5",
+    "sea-8"
+   ],
+   "coasts": [
+    "duskfell",
+    "hollowmere",
+    "holt",
+    "ravenmoor",
+    "saltmere",
+    "whitefell"
+   ]
+  },
+  {
+   "id": "sea-7",
+   "name": "The Western Main",
+   "neighbors": [
+    "sea-1",
+    "sea-9"
+   ],
+   "coasts": [
+    "ashford",
+    "brennmoor",
+    "calvi",
+    "grayholm",
+    "varrow",
+    "westmere"
+   ],
+   "straits": [
+    [
+     "ashford",
+     "varrow"
+    ],
+    [
+     "grayholm",
+     "westmere"
+    ]
+   ]
+  },
+  {
+   "id": "sea-8",
+   "name": "Khesh Roads",
+   "neighbors": [
+    "sea-13",
+    "sea-6"
+   ],
+   "coasts": [
+    "khesh",
+    "qorvai",
+    "ravenmoor",
+    "stonewatch",
+    "zhorun"
+   ]
+  },
+  {
+   "id": "sea-9",
+   "name": "Kell Sound",
+   "neighbors": [
+    "sea-10",
+    "sea-7"
+   ],
+   "coasts": [
+    "calvi",
+    "kell",
+    "merand",
+    "tamber",
+    "varrow"
+   ],
+   "straits": [
+    [
+     "calvi",
+     "varrow"
+    ],
+    [
+     "kell",
+     "merand"
+    ],
+    [
+     "kell",
+     "varrow"
+    ]
+   ]
+  },
+  {
+   "id": "sea-10",
+   "name": "Tamber Bight",
+   "neighbors": [
+    "sea-11",
+    "sea-9"
+   ],
+   "coasts": [
+    "lissan",
+    "pellmark",
+    "portovell",
+    "tamber",
+    "valdis"
+   ]
+  },
+  {
+   "id": "sea-11",
+   "name": "The Serene Sea",
+   "neighbors": [
+    "sea-10",
+    "sea-12"
+   ],
+   "coasts": [
+    "belcrest",
+    "beyla",
+    "corran",
+    "sarn",
+    "southgap",
+    "sulit",
+    "valdis"
+   ],
+   "straits": [
+    [
+     "corran",
+     "sarn"
+    ],
+    [
+     "corran",
+     "sulit"
+    ]
+   ]
+  },
+  {
+   "id": "sea-12",
+   "name": "Dashkin Channel",
+   "neighbors": [
+    "sea-11",
+    "sea-13"
+   ],
+   "coasts": [
+    "dashkin",
+    "sulit",
+    "ulgari"
+   ]
+  },
+  {
+   "id": "sea-13",
+   "name": "Yeshil Channel",
+   "neighbors": [
+    "sea-12",
+    "sea-8"
+   ],
+   "coasts": [
+    "ulgari",
+    "yeshil",
+    "zhorun"
+   ]
+  }
+ ],
+ "ports": {
+  "harnfeld": 1,
+  "calvi": 1,
+  "portovell": 1,
+  "valdis": 1,
+  "drevholm": 2,
+  "ashford": 1,
+  "holt": 1,
+  "yeshil": 1
+ }
+}

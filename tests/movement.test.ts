@@ -11,7 +11,7 @@ describe('movement', () => {
   it('cannot path through a neutral realm', () => {
     const sim = lineGame();
     expect(findPath(sim, 'a', 'a2', 'b1')).toBeNull();
-    expect(checkCommand(sim, { type: 'move', nation: 'a', army: addArmy(sim, 'a', 'a2', { foot: 1 }).id, dest: 'b1' })).toMatch(/access/);
+    expect(checkCommand(sim, { type: 'move', nation: 'a', army: addArmy(sim, 'a', 'a2', { infantry: 1 }).id, dest: 'b1' })).toMatch(/access/);
     // unclaimed wilds are open
     expect(findPath(sim, 'a', 'a2', 'm1')?.path).toEqual(['m1']);
   });
@@ -47,7 +47,7 @@ describe('movement', () => {
 
   it('foot crossing plains takes two weeks; the route is shown before arrival', () => {
     const sim = lineGame();
-    const a = addArmy(sim, 'a', 'a1', { foot: 1 });
+    const a = addArmy(sim, 'a', 'a1', { infantry: 1 });
     expect(applyCommand(sim, { type: 'move', nation: 'a', army: a.id, dest: 'a2' }).ok).toBe(true);
     step(sim, { noAI: true });
     expect(a.location).toBe('a1');
@@ -59,7 +59,7 @@ describe('movement', () => {
   it('an army halts when peace closes its route', () => {
     const sim = lineGame();
     const w = declareWar(sim, 'a', 'b', { type: 'conquest', provinces: ['b3'] });
-    const a = addArmy(sim, 'a', 'a2', { foot: 1 });
+    const a = addArmy(sim, 'a', 'a2', { infantry: 1 });
     applyCommand(sim, { type: 'move', nation: 'a', army: a.id, dest: 'b3' });
     endWar(sim, w.id, 'test');
     for (let i = 0; i < 6; i++) step(sim, { noAI: true });
@@ -71,8 +71,8 @@ describe('movement', () => {
   it('hostile armies crossing on the same edge always meet', () => {
     const sim = lineGame();
     declareWar(sim, 'a', 'b', { type: 'conquest', provinces: ['b3'] });
-    const x = addArmy(sim, 'a', 'a3', { foot: 3 });
-    const y = addArmy(sim, 'b', 'b3', { foot: 3 });
+    const x = addArmy(sim, 'a', 'a3', { infantry: 3 });
+    const y = addArmy(sim, 'b', 'b3', { infantry: 3 });
     applyCommand(sim, { type: 'move', nation: 'a', army: x.id, dest: 'b3' });
     applyCommand(sim, { type: 'move', nation: 'b', army: y.id, dest: 'a3' });
     for (let i = 0; i < 4 && !Object.keys(sim.state.battles).length; i++) step(sim, { noAI: true });

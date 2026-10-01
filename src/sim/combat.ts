@@ -7,27 +7,35 @@
 // friendly with, provided it is hostile to the opposing lead; third parties wait.
 //
 // One round per week:
-//   engaged = up to `frontage` foot/horse regiments (strongest first) plus up to
-//             frontage/2 guns (guns fire at 50% if fewer front regiments than guns)
+//   engaged = up to `frontage` line regiments (infantry, cavalry, armour; strongest
+//             first) plus up to frontage/2 support regiments (artillery, engineers),
+//             which fire at 50% without at least one line regiment each to screen them
 //   fire    = sum(men/1000 * unit attack * type mods * supply mul) * flank * morale mul
-//             horse gets the terrain cavalry modifier; >=20% horse on open ground: +15% flank
+//             cavalry and armour get their terrain modifiers; >=20% cavalry on open
+//             ground: +15% flank; enemy machine guns (antiCavalry) cut cavalry fire;
+//             armour without oil and artillery without shells (at war) fight weaker
 //             morale mul = 0.6 + 0.4 * morale ratio
 //   casualties inflicted = fire * 55 * roll(0.85..1.15), attacker's fire reduced by
 //             defence = terrain + fort (0.15/level, if the defenders hold it) +
-//             entrenchment (0.1 after 2 weeks, 0.2 after 4) + tech + river
-//             (0.2 when every attacker crossed a river border to open the battle),
-//             capped at 0.7
-//   morale loss = 0.15 + (casualties/men) * 8 * enemy shock (horse 1.6, guns 1.2, foot 1.0)
+//             entrenchment (0.1 after 2 weeks, 0.2 after 4; twice as fast with
+//             engineers) + tech + river (0.2 when every attacker crossed a river
+//             border to open the battle; halved if they bring engineers), capped
+//             at 0.7. Attacking armour (breakthrough) strips up to half of the
+//             fort and entrenchment bonus (full effect at 30% of the line).
+//   morale loss = 0.15 + (casualties/men) * 8 * enemy shock (unit morale values)
 // End: a side breaks at 25% morale or 10% of its starting men; if both break the
 // side with the lower morale ratio loses (attacker on ties); after 8 rounds the
-// attacker withdraws. Winner horse pursue (10% of their men, max 15% of loser).
-// Losers retreat to an adjacent enterable province without enemies (friendly
-// ground and short supply lines preferred); with no legal retreat they surrender.
+// attacker withdraws. The winners' cavalry (10% of their men) and armour (15%)
+// pursue, at most 15% of the loser. Losers retreat to an adjacent enterable
+// province without enemies (friendly ground and short supply lines preferred);
+// with no legal retreat they surrender.
 
+import { airCombatBonus } from './air';
 import { C, TERRAIN, UNITS } from './config';
-import { removePopulation, reserveCap } from './economy';
+import { isShort, removePopulation, reserveCap } from './economy';
 import { maxMorale, removeArmy } from './military';
-import { nationMods } from './modifiers';
+import { armiesIn } from './index';
+import { nationMods, type Mods } from './modifiers';
 import { canEnter, isRiver } from './movement';
 import { range } from './rng';
 import { atWar, bump, isFriendly, nationName, notify, provName, type Sim } from './state';
@@ -48,6 +56,8 @@ interface ArmySnap {
   maxMorale: number;
   supply: number;
   stationary: number;
+  /** came ashore from the sea this week (amphibious landing) */
+  landed: boolean;
   regs: RegSnap[];
 }
 export interface SideSnap {
@@ -62,6 +72,7 @@ export function snapArmy(sim: Sim, a: Army): ArmySnap {
     maxMorale: maxMorale(sim, a.nation),
     supply: a.supply,
     stationary: a.stationary,
+    landed: !!a.embarked || a.landed === sim.state.tick,
     regs: a.regiments.map((r) => ({ type: r.type, men: r.men, key: r.id })),
   };
 }
@@ -95,84 +106,160 @@ interface SideCalc {
   engaged: Engaged[];
   fire: number;
   shock: number;
-  horseShare: number;
+  cavalryShare: number;
   reserveRegs: number;
   notes: string[];
 }
 
-function sideCalc(sim: Sim, pid: ProvinceId, s: SideSnap): SideCalc {
+const ATTACK_MOD: Partial<Record<UnitType, keyof Mods>> = {
+  infantry: 'infantryAttack',
+  cavalry: 'cavalryAttack',
+  artillery: 'artilleryAttack',
+  armour: 'armourAttack',
+};
+
+/** The strongest machine-gun effect (antiCavalry) any army on a side brings. */
+function sideAntiCavalry(sim: Sim, s: SideSnap): number {
+  let v = 0;
+  for (const a of s.armies) v = Math.max(v, nationMods(sim, a.nation).antiCavalry);
+  return Math.min(0.9, v);
+}
+
+/** Armour's share of a side's line regiments (men). */
+export function armourShare(s: SideSnap): number {
+  let line = 0;
+  let armour = 0;
+  for (const a of s.armies)
+    for (const r of a.regs) {
+      if (UNITS[r.type].role === 'support') continue;
+      line += r.men;
+      if (r.type === 'armour') armour += r.men;
+    }
+  return line > 0 ? armour / line : 0;
+}
+
+function sideCalc(sim: Sim, pid: ProvinceId, s: SideSnap, enemyAntiCav = 0): SideCalc {
   const terr = TERRAIN[sim.world.prov[pid].terrain];
   const front: Array<{ army: ArmySnap; reg: RegSnap }> = [];
-  const guns: Array<{ army: ArmySnap; reg: RegSnap }> = [];
+  const support: Array<{ army: ArmySnap; reg: RegSnap }> = [];
   for (const a of s.armies) {
     for (const r of a.regs) {
       if (r.men <= 0) continue;
-      (r.type === 'guns' ? guns : front).push({ army: a, reg: r });
+      (UNITS[r.type].role === 'support' ? support : front).push({ army: a, reg: r });
     }
   }
   const order = (x: { reg: RegSnap }, y: { reg: RegSnap }) => y.reg.men - x.reg.men || (x.reg.key < y.reg.key ? -1 : 1);
   front.sort(order);
-  guns.sort(order);
+  support.sort(order);
   const f = front.slice(0, terr.frontage);
-  const g = guns.slice(0, Math.ceil(terr.frontage / 2));
-  const reserveRegs = front.length - f.length + (guns.length - g.length);
-  const screened = f.length >= g.length * C.combat.gunsScreen;
+  const g = support.slice(0, Math.ceil(terr.frontage / 2));
+  const reserveRegs = front.length - f.length + (support.length - g.length);
+  const screened = f.length >= g.length * C.combat.artilleryScreen;
   const notes: string[] = [];
   const engaged: Engaged[] = [];
-  let horseMen = 0;
+  let cavMen = 0;
+  let armourMen = 0;
   let totalMen = 0;
   let shockNum = 0;
   let fire = 0;
+  let unfuelled = false;
+  let noShells = false;
+  let landing = false;
   for (const e of [...f, ...g]) {
-    const m = nationMods(sim, e.army.nation);
+    const nat = e.army.nation;
+    const m = nationMods(sim, nat);
     const u = UNITS[e.reg.type];
     let v = (e.reg.men / C.regimentSize) * u.attack * (1 + m.attack) * supplyCombatMul(e.army.supply);
-    if (e.reg.type === 'foot') v *= 1 + m.footAttack;
-    if (e.reg.type === 'horse') v *= (1 + m.horseAttack) * (1 + terr.cav);
-    if (e.reg.type === 'guns') v *= (1 + m.gunsAttack) * (screened ? 1 : C.combat.unscreenedGuns);
+    const key = ATTACK_MOD[e.reg.type];
+    if (key) v *= 1 + m[key];
+    if (e.reg.type === 'cavalry') v *= (1 + terr.cav) * (1 - enemyAntiCav);
+    if (e.reg.type === 'armour') {
+      v *= 1 + terr.armour;
+      if (isShort(sim, nat, 'oil')) {
+        v *= C.combat.unfuelled;
+        unfuelled = true;
+      }
+    }
+    if (u.role === 'support' && !screened) v *= C.combat.unscreenedArtillery;
+    if (e.reg.type === 'artillery' && isShort(sim, nat, 'nitrates')) {
+      v *= C.combat.noShells;
+      noShells = true;
+    }
+    if (e.army.landed) {
+      v *= 1 - (1 - C.naval.landing) * Math.max(0, 1 - m.landing);
+      landing = true;
+    }
     v = Math.max(0, v);
-    engaged.push({ army: e.army, reg: e.reg, weight: e.reg.men * (e.reg.type === 'guns' ? 0.5 : 1), fire: v });
+    engaged.push({ army: e.army, reg: e.reg, weight: e.reg.men * (u.role === 'support' ? 0.5 : 1), fire: v });
     fire += v;
     shockNum += v * u.morale;
     totalMen += e.reg.men;
-    if (e.reg.type === 'horse') horseMen += e.reg.men;
+    if (e.reg.type === 'cavalry') cavMen += e.reg.men;
+    if (e.reg.type === 'armour') armourMen += e.reg.men;
   }
-  const horseShare = totalMen > 0 ? horseMen / totalMen : 0;
-  if (horseShare >= C.combat.flankHorseShare && terr.cav > 0) {
+  const cavalryShare = totalMen > 0 ? cavMen / totalMen : 0;
+  if (cavalryShare >= C.combat.flankCavalryShare && terr.cav > 0) {
     fire *= 1 + C.combat.flankBonus;
-    notes.push(`Horse flanking on open ground +${Math.round(C.combat.flankBonus * 100)}%`);
+    notes.push(`Cavalry flanking on open ground +${Math.round(C.combat.flankBonus * 100)}%`);
   }
-  if (!screened && g.length) notes.push('Guns without an infantry screen fire at half effect');
-  if (terr.cav < 0 && horseMen > 0) notes.push(`Horse hampered by ${terr.label.toLowerCase()} ${Math.round(terr.cav * 100)}%`);
-  if (terr.cav > 0 && horseMen > 0) notes.push(`Horse favoured by ${terr.label.toLowerCase()} +${Math.round(terr.cav * 100)}%`);
+  if (!screened && g.length) notes.push('Artillery and engineers without an infantry screen fire at half effect');
+  if (terr.cav < 0 && cavMen > 0) notes.push(`Cavalry hampered by ${terr.label.toLowerCase()} ${Math.round(terr.cav * 100)}%`);
+  if (terr.cav > 0 && cavMen > 0) notes.push(`Cavalry favoured by ${terr.label.toLowerCase()} +${Math.round(terr.cav * 100)}%`);
+  if (cavMen > 0 && enemyAntiCav > 0) notes.push(`Machine guns cut cavalry fire −${Math.round(enemyAntiCav * 100)}%`);
+  if (armourMen > 0 && terr.armour !== 0) notes.push(`Armour ${terr.armour > 0 ? 'favoured' : 'hampered'} by ${terr.label.toLowerCase()} ${terr.armour > 0 ? '+' : ''}${Math.round(terr.armour * 100)}%`);
+  if (unfuelled) notes.push(`Armour short of oil −${Math.round((1 - C.combat.unfuelled) * 100)}%`);
+  if (noShells) notes.push(`Artillery short of shells −${Math.round((1 - C.combat.noShells) * 100)}%`);
+  if (landing) {
+    const pen = (1 - C.naval.landing) * Math.max(0, 1 - nationMods(sim, s.armies[0].nation).landing);
+    notes.push(`Landing from the sea −${Math.round(pen * 100)}%`);
+  }
+  // the air over the battlefield
+  const air = airCombatBonus(sim, pid, [...new Set(s.armies.map((a) => a.nation))]);
+  if (air.mul !== 1) {
+    fire *= air.mul;
+    notes.push(...air.notes);
+  }
   if (reserveRegs > 0) notes.push(`Frontage ${terr.frontage}: ${reserveRegs} regiment(s) held in reserve`);
   const supplyWorst = Math.min(...s.armies.map((a) => a.supply));
   if (s.armies.length && supplyStatus(supplyWorst) !== 'supplied') notes.push(`${supplyStatus(supplyWorst) === 'strained' ? 'Strained' : 'Unsupplied'} troops ${supplyStatus(supplyWorst) === 'strained' ? '−10%' : '−25%'}`);
   const mr = moraleRatio(s);
   fire *= 0.6 + 0.4 * Math.min(1, mr);
-  return { engaged, fire, shock: fire > 0 ? shockNum / Math.max(1e-9, engaged.reduce((q, e) => q + e.fire, 0)) : 1, horseShare, reserveRegs, notes };
+  return { engaged, fire, shock: fire > 0 ? shockNum / Math.max(1e-9, engaged.reduce((q, e) => q + e.fire, 0)) : 1, cavalryShare, reserveRegs, notes };
 }
 
-export function entrenchBonus(sim: Sim, nid: NationId, stationary: number): number {
+/** Entrenchment of an army that has stood still `stationary` weeks (engineers dig twice as fast). */
+export function entrenchBonus(sim: Sim, nid: NationId, stationary: number, engineers = false): number {
   const [w1, w2] = C.army.entrenchWeeks;
   const [b1, b2] = C.army.entrenchBonus;
-  const base = stationary >= w2 ? b2 : stationary >= w1 ? b1 : 0;
+  const weeks = stationary * (engineers ? C.army.engineerEntrench : 1);
+  const base = weeks >= w2 ? b2 : weeks >= w1 ? b1 : 0;
   return base * Math.max(0, 1 + nationMods(sim, nid).entrench);
 }
 
-export function defenceBonus(sim: Sim, pid: ProvinceId, def: SideSnap, river = false): { value: number; notes: string[] } {
+function hasEngineers(a: ArmySnap): boolean {
+  return a.regs.some((r) => r.type === 'engineers' && r.men > 0);
+}
+
+/**
+ * Defender's bonus. `att` (when given) lets attacking engineers halve the river
+ * bonus and attacking armour break through forts and entrenchment.
+ */
+export function defenceBonus(sim: Sim, pid: ProvinceId, def: SideSnap, river = false, att?: SideSnap): { value: number; notes: string[] } {
   const terr = TERRAIN[sim.world.prov[pid].terrain];
   const p = sim.state.provinces[pid];
   const notes: string[] = [];
   let v = terr.defense;
   if (terr.defense > 0) notes.push(`${terr.label}: defender +${Math.round(terr.defense * 100)}%`);
   if (river) {
-    v += C.combat.riverBonus;
-    notes.push(`Attack across a river: defender +${Math.round(C.combat.riverBonus * 100)}%`);
+    const bridged = !!att && att.armies.some(hasEngineers);
+    const rb = C.combat.riverBonus * (bridged ? 0.5 : 1);
+    v += rb;
+    notes.push(`Attack across a river: defender +${Math.round(rb * 100)}%${bridged ? ' (engineers bridge it)' : ''}`);
   }
+  let works = 0;
   const lead = def.armies[0]?.nation;
   if (lead && p.fort > 0 && isFriendly(sim, lead, p.controller)) {
-    v += C.combat.fortBonus * p.fort;
+    works += C.combat.fortBonus * p.fort;
     notes.push(`Fort level ${p.fort}: defender +${Math.round(C.combat.fortBonus * p.fort * 100)}%`);
   }
   let men = 0;
@@ -182,7 +269,7 @@ export function defenceBonus(sim: Sim, pid: ProvinceId, def: SideSnap, river = f
     let m = 0;
     for (const r of a.regs) m += r.men;
     men += m;
-    ent += entrenchBonus(sim, a.nation, a.stationary) * m;
+    ent += entrenchBonus(sim, a.nation, a.stationary, hasEngineers(a)) * m;
     tech += nationMods(sim, a.nation).defense * m;
   }
   if (men > 0) {
@@ -191,7 +278,14 @@ export function defenceBonus(sim: Sim, pid: ProvinceId, def: SideSnap, river = f
   }
   if (ent > 0) notes.push(`Entrenched: defender +${Math.round(ent * 100)}%`);
   if (tech > 0) notes.push(`Defensive doctrine +${Math.round(tech * 100)}%`);
-  v += ent + tech;
+  works += ent;
+  const share = att ? armourShare(att) : 0;
+  if (share > 0 && works > 0) {
+    const cut = Math.min(C.combat.breakthroughMax, (C.combat.breakthroughMax * share) / C.combat.breakthroughShare);
+    notes.push(`Armour breaks through forts and trenches: −${Math.round(works * cut * 100)}%`);
+    works *= 1 - cut;
+  }
+  v += works + tech;
   return { value: Math.min(C.combat.maxDefense, v), notes };
 }
 
@@ -206,9 +300,9 @@ export interface RoundResult {
 
 /** Resolves one round on the snapshots in place. */
 export function resolveRound(sim: Sim, pid: ProvinceId, att: SideSnap, def: SideSnap, rollA: number, rollD: number, river = false): RoundResult {
-  const A = sideCalc(sim, pid, att);
-  const D = sideCalc(sim, pid, def);
-  const dfb = defenceBonus(sim, pid, def, river);
+  const A = sideCalc(sim, pid, att, sideAntiCavalry(sim, def));
+  const D = sideCalc(sim, pid, def, sideAntiCavalry(sim, att));
+  const dfb = defenceBonus(sim, pid, def, river, att);
   const defCas = A.fire * C.combat.casualtyPerFire * rollA * (1 - dfb.value);
   const attCas = D.fire * C.combat.casualtyPerFire * rollD;
   const attMen = sideMen(att);
@@ -358,7 +452,8 @@ export function detectBattles(sim: Sim): void {
   const byProv = new Map<ProvinceId, Army[]>();
   for (const id of Object.keys(st.armies).sort()) {
     const a = st.armies[id];
-    if (a.retreating) continue;
+    // troops at sea fight only once they land (their location is still the port they left)
+    if (a.retreating || a.embarked) continue;
     let arr = byProv.get(a.location);
     if (!arr) byProv.set(a.location, (arr = []));
     arr.push(a);
@@ -453,7 +548,7 @@ export function pruneBattles(sim: Sim): void {
     const b = st.battles[id];
     const valid = (aid: string) => {
       const a = st.armies[aid];
-      return !!a && a.location === b.province && a.battle === b.id && !a.retreating;
+      return !!a && a.location === b.province && a.battle === b.id && !a.retreating && !a.embarked;
     };
     b.attackers = b.attackers.filter(valid);
     b.defenders = b.defenders.filter(valid);
@@ -508,12 +603,7 @@ export function weeklyCombat(sim: Sim): void {
     for (const aid in r.lossesByArmy) {
       const arm = attArmies.find((x) => x.id === aid) ?? defArmies.find((x) => x.id === aid);
       if (!arm) continue;
-      const l = r.lossesByArmy[aid];
-      const n = st.nations[arm.nation];
-      n.stats.menLost += l;
-      removePopulation(sim, arm.nation, l);
-      const rc = Math.max(5000, reserveCap(sim, arm.nation));
-      n.warExhaustion = Math.min(100, n.warExhaustion + (l / rc) * C.war.exhaustionPerLossShare * Math.max(0.1, 1 + nationMods(sim, arm.nation).warExhaustion));
+      recordLosses(sim, arm.nation, r.lossesByArmy[aid]);
     }
     b.rounds.push({
       round: b.rounds.length + 1,
@@ -525,6 +615,18 @@ export function weeklyCombat(sim: Sim): void {
     const out = checkEnd(att, def, b.attStartMen, b.defStartMen, b.rounds.length);
     if (out) endBattle(sim, b, out);
   }
+}
+
+/**
+ * Men a realm loses in battle (fighting, pursuit or surrender): they count in
+ * its statistics, leave its population and add to its war exhaustion.
+ */
+function recordLosses(sim: Sim, nid: NationId, men: number): void {
+  const n = sim.state.nations[nid];
+  n.stats.menLost += men;
+  removePopulation(sim, nid, men);
+  const rc = Math.max(5000, reserveCap(sim, nid));
+  n.warExhaustion = Math.min(100, n.warExhaustion + (men / rc) * C.war.exhaustionPerLossShare * Math.max(0.1, 1 + nationMods(sim, nid).warExhaustion));
 }
 
 function writeBack(sim: Sim, snap: ArmySnap): void {
@@ -546,9 +648,8 @@ export function retreatTarget(sim: Sim, a: Army, from: ProvinceId): ProvinceId |
   for (const nb of [...sim.world.prov[from].neighbors].sort()) {
     if (!canEnter(sim, a.nation, nb)) continue;
     let enemy = false;
-    for (const id in sim.state.armies) {
-      const o = sim.state.armies[id];
-      if (o.location === nb && !o.retreating && atWar(sim, a.nation, o.nation)) {
+    for (const o of armiesIn(sim, nb)) {
+      if (!o.retreating && atWar(sim, a.nation, o.nation)) {
         enemy = true;
         break;
       }
@@ -576,12 +677,18 @@ function endBattle(sim: Sim, b: Battle, winner: 'attacker' | 'defender'): void {
   const loseArmies = loseIds.map((i) => st.armies[i]).filter((a): a is Army => !!a);
   const terr = TERRAIN[sim.world.prov[b.province].terrain];
 
-  // pursuit by the winners' horse
-  let horseMen = 0;
-  for (const a of winArmies) for (const r of a.regiments) if (r.type === 'horse') horseMen += r.men;
+  // pursuit by the winners' cavalry and armour
+  let pursuers = 0;
+  for (const a of winArmies)
+    for (const r of a.regiments) {
+      const u = UNITS[r.type];
+      if (!u.pursuit) continue;
+      const tmod = r.type === 'armour' ? terr.armour : terr.cav;
+      pursuers += r.men * u.pursuit * Math.max(0, 1 + tmod);
+    }
   let loserMen = 0;
   for (const a of loseArmies) for (const r of a.regiments) loserMen += r.men;
-  let pursuit = Math.min(loserMen * C.combat.pursuitCap, horseMen * C.combat.pursuit * Math.max(0, 1 + terr.cav));
+  let pursuit = Math.min(loserMen * C.combat.pursuitCap, pursuers);
   pursuit = Math.round(pursuit);
   if (pursuit > 0 && loserMen > 0) {
     for (const a of loseArmies) {
@@ -599,8 +706,7 @@ function endBattle(sim: Sim, b: Battle, winner: 'attacker' | 'defender'): void {
         }
         return true;
       });
-      st.nations[a.nation].stats.menLost += lost;
-      removePopulation(sim, a.nation, lost);
+      recordLosses(sim, a.nation, lost);
       if (winner === 'attacker') b.defLosses += lost;
       else b.attLosses += lost;
     }
@@ -642,8 +748,7 @@ function endBattle(sim: Sim, b: Battle, winner: 'attacker' | 'defender'): void {
     if (!to) {
       let men = 0;
       for (const r of a.regiments) men += r.men;
-      st.nations[a.nation].stats.menLost += men;
-      removePopulation(sim, a.nation, men);
+      recordLosses(sim, a.nation, men);
       if (winner === 'attacker') b.defLosses += men;
       else b.attLosses += men;
       surrendered.push(`${a.name} (${nationName(sim, a.nation)})`);

@@ -2,7 +2,7 @@
 // Units: time in ticks (1 tick = 1 week, 4 weeks = 1 month, 12 months = 1 year),
 // money in crowns, supplies in wagons, manpower in men, population in thousands.
 
-import type { Terrain, UnitType } from './types';
+import type { ShipType, StrategicResource, Terrain, UnitType, WingType } from './types';
 
 export interface TerrainRules {
   move: number; // movement points needed to enter
@@ -10,50 +10,218 @@ export interface TerrainRules {
   frontage: number; // regiments per side that can engage
   supply: number; // base supply capacity in regiments
   devCap: number; // soft development cap (can be exceeded by devOvercap at a higher cost)
-  cav: number; // horse effectiveness modifier
-  supplyProd: number; // supplies production multiplier
+  cav: number; // cavalry effectiveness modifier
+  armour: number; // armour effectiveness modifier
+  supplyProd: number; // food production multiplier
   devCost: number; // development cost multiplier
   popCap: number; // population capacity (thousands) at dev 1
   label: string;
 }
 
 export const TERRAIN: Record<Terrain, TerrainRules> = {
-  plains: { move: 2, defense: 0, frontage: 16, supply: 10, devCap: 10, cav: 0.2, supplyProd: 1.2, devCost: 1.0, popCap: 70, label: 'Plains' },
-  steppe: { move: 2, defense: 0, frontage: 20, supply: 7, devCap: 6, cav: 0.3, supplyProd: 0.8, devCost: 1.0, popCap: 40, label: 'Steppe' },
-  forest: { move: 3, defense: 0.15, frontage: 10, supply: 7, devCap: 7, cav: -0.3, supplyProd: 0.9, devCost: 1.1, popCap: 45, label: 'Forest' },
-  hills: { move: 3, defense: 0.25, frontage: 12, supply: 6, devCap: 8, cav: -0.15, supplyProd: 0.8, devCost: 1.2, popCap: 45, label: 'Hills' },
-  marsh: { move: 4, defense: 0.2, frontage: 8, supply: 4, devCap: 5, cav: -0.4, supplyProd: 0.7, devCost: 1.3, popCap: 35, label: 'Marsh' },
-  mountains: { move: 5, defense: 0.5, frontage: 6, supply: 3, devCap: 4, cav: -0.5, supplyProd: 0.5, devCost: 1.5, popCap: 20, label: 'Mountains' },
+  plains: { move: 2, defense: 0, frontage: 16, supply: 10, devCap: 10, cav: 0.2, armour: 0.2, supplyProd: 1.2, devCost: 1.0, popCap: 70, label: 'Plains' },
+  steppe: { move: 2, defense: 0, frontage: 20, supply: 7, devCap: 6, cav: 0.3, armour: 0.25, supplyProd: 0.8, devCost: 1.0, popCap: 40, label: 'Steppe' },
+  forest: { move: 3, defense: 0.15, frontage: 10, supply: 7, devCap: 7, cav: -0.3, armour: -0.35, supplyProd: 0.9, devCost: 1.1, popCap: 45, label: 'Forest' },
+  hills: { move: 3, defense: 0.25, frontage: 12, supply: 6, devCap: 8, cav: -0.15, armour: -0.2, supplyProd: 0.8, devCost: 1.2, popCap: 45, label: 'Hills' },
+  marsh: { move: 4, defense: 0.2, frontage: 8, supply: 4, devCap: 5, cav: -0.4, armour: -0.5, supplyProd: 0.7, devCost: 1.3, popCap: 35, label: 'Marsh' },
+  mountains: { move: 5, defense: 0.5, frontage: 6, supply: 3, devCap: 4, cav: -0.5, armour: -0.6, supplyProd: 0.5, devCost: 1.5, popCap: 20, label: 'Mountains' },
 };
+
+/** How a regiment fights: in the line, in support behind it (needs a screen), or as a breakthrough arm. */
+export type UnitRole = 'line' | 'support' | 'breakthrough';
 
 export interface UnitRules {
   label: string;
   plural: string;
+  /** one-letter code for compact army summaries */
+  abbr: string;
+  role: UnitRole;
+  /** technology that unlocks the unit (null = always available) */
+  requires: string | null;
   cost: number; // crowns
-  supplies: number; // supplies to equip
+  materiel: number; // equipment from industry
+  /** strategic resources consumed when the regiment is raised */
+  resources: Partial<Record<StrategicResource, number>>;
   weeks: number; // training time
   upkeep: number; // crowns / month at full strength
-  supplyUse: number; // supplies / month at full strength
+  supplyUse: number; // food / month at full strength
+  /** strategic resources consumed per month at full strength (oil for armour; nitrates only at war) */
+  burn: Partial<Record<StrategicResource, number>>;
   attack: number; // firepower per 1000 men
-  morale: number; // morale damage multiplier dealt
+  morale: number; // morale damage multiplier dealt (shock)
   speed: number; // movement points per week
   siege: number; // siege contribution
-  role: string;
+  /** share of its men that pursue a beaten enemy */
+  pursuit: number;
+  description: string;
 }
 
 export const UNITS: Record<UnitType, UnitRules> = {
-  foot: {
-    label: 'Foot', plural: 'Foot', cost: 20, supplies: 5, weeks: 4, upkeep: 1.0, supplyUse: 0.5,
-    attack: 1.0, morale: 1.0, speed: 1.0, siege: 1, role: 'Cheap line infantry. Holds ground and fills the frontage.',
+  infantry: {
+    label: 'Infantry', plural: 'Infantry', abbr: 'I', role: 'line', requires: null,
+    cost: 15, materiel: 10, resources: {}, weeks: 4, upkeep: 1.0, supplyUse: 0.5, burn: {},
+    attack: 1.0, morale: 1.0, speed: 1.0, siege: 1, pursuit: 0,
+    description: 'Riflemen. Hold ground, fill the frontage and screen the guns.',
   },
-  horse: {
-    label: 'Horse', plural: 'Horse', cost: 45, supplies: 10, weeks: 6, upkeep: 2.0, supplyUse: 1.0,
-    attack: 1.2, morale: 1.6, speed: 1.5, siege: 0.5, role: 'Fast shock cavalry. Strong on open ground, pursues beaten enemies.',
+  cavalry: {
+    label: 'Cavalry', plural: 'Cavalry', abbr: 'C', role: 'line', requires: null,
+    cost: 30, materiel: 12, resources: {}, weeks: 6, upkeep: 1.6, supplyUse: 1.0, burn: {},
+    attack: 1.1, morale: 1.5, speed: 1.5, siege: 0.5, pursuit: 0.1,
+    description: 'Fast horsemen. Strong on open ground and in pursuit; machine guns make them costly.',
   },
-  guns: {
-    label: 'Guns', plural: 'Guns', cost: 60, supplies: 20, weeks: 8, upkeep: 2.4, supplyUse: 1.0,
-    attack: 1.7, morale: 1.2, speed: 0.8, siege: 4, role: 'Artillery. Heavy firepower and siege work; fragile without infantry.',
+  artillery: {
+    label: 'Artillery', plural: 'Artillery', abbr: 'A', role: 'support', requires: null,
+    cost: 30, materiel: 30, resources: { iron: 4, nitrates: 2 }, weeks: 8, upkeep: 2.0, supplyUse: 0.8, burn: { nitrates: 0.25 },
+    attack: 1.7, morale: 1.2, speed: 0.8, siege: 4, pursuit: 0,
+    description: 'Field and siege guns. Heavy firepower behind an infantry screen; shells need nitrates in war.',
   },
+  engineers: {
+    label: 'Engineers', plural: 'Engineers', abbr: 'E', role: 'support', requires: 'engineering_corps',
+    cost: 25, materiel: 20, resources: { iron: 2 }, weeks: 6, upkeep: 1.4, supplyUse: 0.6, burn: {},
+    attack: 0.6, morale: 0.8, speed: 1.0, siege: 3, pursuit: 0,
+    description: 'Sappers and bridging trains. Their army digs in twice as fast, besieges faster and crosses rivers without penalty.',
+  },
+  armour: {
+    label: 'Armour', plural: 'Armour', abbr: 'T', role: 'breakthrough', requires: 'tanks',
+    cost: 50, materiel: 80, resources: { iron: 8, rubber: 3, oil: 2 }, weeks: 12, upkeep: 3.0, supplyUse: 0.4, burn: { oil: 0.6 },
+    attack: 2.6, morale: 2.0, speed: 1.2, siege: 1.5, pursuit: 0.15,
+    description: 'Tanks. Break entrenched lines and forts; poor in forest, marsh and mountains; run on oil.',
+  },
+};
+
+export const UNIT_TYPES = Object.keys(UNITS) as UnitType[];
+
+export interface ShipRules {
+  label: string;
+  plural: string;
+  abbr: string;
+  requires: string | null;
+  cost: number;
+  materiel: number;
+  resources: Partial<Record<StrategicResource, number>>;
+  weeks: number;
+  upkeep: number;
+  /** fuel per month at sea: coal-fired until Oil-Fired Boilers, oil after (submarines and carriers always oil) */
+  fuel: number;
+  oil: boolean;
+  /** firepower against surface ships, torpedoes, anti-submarine, anti-aircraft and air strike */
+  gun: number;
+  torpedo: number;
+  antiSub: number;
+  aa: number;
+  air: number;
+  /** how much damage it takes to sink (and how big a target it is) */
+  hull: number;
+  /** zones per week */
+  speed: number;
+  /** regiments carried */
+  capacity: number;
+  description: string;
+}
+
+export const SHIPS: Record<ShipType, ShipRules> = {
+  transport: {
+    label: 'Transport', plural: 'Transports', abbr: 'Tr', requires: null,
+    cost: 20, materiel: 15, resources: { iron: 2 }, weeks: 10, upkeep: 0.6, fuel: 0.1, oil: false,
+    gun: 0, torpedo: 0, antiSub: 0, aa: 0, air: 0, hull: 2, speed: 1, capacity: 2,
+    description: 'Carries two regiments across the sea. Defenceless: escort it.',
+  },
+  screen: {
+    label: 'Torpedo boat', plural: 'Torpedo boats', abbr: 'Sc', requires: 'torpedo_boats',
+    cost: 25, materiel: 20, resources: { iron: 3 }, weeks: 12, upkeep: 0.8, fuel: 0.15, oil: false,
+    gun: 1, torpedo: 1, antiSub: 3, aa: 0.5, air: 0, hull: 2, speed: 2, capacity: 0,
+    description: 'Screens (torpedo boats, later destroyers): hunt submarines and shield transports and carriers.',
+  },
+  cruiser: {
+    label: 'Cruiser', plural: 'Cruisers', abbr: 'Cr', requires: null,
+    cost: 45, materiel: 40, resources: { iron: 6 }, weeks: 20, upkeep: 1.5, fuel: 0.3, oil: false,
+    gun: 3.5, torpedo: 0.5, antiSub: 1, aa: 1, air: 0, hull: 4, speed: 2, capacity: 0,
+    description: 'Fast and versatile: patrols, blockades and escorts.',
+  },
+  capital: {
+    label: 'Battleship', plural: 'Battleships', abbr: 'Bb', requires: null,
+    cost: 90, materiel: 90, resources: { iron: 14 }, weeks: 36, upkeep: 3, fuel: 0.6, oil: false,
+    gun: 8, torpedo: 0, antiSub: 0, aa: 2, air: 0, hull: 12, speed: 1.5, capacity: 0,
+    description: 'Capital ships (ironclads, then dreadnoughts): the heaviest guns afloat, the decisive surface fight.',
+  },
+  submarine: {
+    label: 'Submarine', plural: 'Submarines', abbr: 'Ss', requires: 'submarines',
+    cost: 35, materiel: 30, resources: { iron: 4 }, weeks: 16, upkeep: 1, fuel: 0.15, oil: true,
+    gun: 0.3, torpedo: 4, antiSub: 0, aa: 0, air: 0, hull: 2, speed: 1.5, capacity: 0,
+    description: 'Unseen torpedoes against capital ships and transports; only screens and cruisers can hunt them. Blockades without holding the sea.',
+  },
+  carrier: {
+    label: 'Carrier', plural: 'Carriers', abbr: 'Cv', requires: 'naval_aviation',
+    cost: 100, materiel: 100, resources: { iron: 12, rubber: 2 }, weeks: 40, upkeep: 3.5, fuel: 0.5, oil: true,
+    gun: 0.5, torpedo: 0, antiSub: 1, aa: 3, air: 7, hull: 9, speed: 1.5, capacity: 0,
+    description: 'Strikes first from the air before the guns can reach; needs screens around it.',
+  },
+};
+export const SHIP_TYPES = Object.keys(SHIPS) as ShipType[];
+
+export interface WingRules {
+  label: string;
+  plural: string;
+  abbr: string;
+  requires: string;
+  cost: number;
+  materiel: number;
+  resources: Partial<Record<StrategicResource, number>>;
+  weeks: number;
+  upkeep: number;
+  /** oil per month */
+  fuel: number;
+  /** air combat, ground attack and bombing value at full strength */
+  air: number;
+  ground: number;
+  bomb: number;
+  /** range in province hops from its base */
+  range: number;
+  missions: Array<'superiority' | 'support' | 'interdiction' | 'bombing' | 'recon'>;
+  description: string;
+}
+
+export const WINGS: Record<WingType, WingRules> = {
+  recon: {
+    label: 'Reconnaissance wing', plural: 'Reconnaissance wings', abbr: 'Re', requires: 'aviation',
+    cost: 20, materiel: 15, resources: { rubber: 1 }, weeks: 6, upkeep: 0.6, fuel: 0.05,
+    air: 0.5, ground: 0, bomb: 0, range: 3, missions: ['recon'],
+    description: 'Spotters over the front: better fire for our armies, and screens find submarines in nearby waters.',
+  },
+  fighter: {
+    label: 'Fighter wing', plural: 'Fighter wings', abbr: 'Fi', requires: 'fighters',
+    cost: 30, materiel: 25, resources: { rubber: 1, iron: 1 }, weeks: 8, upkeep: 1, fuel: 0.15,
+    air: 3, ground: 0.5, bomb: 0, range: 3, missions: ['superiority', 'support'],
+    description: 'Wins the sky: holds air superiority, shoots down bombers and halves enemy ground support.',
+  },
+  attack: {
+    label: 'Ground-attack wing', plural: 'Ground-attack wings', abbr: 'At', requires: 'ground_attack',
+    cost: 35, materiel: 30, resources: { rubber: 1, iron: 2 }, weeks: 10, upkeep: 1.2, fuel: 0.2,
+    air: 1, ground: 3, bomb: 0.5, range: 3, missions: ['support', 'interdiction'],
+    description: 'Close support for battles, or interdiction of enemy supply and movement.',
+  },
+  bomber: {
+    label: 'Bomber wing', plural: 'Bomber wings', abbr: 'Bo', requires: 'strategic_bombing',
+    cost: 50, materiel: 45, resources: { rubber: 2, iron: 3 }, weeks: 14, upkeep: 1.8, fuel: 0.3,
+    air: 0.8, ground: 1, bomb: 3, range: 5, missions: ['bombing', 'interdiction'],
+    description: 'Strikes factories far behind the front; needs fighters to survive against defended skies.',
+  },
+};
+export const WING_TYPES = Object.keys(WINGS) as WingType[];
+
+/** Plural name of a regiment, ship or air wing type. */
+export function forceLabel(kind: string): string {
+  return (UNITS as Record<string, { plural: string }>)[kind]?.plural ?? (SHIPS as Record<string, { plural: string }>)[kind]?.plural ?? (WINGS as Record<string, { plural: string }>)[kind]?.plural ?? kind;
+}
+export const STRATEGIC: StrategicResource[] = ['coal', 'iron', 'oil', 'rubber', 'nitrates'];
+
+export const RESOURCE_INFO: Record<StrategicResource | 'food', { label: string; price: number; use: string }> = {
+  food: { label: 'Food', price: 1, use: 'Feeds armies on supply lines; deposits add 3 a month.' },
+  coal: { label: 'Coal', price: 1.5, use: 'Fuels factories (0.6 a month per factory) and synthetic chemistry; without it factories run at 30%.' },
+  iron: { label: 'Iron', price: 2, use: 'Steel for artillery, armour, factories, forts and railways.' },
+  oil: { label: 'Oil', price: 3, use: 'Fuel for armour (and later fleets and aircraft).' },
+  rubber: { label: 'Rubber', price: 3, use: 'Tyres and seals for armour and motor transport.' },
+  nitrates: { label: 'Nitrates', price: 2.5, use: 'Shells for artillery in war; fertiliser.' },
 };
 
 export const C = {
@@ -64,20 +232,42 @@ export const C = {
     goldPerDev: 0.8,
     goldPerPop: 0.012, // crowns / month per thousand people
     capitalBonus: 3,
-    goodsBonus: 2,
     occupierShare: 0.3, // share of a province's crowns levied by an occupier
     supplyPerDev: 0.5,
-    grainBonus: 3,
+    foodBonus: 3, // food deposit
     stockpileBase: 60,
     stockpilePerDev: 5,
-    tradeBase: 2,
-    tradeShare: 0.06, // of partner's province income
+    /** crowns each partner earns from a trade agreement's commerce, besides resource sales */
+    tradeCommerce: 1,
     fundingCost: [0, 0.08, 0.18, 0.32] as const, // share of gross income
     fundingMul: [1, 1.4, 1.8, 2.2] as const,
     interestRate: 0.02, // monthly interest on debt
     creditMonths: 3, // debt beyond this many months of income triggers bankruptcy
     severeDebtMonths: 3,
     bankruptcyMonths: 24,
+  },
+
+  resources: {
+    /** units / month from a deposit at full efficiency, plus depositPerDev per development */
+    depositYield: { coal: 4, iron: 3, oil: 3, rubber: 3, nitrates: 3 } as Record<StrategicResource, number>,
+    depositPerDev: 0.25,
+    stockBase: 40, // stockpile cap per strategic resource
+    stockPerDev: 3,
+    startShare: 0.5, // starting stock as a share of the cap
+    /** a realm keeps this share of its cap before selling, and buys up to this share */
+    keepShare: 0.4,
+  },
+
+  industry: {
+    coalPerFactory: 0.6, // coal / month per factory level
+    unpowered: 0.3, // share of capacity a factory keeps without coal (water power, short shifts)
+    materielPerIC: 4, // materiel / month per point of industrial capacity
+    workshopPerDev: 0.15, // materiel / month per integrated dev (workshops without factories)
+    materielBase: 80, // stockpile cap
+    materielPerFactory: 40,
+    goodsPerMateriel: 0.35, // crowns per unit of output sold when the materiel stockpile is full
+    startMaterielShare: 0.6,
+    reinforceMateriel: 0.5, // share of a regiment's materiel cost to replace 1,000 men
   },
 
   population: {
@@ -129,6 +319,21 @@ export const C = {
     infraMax: 3,
     fortBase: 60, // * (level + 1) * (1 + level/2)
     fortSupplies: 10,
+    fortIron: 5,
+    infraIron: 4, // per level
+    factoryBase: 80, // * (level + 1)
+    factoryIron: 10,
+    factoryWeeks: 20,
+    factoryMax: 5,
+    factoryMinIntegration: 50,
+    portBase: 50, // * (level + 1)
+    portIron: 4,
+    portWeeks: 16,
+    portMax: 3,
+    airfieldBase: 40, // * (level + 1)
+    airfieldIron: 3,
+    airfieldWeeks: 12,
+    airfieldMax: 2,
     fortWeeks: 16,
     fortMax: 3,
     fortUpkeep: 1, // crowns / month per level
@@ -156,6 +361,8 @@ export const C = {
     maxRegiments: 40,
     entrenchWeeks: [2, 4] as const,
     entrenchBonus: [0.1, 0.2] as const,
+    /** an army with engineers digs in this many times faster */
+    engineerEntrench: 2,
   },
 
   supply: {
@@ -182,19 +389,78 @@ export const C = {
     fortBonus: 0.15, // per level, defender only
     riverBonus: 0.2, // defender, when every attacker crossed a river into the province
     maxDefense: 0.7,
-    flankHorseShare: 0.2,
+    flankCavalryShare: 0.2,
     flankBonus: 0.15,
-    gunsScreen: 1, // guns need at least this many front regiments per gun regiment
-    unscreenedGuns: 0.5,
-    pursuit: 0.1,
+    artilleryScreen: 1, // support regiments need at least this many line regiments each
+    unscreenedArtillery: 0.5,
     pursuitCap: 0.15,
+    /** armour share of the line at which entrenchment and forts lose half their value */
+    breakthroughShare: 0.3,
+    breakthroughMax: 0.5,
+    /** armour without fuel and artillery without shells fight at this share */
+    unfuelled: 0.5,
+    noShells: 0.6,
+  },
+
+  naval: {
+    /** hit points removed per point of fire, before the target's hull */
+    damage: 32,
+    rounds: 3,
+    /** a side withdraws once its fighting value falls below this share of its start */
+    withdrawAt: 0.5,
+    /** transports and carriers behind enough screens and cruisers are this much harder to hit */
+    screened: 0.3,
+    /** repair per week per port level, in a zone on the coast of our port */
+    repair: 6,
+    /** damage per week beyond this many zones from a friendly port */
+    rangeZones: 4,
+    attrition: 2,
+    /** blockade: hostile power needed against our surface power (×) */
+    blockadeRatio: 2,
+    /** a blockaded province loses this share of its crowns */
+    blockadeIncome: 0.25,
+    /** attackers coming ashore fire at this share on the week they land */
+    landing: 0.75,
+    unfuelled: 0.6,
+    startFleetPorts: 3,
+    /** anti-aircraft fire halves a carrier strike at this many points */
+    aaScale: 20,
+    /** by round: guns fire at this share against a side with carrier aircraft when they have none (the strikes come before the guns close) */
+    outranged: [0.3, 0.6, 1] as number[],
+  },
+
+  air: {
+    /** strength lost per week against enemy air power (scaled by the air balance) */
+    combatLoss: 10,
+    /** superiority: our air power at least this multiple of theirs */
+    superiority: 1.5,
+    /** ground support: + share of firepower per point of support (cap) */
+    supportPer: 0.12,
+    supportMax: 0.4,
+    /** enemy superiority cuts our support and interdiction to this share */
+    contested: 0.4,
+    recon: 0.05,
+    interdictSupply: 0.15,
+    interdictSupplyMax: 0.4,
+    interdictMove: 0.1,
+    interdictMoveMax: 0.3,
+    /** industry lost in a bombed province per point of bombing (cap) */
+    bombIndustry: 0.25,
+    bombIndustryMax: 0.6,
+    /** anti-aircraft fire of forts: strength lost per week per fort level */
+    flak: 2,
+    replenish: 8,
+    replenishMateriel: 0.3,
+    wingsPerAirfield: 2,
   },
 
   siege: {
     noFortWeeks: 2, // progress 100 in this many weeks with no fort
     fortWeeksPerLevel: 10,
-    gunsBonus: 0.25, // per gun regiment, max 6
-    gunsMax: 6,
+    artilleryBonus: 0.25, // per artillery regiment, max 6
+    artilleryMax: 6,
+    engineerBonus: 0.5, // per engineer regiment, max 2
+    engineerMax: 2,
     minRegimentsPerLevel: 2,
     liberateMul: 2,
   },
@@ -277,6 +543,14 @@ export const C = {
     exposureWeight: 0.15, // share of each open neighbour's strength counted against a war plan (beyond two open borders)
     secondFrontExhaustion: 25, // an AI at war and this exhausted refuses a call to a second front
   },
+
+  /** player commands kept for bug-report replays before the log rolls over to a checkpoint */
+  playerLogMax: 2000,
 } as const;
 
-export const SCHEMA_VERSION = 1;
+/**
+ * Save format. 1: first release. 2: records the map fingerprint (id, revision,
+ * checksum) and embeds custom maps. 3: the industrial age (units, resources,
+ * industry, research eras). Older saves are migrated (src/sim/migrate.ts).
+ */
+export const SCHEMA_VERSION = 3;

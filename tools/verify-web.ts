@@ -9,6 +9,7 @@ import { createServer, type Server } from 'node:http';
 import { extname, join, normalize } from 'node:path';
 import { inflateRawSync } from 'node:zlib';
 import { chromium, type Browser, type Page } from 'playwright';
+import { seaAirSave } from './sea-air-save';
 
 const DIST = 'dist';
 const ZIP = 'release/crown-and-frontier-web.zip';
@@ -150,6 +151,195 @@ async function mapChoice(browser: Browser, base: string): Promise<void> {
   await page.waitForTimeout(900);
   const z1 = await page.evaluate(() => (window as any).cnf.renderer.camera.zoom);
   record('Keyboard: Shift+2 shows the Terrain map; F fits the whole map', mode === 'terrain' && z1 < z0, `mode ${mode}, zoom ${z0.toFixed(3)} → ${z1.toFixed(3)}`);
+  // the Diplomacy ledger shows the diplomacy map while it is open, then puts the player's map back
+  await page.keyboard.press('KeyD');
+  await page.waitForTimeout(150);
+  const during = await page.evaluate(() => (window as any).cnf.mode);
+  await page.keyboard.press('Escape');
+  await page.waitForTimeout(150);
+  const after = await page.evaluate(() => (window as any).cnf.mode);
+  record('Closing Diplomacy restores the map mode it replaced', during === 'diplomacy' && after === 'terrain', `${mode} → ${during} → ${after}`);
+  await page.close();
+}
+
+/** Navy and air through the interface: blockade, air superiority over a battle, a landing. */
+async function seaAirFlow(browser: Browser, base: string): Promise<void> {
+  const { text, ids } = seaAirSave();
+  const path = join('reports', 'tmp', 'sea-air.json');
+  mkdirSync(join('reports', 'tmp'), { recursive: true });
+  writeFileSync(path, text);
+  const page = await browser.newPage({ viewport: { width: 1366, height: 768 } });
+  const problems = await watch(page);
+  await page.goto(base);
+  await startCampaign(page);
+  await page.getByRole('button', { name: 'Game menu' }).click();
+  const [chooser] = await Promise.all([page.waitForEvent('filechooser'), page.getByRole('button', { name: 'Import file' }).click()]);
+  await chooser.setFiles(path);
+  await page.waitForFunction(() => (window as any).cnf.player === 'ser', null, { timeout: 10000 });
+  await page.evaluate(() => {
+    const app = (window as any).cnf;
+    app.setSpeed(0);
+    document.querySelectorAll<HTMLButtonElement>('.modal-layer:not(.hidden) footer button').forEach((b) => b.click());
+  });
+  // screen point of a province (centred first) or of an army marker
+  const view = async (pid: string) =>
+    page.evaluate((p) => {
+      const app = (window as any).cnf;
+      const c = app.renderer.provinceCenter(p);
+      app.renderer.camera.centerOn(c.x, c.y, Math.max(app.renderer.camera.zoom, app.renderer.camera.zoomForProvincePx(70)), false);
+      app.mapDirty = true;
+    }, pid);
+  const provPoint = (pid: string) =>
+    page.evaluate((p) => {
+      const app = (window as any).cnf;
+      const c = app.renderer.provinceCenter(p);
+      const s = app.renderer.camera.toScreen(c.x, c.y);
+      const r = app.canvas.getBoundingClientRect();
+      return { x: s.x + r.left, y: s.y + r.top };
+    }, pid);
+  const clickProvince = async (pid: string) => {
+    // aim a little off the centre, clear of army markers, and fall back to a scan of the province
+    const p = await page.evaluate((id) => {
+      const app = (window as any).cnf;
+      const r = app.canvas.getBoundingClientRect();
+      const c = app.renderer.provinceCenter(id);
+      const s = app.renderer.camera.toScreen(c.x, c.y);
+      for (let d = 0; d < 80; d += 4) {
+        for (const [dx, dy] of [[0, d], [d, 0], [0, -d], [-d, 0], [d, d], [-d, -d], [d, -d], [-d, d]]) {
+          const x = s.x + dx;
+          const y = s.y + dy;
+          if (app.renderer.provinceAt(x, y) === id && !app.renderer.armyAt(x, y) && !app.renderer.fleetAt(x, y) && !app.renderer.battleAt(x, y)) return { x: x + r.left, y: y + r.top };
+        }
+      }
+      return null;
+    }, pid);
+    if (!p) throw new Error(`no clear point in ${pid}`);
+    await page.mouse.click(p.x, p.y);
+    await page.waitForTimeout(150);
+  };
+  const clickArmy = async (id: string) => {
+    const p = await page.evaluate((a) => {
+      const app = (window as any).cnf;
+      const m = app.renderer.markers.find((x: { army: string }) => x.army === a);
+      const r = app.canvas.getBoundingClientRect();
+      return m ? { x: m.x + m.w / 2 + r.left, y: m.y + m.h / 2 + r.top } : null;
+    }, id);
+    if (!p) throw new Error(`army ${id} has no marker on screen`);
+    await page.mouse.click(p.x, p.y);
+    await page.waitForTimeout(150);
+  };
+  const inspector = () => page.locator('aside.inspector').innerText();
+  void provPoint;
+
+  // ── blockade: the zone card marks Westmere, the fleet card says so, the Military ledger counts it
+  await page.evaluate((z) => {
+    const app = (window as any).cnf;
+    const c = app.renderer.zoneCenter(z);
+    app.renderer.camera.centerOn(c.x, c.y, app.renderer.camera.zoom, false);
+    app.mapDirty = true;
+  }, ids.zone);
+  await page.waitForTimeout(250);
+  const zp = await page.evaluate((z) => {
+    const app = (window as any).cnf;
+    const r = app.canvas.getBoundingClientRect();
+    const c = app.renderer.zoneCenter(z);
+    const s = app.renderer.camera.toScreen(c.x, c.y);
+    for (let d = 0; d < 120; d += 4) for (const [dx, dy] of [[0, d], [d, 0], [0, -d], [-d, 0]]) if (app.renderer.zoneAt(s.x + dx, s.y + dy) === z && !app.renderer.fleetAt(s.x + dx, s.y + dy)) return { x: s.x + dx + r.left, y: s.y + dy + r.top };
+    return null;
+  }, ids.zone);
+  if (zp) await page.mouse.click(zp.x, zp.y);
+  await page.waitForTimeout(200);
+  const zoneText = await inspector();
+  const zoneSel = await page.evaluate(() => (window as any).cnf.selectedZone);
+  const westmereMarked = /\nWestmere\nblockaded/i.test(zoneText);
+  await page.evaluate((f) => (window as any).cnf.selectFleet(f), ids.fleet);
+  await page.waitForTimeout(150);
+  const fleetText = await inspector();
+  await page.keyboard.press('Escape');
+  await page.keyboard.press('m');
+  await page.waitForTimeout(250);
+  const ledger = await page.locator('.drawer:not(.closed)').innerText().catch(() => '');
+  const blockTile = /Blockades\s*[1-9]\d* \/ 0/i.test(ledger) && /We blockade: [^\n]*Westmere/.test(ledger);
+  await page.keyboard.press('Escape');
+  record(
+    'Blockade: clicking the sea shows the blockaded coast, the fleet card says Blockading, the Military ledger counts it',
+    zoneSel === ids.zone && westmereMarked && /Blockading/.test(fleetText) && blockTile,
+    `zone ${zoneSel}: Westmere ${westmereMarked ? 'marked blockaded' : 'not marked'}; fleet card ${/Blockading/.test(fleetText) ? 'Blockading' : 'no tag'}; ledger ${(ledger.match(/We blockade: [^\n]*/) ?? ['no blockade line'])[0]}`,
+  );
+
+  // ── air: ground support over Duncairn, first under the enemy's sky, then under ours
+  const flyMission = async (wing: string, label: RegExp, target: string) => {
+    await view('serenna');
+    await page.waitForTimeout(200);
+    await clickProvince('serenna');
+    await page.locator(`[data-fk="wing-${wing}"]`).click();
+    await page.waitForTimeout(100);
+    await page.getByRole('button', { name: label }).first().click();
+    await view(target);
+    await page.waitForTimeout(200);
+    await clickProvince(target);
+    return page.evaluate((w) => {
+      const x = (window as any).cnf.sim.state.wings[w];
+      return `${x.mission}@${x.target}`;
+    }, wing);
+  };
+  const m1 = await flyMission(ids.attack, /Fly ground support/, 'duncairn');
+  await view('duncairn');
+  await page.waitForTimeout(250);
+  await clickArmy(ids.theirs);
+  const under = await inspector();
+  const theirSky = under.match(/Air support \+(\d+)% \(enemy holds the sky\)/);
+  const fm: string[] = [];
+  for (const f of [ids.f1, ids.f2, ids.f3]) fm.push(await flyMission(f, /Fly air superiority/, 'duncairn'));
+  await view('duncairn');
+  await page.waitForTimeout(250);
+  await clickArmy(ids.theirs);
+  const over = await inspector();
+  const ourSky = over.match(/Air support \+(\d+)% \(air superiority\)/);
+  record(
+    'Air: a wing flies ground support chosen on the map; the attack forecast shows the enemy holding the sky, then our fighters winning it',
+    m1 === 'support@duncairn' && fm.every((x) => x === 'superiority@duncairn') && !!theirSky && !!ourSky && Number(ourSky[1]) > Number(theirSky[1]),
+    `attack wing ${m1}; fighters ${fm.join(', ')}; forecast ${theirSky ? theirSky[0] : 'no enemy-sky note'} → ${ourSky ? ourSky[0] : 'no superiority note'}`,
+  );
+
+  // ── naval invasion: Ship by sea, click the beach, run the weeks until the troops are ashore
+  await view('calvi');
+  await page.waitForTimeout(250);
+  await clickArmy(ids.landing);
+  await page.getByRole('button', { name: /Ship by sea/ }).first().click();
+  await view('westmere');
+  await page.waitForTimeout(250);
+  await clickProvince('westmere');
+  const aboard = await page.evaluate((a) => (window as any).cnf.sim.state.armies[a]?.embarked ?? null, ids.landing);
+  await page.evaluate(() => (window as any).cnf.setSpeed(4));
+  const landed = await page
+    .waitForFunction(
+      (a) => {
+        const app = (window as any).cnf;
+        if (app.speed === 0) {
+          document.querySelectorAll<HTMLButtonElement>('.modal-layer:not(.hidden) footer button').forEach((b) => b.click());
+          app.setSpeed(4);
+        }
+        const army = app.sim.state.armies[a];
+        return app.sim.state.nations.ser.stats.landings > 0 && (!army || !army.embarked);
+      },
+      ids.landing,
+      { timeout: 30000, polling: 100 },
+    )
+    .then(() => true)
+    .catch(() => false);
+  const after = await page.evaluate((a) => {
+    const app = (window as any).cnf;
+    app.setSpeed(0);
+    const army = app.sim.state.armies[a];
+    return { loc: army?.location ?? 'gone', landings: app.sim.state.nations.ser.stats.landings, tick: app.sim.state.tick };
+  }, ids.landing);
+  record(
+    'Naval invasion: Ship by sea, click the beach, the troops sail and land',
+    aboard === ids.fleet && landed && after.loc === 'westmere',
+    `embarked on ${aboard}; landings ${after.landings}; army now in ${after.loc} (week ${after.tick})`,
+  );
+  record('No errors during the navy and air session', problems.length === 0, problems.slice(0, 3).join('; '));
   await page.close();
 }
 
@@ -161,9 +351,15 @@ async function main(): Promise<void> {
   const browser = await chromium.launch();
   const version = browser.version();
   try {
+    // ONLY=sea-air runs just the navy and air flow (while working on it; no report is written)
+    if (process.env.ONLY === 'sea-air') {
+      await seaAirFlow(browser, `${origin}/`);
+      return;
+    }
     await flow(browser, `${origin}/`, 'Site root');
     await flow(browser, `${origin}${SUB}`, 'Project subpath');
     await mapChoice(browser, `${origin}/`);
+    await seaAirFlow(browser, `${origin}/`);
     if (zipFiles) {
       record('Release ZIP has index.html at its root', zipFiles.has('index.html'), `${zipFiles.size} files`);
       await flow(browser, `${origin}/zip/`, 'Unpacked release ZIP');
@@ -267,6 +463,54 @@ async function main(): Promise<void> {
       const msg = await page.locator('.modal h2', { hasText: 'Cannot load this save' }).count();
       const still = await page.evaluate(() => (window as any).cnf.sim?.state.tick);
       record('A damaged save is rejected and the campaign is kept', msg === 1 && still === tick);
+      // a save from the first release (format 1) is converted, and the player is told
+      await page.locator('.modal footer button').first().click();
+      await page.getByRole('button', { name: 'Game menu' }).click();
+      const [chooser3] = await Promise.all([page.waitForEvent('filechooser'), page.getByRole('button', { name: 'Import file' }).click()]);
+      await chooser3.setFiles(join('tests', 'fixtures', 'reach-save-main-c29aea6.json'));
+      await page.waitForSelector('.modal h2:has-text("This save was converted")', { timeout: 10000 }).catch(() => null);
+      const old = await page.evaluate(() => ({ tick: (window as any).cnf.sim?.state.tick, schema: (window as any).cnf.sim?.state.schema, map: (window as any).cnf.sim?.state.scenarioId }));
+      const notice = await page.locator('.modal', { hasText: 'save format 1' }).count();
+      record('A format-1 save is converted on import, with a notice', old.tick === 60 && old.schema === 3 && old.map === 'reach' && notice === 1, `tick ${old.tick}, format ${old.schema}, ${old.map}`);
+      // a format-2 save (Stage A build) is converted to the industrial age, and the player is told
+      await page.locator('.modal footer button').first().click();
+      await page.getByRole('button', { name: 'Game menu' }).click();
+      const [chooser4] = await Promise.all([page.waitForEvent('filechooser'), page.getByRole('button', { name: 'Import file' }).click()]);
+      await chooser4.setFiles(join('tests', 'fixtures', 'aldmere-save-format2-168569b.json'));
+      await page.waitForSelector('.modal h2:has-text("This save was converted")', { timeout: 10000 }).catch(() => null);
+      const f2 = await page.evaluate(() => {
+        const sim = (window as any).cnf.sim;
+        const regs = Object.values<any>(sim?.state.armies ?? {}).flatMap((a) => a.regiments.map((r: any) => r.type));
+        return { tick: sim?.state.tick, schema: sim?.state.schema, map: sim?.state.scenarioId, oldUnits: regs.filter((t: string) => ['foot', 'horse', 'guns'].includes(t)).length };
+      });
+      const notice2 = await page.locator('.modal', { hasText: 'industrial age' }).count();
+      record('A format-2 save is converted to the industrial age on import, with a notice', f2.tick === 240 && f2.schema === 3 && f2.map === 'aldmere' && f2.oldUnits === 0 && notice2 === 1, `tick ${f2.tick}, format ${f2.schema}, ${f2.map}`);
+      // a stored save that cannot be converted stays listed, is refused with a reason, and can still be exported
+      const unconvertible = JSON.parse(readFileSync(join('tests', 'fixtures', 'custom-map-save-format2-168569b.json'), 'utf8'));
+      unconvertible.mapPackage.provinces[0].neighbors.push('nowhere');
+      const unconvertibleText = JSON.stringify(unconvertible);
+      await page.evaluate((t) => (window as any).cnf.store.put('slot-9', t), unconvertibleText);
+      await page.locator('.modal footer button').first().click();
+      await page.getByRole('button', { name: 'Game menu' }).click();
+      await page.getByRole('button', { name: 'Save and quit to menu' }).click();
+      await page.waitForSelector('.screen .menu-list button');
+      await page.getByRole('button', { name: /Load or import/ }).click();
+      const card9 = page.locator('.save-card', { hasText: 'Slot 9' });
+      await card9.waitFor({ timeout: 5000 }).catch(() => null);
+      const olderNote = await card9.locator('text=earlier version').count();
+      await card9.getByRole('button', { name: 'Load' }).click();
+      const refusal = page.locator('.modal', { hasText: 'Cannot load this save' });
+      await refusal.waitFor({ timeout: 5000 }).catch(() => null);
+      const reason = (await refusal.textContent().catch(() => '')) ?? '';
+      await refusal.locator('footer button').first().click().catch(() => null);
+      const [dl9] = await Promise.all([page.waitForEvent('download', { timeout: 5000 }), card9.getByRole('button', { name: 'Export this save to a file' }).click()]).catch(() => [null]);
+      const dlPath = dl9 ? await dl9.path() : null;
+      const exportedSame = !!dlPath && readFileSync(dlPath, 'utf8') === unconvertibleText;
+      record(
+        'A save that cannot be converted stays listed, is refused with a reason and can be exported',
+        olderNote === 1 && /cannot be/.test(reason) && (await card9.count()) === 1 && exportedSame,
+        reason.replace(/\s+/g, ' ').slice(0, 140),
+      );
       record('No errors during the session', problems.length === 0, problems.slice(0, 3).join('; '));
       await page.close();
     }

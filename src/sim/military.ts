@@ -5,59 +5,60 @@
 // disbanding returns survivors to the pool (capped by the reserve), and
 // casualties leave the system permanently (and reduce population).
 
-import { C, UNITS } from './config';
+import { interdiction } from './air';
+import { C, RESOURCE_INFO, UNITS, UNIT_TYPES } from './config';
+import { TECHS } from './data/techs';
 import { poolCap, removePopulation } from './economy';
-import { nationMods } from './modifiers';
+import { touchArmies } from './index';
+import { nationMods, type Mods } from './modifiers';
 import { armiesAt, armiesOf, atWar, bump, enemiesOf, isFriendly, notify, provName, type Sim } from './state';
 import { supplyAt, supplyStatus } from './supply';
-import type { Army, ArmyId, NationId, ProvinceId, Regiment, UnitType } from './types';
+import type { Army, ArmyId, NationId, ProvinceId, Regiment, StrategicResource, UnitType } from './types';
+
+function techName(id: string): string {
+  return TECHS[id]?.name ?? id;
+}
 
 export function maxMorale(sim: Sim, nid: NationId): number {
   return C.army.baseMorale + nationMods(sim, nid).moraleMax;
 }
 
-/** Number of integrated (>= 50), controlled provinces with a resource. */
-export function resourceCount(sim: Sim, nid: NationId, res: 'grain' | 'iron' | 'horses' | 'goods'): number {
-  let c = 0;
-  for (const pid of sim.world.provIds) {
-    const p = sim.state.provinces[pid];
-    if (p.owner === nid && p.controller === nid && p.integration >= 50 && sim.world.prov[pid].resource === res) c++;
-  }
-  return c;
-}
-
 export interface UnitCost {
   crowns: number;
-  supplies: number;
+  materiel: number;
+  /** strategic resources taken from the stockpiles */
+  resources: Partial<Record<StrategicResource, number>>;
   manpower: number;
   weeks: number;
   notes: string[];
 }
 
+const COST_MOD: Partial<Record<UnitType, keyof Mods>> = {
+  infantry: 'infantryCost',
+  cavalry: 'cavalryCost',
+  artillery: 'artilleryCost',
+  armour: 'armourCost',
+};
+
 export function unitCost(sim: Sim, nid: NationId, unit: UnitType): UnitCost {
   const m = nationMods(sim, nid);
-  let mul = 1 + m.recruitCost;
-  const notes: string[] = [];
-  if (unit === 'foot') mul += m.footCost;
-  if (unit === 'horse') {
-    mul += m.horseCost;
-    const h = Math.min(3, resourceCount(sim, nid, 'horses'));
-    if (h) {
-      mul -= 0.1 * h;
-      notes.push(`Horse provinces −${h * 10}%`);
-    }
-  }
-  if (unit === 'guns') {
-    mul += m.gunsCost;
-    const i = Math.min(3, resourceCount(sim, nid, 'iron'));
-    if (i) {
-      mul -= 0.1 * i;
-      notes.push(`Iron provinces −${i * 10}%`);
-    }
-  }
-  mul = Math.max(0.3, mul);
   const u = UNITS[unit];
-  return { crowns: Math.round(u.cost * mul), supplies: u.supplies, manpower: C.regimentSize, weeks: u.weeks, notes };
+  const key = COST_MOD[unit];
+  const mul = Math.max(0.3, 1 + m.recruitCost + (key ? m[key] : 0));
+  return {
+    crowns: Math.round(u.cost * mul),
+    materiel: Math.round(u.materiel * Math.max(0.3, 1 + m.materielCost)),
+    resources: { ...u.resources },
+    manpower: C.regimentSize,
+    weeks: u.weeks,
+    notes: [],
+  };
+}
+
+/** Whether the realm knows how to raise this kind of regiment. */
+export function unitUnlocked(sim: Sim, nid: NationId, unit: UnitType): boolean {
+  const req = UNITS[unit]?.requires;
+  return !req || sim.state.nations[nid].research.done.includes(req);
 }
 
 function hostileArmyIn(sim: Sim, nid: NationId, pid: ProvinceId): boolean {
@@ -70,6 +71,7 @@ export function recruitProblem(sim: Sim, nid: NationId, pid: ProvinceId, unit: U
   if (!n?.alive) return 'Your realm has fallen.';
   if (!p) return 'Unknown province.';
   if (!UNITS[unit]) return 'Unknown unit type.';
+  if (!unitUnlocked(sim, nid, unit)) return `${UNITS[unit].plural} need the technology ${techName(UNITS[unit].requires!)}.`;
   if (p.owner !== nid) return 'You can only raise troops in your own provinces.';
   if (p.controller !== nid) return 'The province is occupied by an enemy.';
   if (p.revoltUntil > sim.state.tick) return 'The province is in revolt.';
@@ -77,7 +79,10 @@ export function recruitProblem(sim: Sim, nid: NationId, pid: ProvinceId, unit: U
   if (hostileArmyIn(sim, nid, pid)) return 'Enemy troops are in the province.';
   const cost = unitCost(sim, nid, unit);
   if (n.treasury < cost.crowns) return `Needs ${cost.crowns} crowns (treasury ${Math.floor(n.treasury)}).`;
-  if (n.supplies < cost.supplies) return `Needs ${cost.supplies} supplies (stockpile ${Math.floor(n.supplies)}).`;
+  if (n.materiel < cost.materiel) return `Needs ${cost.materiel} materiel (stockpile ${Math.floor(n.materiel)}): build factories or wait for industry.`;
+  for (const [r, amt] of Object.entries(cost.resources) as Array<[StrategicResource, number]>) {
+    if (n.stock[r] < amt) return `Needs ${amt} ${RESOURCE_INFO[r].label.toLowerCase()} (stockpile ${Math.floor(n.stock[r])}).`;
+  }
   if (n.manpower < cost.manpower) return `Needs ${cost.manpower.toLocaleString()} men in the manpower pool (pool ${Math.floor(n.manpower).toLocaleString()}).`;
   return null;
 }
@@ -86,12 +91,13 @@ export function orderRecruit(sim: Sim, nid: NationId, pid: ProvinceId, unit: Uni
   const n = sim.state.nations[nid];
   const cost = unitCost(sim, nid, unit);
   n.treasury -= cost.crowns;
-  n.supplies -= cost.supplies;
+  n.materiel -= cost.materiel;
+  for (const [r, amt] of Object.entries(cost.resources) as Array<[StrategicResource, number]>) n.stock[r] -= amt;
   n.manpower -= cost.manpower;
   sim.state.provinces[pid].recruits.push({ nation: nid, unit, weeksLeft: cost.weeks });
 }
 
-/** Cancels queued recruits in a province: manpower and supplies are returned, crowns are lost. */
+/** Cancels queued recruits in a province: manpower, materiel and resources are returned, crowns are lost. */
 export function cancelRecruits(sim: Sim, pid: ProvinceId, nid?: NationId): number {
   const p = sim.state.provinces[pid];
   let n = 0;
@@ -100,7 +106,8 @@ export function cancelRecruits(sim: Sim, pid: ProvinceId, nid?: NationId): numbe
     const ns = sim.state.nations[r.nation];
     if (ns?.alive) {
       ns.manpower += C.regimentSize;
-      ns.supplies += UNITS[r.unit].supplies;
+      ns.materiel += UNITS[r.unit].materiel;
+      for (const [res, amt] of Object.entries(UNITS[r.unit].resources) as Array<[StrategicResource, number]>) ns.stock[res] += amt;
     }
     n++;
     return false;
@@ -141,6 +148,7 @@ export function createArmy(sim: Sim, nid: NationId, loc: ProvinceId, regiments: 
     task: null,
   };
   st.armies[id] = a;
+  touchArmies(sim);
   return a;
 }
 
@@ -155,6 +163,7 @@ export function removeArmy(sim: Sim, id: ArmyId): void {
     }
   }
   delete sim.state.armies[id];
+  touchArmies(sim);
   for (const nid in sim.state.nations) delete sim.state.nations[nid].ai.objectives[id];
 }
 
@@ -204,7 +213,7 @@ export function splitProblem(sim: Sim, nid: NationId, id: ArmyId, counts: Partia
   if (a.battle) return 'Cannot reorganise during a battle.';
   if (a.retreating) return 'Cannot reorganise while retreating.';
   let take = 0;
-  for (const t of ['foot', 'horse', 'guns'] as UnitType[]) {
+  for (const t of UNIT_TYPES) {
     const c = counts[t] ?? 0;
     if (c < 0 || !Number.isInteger(c)) return 'Invalid regiment count.';
     const have = a.regiments.filter((r) => r.type === t).length;
@@ -219,7 +228,7 @@ export function splitProblem(sim: Sim, nid: NationId, id: ArmyId, counts: Partia
 export function doSplit(sim: Sim, id: ArmyId, counts: Partial<Record<UnitType, number>>): Army {
   const a = sim.state.armies[id];
   const moved: Regiment[] = [];
-  for (const t of ['foot', 'horse', 'guns'] as UnitType[]) {
+  for (const t of UNIT_TYPES) {
     let c = counts[t] ?? 0;
     // detach the strongest regiments of the requested type
     const pool = a.regiments.filter((r) => r.type === t).sort((x, y) => y.men - x.men || (x.id < y.id ? -1 : 1));
@@ -323,8 +332,14 @@ export function weeklyArmyCare(sim: Sim): void {
   for (const id of ids) {
     const a = st.armies[id];
     if (!a) continue;
+    if (a.embarked) {
+      // at sea: fed from the ships' stores, no attrition and no replacements
+      a.supply = 1;
+      continue;
+    }
     const info = supplyAt(sim, a.nation, a.location, 0, false);
-    a.supply = info.level;
+    // enemy aircraft interdicting the province cut what reaches the army
+    a.supply = Math.max(0, info.level - interdiction(sim, a.location, a.nation).supply);
     const n = st.nations[a.nation];
     const mods = nationMods(sim, a.nation);
     const mm = maxMorale(sim, a.nation);
@@ -334,7 +349,7 @@ export function weeklyArmyCare(sim: Sim): void {
       if (a.path.length === 0 && !a.battle && a.stationary >= 8 && isFriendly(sim, a.nation, st.provinces[a.location].controller)) n.stats.idleArmyWeeks++;
     }
     if (a.battle) continue;
-    const status = supplyStatus(info.level);
+    const status = supplyStatus(a.supply);
     if (status === 'unsupplied') {
       const rate = C.supply.attrition * Math.max(0.1, 1 + mods.attrition);
       let lost = 0;
@@ -371,20 +386,29 @@ export function weeklyArmyCare(sim: Sim): void {
   }
 }
 
+/** Replacements: men from the pool and materiel to equip them (a share of each regiment's materiel cost per 1,000 men). */
 function reinforce(sim: Sim, a: Army): void {
   const n = sim.state.nations[a.nation];
-  if (n.manpower <= 0) return;
+  if (n.manpower <= 0 || n.materiel <= 0) return;
   const mods = nationMods(sim, a.nation);
   const per = C.regimentSize * C.army.reinforceRate * Math.max(0.1, 1 + mods.reinforce);
   let want = 0;
-  for (const r of a.regiments) want += Math.min(per, C.regimentSize - r.men);
+  let kit = 0;
+  for (const r of a.regiments) {
+    const add = Math.min(per, C.regimentSize - r.men);
+    want += add;
+    kit += (add / C.regimentSize) * UNITS[r.type].materiel * C.industry.reinforceMateriel;
+  }
   if (want <= 0) return;
-  const scale = Math.min(1, n.manpower / want);
+  const scale = Math.min(1, n.manpower / want, kit > 0 ? n.materiel / kit : 1);
   let used = 0;
+  let spent = 0;
   for (const r of a.regiments) {
     const add = Math.floor(Math.min(per, C.regimentSize - r.men) * scale);
     r.men += add;
     used += add;
+    spent += (add / C.regimentSize) * UNITS[r.type].materiel * C.industry.reinforceMateriel;
   }
   n.manpower -= used;
+  n.materiel = Math.max(0, n.materiel - spent);
 }

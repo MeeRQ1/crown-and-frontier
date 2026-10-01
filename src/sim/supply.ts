@@ -12,8 +12,12 @@
 // Supplied >= 0.8 > Strained >= 0.4 > Unsupplied.
 
 import { C, TERRAIN } from './config';
+import { CostHeap } from './heap';
+import { armiesIn } from './index';
 import { nationMods } from './modifiers';
+import { fleetEpoch, straitBlocked } from './naval';
 import { isFriendly, type Sim } from './state';
+import { edgeKey } from './world';
 import type { Army, NationId, ProvinceId } from './types';
 
 export type SupplyStatus = 'supplied' | 'strained' | 'unsupplied';
@@ -56,38 +60,42 @@ export function supplyDistances(sim: Sim, nid: NationId): Record<ProvinceId, num
     per = new Map();
     distCache.set(sim.state, per);
   }
-  const key = `${sim.state.tick}|${sim.state.rev}`;
+  // sea control changes which straits carry supply
+  const key = `${sim.state.tick}|${sim.state.rev}|${fleetEpoch(sim)}`;
   const hit = per.get(nid);
   if (hit && hit.key === key) return hit.dist;
 
   const dist: Record<ProvinceId, number> = {};
-  const friendly = (pid: ProvinceId) => isFriendly(sim, nid, sim.state.provinces[pid].controller);
-  const open: Array<[number, ProvinceId]> = [];
+  // one friendliness lookup per controlling realm, not per province
+  const friends = new Map<string | null, boolean>();
+  const friendly = (pid: ProvinceId) => {
+    const c = sim.state.provinces[pid].controller;
+    let f = friends.get(c);
+    if (f === undefined) friends.set(c, (f = isFriendly(sim, nid, c)));
+    return f;
+  };
+  const open = new CostHeap();
   for (const pid of sim.world.provIds) {
     dist[pid] = Infinity;
     if (friendly(pid) && isSupplySource(sim, pid)) {
       dist[pid] = 0;
-      open.push([0, pid]);
+      open.push(0, pid);
     }
   }
-  // Dijkstra through friendly-controlled provinces (small graph: linear minimum scan).
-  while (open.length) {
-    let bi = 0;
-    for (let i = 1; i < open.length; i++) {
-      const x = open[i];
-      const y = open[bi];
-      if (x[0] < y[0] || (x[0] === y[0] && x[1] < y[1])) bi = i;
-    }
-    const [d, cur] = open[bi];
-    open[bi] = open[open.length - 1];
-    open.pop();
+  // Dijkstra through friendly-controlled provinces; the heap's (cost, id)
+  // order makes the visiting order independent of insertion order.
+  while (open.size) {
+    const d = open.peekCost();
+    const cur = open.pop();
     if (d > dist[cur]) continue;
+    const straitAt = sim.world.straitEnds.has(cur);
     for (const nb of sim.world.prov[cur].neighbors) {
+      if (straitAt && sim.world.straitSet.has(edgeKey(cur, nb)) && straitBlocked(sim, nid, cur, nb)) continue;
       const nd = d + stepCost(sim, nb);
       if (nd < dist[nb]) {
         dist[nb] = nd;
         // only friendly provinces relay supply further
-        if (friendly(nb)) open.push([nd, nb]);
+        if (friendly(nb)) open.push(nd, nb);
       }
     }
   }
@@ -122,10 +130,7 @@ export function supplyAt(sim: Sim, nid: NationId, pid: ProvinceId, extraRegiment
   const connected = inRange && stock > 0;
   const capacity = provinceSupplyCapacity(sim, nid, pid);
   let load = extraRegiments;
-  for (const id in sim.state.armies) {
-    const a = sim.state.armies[id];
-    if (a.location === pid && isFriendly(sim, nid, a.nation)) load += a.regiments.length;
-  }
+  for (const a of armiesIn(sim, pid)) if (isFriendly(sim, nid, a.nation)) load += a.regiments.length;
   load = Math.max(1, load);
   const level = connected ? Math.min(1, (2 * capacity) / load) : Math.min(0.6, (C.supply.disconnectedMul * capacity) / load);
   const reasons: string[] = [];
@@ -136,7 +141,7 @@ export function supplyAt(sim: Sim, nid: NationId, pid: ProvinceId, extraRegiment
       remedies.push('Hold provinces back toward home, integrate frontier land to 50+, build a fort nearby, or research Supply Trains.');
     } else if (stock <= 0) {
       reasons.push('The national supply stockpile is empty.');
-      remedies.push('Reduce army size, secure grain provinces, or research Crop Rotation.');
+      remedies.push('Reduce army size, secure grain provinces, or research Refrigeration.');
     }
     const effCap = connected ? 2 * capacity : C.supply.disconnectedMul * capacity;
     if (load > effCap) {

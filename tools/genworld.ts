@@ -19,7 +19,8 @@
 
 import { mkdirSync, writeFileSync } from 'node:fs';
 import { ALDMERE_LABELS, ALDMERE_NATIONS, ALDMERE_REGIONS } from '../src/data/aldmere';
-import type { ProvinceDef, Resource, Terrain } from '../src/sim/types';
+import type { ProvinceDef, Terrain } from '../src/sim/types';
+import { industrialDeposit, type LegacyResource } from '../src/maps/deposits';
 import * as S from './aldmere.spec';
 import { buildMap, fillSea, hashStr, MinHeap, mulberry, pointInPoly, polylineDist, previewSvg, segIntersect, type BuiltMap, type Pt, type Seed } from './mapgen/core';
 
@@ -536,7 +537,8 @@ for (const k of riverPairs) k.split('|').forEach((x) => onRiver.add(x));
 const mouths = S.RIVERS.map((r) => r.pts[r.pts.length - 1]);
 
 const specOf = (p: Prov) => REG[regIdx.get(p.region)!];
-interface Out extends Omit<ProvinceDef, 'neighbors' | 'id' | 'name'> {
+interface Out extends Omit<ProvinceDef, 'neighbors' | 'id' | 'name' | 'resource'> {
+  resource: LegacyResource;
   tmp: string;
   culture: string;
 }
@@ -571,7 +573,8 @@ for (const p of provs) {
     }
     terrain = best;
   }
-  let resource: Resource = null;
+  // the generator places the map's original resources; industrialDeposit() converts them on output
+  let resource: LegacyResource = null;
   if (f) resource = f.resource;
   else {
     const roll = rnd();
@@ -719,7 +722,7 @@ const provincesOut: ProvinceDef[] = provIdsTmp.map((t) => {
     id: rid(t),
     name: nameOf.get(t)!,
     terrain: o.terrain,
-    resource: o.resource,
+    resource: industrialDeposit(o.resource, o.terrain, rid(t)),
     owner: o.owner,
     dev: o.dev,
     pop: o.pop,

@@ -9,17 +9,19 @@ import { POLICIES, POLICY_LIST } from '../data/policies';
 import { TECH_LIST } from '../data/techs';
 import { activeProjects, buildProblem, buildSlots, projectCost } from '../construction';
 import { addMemory, claimsOn, coalitionAgainst, envoySlots, evaluateTreaty, fabricateProblem, memoriesOf, opinion, sharedThreat, treatyProblem } from '../diplomacy';
-import { grossIncome, poolCap, reserveCap, tradeValue } from '../economy';
+import { factoryCount, grossIncome, materielCap, poolCap, reserveCap, resourcePlan, tradeValue } from '../economy';
+import { memoize } from '../index';
 import { overextension } from '../integration';
 import { nationPotential, nationStrength } from '../military';
 import { nationMods } from '../modifiers';
-import { policyProblem, techAvailable } from '../progression';
+import { policyProblem, researchProblem, techAvailable, yearsEarly } from '../progression';
 import {
   aliveNations,
   alliesOf,
   armiesOf,
   atWar,
   borders,
+  dateOf,
   diag,
   nationDistance,
   enemiesOf,
@@ -38,6 +40,7 @@ import type { NationId, PeaceTerms, ProjectKind, ProvinceId, TreatyType, Victory
 import { VICTORY_MONTHS } from '../victory';
 import { canJoin, evaluatePeace, goalOptions, provinceCost, scoreFor, termsCost } from '../war';
 import { aiRand, diffOf, issue } from './common';
+import { coastalShare, navalStrategy, planInvasion } from './navy';
 
 const AVG_UPKEEP = 1.45;
 const AVG_SUPPLY = 0.62;
@@ -54,6 +57,10 @@ function regimentCount(sim: Sim, nid: NationId): number {
 }
 
 export function isThreatened(sim: Sim, nid: NationId): NationId | null {
+  return memoize(sim, 'isThreatened', nid, () => threatOf(sim, nid));
+}
+
+function threatOf(sim: Sim, nid: NationId): NationId | null {
   const mine = Math.max(1, nationStrength(sim, nid));
   let worst: NationId | null = null;
   let worstRatio = 1.25;
@@ -106,15 +113,25 @@ function chooseResearch(sim: Sim, nid: NationId): void {
   const war = warsOf(sim, nid).length > 0 || !!isThreatened(sim, nid);
   const over = overextension(sim, nid) > 0;
   const shortSupplies = n.supplies < 20;
-  const cands = TECH_LIST.filter((t) => !n.research.done.includes(t.id) && t.requires.every((r) => n.research.done.includes(r)));
+  const cands = TECH_LIST.filter((t) => !researchProblem(sim, nid, t.id));
   if (!cands.length) return;
+  const short = new Set(n.shortages);
   const scored = cands.map((t) => {
-    let s = p.research[t.branch] * (1.3 - 0.1 * t.tier);
-    if (war && t.branch === 'arms') s *= 1.3;
-    if (over && ['bureaucracy', 'colonial', 'law'].includes(t.id)) s *= 1.5;
-    if (shortSupplies && ['trains', 'rotation'].includes(t.id)) s *= 1.4;
-    if (n.ai.goal.victory === 'diplomatic' && ['corps', 'embassies', 'concert'].includes(t.id)) s *= 1.3;
-    if (n.ai.goal.victory === 'economic' && ['surveys', 'charters', 'law'].includes(t.id)) s *= 1.3;
+    // older technologies first, and those ahead of their time only when cheap enough
+    let s = p.research[t.branch] * (1.3 - 0.05 * t.era) / (1 + 0.15 * yearsEarly(sim, t.id));
+    if (war && t.branch === 'land') s *= 1.3;
+    if (over && ['civil_service', 'telegraph_network', 'mass_politics', 'planning_bureau'].includes(t.id)) s *= 1.5;
+    if (shortSupplies && ['rail_logistics', 'refrigeration', 'rubber_plantations'].includes(t.id)) s *= 1.4;
+    for (const r of short) if (TECH_HELPS[r]?.includes(t.id)) s *= 1.6;
+    if (t.effects.industry || t.effects.factoryCost) s *= 1.15;
+    if (t.unlocks) s *= 1.2;
+    // a navy matters to coastal realms; aircraft are new arms worth having
+    if (t.branch === 'naval') s *= 0.6 + coastalShare(sim, nid);
+    if (t.branch === 'air' && t.unlocks) s *= 1.3;
+    // flight is the gateway to the whole air branch
+    if (t.id === 'aviation') s *= 1.8;
+    if (n.ai.goal.victory === 'diplomatic' && t.branch === 'society' && (t.effects.opinion || t.effects.envoys)) s *= 1.3;
+    if (n.ai.goal.victory === 'economic' && (t.branch === 'industry' || t.effects.integration)) s *= 1.2;
     s *= 1 + (aiRand(sim) - 0.5) * 0.2;
     return { t, s };
   });
@@ -124,6 +141,15 @@ function chooseResearch(sim: Sim, nid: NationId): void {
   issue(sim, { type: 'research', nation: nid, tech: pick.t.id });
   diag(sim, nid, 'strategic', `Research: ${pick.t.name}`, scored.slice(0, 3).map((x) => `${x.t.name} ${x.s.toFixed(2)}`));
 }
+
+/** Technologies that ease a shortage of each resource. */
+const TECH_HELPS: Record<string, string[]> = {
+  coal: ['deep_mining', 'turbines'],
+  iron: ['bessemer', 'steel_mills'],
+  oil: ['oil_refining', 'synthetic_fuel'],
+  rubber: ['rubber_plantations', 'synthetic_rubber'],
+  nitrates: ['chemical_industry', 'haber_process'],
+};
 
 function choosePolicy(sim: Sim, nid: NationId): void {
   const st = sim.state;
@@ -168,10 +194,20 @@ function planConstruction(sim: Sim, nid: NationId): void {
   while (activeProjects(sim, nid).length < buildSlots(sim, nid) && guard++ < 4) {
     const budget = n.treasury - treasuryReserve(sim, nid);
     if (budget <= 20) return;
+    const known = { slots: buildSlots(sim, nid), active: activeProjects(sim, nid).length };
+    const plan = resourcePlan(sim, nid);
+    const pendingFactories = activeProjects(sim, nid).filter((q) => st.provinces[q].project?.kind === 'factory').length;
+    const factoriesNow = factoryCount(sim, nid);
     const cands: Array<{ pid: ProvinceId; kind: ProjectKind; v: number }> = [];
     let forts = 0;
     for (const pid of ownedProvinces(sim, nid)) forts += st.provinces[pid].fort;
     const owned = ownedProvinces(sim, nid);
+    // the navy needs a port; aircraft need airfields (counting those being built)
+    const building = (k: ProjectKind) => activeProjects(sim, nid).filter((q) => st.provinces[q].project?.kind === k).length;
+    const ports = owned.filter((q) => st.provinces[q].port > 0).length + building('port');
+    const coastShare = owned.filter((q) => sim.world.provZones[q]).length / Math.max(1, owned.length);
+    const fields = owned.filter((q) => st.provinces[q].airfield > 0).length + building('airfield');
+    const wantFields = n.research.done.includes('aviation') ? Math.min(3, 1 + Math.floor(owned.length / 14)) : 0;
     for (const pid of owned) {
       const pr = st.provinces[pid];
       if (pr.controller !== nid || pr.project) continue;
@@ -181,13 +217,31 @@ function planConstruction(sim: Sim, nid: NationId): void {
         const o = st.provinces[nb].owner;
         return !!o && o !== nid && (atWar(sim, nid, o) || opinion(sim, o, nid) < -10 || o === threat);
       });
-      for (const kind of ['dev', 'infra', 'fort', 'charter'] as ProjectKind[]) {
-        if (buildProblem(sim, nid, pid, kind)) continue;
+      for (const kind of ['dev', 'infra', 'factory', 'fort', 'charter', 'port', 'airfield'] as ProjectKind[]) {
+        if (kind === 'port' && (!sim.world.provZones[pid] || (ports > 0 && !(pr.port > 0 && pr.port < 2 && coastShare > 0.4)))) continue;
+        if (kind === 'airfield' && (fields >= wantFields || pr.airfield > 0)) continue;
+        if (buildProblem(sim, nid, pid, kind, known)) continue;
         const cost = projectCost(sim, nid, pid, kind).crowns;
         if (cost > budget) continue;
         let v = 0;
         if (kind === 'dev') v = ((1.3 * (0.25 + 0.75 * pr.integration / 100)) / cost) * 100 * econWeight;
         if (kind === 'infra') v = ((((100 - pr.integration) / 100) * 1.2 + (border ? 0.3 : 0) + pr.dev * 0.05) / cost) * 100;
+        if (kind === 'factory') {
+          // industry needs coal: a new factory only when the realm's own coal (and half its
+          // imports, which can dry up) feeds it after the factories already being built;
+          // a realm without coal still keeps a small industrial base
+          const coalMargin = plan.produced.coal + 0.5 * n.lastMonth.resources.coal.imported - plan.need.coal - pendingFactories * C.industry.coalPerFactory;
+          const fuelled = !n.shortages.includes('coal') && coalMargin >= C.industry.coalPerFactory * 1.2;
+          const smallBase = factoriesNow + pendingFactories < 2 + Math.floor(owned.length / 6);
+          if (!fuelled && !smallBase) continue;
+          const coal = fuelled ? 1 : C.industry.unpowered;
+          // a realm with no industry at all makes no materiel: its first factory comes first
+          const none = factoriesNow + pendingFactories === 0 ? 4 : 1;
+          const wantMateriel = n.materiel < materielCap(sim, nid) * 0.5 ? 1.3 : 1;
+          v = ((2.2 * (0.25 + 0.75 * pr.integration / 100) * coal * wantMateriel * none) / cost) * 100 * (p.id === 'commercial' || n.ai.goal.victory === 'economic' ? 1.2 : 1);
+        }
+        if (kind === 'port') v = ports === 0 ? ((3 * (pr.dev + 2)) / cost) * 100 : ((0.6 * coastShare) / cost) * 100;
+        if (kind === 'airfield') v = ((2.5 * (n.capital === pid ? 2 : 1) * (border ? 1.4 : 1) * (pr.dev + 2) * 0.3) / cost) * 100;
         if (kind === 'charter') v = pr.integration < 60 ? (((60 - pr.integration) / 60) * (pr.dev + 2) * 0.6 / cost) * 100 * (n.ai.goal.victory === 'territorial' ? 1.3 : 1) : 0;
         if (kind === 'fort') {
           if (!hostileBorder || forts >= 1 + (owned.length * p.fortLove) / 4 + (n.treasury > grossIncome(n.lastMonth) * 12 ? 2 : 0)) continue;
@@ -199,7 +253,7 @@ function planConstruction(sim: Sim, nid: NationId): void {
       }
     }
     for (const pid of sim.world.provIds) {
-      if (st.provinces[pid].owner || buildProblem(sim, nid, pid, 'settle')) continue;
+      if (st.provinces[pid].owner || buildProblem(sim, nid, pid, 'settle', known)) continue;
       const cost = projectCost(sim, nid, pid, 'settle').crowns;
       if (cost > budget) continue;
       const res = sim.world.prov[pid].resource ? 0.5 : 0;
@@ -451,7 +505,8 @@ function considerWar(sim: Sim, nid: NationId): void {
   }
   const threshold = 2;
   if (pick.score < threshold) {
-    if (pick.score > 0 && (st.tick / 4) % 12 === 0)
+    // once a year per realm (strategic turns are staggered across the weeks of a month)
+    if (pick.score > 0 && dateOf(sim).month === 0)
       diag(sim, nid, 'strategic', `War considered but not worth it`, cands.slice(0, 3).map((c) => `${nationName(sim, c.t)}: ratio ${c.ratio.toFixed(2)}/${c.need.toFixed(2)} score ${c.score.toFixed(1)}`));
     // prepare: fabricate a claim on the best target if we lack one
     if (p.aggression >= 1 && !claimsOn(sim, nid, pick.t).length) {
@@ -615,6 +670,8 @@ export function strategic(sim: Sim, nid: NationId): void {
   choosePolicy(sim, nid);
   considerPeace(sim, nid);
   planConstruction(sim, nid);
+  navalStrategy(sim, nid, treasuryReserve(sim, nid));
+  planInvasion(sim, nid);
   diplomacy(sim, nid);
   considerWar(sim, nid);
   // rivals close to victory make everyone nervous

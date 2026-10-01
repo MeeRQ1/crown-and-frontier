@@ -10,7 +10,8 @@ import { SCHEMA_VERSION } from '../sim/config';
 import { dateOf, nationName, ownedProvinces, type Sim } from '../sim/state';
 import type { Difficulty, NationId } from '../sim/types';
 import { VICTORY_LABELS } from '../sim/victory';
-import { DEFAULT_SCENARIO, getWorld, scenarioIds } from '../sim/world';
+import { DEFAULT_SCENARIO, getWorld, isBuiltinMap, mapScenarioPart, scenarioIds } from '../sim/world';
+import { builtinScenario, type BuiltinMapId } from '../maps/builtin';
 import type { App } from './app';
 import { AtlasView, startOf } from './atlas-view';
 import { button, h, setChildren, type Child } from './dom';
@@ -21,20 +22,28 @@ import { loadGeometry } from './map/maps';
 import { MapRenderer } from './map/renderer';
 import { confirmDialog, dialog } from './panels/dialogs';
 import { DEFAULT_SETTINGS, type UISettings } from './settings';
-import { pickFile } from './storage';
+import { downloadText, pickFile } from './storage';
 
 /** Cleanup hooks for screens that own animation or observers. */
 export const screenCleanup = new WeakMap<HTMLElement, () => void>();
 
 const LEDE = 'A young crown on a divided continent. Every province beyond your heartland is raw frontier: little tax, few recruits, restless people, until you bind it to the crown. Settle, trade or conquer, and hold what you take.';
 
-const MAP_INFO: Record<string, { title: string; kind: string; lengths: Array<[number, string]>; defaultYears: number }> = {
-  aldmere: { title: 'Aldmere', kind: 'Standard campaign', lengths: [[40, 'Standard · 40 years'], [60, 'Long · 60 years'], [80, 'Epic · 80 years']], defaultYears: 60 },
-  reach: { title: 'The Reach', kind: 'Quick campaign', lengths: [[25, 'Short · 25 years'], [40, 'Standard · 40 years'], [60, 'Long · 60 years']], defaultYears: 40 },
-};
+const MAP_KIND: Record<string, string> = { aldmere: 'Standard campaign', reach: 'Quick campaign' };
 
-function mapInfo(id: string) {
-  return MAP_INFO[id] ?? { title: id, kind: 'Campaign', lengths: [[40, '40 years']] as Array<[number, string]>, defaultYears: 40 };
+/** Title, kind and campaign lengths (with their calendar years) from the map's own rules. */
+function mapInfo(id: string): { title: string; kind: string; startYear: number; lengths: Array<[number, string]>; defaultYears: number } {
+  const part = isBuiltinMap(id) ? builtinScenario(id as BuiltinMapId) : mapScenarioPart(id);
+  const rules = part?.rules ?? { startYear: 1880, campaignYears: { options: [40], default: 40 } };
+  const opts = [...rules.campaignYears.options].sort((a, b) => a - b);
+  const names = opts.length === 3 ? ['Short', 'Standard', 'Long'] : opts.length === 2 ? ['Standard', 'Long'] : [''];
+  return {
+    title: part?.meta.name ?? id,
+    kind: MAP_KIND[id] ?? 'Custom campaign',
+    startYear: rules.startYear,
+    lengths: opts.map((y, i) => [y, `${names[i] ? `${names[i]} · ` : ''}${y} years (${rules.startYear}–${rules.startYear + y})`]),
+    defaultYears: rules.campaignYears.default,
+  };
 }
 
 function backBtn(app: App, label = 'Back'): HTMLElement {
@@ -78,7 +87,7 @@ export function renderMenu(app: App): HTMLElement {
         ),
       ),
     ),
-    h('div', { class: 'atlas-caption', 'aria-hidden': 'true' }, 'Aldmere, 1640'),
+    h('div', { class: 'atlas-caption', 'aria-hidden': 'true' }, 'Aldmere, 1880'),
   );
   screenCleanup.set(el, () => view.destroy());
   // the menu is usable at once; the atlas behind it is prepared a moment later
@@ -211,7 +220,7 @@ export function renderNewGame(app: App, initialMap: string = DEFAULT_SCENARIO): 
           { class: `map-card ${id === map ? 'selected' : ''}`, type: 'button', role: 'radio', 'aria-checked': id === map ? 'true' : 'false', 'data-map': id },
           c,
           h('span', { class: 'mc-t' }, info.title),
-          h('span', { class: 'mc-s' }, `${info.kind} · ${w.provIds.length} provinces · ${w.nationIds.length} realms`),
+          h('span', { class: 'mc-s' }, `${info.kind} · from ${info.startYear} · ${w.provIds.length} provinces · ${w.nationIds.length} realms`),
         );
         card.addEventListener('click', () => {
           if (id === map) return;
@@ -368,8 +377,10 @@ export function renderLoad(app: App): HTMLElement {
       slots.length
         ? slots.map((s) => {
             const m = s.meta;
-            const known = m && scenarioIds().includes(m.scenario);
-            const def = known && m.nation ? getWorld(m.scenario).nationDefs[m.nation] : null;
+            const registered = !!m && scenarioIds().includes(m.scenario);
+            // a save of a custom map carries the map itself
+            const known = registered || !!m?.customMap;
+            const def = registered && m.nation ? getWorld(m.scenario).nationDefs[m.nation] : null;
             const why = !m ? 'This save cannot be read.' : !known ? `This save uses a map ("${m.scenario}") that this version does not include.` : null;
             return h(
               'div',
@@ -379,11 +390,15 @@ export function renderLoad(app: App): HTMLElement {
                 'div',
                 { class: 'grow' },
                 h('div', { class: 'sv-t' }, m ? m.nationName : s.key),
-                h('div', { class: 'sv-s' }, m ? `${mapInfo(m.scenario).title} · ${m.date} · saved ${new Date(m.savedAt).toLocaleString()}` : 'Unreadable save'),
+                h('div', { class: 'sv-s' }, m ? `${m.mapName ?? (isBuiltinMap(m.scenario) ? mapInfo(m.scenario).title : m.scenario)} · ${m.date} · saved ${new Date(m.savedAt).toLocaleString()}` : 'Unreadable save'),
                 h('div', { class: 'sv-k' }, s.key.startsWith('autosave') ? 'Autosave' : s.key.replace('slot-', 'Slot ')),
                 why ? h('div', { class: 'small bad' }, why) : null,
+                !why && s.schema !== null && s.schema < SCHEMA_VERSION
+                  ? h('div', { class: 'small muted' }, `Made by an earlier version (save format ${s.schema}). It is converted to the current rules when loaded, and you are told what changed; export it first to keep the original.`)
+                  : null,
               ),
               button('Load', () => void app.load(s.key), { cls: 'primary', disabled: why }),
+              button('', () => void app.store.get(s.key).then((text) => text && downloadText(`crown-frontier-${s.key}.json`, text)), { cls: 'icon quiet', icon: 'download', title: 'Export this save to a file' }),
               button('', () => confirmDialog(app, 'Delete this save?', `${m ? `${m.nationName}, ${m.date}` : s.key} will be removed from this browser. This cannot be undone.`, () => void app.store.remove(s.key).then(refresh), 'Delete'), { cls: 'icon quiet', icon: 'close', title: 'Delete this save' }),
             );
           })
@@ -581,7 +596,7 @@ export function openMenuDialog(app: App): void {
         app.showScreen(renderHowTo(app));
       }, { icon: 'help' }),
     ),
-    h('p', { class: 'small muted', style: 'margin-top:12px' }, `Saves are stored in this browser (${app.store.mode}); export to keep a copy elsewhere. Save format ${SCHEMA_VERSION}.`),
+    h('p', { class: 'small muted', style: 'margin-top:12px' }, `Saves are stored in this browser (${app.store.mode}); export to keep a copy elsewhere. Game version ${__APP_VERSION__}, save format ${SCHEMA_VERSION}.`),
   ];
   const resume = button('Resume', () => close(), { cls: 'primary' });
   const quit = button('Save and quit to menu', () => {

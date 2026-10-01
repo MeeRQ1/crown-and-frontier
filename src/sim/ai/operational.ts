@@ -4,11 +4,11 @@
 // assignment with commitment, staging and merging before attacks (Normal/Hard),
 // forecast checks before engaging, and withdrawal from overwhelming threats.
 
-import { C, UNITS } from '../config';
+import { C, UNITS, UNIT_TYPES } from '../config';
 import { PERSONALITIES } from '../data/personalities';
 import { forecastBattle } from '../combat';
 import { grossIncome } from '../economy';
-import { armyStrength, maxMorale, recruitProblem, unitCost } from '../military';
+import { armyStrength, maxMorale, recruitProblem, unitCost, unitUnlocked } from '../military';
 import { nationMods } from '../modifiers';
 import { findPath } from '../movement';
 import {
@@ -26,20 +26,20 @@ import {
 import { supplyAt, supplyDistances } from '../supply';
 import type { Army, NationId, ProvinceId, UnitType } from '../types';
 import { diffOf, hostileArmiesAt, issue, pathVia, reachFrom, sumStrength, threatAround, type Reach } from './common';
+import { navalOps } from './navy';
 
 function regimentsByType(sim: Sim, nid: NationId): Record<UnitType, number> {
-  const out: Record<UnitType, number> = { foot: 0, horse: 0, guns: 0 };
+  const out: Record<UnitType, number> = { infantry: 0, cavalry: 0, artillery: 0, engineers: 0, armour: 0 };
   for (const a of armiesOf(sim, nid)) for (const r of a.regiments) out[r.type]++;
   for (const pid of sim.world.provIds) for (const o of sim.state.provinces[pid].recruits) if (o.nation === nid) out[o.unit]++;
   return out;
 }
 
 function hopsToEnemy(sim: Sim, nid: NationId, pid: ProvinceId): number {
-  const h = sim.world.hops[pid];
   let best = 99;
   for (const q of sim.world.provIds) {
     const c = sim.state.provinces[q].controller;
-    if (c && atWar(sim, nid, c)) best = Math.min(best, h[q] ?? 99);
+    if (c && atWar(sim, nid, c)) best = Math.min(best, sim.world.hop(pid, q) ?? 99);
   }
   return best;
 }
@@ -73,21 +73,25 @@ function recruit(sim: Sim, nid: NationId): void {
   const n = st.nations[nid];
   const d = diffOf(sim);
   const counts = regimentsByType(sim, nid);
-  let total = counts.foot + counts.horse + counts.guns;
+  let total = UNIT_TYPES.reduce((t, u) => t + counts[u], 0);
   const war = warsOf(sim, nid).length > 0;
-  // shrink an army that is too costly for the treasury in peace
-  if (!war && total > n.ai.armyTarget + 2 && n.lastMonth.net < 0) {
+  // shrink an army that is too costly for the treasury in peace; when bankruptcy is
+  // a few months away at the current deficit, stand down the smallest army even at
+  // war (bankruptcy dissolves a fifth of the regiments anyway, and costs far more)
+  const net = n.lastMonth.net;
+  const broke = n.treasury < 0 && net < 0 && (Math.max(5, grossIncome(n.lastMonth)) * C.economy.creditMonths + n.treasury) / -net <= 4;
+  if ((broke || !war) && total > n.ai.armyTarget + (broke ? 0 : 2) && n.lastMonth.net < 0) {
     const smallest = armiesOf(sim, nid)
-      .filter((a) => !a.battle && !a.retreating)
+      .filter((a) => !a.battle && !a.retreating && !a.embarked)
       .sort((a, b) => a.regiments.length - b.regiments.length || (a.id < b.id ? -1 : 1))[0];
-    if (smallest && smallest.regiments.length <= total - n.ai.armyTarget) issue(sim, { type: 'disband', nation: nid, army: smallest.id }, `Disbanded ${smallest.name} to balance the budget`);
+    if (smallest && (broke || smallest.regiments.length <= total - n.ai.armyTarget)) issue(sim, { type: 'disband', nation: nid, army: smallest.id }, `Disbanded ${smallest.name} to balance the budget`);
     return;
   }
-  const comp = PERSONALITIES[n.ai.personality].composition;
+  const comp = targetComposition(sim, nid);
   const buffer = Math.max(15, grossIncome(n.lastMonth) * (war ? 0.2 : 0.4));
   for (let i = 0; i < d.recruitPerWeek; i++) {
     if (total >= n.ai.armyTarget) return;
-    const want = (['foot', 'horse', 'guns'] as UnitType[])
+    const want = UNIT_TYPES.filter((t) => comp[t] > 0)
       .map((t) => ({ t, deficit: comp[t] * (total + 1) - counts[t] }))
       .sort((a, b) => b.deficit - a.deficit || (a.t < b.t ? -1 : 1));
     let placed = false;
@@ -106,6 +110,28 @@ function recruit(sim: Sim, nid: NationId): void {
     }
     if (!placed) return;
   }
+}
+
+/**
+ * The mix the realm aims for: its personality's composition, with units it has
+ * not unlocked (or cannot fuel or build) folded into infantry, and cavalry
+ * halved once machine guns exist anywhere (era III).
+ */
+export function targetComposition(sim: Sim, nid: NationId): Record<UnitType, number> {
+  const base = PERSONALITIES[sim.state.nations[nid].ai.personality].composition;
+  const out = { ...base };
+  const n = sim.state.nations[nid];
+  const fold = (t: UnitType) => {
+    out.infantry += out[t];
+    out[t] = 0;
+  };
+  if (!unitUnlocked(sim, nid, 'engineers')) fold('engineers');
+  if (!unitUnlocked(sim, nid, 'armour') || n.shortages.includes('oil') || n.shortages.includes('rubber')) fold('armour');
+  if (Object.values(sim.state.nations).some((x) => x.alive && x.research.done.includes('machine_guns'))) {
+    out.infantry += out.cavalry / 2;
+    out.cavalry /= 2;
+  }
+  return out;
 }
 
 // ───────────────────────────── Movement helpers ─────────────────────────────
@@ -183,9 +209,9 @@ function peaceOps(sim: Sim, nid: NationId, armies: Army[]): void {
     // detach one regiment from the nearest army with at least 3 regiments
     const donor = free
       .filter((a) => a.regiments.length >= 3 && !a.battle && !a.retreating)
-      .sort((a, b) => (sim.world.hops[a.location][pid] ?? 99) - (sim.world.hops[b.location][pid] ?? 99) || (a.id < b.id ? -1 : 1))[0];
+      .sort((a, b) => (sim.world.hop(a.location, pid) ?? 99) - (sim.world.hop(b.location, pid) ?? 99) || (a.id < b.id ? -1 : 1))[0];
     if (!donor) break;
-    const type: UnitType = donor.regiments.some((r) => r.type === 'foot') ? 'foot' : donor.regiments[0].type;
+    const type: UnitType = donor.regiments.some((r) => r.type === 'infantry') ? 'infantry' : donor.regiments[0].type;
     const r = issue(sim, { type: 'split', nation: nid, army: donor.id, counts: { [type]: 1 } });
     if (!r.ok) break;
     const g = st.armies[`a${st.counters.army}`];
@@ -335,7 +361,7 @@ function warOps(sim: Sim, nid: NationId, armies: Army[]): void {
   const covered = new Map<ProvinceId, number>();
   for (const a of armies) {
     if (!st.armies[a.id] || !assigned.has(a.id)) continue;
-    const post = posts.find((p) => p.post === a.location || (sim.world.hops[p.post]?.[a.location] ?? 99) <= 1);
+    const post = posts.find((p) => p.post === a.location || (sim.world.hop(p.post, a.location) ?? 99) <= 1);
     if (post) covered.set(post.post, (covered.get(post.post) ?? 0) + armyStrength(sim, a));
   }
   for (const a of armies) {
@@ -389,7 +415,7 @@ export function frontPosts(sim: Sim, nid: NationId): Array<{ enemy: NationId; po
     for (const a of armiesOf(sim, e)) {
       if (a.retreating) continue;
       let d = 99;
-      for (const p of border) d = Math.min(d, sim.world.hops[a.location]?.[p] ?? 99);
+      for (const p of border) d = Math.min(d, sim.world.hop(a.location, p) ?? 99);
       if (d <= 3) {
         threat += armyStrength(sim, a);
         near.push(a.location);
@@ -399,7 +425,7 @@ export function frontPosts(sim: Sim, nid: NationId): Array<{ enemy: NationId; po
     // the post: closest border province to their armies, preferring forts and development
     const score = (p: ProvinceId) => {
       let d = 99;
-      for (const q of near) d = Math.min(d, sim.world.hops[p]?.[q] ?? 99);
+      for (const q of near) d = Math.min(d, sim.world.hop(p, q) ?? 99);
       return d * 3 - st.provinces[p].fort * 2 - st.provinces[p].dev * 0.3;
     };
     const post = [...border].sort((x, y) => score(x) - score(y) || (x < y ? -1 : 1))[0];
@@ -411,8 +437,9 @@ export function frontPosts(sim: Sim, nid: NationId): Array<{ enemy: NationId; po
 /** Weekly operational pass for one AI realm. */
 export function operational(sim: Sim, nid: NationId): void {
   recruit(sim, nid);
+  navalOps(sim, nid);
   const armies = armiesOf(sim, nid)
-    .filter((a) => !a.battle && !a.retreating)
+    .filter((a) => !a.battle && !a.retreating && !a.embarked && a.task !== 'invasion')
     .sort((a, b) => (a.id < b.id ? -1 : 1));
   if (!armies.length) return;
   if (enemiesOf(sim, nid).length) warOps(sim, nid, armies);

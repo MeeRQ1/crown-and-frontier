@@ -3,13 +3,15 @@
 // rotate between two slots so a failed or interrupted write never destroys the
 // only copy. Browser saves live per origin and are not synced across devices.
 
-import { peekMeta, type SaveMeta } from '../sim/save';
+import { peekMeta, peekSchema, type SaveMeta } from '../sim/save';
 
 export type StoreMode = 'indexeddb' | 'localstorage' | 'memory';
 
 export interface SlotInfo {
   key: string;
   meta: SaveMeta | null;
+  /** save format number (older formats are converted when loaded) */
+  schema: number | null;
   size: number;
 }
 
@@ -148,7 +150,7 @@ export class SaveStore {
     const out: SlotInfo[] = [];
     for (const key of keys.sort()) {
       const text = await this.get(key);
-      if (text) out.push({ key, meta: peekMeta(text), size: text.length });
+      if (text) out.push({ key, meta: peekMeta(text), schema: peekSchema(text), size: text.length });
     }
     return out;
   }

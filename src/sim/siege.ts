@@ -4,13 +4,16 @@
 // not retreating) in a province whose controller it is at war with besieges it:
 //   no fort: 100 progress in 2 weeks
 //   fort L : 100 progress in 10*L weeks, requires >= 2*L regiments present
-//   x (1 + 0.25 per guns regiment, max 6) x (1 + siege tech) x 0.5 if unsupplied
+//   x (1 + 0.25 per artillery regiment, max 6) x (1 + 0.5 per engineer regiment, max 2)
+//   x (1 + siege tech) x 0.5 if unsupplied
 //   x 2 when the legal owner (or its friend) is retaking its own province
 // At 100 the controller changes (to the legal owner if the besiegers are not at
 // war with it). Progress resets if the besiegers leave.
 
 import { C } from './config';
+import { poolCap } from './economy';
 import { cancelRecruits } from './military';
+import { armiesIn } from './index';
 import { nationMods } from './modifiers';
 import { atWar, bump, isFriendly, nationName, notify, provName, type Sim } from './state';
 import { supplyStatus } from './supply';
@@ -25,15 +28,14 @@ export interface SiegeInfo {
   notes: string[];
 }
 
-export function siegeInfo(sim: Sim, pid: ProvinceId): SiegeInfo | null {
+export function siegeInfo(sim: Sim, pid: ProvinceId, battleAt?: Set<ProvinceId>): SiegeInfo | null {
   const st = sim.state;
   const p = st.provinces[pid];
   if (!p.controller) return null;
-  if (Object.values(st.battles).some((b) => b.province === pid)) return null;
+  if (battleAt ? battleAt.has(pid) : Object.values(st.battles).some((b) => b.province === pid)) return null;
   const present: Army[] = [];
-  for (const id of Object.keys(st.armies).sort()) {
-    const a = st.armies[id];
-    if (a.location === pid && !a.retreating && !a.battle && a.path.length === 0 && atWar(sim, a.nation, p.controller)) present.push(a);
+  for (const a of [...armiesIn(sim, pid)].sort((x, y) => (x.id < y.id ? -1 : x.id > y.id ? 1 : 0))) {
+    if (!a.retreating && !a.battle && a.path.length === 0 && atWar(sim, a.nation, p.controller)) present.push(a);
   }
   if (!present.length) return null;
   // lead besieger: the nation with the most regiments present
@@ -42,15 +44,20 @@ export function siegeInfo(sim: Sim, pid: ProvinceId): SiegeInfo | null {
   const lead = [...byNation.entries()].sort((x, y) => y[1] - x[1] || (x[0] < y[0] ? -1 : 1))[0][0];
   const team = present.filter((a) => isFriendly(sim, lead, a.nation));
   const regiments = team.reduce((s, a) => s + a.regiments.length, 0);
-  const guns = team.reduce((s, a) => s + a.regiments.filter((r) => r.type === 'guns').length, 0);
+  const guns = team.reduce((s, a) => s + a.regiments.filter((r) => r.type === 'artillery').length, 0);
   const required = Math.max(1, C.siege.minRegimentsPerLevel * p.fort);
   const notes: string[] = [];
   let rate = p.fort > 0 ? 100 / (C.siege.fortWeeksPerLevel * p.fort) : 100 / C.siege.noFortWeeks;
   if (p.fort > 0) notes.push(`Fort level ${p.fort}: ${C.siege.fortWeeksPerLevel * p.fort} weeks base`);
-  const g = Math.min(C.siege.gunsMax, guns);
+  const sappers = Math.min(C.siege.engineerMax, team.reduce((s, a) => s + a.regiments.filter((r) => r.type === 'engineers').length, 0));
+  if (sappers > 0) {
+    rate *= 1 + C.siege.engineerBonus * sappers;
+    notes.push(`${sappers} engineer regiment(s) +${Math.round(C.siege.engineerBonus * sappers * 100)}%`);
+  }
+  const g = Math.min(C.siege.artilleryMax, guns);
   if (g && p.fort > 0) {
-    rate *= 1 + C.siege.gunsBonus * g;
-    notes.push(`${g} guns regiment(s) +${Math.round(C.siege.gunsBonus * g * 100)}%`);
+    rate *= 1 + C.siege.artilleryBonus * g;
+    notes.push(`${g} artillery regiment(s) +${Math.round(C.siege.artilleryBonus * g * 100)}%`);
   }
   const sm = nationMods(sim, lead).siege;
   if (sm) {
@@ -75,20 +82,28 @@ export function siegeInfo(sim: Sim, pid: ProvinceId): SiegeInfo | null {
 export function setController(sim: Sim, pid: ProvinceId, ctrl: NationId | null): void {
   const p = sim.state.provinces[pid];
   if (p.controller === ctrl) return;
+  const lostByOwner = p.owner !== null && p.controller === p.owner;
   p.controller = ctrl;
   p.siege = null;
   if (p.recruits.length) cancelRecruits(sim, pid);
   bump(sim);
+  // an occupied province no longer adds to its owner's reserve
+  if (lostByOwner) {
+    const n = sim.state.nations[p.owner!];
+    if (n?.alive) n.manpower = Math.min(n.manpower, poolCap(sim, p.owner!));
+  }
 }
 
 /** Weekly siege progress for all provinces (province id order). */
 export function weeklySieges(sim: Sim): void {
   const st = sim.state;
+  const battleAt = new Set(Object.values(st.battles).map((b) => b.province));
   for (const pid of sim.world.provIds) {
     const p = st.provinces[pid];
-    const info = siegeInfo(sim, pid);
+    // only provinces with armies standing in them can be besieged
+    const info = armiesIn(sim, pid).length ? siegeInfo(sim, pid, battleAt) : null;
     if (!info) {
-      if (p.siege && !Object.values(st.battles).some((b) => b.province === pid)) p.siege = null;
+      if (p.siege && !battleAt.has(pid)) p.siege = null;
       continue;
     }
     if (!p.siege || p.siege.nation !== info.nation) p.siege = { nation: info.nation, progress: 0 };

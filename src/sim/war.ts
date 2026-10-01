@@ -25,8 +25,11 @@ import {
   type OpinionPart,
 } from './diplomacy';
 import { poolCap, stockpileCap } from './economy';
+import { removeAir } from './air';
 import { cancelRecruits, removeArmy } from './military';
+import { removeNavy } from './naval';
 import { pruneBattles } from './combat';
+import { touchArmies } from './index';
 import { nationMods } from './modifiers';
 import { canEnter, findPath } from './movement';
 import {
@@ -133,6 +136,7 @@ export function declareWar(sim: Sim, attacker: NationId, target: NationId, goal:
     dominantMonths: 0,
   };
   st.wars[w.id] = w;
+  bump(sim);
   const an = st.nations[attacker];
   an.stats.warsDeclared++;
   addMemory(sim, target, attacker, 'war', -50, 0.4);
@@ -140,7 +144,7 @@ export function declareWar(sim: Sim, attacker: NationId, target: NationId, goal:
     an.trust = Math.max(0, an.trust - C.war.conquestTrustLoss);
     for (const nid of aliveNations(sim)) {
       if (nid === attacker || nid === target) continue;
-      const near = ownedProvinces(sim, nid).some((q) => ownedProvinces(sim, target).some((p) => (sim.world.hops[q][p] ?? 99) <= 1));
+      const near = ownedProvinces(sim, nid).some((q) => ownedProvinces(sim, target).some((p) => (sim.world.hop(q, p) ?? 99) <= 1));
       if (near) addAlarm(sim, nid, attacker, 8);
     }
   }
@@ -401,14 +405,17 @@ export function evaluatePeace(sim: Sim, warId: string, proposer: NationId, targe
 /** Returns occupied provinces between two groups to their owners. */
 function restoreControl(sim: Sim, groupA: NationId[], groupB: NationId[]): void {
   const st = sim.state;
+  let changed = false;
   for (const pid of sim.world.provIds) {
     const p = st.provinces[pid];
     if (!p.owner || !p.controller || p.owner === p.controller) continue;
     if ((groupA.includes(p.owner) && groupB.includes(p.controller)) || (groupB.includes(p.owner) && groupA.includes(p.controller))) {
       p.controller = p.owner;
       p.siege = null;
+      changed = true;
     }
   }
+  if (changed) bump(sim);
 }
 
 export function applyPeace(sim: Sim, warId: string, proposer: NationId, target: NationId, terms: PeaceTerms): void {
@@ -453,6 +460,7 @@ export function applyPeace(sim: Sim, warId: string, proposer: NationId, target: 
         notify(sim, n, 'urgent', 'peace', `Peace: the ${w.name} is over (${desc}).`);
       }
       delete st.wars[warId];
+      bump(sim);
     } else {
       const minor = [w.attackerLead, w.defenderLead].includes(proposer) ? target : proposer;
       const lead = minor === proposer ? target : proposer;
@@ -464,6 +472,7 @@ export function applyPeace(sim: Sim, warId: string, proposer: NationId, target: 
       }
       w.attackers = w.attackers.filter((n) => n !== minor);
       w.defenders = w.defenders.filter((n) => n !== minor);
+      bump(sim);
       st.truces.push({ a: minor, b: lead, until: st.tick + months(C.diplomacy.truceMonths) });
       for (const n of [minor, lead]) {
         if (!st.nations[n]?.alive) continue;
@@ -475,9 +484,27 @@ export function applyPeace(sim: Sim, warId: string, proposer: NationId, target: 
     }
   }
   notify(sim, null, 'low', 'peace', `${nationName(sim, proposer)} and ${nationName(sim, target)} made peace: ${desc}.`);
+  dropStaleProposals(sim);
   relocateArmies(sim);
   pruneBattles(sim);
   bump(sim);
+}
+
+/**
+ * Removes peace offers and calls to arms that a peace has made meaningless: the
+ * war is over, or the realm that sent or received the offer has left it.
+ */
+export function dropStaleProposals(sim: Sim): void {
+  const st = sim.state;
+  st.proposals = st.proposals.filter((p) => {
+    if (p.kind !== 'peace' && p.kind !== 'callToArms') return true;
+    const w = st.wars[p.war!];
+    if (!w) return false;
+    if (p.kind === 'callToArms') return sideOf(w, p.from) !== null;
+    const a = sideOf(w, p.from);
+    const b = sideOf(w, p.to);
+    return a !== null && b !== null && a !== b;
+  });
 }
 
 /** Ends a war outright with a white peace (forced settlements, eliminated leaders). */
@@ -494,6 +521,8 @@ export function endWar(sim: Sim, warId: string, reason: string): void {
     notify(sim, n, 'urgent', 'peace', `The ${w.name} has ended: ${reason}`);
   }
   delete st.wars[warId];
+  bump(sim);
+  dropStaleProposals(sim);
   relocateArmies(sim);
   pruneBattles(sim);
   bump(sim);
@@ -504,6 +533,7 @@ export function relocateArmies(sim: Sim): void {
   const st = sim.state;
   for (const id of Object.keys(st.armies).sort()) {
     const a = st.armies[id];
+    if (a?.embarked) continue; // at sea: its fleet decides where it lands
     if (!a || canEnter(sim, a.nation, a.location)) {
       if (a && a.path.length && !a.retreating && !canEnter(sim, a.nation, a.path[a.path.length - 1])) {
         notify(sim, a.nation, 'normal', 'move', `${a.name} halted: the peace closed its route to ${provName(sim, a.path[a.path.length - 1])}.`, { army: a.id, province: a.location });
@@ -512,12 +542,11 @@ export function relocateArmies(sim: Sim): void {
       }
       continue;
     }
-    const hops = sim.world.hops[a.location];
     let best: ProvinceId | null = null;
     let bd = Infinity;
     for (const pid of sim.world.provIds) {
       if (st.provinces[pid].controller !== a.nation) continue;
-      const d = hops[pid] ?? Infinity;
+      const d = sim.world.hop(a.location, pid) ?? Infinity;
       if (d < bd || (d === bd && best !== null && pid < best)) {
         bd = d;
         best = pid;
@@ -528,6 +557,7 @@ export function relocateArmies(sim: Sim): void {
       continue;
     }
     a.location = best;
+    touchArmies(sim);
     a.path = [];
     a.progress = 0;
     a.retreating = false;
@@ -548,6 +578,7 @@ export function transferProvince(sim: Sim, pid: ProvinceId, to: NationId): void 
   p.owner = to;
   p.controller = to;
   p.siege = null;
+  bump(sim);
   p.integration = p.claims.includes(to) ? C.integration.conqueredClaim : C.integration.conquered;
   p.unrest = Math.max(p.unrest, 30);
   p.revoltUntil = 0;
@@ -599,6 +630,8 @@ export function eliminate(sim: Sim, nid: NationId, by: NationId | null): void {
   n.eliminatedTick = st.tick;
   n.capital = null;
   for (const a of armiesOf(sim, nid)) removeArmy(sim, a.id);
+  removeNavy(sim, nid);
+  removeAir(sim, nid);
   for (const pid of sim.world.provIds) {
     const p = st.provinces[pid];
     p.recruits = p.recruits.filter((r) => r.nation !== nid);
@@ -606,6 +639,7 @@ export function eliminate(sim: Sim, nid: NationId, by: NationId | null): void {
     if (p.controller === nid) p.controller = p.owner;
     if (p.siege?.nation === nid) p.siege = null;
   }
+  bump(sim);
   st.treaties = st.treaties.filter((t) => t.a !== nid && t.b !== nid);
   st.envoys = st.envoys.filter((e) => e.from !== nid && e.to !== nid);
   st.fabrications = st.fabrications.filter((f) => f.nation !== nid);
@@ -622,6 +656,7 @@ export function eliminate(sim: Sim, nid: NationId, by: NationId | null): void {
     } else {
       w.attackers = w.attackers.filter((x) => x !== nid);
       w.defenders = w.defenders.filter((x) => x !== nid);
+      bump(sim);
     }
   }
   notify(sim, null, 'urgent', 'eliminated', `${sim.world.nationDefs[nid].name} has been destroyed${by ? ` by ${nationName(sim, by)}` : ''}.`);
@@ -642,14 +677,15 @@ export function returnStrandedArmies(sim: Sim): void {
     if (a.battle || a.retreating || a.path.length) continue;
     const ctrl = st.provinces[a.location].controller;
     if (ctrl === a.nation || (ctrl && atWar(sim, a.nation, ctrl))) continue;
-    const hops = sim.world.hops[a.location];
+    const here = a.location;
     const home = sim.world.provIds
       .filter((pid) => st.provinces[pid].controller === a.nation)
-      .sort((x, y) => (hops[x] ?? Infinity) - (hops[y] ?? Infinity) || (x < y ? -1 : 1));
+      .sort((x, y) => (sim.world.hop(here, x) ?? Infinity) - (sim.world.hop(here, y) ?? Infinity) || (x < y ? -1 : 1));
     if (!home.length) continue;
     if (canEnter(sim, a.nation, a.location) && home.some((pid) => findPath(sim, a.nation, a.location, pid))) continue;
     const from = a.location;
     a.location = home[0];
+    touchArmies(sim);
     a.progress = 0;
     notify(sim, a.nation, 'normal', 'move', `${a.name} had no legal route home from ${provName(sim, from)} and returned to ${provName(sim, home[0])} under safe conduct.`, { army: a.id, province: home[0] });
     bump(sim);

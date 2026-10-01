@@ -57,7 +57,7 @@ export const MODES: ModeDef[] = [
     label: 'Economy',
     icon: 'economy',
     key: 'R',
-    explain: 'Crowns each province yields its owner per month (development, trade goods, integration, unrest and occupation all count). Close up, the development level is written on each province.',
+    explain: 'Crowns each province yields its owner per month (development, population, integration, unrest and occupation all count). Close up, the development level is written on each province.',
     ramp: { stops: ['#efe6cf', '#e3c276', '#c98a3a', '#8e4a22'], from: '0', to: '12+ crowns / month' },
   },
   {
@@ -135,13 +135,12 @@ export function buildContext(sim: Sim, mode: MapMode, viewer: NationId | null): 
     const hostile = enemiesOf(sim, viewer);
     const threat: Record<ProvinceId, number> = {};
     let max = 0;
-    const hops = sim.world.hops;
     const hostileArmies = Object.values(st.armies).filter((a) => hostile.includes(a.nation));
     for (const pid of sim.world.provIds) {
       if (st.provinces[pid].owner !== viewer) continue;
       let t = 0;
       for (const a of hostileArmies) {
-        const d = hops[pid][a.location];
+        const d = sim.world.hop(pid, a.location);
         if (d !== undefined && d <= 2) t += armyStrength(sim, a) * (d === 0 ? 1.2 : d === 1 ? 1 : 0.6);
       }
       threat[pid] = t;

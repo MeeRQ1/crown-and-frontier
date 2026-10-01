@@ -3,7 +3,7 @@
 // rules for the current state before they are suggested.
 
 import { activeProjects, buildProblem, PROJECT_LABELS } from '../sim/construction';
-import { recruitProblem } from '../sim/military';
+import { recruitProblem, unitCost } from '../sim/military';
 import { armiesOf, ownedProvinces, provName } from '../sim/state';
 import type { ProjectKind } from '../sim/types';
 import type { App } from './app';
@@ -14,6 +14,14 @@ interface Step {
   text: (app: App) => (string | Node)[];
   done?: (app: App) => boolean;
   show?: (app: App) => void;
+}
+
+function recruitText(c: ReturnType<typeof unitCost>): string {
+  const parts = [`${c.crowns} crowns`];
+  if (c.materiel) parts.push(`${c.materiel} materiel`);
+  for (const [r, v] of Object.entries(c.resources)) if (v) parts.push(`${v} ${r}`);
+  parts.push(`${c.manpower.toLocaleString('en-GB')} men from the manpower pool`);
+  return parts.join(', ');
 }
 
 function suggestProject(app: App): { pid: string; kind: ProjectKind } | { reason: string } {
@@ -67,10 +75,10 @@ const STEPS: Step[] = [
     text: (app) => {
       const sim = app.sim!;
       const cap = sim.state.nations[app.player!].capital!;
-      const prob = recruitProblem(sim, app.player!, cap, 'foot');
+      const prob = recruitProblem(sim, app.player!, cap, 'infantry');
       return prob
         ? [`Recruiting in ${provName(sim, cap)} is not possible right now: ${prob} You can skip this step.`]
-        : [`In ${provName(sim, cap)}, press “Raise Foot”: 20 crowns, 5 supplies and 1,000 men from the manpower pool. Regiments cost upkeep every month.`];
+        : [`In ${provName(sim, cap)}, press “Raise Infantry”: ${recruitText(unitCost(sim, app.player!, 'infantry'))}. Regiments cost upkeep every month, and replacing their losses later uses materiel from your factories.`];
     },
     done: (app) => app.sim!.world.provIds.some((p) => app.sim!.state.provinces[p].recruits.some((r) => r.nation === app.player)),
     show: (app) => app.selectProvince(app.sim!.state.nations[app.player!].capital!, true),

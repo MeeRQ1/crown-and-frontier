@@ -564,7 +564,7 @@ canvas.map.dragging { cursor: grabbing; }
 }
 .inspector.closed { transform: translateX(24px); opacity: 0; pointer-events: none; visibility: hidden; }
 .inspector .ins-head { position: relative; display: flex; gap: var(--s5); align-items: center; padding: var(--s5) var(--s6) var(--s4); border-bottom: 1px solid var(--line); }
-.inspector .ins-head .titles { min-width: 0; flex: 1; }
+.inspector .ins-head .titles { min-width: 0; flex: 1; padding-right: 26px; }
 .inspector .ins-head h2 { margin: 0; font-size: var(--fs-xl); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .inspector .ins-head .sub { color: var(--text-2); font-size: var(--fs-sm); }
 .inspector .ins-head .close { position: absolute; right: var(--s3); top: var(--s3); }
@@ -976,3 +976,7 @@ table.data tr.me td { background: var(--brass-soft); }
 
 /* with a ledger open, map modes show icons (the active one keeps its label) */
 .drawer:not(.closed) ~ .modes .mode-bar button:not(.active) .lbl { display: none; }
+
+/* inline link-style buttons (zone and fleet references inside cards) */
+.linkish { background: none; border: 0; padding: 0; font: inherit; color: var(--brass); text-decoration: underline; text-underline-offset: 2px; cursor: pointer; }
+.linkish:hover { color: var(--paper-100, #fff); }

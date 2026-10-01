@@ -17,6 +17,7 @@ import {
   borders,
   bump,
   clamp,
+  dateOf,
   enemiesOf,
   hasTreaty,
   months,
@@ -75,36 +76,52 @@ export interface OpinionPart {
   value: number;
 }
 
+/**
+ * Sums the terms of `a`'s opinion of `b` in a fixed order. With `parts` it
+ * also records each term with its label (for explanations); without, it only
+ * adds them up, which is what most rules need.
+ */
+function opinionSum(sim: Sim, a: NationId, b: NationId, parts?: OpinionPart[]): number {
+  let v = 0;
+  const add = (label: () => string, value: number) => {
+    v += value;
+    parts?.push({ label: label(), value });
+  };
+  for (const m of memoriesOf(sim, a, b)) if (Math.abs(m.value) >= 0.5) add(() => MEMORY_LABELS[m.kind] ?? m.kind, m.value);
+  if (borders(sim, a, b)) add(() => 'Border friction', C.diplomacy.borderFriction);
+  if (hasTreaty(sim, 'alliance', a, b)) add(() => 'Defensive alliance', C.diplomacy.allianceOpinion);
+  if (hasTreaty(sim, 'nap', a, b)) add(() => 'Non-aggression pact', C.diplomacy.napOpinion);
+  if (hasTreaty(sim, 'trade', a, b)) add(() => 'Trade agreement', C.diplomacy.tradeOpinion);
+  const ea = enemiesOf(sim, a);
+  if (ea.length) {
+    const eb = enemiesOf(sim, b);
+    if (ea.some((x) => eb.includes(x))) add(() => 'Common enemy', C.diplomacy.commonEnemy);
+  }
+  const alarm = sim.state.alarm[a]?.[b] ?? 0;
+  if (alarm >= 1) add(() => `Alarmed by their conquests or power (${Math.round(alarm)})`, -alarm * C.diplomacy.alarmOpinion);
+  const trust = sim.state.nations[b].trust;
+  const tv = (trust - 50) * 0.3;
+  if (Math.abs(tv) >= 0.5) add(() => `Their reputation (trust ${Math.round(trust)})`, tv);
+  const om = nationMods(sim, b).opinion;
+  if (om) add(() => 'Their diplomatic standing', om);
+  if (claimsOn(sim, a, b).length) add(() => 'They hold land we claim', -10);
+  if (claimsOn(sim, b, a).length) add(() => 'They claim our land', -5);
+  if (atWar(sim, a, b)) add(() => 'At war', -40);
+  if (sim.state.coalitions.some((c) => c.target === b && c.members.includes(a))) add(() => 'Coalition against them', -20);
+  return v;
+}
+
 /** Why `a` regards `b` the way it does. */
 export function opinionParts(sim: Sim, a: NationId, b: NationId): OpinionPart[] {
   const parts: OpinionPart[] = [];
   if (a === b) return parts;
-  for (const m of memoriesOf(sim, a, b)) if (Math.abs(m.value) >= 0.5) parts.push({ label: MEMORY_LABELS[m.kind] ?? m.kind, value: m.value });
-  if (borders(sim, a, b)) parts.push({ label: 'Border friction', value: C.diplomacy.borderFriction });
-  if (hasTreaty(sim, 'alliance', a, b)) parts.push({ label: 'Defensive alliance', value: C.diplomacy.allianceOpinion });
-  if (hasTreaty(sim, 'nap', a, b)) parts.push({ label: 'Non-aggression pact', value: C.diplomacy.napOpinion });
-  if (hasTreaty(sim, 'trade', a, b)) parts.push({ label: 'Trade agreement', value: C.diplomacy.tradeOpinion });
-  const ea = enemiesOf(sim, a);
-  const eb = enemiesOf(sim, b);
-  if (ea.some((x) => eb.includes(x))) parts.push({ label: 'Common enemy', value: C.diplomacy.commonEnemy });
-  const alarm = sim.state.alarm[a]?.[b] ?? 0;
-  if (alarm >= 1) parts.push({ label: `Alarmed by their conquests or power (${Math.round(alarm)})`, value: -alarm * C.diplomacy.alarmOpinion });
-  const trust = sim.state.nations[b].trust;
-  const tv = (trust - 50) * 0.3;
-  if (Math.abs(tv) >= 0.5) parts.push({ label: `Their reputation (trust ${Math.round(trust)})`, value: tv });
-  const om = nationMods(sim, b).opinion;
-  if (om) parts.push({ label: 'Their diplomatic standing', value: om });
-  if (claimsOn(sim, a, b).length) parts.push({ label: 'They hold land we claim', value: -10 });
-  if (claimsOn(sim, b, a).length) parts.push({ label: 'They claim our land', value: -5 });
-  if (atWar(sim, a, b)) parts.push({ label: 'At war', value: -40 });
-  if (sim.state.coalitions.some((c) => c.target === b && c.members.includes(a))) parts.push({ label: 'Coalition against them', value: -20 });
+  opinionSum(sim, a, b, parts);
   return parts;
 }
 
 export function opinion(sim: Sim, a: NationId, b: NationId): number {
-  let v = 0;
-  for (const p of opinionParts(sim, a, b)) v += p.value;
-  return clamp(Math.round(v), -100, 100);
+  if (a === b) return 0;
+  return clamp(Math.round(opinionSum(sim, a, b)), -100, 100);
 }
 
 const claimIndex = new WeakMap<object, { key: string; map: Map<string, ProvinceId[]> }>();
@@ -367,7 +384,7 @@ export function alarmForConquest(sim: Sim, conqueror: NationId, pid: ProvinceId)
   for (const nid of aliveNations(sim)) {
     if (nid === conqueror || hasTreaty(sim, 'alliance', nid, conqueror)) continue;
     let d = Infinity;
-    for (const q of ownedProvinces(sim, nid)) d = Math.min(d, sim.world.hops[q][pid] ?? Infinity);
+    for (const q of ownedProvinces(sim, nid)) d = Math.min(d, sim.world.hop(q, pid) ?? Infinity);
     const prox = d <= 1 ? 1 : d === 2 ? 0.6 : d === 3 ? 0.3 : d === 4 ? 0.15 : 0;
     if (!prox) continue;
     const add = (dev + 3) * prox * size * C.diplomacy.alarmConquestMul * gen;
@@ -458,7 +475,8 @@ function updateCoalitions(sim: Sim): void {
     }
     for (const n of alarmed) {
       if (st.nations[n].isPlayer && !(c?.members.includes(n)) && (aiAlarmed.length >= 1 || c)) {
-        if ((st.tick / 4) % 12 === 0)
+        // once a year, in January (the monthly settlement runs in the last week of a month)
+        if (dateOf(sim).month === 0)
           notify(sim, n, 'normal', 'coalition', `Alarm about ${nationName(sim, target)} is high: you may join a coalition against them (Diplomacy).`);
       }
     }
