@@ -9,6 +9,7 @@ import { createServer, type Server } from 'node:http';
 import { extname, join, normalize } from 'node:path';
 import { inflateRawSync } from 'node:zlib';
 import { chromium, type Browser, type Page } from 'playwright';
+import { seaAirSave } from './sea-air-save';
 
 const DIST = 'dist';
 const ZIP = 'release/crown-and-frontier-web.zip';
@@ -161,6 +162,187 @@ async function mapChoice(browser: Browser, base: string): Promise<void> {
   await page.close();
 }
 
+/** Navy and air through the interface: blockade, air superiority over a battle, a landing. */
+async function seaAirFlow(browser: Browser, base: string): Promise<void> {
+  const { text, ids } = seaAirSave();
+  const path = join('reports', 'tmp', 'sea-air.json');
+  mkdirSync(join('reports', 'tmp'), { recursive: true });
+  writeFileSync(path, text);
+  const page = await browser.newPage({ viewport: { width: 1366, height: 768 } });
+  const problems = await watch(page);
+  await page.goto(base);
+  await startCampaign(page);
+  await page.getByRole('button', { name: 'Game menu' }).click();
+  const [chooser] = await Promise.all([page.waitForEvent('filechooser'), page.getByRole('button', { name: 'Import file' }).click()]);
+  await chooser.setFiles(path);
+  await page.waitForFunction(() => (window as any).cnf.player === 'ser', null, { timeout: 10000 });
+  await page.evaluate(() => {
+    const app = (window as any).cnf;
+    app.setSpeed(0);
+    document.querySelectorAll<HTMLButtonElement>('.modal-layer:not(.hidden) footer button').forEach((b) => b.click());
+  });
+  // screen point of a province (centred first) or of an army marker
+  const view = async (pid: string) =>
+    page.evaluate((p) => {
+      const app = (window as any).cnf;
+      const c = app.renderer.provinceCenter(p);
+      app.renderer.camera.centerOn(c.x, c.y, Math.max(app.renderer.camera.zoom, app.renderer.camera.zoomForProvincePx(70)), false);
+      app.mapDirty = true;
+    }, pid);
+  const provPoint = (pid: string) =>
+    page.evaluate((p) => {
+      const app = (window as any).cnf;
+      const c = app.renderer.provinceCenter(p);
+      const s = app.renderer.camera.toScreen(c.x, c.y);
+      const r = app.canvas.getBoundingClientRect();
+      return { x: s.x + r.left, y: s.y + r.top };
+    }, pid);
+  const clickProvince = async (pid: string) => {
+    // aim a little off the centre, clear of army markers, and fall back to a scan of the province
+    const p = await page.evaluate((id) => {
+      const app = (window as any).cnf;
+      const r = app.canvas.getBoundingClientRect();
+      const c = app.renderer.provinceCenter(id);
+      const s = app.renderer.camera.toScreen(c.x, c.y);
+      for (let d = 0; d < 80; d += 4) {
+        for (const [dx, dy] of [[0, d], [d, 0], [0, -d], [-d, 0], [d, d], [-d, -d], [d, -d], [-d, d]]) {
+          const x = s.x + dx;
+          const y = s.y + dy;
+          if (app.renderer.provinceAt(x, y) === id && !app.renderer.armyAt(x, y) && !app.renderer.fleetAt(x, y) && !app.renderer.battleAt(x, y)) return { x: x + r.left, y: y + r.top };
+        }
+      }
+      return null;
+    }, pid);
+    if (!p) throw new Error(`no clear point in ${pid}`);
+    await page.mouse.click(p.x, p.y);
+    await page.waitForTimeout(150);
+  };
+  const clickArmy = async (id: string) => {
+    const p = await page.evaluate((a) => {
+      const app = (window as any).cnf;
+      const m = app.renderer.markers.find((x: { army: string }) => x.army === a);
+      const r = app.canvas.getBoundingClientRect();
+      return m ? { x: m.x + m.w / 2 + r.left, y: m.y + m.h / 2 + r.top } : null;
+    }, id);
+    if (!p) throw new Error(`army ${id} has no marker on screen`);
+    await page.mouse.click(p.x, p.y);
+    await page.waitForTimeout(150);
+  };
+  const inspector = () => page.locator('aside.inspector').innerText();
+  void provPoint;
+
+  // ── blockade: the zone card marks Westmere, the fleet card says so, the Military ledger counts it
+  await page.evaluate((z) => {
+    const app = (window as any).cnf;
+    const c = app.renderer.zoneCenter(z);
+    app.renderer.camera.centerOn(c.x, c.y, app.renderer.camera.zoom, false);
+    app.mapDirty = true;
+  }, ids.zone);
+  await page.waitForTimeout(250);
+  const zp = await page.evaluate((z) => {
+    const app = (window as any).cnf;
+    const r = app.canvas.getBoundingClientRect();
+    const c = app.renderer.zoneCenter(z);
+    const s = app.renderer.camera.toScreen(c.x, c.y);
+    for (let d = 0; d < 120; d += 4) for (const [dx, dy] of [[0, d], [d, 0], [0, -d], [-d, 0]]) if (app.renderer.zoneAt(s.x + dx, s.y + dy) === z && !app.renderer.fleetAt(s.x + dx, s.y + dy)) return { x: s.x + dx + r.left, y: s.y + dy + r.top };
+    return null;
+  }, ids.zone);
+  if (zp) await page.mouse.click(zp.x, zp.y);
+  await page.waitForTimeout(200);
+  const zoneText = await inspector();
+  const zoneSel = await page.evaluate(() => (window as any).cnf.selectedZone);
+  const westmereMarked = /\nWestmere\nblockaded/i.test(zoneText);
+  await page.evaluate((f) => (window as any).cnf.selectFleet(f), ids.fleet);
+  await page.waitForTimeout(150);
+  const fleetText = await inspector();
+  await page.keyboard.press('Escape');
+  await page.keyboard.press('m');
+  await page.waitForTimeout(250);
+  const ledger = await page.locator('.drawer:not(.closed)').innerText().catch(() => '');
+  const blockTile = /Blockades\s*[1-9]\d* \/ 0/i.test(ledger) && /We blockade: [^\n]*Westmere/.test(ledger);
+  await page.keyboard.press('Escape');
+  record(
+    'Blockade: clicking the sea shows the blockaded coast, the fleet card says Blockading, the Military ledger counts it',
+    zoneSel === ids.zone && westmereMarked && /Blockading/.test(fleetText) && blockTile,
+    `zone ${zoneSel}: Westmere ${westmereMarked ? 'marked blockaded' : 'not marked'}; fleet card ${/Blockading/.test(fleetText) ? 'Blockading' : 'no tag'}; ledger ${(ledger.match(/We blockade: [^\n]*/) ?? ['no blockade line'])[0]}`,
+  );
+
+  // ── air: ground support over Duncairn, first under the enemy's sky, then under ours
+  const flyMission = async (wing: string, label: RegExp, target: string) => {
+    await view('serenna');
+    await page.waitForTimeout(200);
+    await clickProvince('serenna');
+    await page.locator(`[data-fk="wing-${wing}"]`).click();
+    await page.waitForTimeout(100);
+    await page.getByRole('button', { name: label }).first().click();
+    await view(target);
+    await page.waitForTimeout(200);
+    await clickProvince(target);
+    return page.evaluate((w) => {
+      const x = (window as any).cnf.sim.state.wings[w];
+      return `${x.mission}@${x.target}`;
+    }, wing);
+  };
+  const m1 = await flyMission(ids.attack, /Fly ground support/, 'duncairn');
+  await view('duncairn');
+  await page.waitForTimeout(250);
+  await clickArmy(ids.theirs);
+  const under = await inspector();
+  const theirSky = under.match(/Air support \+(\d+)% \(enemy holds the sky\)/);
+  const fm: string[] = [];
+  for (const f of [ids.f1, ids.f2, ids.f3]) fm.push(await flyMission(f, /Fly air superiority/, 'duncairn'));
+  await view('duncairn');
+  await page.waitForTimeout(250);
+  await clickArmy(ids.theirs);
+  const over = await inspector();
+  const ourSky = over.match(/Air support \+(\d+)% \(air superiority\)/);
+  record(
+    'Air: a wing flies ground support chosen on the map; the attack forecast shows the enemy holding the sky, then our fighters winning it',
+    m1 === 'support@duncairn' && fm.every((x) => x === 'superiority@duncairn') && !!theirSky && !!ourSky && Number(ourSky[1]) > Number(theirSky[1]),
+    `attack wing ${m1}; fighters ${fm.join(', ')}; forecast ${theirSky ? theirSky[0] : 'no enemy-sky note'} → ${ourSky ? ourSky[0] : 'no superiority note'}`,
+  );
+
+  // ── naval invasion: Ship by sea, click the beach, run the weeks until the troops are ashore
+  await view('calvi');
+  await page.waitForTimeout(250);
+  await clickArmy(ids.landing);
+  await page.getByRole('button', { name: /Ship by sea/ }).first().click();
+  await view('westmere');
+  await page.waitForTimeout(250);
+  await clickProvince('westmere');
+  const aboard = await page.evaluate((a) => (window as any).cnf.sim.state.armies[a]?.embarked ?? null, ids.landing);
+  await page.evaluate(() => (window as any).cnf.setSpeed(4));
+  const landed = await page
+    .waitForFunction(
+      (a) => {
+        const app = (window as any).cnf;
+        if (app.speed === 0) {
+          document.querySelectorAll<HTMLButtonElement>('.modal-layer:not(.hidden) footer button').forEach((b) => b.click());
+          app.setSpeed(4);
+        }
+        const army = app.sim.state.armies[a];
+        return app.sim.state.nations.ser.stats.landings > 0 && (!army || !army.embarked);
+      },
+      ids.landing,
+      { timeout: 30000, polling: 100 },
+    )
+    .then(() => true)
+    .catch(() => false);
+  const after = await page.evaluate((a) => {
+    const app = (window as any).cnf;
+    app.setSpeed(0);
+    const army = app.sim.state.armies[a];
+    return { loc: army?.location ?? 'gone', landings: app.sim.state.nations.ser.stats.landings, tick: app.sim.state.tick };
+  }, ids.landing);
+  record(
+    'Naval invasion: Ship by sea, click the beach, the troops sail and land',
+    aboard === ids.fleet && landed && after.loc === 'westmere',
+    `embarked on ${aboard}; landings ${after.landings}; army now in ${after.loc} (week ${after.tick})`,
+  );
+  record('No errors during the navy and air session', problems.length === 0, problems.slice(0, 3).join('; '));
+  await page.close();
+}
+
 async function main(): Promise<void> {
   if (!existsSync(join(DIST, 'index.html'))) throw new Error('dist/ missing: run npm run build');
   const zipFiles = existsSync(ZIP) ? unzip(ZIP) : null;
@@ -169,9 +351,15 @@ async function main(): Promise<void> {
   const browser = await chromium.launch();
   const version = browser.version();
   try {
+    // ONLY=sea-air runs just the navy and air flow (while working on it; no report is written)
+    if (process.env.ONLY === 'sea-air') {
+      await seaAirFlow(browser, `${origin}/`);
+      return;
+    }
     await flow(browser, `${origin}/`, 'Site root');
     await flow(browser, `${origin}${SUB}`, 'Project subpath');
     await mapChoice(browser, `${origin}/`);
+    await seaAirFlow(browser, `${origin}/`);
     if (zipFiles) {
       record('Release ZIP has index.html at its root', zipFiles.has('index.html'), `${zipFiles.size} files`);
       await flow(browser, `${origin}/zip/`, 'Unpacked release ZIP');

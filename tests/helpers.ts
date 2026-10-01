@@ -66,3 +66,45 @@ export function totalMen(sim: Sim, nid?: string): number {
   for (const a of Object.values(sim.state.armies)) if (!nid || a.nation === nid) for (const r of a.regiments) m += r.men;
   return m;
 }
+
+// A coast for the navy and air tests:
+//
+//   a1 ─ a2 ─ b1 ─ b2        land; i1 is b's island, across a strait from a2;
+//    W     M         E       c1 is realm c's island, reached only by sea (zone E)
+//                            sea zones: W (coast a1), M (a2, b1, i1; commands the
+//                            a2–i1 strait), E (b2, c1); W–M–E in a row
+export function seaScenario(): ScenarioDef {
+  return {
+    id: 'test-sea',
+    name: 'Test sea',
+    description: 'synthetic',
+    startYear: 1880,
+    nations: [nation('a', 'a1'), nation('b', 'b1'), nation('c', 'c1')],
+    regions: [{ id: 'a', name: 'A' }, { id: 'b', name: 'B' }, { id: 'c', name: 'C' }],
+    straits: [['a2', 'i1']],
+    rivers: [],
+    provinces: [
+      prov('a1', 'plains', 'a', ['a2'], { port: 1, dev: 6 }),
+      prov('a2', 'plains', 'a', ['a1', 'b1', 'i1'], { port: 1 }),
+      prov('b1', 'plains', 'b', ['a2', 'b2'], { port: 1, dev: 6, factories: 3 }),
+      prov('b2', 'plains', 'b', ['b1'], { port: 1 }),
+      prov('i1', 'plains', 'b', ['a2'], { dev: 2 }),
+      prov('c1', 'plains', 'c', [], { port: 1, dev: 5 }),
+    ],
+    seaZones: [
+      { id: 'zw', name: 'West Water', neighbors: ['zm'], coasts: ['a1'] },
+      { id: 'zm', name: 'Middle Water', neighbors: ['zw', 'ze'], coasts: ['a2', 'b1', 'i1'], straits: [['a2', 'i1']] },
+      { id: 'ze', name: 'East Water', neighbors: ['zm'], coasts: ['b2', 'c1'] },
+    ],
+  };
+}
+
+registerScenario('test-sea', seaScenario);
+
+/** A game on the sea scenario with no armies or fleets (precise setups). */
+export function seaGame(opts: NewGameOptions = {}): Sim {
+  const sim = createGame({ scenario: 'test-sea', seed: 7, playerNation: null, ...opts });
+  sim.state.armies = {};
+  sim.state.fleets = {};
+  return sim;
+}

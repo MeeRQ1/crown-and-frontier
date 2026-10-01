@@ -148,6 +148,8 @@ export interface World {
   regionProvinces: Record<string, ProvinceId[]>;
   /** key `${a}|${b}` with a<b → strait crossing */
   straitSet: Set<string>;
+  /** provinces at either end of a strait (a cheap pre-check before building an edge key) */
+  straitEnds: Set<ProvinceId>;
   /** key `${a}|${b}` with a<b → river border */
   riverSet: Set<string>;
   /** sea zones by id, in map order */
@@ -515,6 +517,8 @@ export interface NationStats {
   navalBattles: number;
   landings: number;
   blockadeWeeks: number;
+  /** weeks with a fleet away from its home waters */
+  seaWeeks: number;
   wingsBuilt: number;
   airMissionWeeks: number;
   bombingWeeks: number;

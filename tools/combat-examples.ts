@@ -88,3 +88,14 @@ function show(title: string, f: ReturnType<typeof forecastBattle>) {
   show('5c. The same armour without oil', forecastBattle(sim, 'b1', [tanks], [d]));
 }
 
+
+// 6–8. The navy and the air arm (tools/sea-air-examples.ts)
+{
+  const { airExamples, blockadeExamples, describeExample, invasionExamples } = await import('./sea-air-examples');
+  console.log('\n## Naval invasion');
+  for (const e of invasionExamples()) console.log('\n' + describeExample(e).join('\n'));
+  console.log('\n## Blockade');
+  for (const e of blockadeExamples()) console.log('\n' + describeExample(e).join('\n'));
+  console.log('\n## Air superiority and ground support');
+  for (const e of airExamples()) console.log('\n' + describeExample(e).join('\n'));
+}

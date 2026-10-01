@@ -300,6 +300,19 @@ export class GeoIndex {
     return v ? (this.zoneIds[v - 1] ?? null) : null;
   }
 
+  private seaClipPath: Path2D | null = null;
+  /** Everything that is not land (for clipping sea-zone tints, even-odd rule). */
+  seaClip(): Path2D {
+    if (this.seaClipPath) return this.seaClipPath;
+    const b = this.bounds;
+    const p = new Path2D();
+    p.rect(b.minX - 1e4, b.minY - 1e4, b.maxX - b.minX + 2e4, b.maxY - b.minY + 2e4);
+    for (const pr of this.provList) p.addPath(pr.path);
+    for (const pk of this.peaks) p.addPath(pk.path);
+    this.seaClipPath = p;
+    return p;
+  }
+
   /** The water of one zone (cell runs; land drawn over it hides the coast cells). */
   zonePath(id: string): Path2D | null {
     const hit = this.zonePathCache.get(id);

@@ -29,7 +29,7 @@ priorities is in [AUDIT.md](AUDIT.md). The era and content decisions are in
 |---|---|---|---|
 | **A · Foundations** | Audit; confirmed bug fixes; baselines and tools; derived indexes; versioned map packages; save format 2 with migration; replayable bug reports; setting decision | — | **done** (this pull request) |
 | **B · Industrial economy and research** | The new era's calendar; six resources; industry and production; trade as resource exchange; the five-era tree with horizons; data-driven land roster (infantry, cavalry, artillery, engineers, armour); save format 3 with conversion from 1640 saves; built-in maps converted; economy AI | A | **done** (this pull request) |
-| **C · War on land, at sea and in the air** | Land depth (frontage by terrain, breakthrough, entrenchment lines, rail logistics, armour); map package v3 with sea zones and ports (v1 and v2 upgraded automatically); fleets, naval combat, transports and invasions, blockades; airfields and air missions (superiority, ground support, interdiction, bombing, reconnaissance); military AI for all three arms | B | planned |
+| **C · War on land, at sea and in the air** | Land depth (frontage by terrain, breakthrough, entrenchment lines, rail logistics, armour); map package v3 with sea zones and ports (v1 and v2 upgraded automatically); fleets, naval combat, transports and invasions, blockades; airfields and air missions (superiority, ground support, interdiction, bombing, reconnaissance); military AI for all three arms | B | **done** (this pull request) |
 | **D · Maps** | Map library screen; at least three new fictional maps (small, standard, large); in-browser map editor (provinces, realms, regions, sea zones, routes, validation, export and import); a real-world regional map from Natural Earth (public domain) with attribution; level of detail for large maps | A (format), C (sea zones) | planned |
 | **E · Diplomacy, settlements and national focus** | Peace settlements with several parties and graded demands; guarantees, spheres and influence; trade blocs; national focus trees (generic and per-realm), replacing the six policies; diplomacy and focus AI | B, C | planned |
 | **F · Onboarding, balance and delivery** | Tutorial and onboarding for every new system; UI pass; AI system-usage reports; balance from AI batches on every map; player-style sessions; screenshots; final docs, attribution, test and performance results, known limitations | B–E | planned |
@@ -134,33 +134,33 @@ assigned to a stage and not started. Nothing has been dropped.
 | 2 | Identify bugs, fragile transitions, dominant strategies, AI weaknesses, performance at several map sizes, UI problems, architecture fitness | A | done | AUDIT.md sections |
 | 3 | Confirm issues before fixing them | A | done | AUDIT.md evidence column; bugs 1–5 also by their tests failing on the unfixed code |
 | 4 | Concise plan and requirement ledger with dependencies, acceptance checks, scope decisions | A | done | This file |
-| 5 | A coherent setting supporting land, naval and air warfare | A (decision), B–C | land and economy done (B); naval and air in C | SETTING.md |
+| 5 | A coherent setting supporting land, naval and air warfare | A (decision), B–C | done | SETTING.md (decisions taken in Stages B and C) |
 | 6 | Reproducible baselines: load and creation, tick avg/p95/p99/max, AI, pathfinding, supply, diplomacy, frame times, memory; small, standard and large maps | A | done | `reports/perf/`, `npm run bench`, `npm run bench:web` |
 | 7 | Determinism | A, every stage | done | Determinism tests, rule check, fuzzer save/load and repeat checks |
 | 8 | Fix important failures | A, every stage | done for all confirmed | AUDIT.md table |
 | 9 | Diagnostic export | A | done | `src/sim/diagnostics.ts`, `tools/replay.ts`, tests |
-| 10 | Versioned map and content schemas | A (maps v1, saves 2), B (maps v2 with deposits, saves 3), C (maps v3 with sea zones) | done for A and B | `src/maps/`, `src/sim/migrate.ts` |
+| 10 | Versioned map and content schemas | A (maps v1, saves 2), B (maps v2 with deposits, saves 3), C (maps v3 with sea zones) | done for A–C | `src/maps/`, `src/sim/migrate.ts`; v1 and v2 packages upgrade to v3 (`tests/naval.test.ts`, `tests/saves-maps.test.ts`) |
 | 11 | Map library with ≥3 new fictional maps | D | planned | Stage D checks |
 | 12 | In-browser map editor | D | planned | Stage D checks |
 | 13 | Real-world regional map with licensed data | D | planned | Natural Earth (public domain) |
-| 14 | Deeper land warfare | B (roster: engineers, armour, machine guns, breakthrough), C | started in B | `tests/industry.test.ts`; Stage C checks |
-| 15 | Navy | C | planned | Stage C checks |
-| 16 | Air | C | planned | Stage C checks |
+| 14 | Deeper land warfare | B (roster: engineers, armour, machine guns, breakthrough), C | done | Terrain frontage, breakthrough, entrenchment deepened by Trench Warfare and Elastic Defence, rail and motor logistics (B); landings, air support and interdiction, straits closed by sea control (C); `tests/industry.test.ts`, `tests/worked-sea-air.test.ts`, combat matrix (`tests/matrix.test.ts`) |
+| 15 | Navy | C | done | `src/sim/naval.ts`, `src/sim/ai/navy.ts`; `tests/naval.test.ts`, worked examples, browser flows, Stage C checks |
+| 16 | Air | C | done | `src/sim/air.ts`; `tests/air.test.ts`, worked examples, browser flow, Stage C checks |
 | 17 | About 5–7 resources | B | done | Food, coal, iron, oil, rubber, nitrates; `tests/industry.test.ts` |
 | 18 | Industry | B | done | Factories, materiel, shortages; Stage B checks |
 | 19 | Trade | B (resource exchange), E (trade blocs) | done for B | Stage B checks |
 | 20 | Diplomacy | E | planned | Stage E checks |
 | 21 | Settlements | E | planned | Peace settlements (scope decision) |
-| 22 | Research | B (land, industry, society), C (naval, air) | done for B | 54 technologies, five eras, horizons; Stage B checks |
+| 22 | Research | B (land, industry, society), C (naval, air) | done | 73 technologies in five branches, five eras, horizons; Stage B and C checks |
 | 23 | National focus trees | E | planned | Stage E checks |
-| 24 | AI that uses every system | B–E, measured in F | B systems done | System-usage section in every AI report (`tools/usage.ts`) |
+| 24 | AI that uses every system | B–E, measured in F | B and C systems done | System-usage section in every AI report (`tools/usage.ts`) |
 | 25 | UI and onboarding | every stage, F | planned | Stage F checks |
-| 26 | Stages A–F, each runnable with concrete checks | A–F | A and B done | Acceptance checks above |
-| 27 | Tests, browser flows, AI campaigns, player-style sessions, screenshots, docs, attribution, test and performance results, known limitations | every stage, F | A done for its scope | PR descriptions, STATUS.md |
+| 26 | Stages A–F, each runnable with concrete checks | A–F | A, B and C done | Acceptance checks above |
+| 27 | Tests, browser flows, AI campaigns, player-style sessions, screenshots, docs, attribution, test and performance results, known limitations | every stage, F | A–C done for their scope | PR description, STATUS.md, `reports/`, `docs/screenshots/stage-*` |
 | 28 | Do not merge or publish without instruction | all | followed | Draft pull requests only |
 | 29 | No invented results, untested browser claims or mock interfaces | all | followed | Results come from tools in the repo |
 | 30 | No accounts, backend, paid services or external AI APIs | all | followed | Static build, local storage |
-| 31 | Preserve saves; versioning, migrations, notices; never silently corrupt or discard | A, B, every later stage | done for A and B | Format 2 and 3 migration tests and fixtures; browser checks |
+| 31 | Preserve saves; versioning, migrations, notices; never silently corrupt or discard | A, B, every later stage | done for A–C | Format 2 and 3 migration tests and fixtures; format-3 saves from before fleets get defaults and a notice; browser checks |
 | 32 | No real-device claims from a resized desktop browser | all | followed | AUDIT.md wording |
 | 33 | Reject malformed or very large imports; never execute imported scripts | A | done | Validator limits, save limit, tests, text-only rendering |
 | 34 | Reviewable pull requests; no silent scope reduction | all | followed | One PR per stage; this ledger |
@@ -168,14 +168,15 @@ assigned to a stage and not started. Nothing has been dropped.
 | 36 | No speculative rewrites; no optimisation that changes rules | all | followed | Rule check record |
 | 37 | Worker only if profiling justifies it | all | followed | Worker decision in AUDIT.md |
 
-## Next steps (Stage C)
+## Next steps (Stage D)
 
-1. Map format 3 with sea zones and ports: zones generated for the built-in maps, formats 1
-   and 2 upgraded automatically, the validator extended.
-2. Fleets (transports, screens, cruisers, capital ships, submarines, carriers) in sea
-   zones; naval combat; transports and invasions; blockades of ports and trade.
-3. Airfields and air wings with ranges; superiority, ground support, interdiction,
-   bombing and reconnaissance, feeding land combat and the economy.
-4. Naval and air technologies (Stage C brings the tree to 60–80); fleet and air AI.
-5. Extend the format 2 → 3 conversion (fleets and air start empty); re-run benchmarks,
-   AI batches with system-usage counts and the combat matrix.
+1. A map library screen: built-in and imported maps with size, realms, start year, style
+   and a preview; import, export and delete for custom maps.
+2. At least three new fictional maps (small, standard, large), each with its own campaign
+   style, made with the shared generator core and validated like any import.
+3. An in-browser editor: create a map from scratch or edit an existing one (provinces,
+   realms, regions, terrain and deposits, sea zones and ports, straits and rivers),
+   validation with actionable messages, export and import through the same validator.
+4. A real-world regional map built from Natural Earth by a reproducible script, with the
+   attribution shown in the game and recorded in THIRD_PARTY_NOTICES.md.
+5. Far-zoom level of detail for large maps, measured before and after.

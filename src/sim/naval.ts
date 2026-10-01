@@ -11,7 +11,8 @@
 // carriers behind enough screens and cruisers are hard to hit), submarine
 // torpedoes go for the big ships, anti-submarine fire is the only thing that
 // hurts submarines, and carriers strike from the air (anti-aircraft fire blunts
-// them). Damage is fire × 32 × roll ÷ the target's hull, spread over targets by
+// them). A side without carrier aircraft facing a side with them is out-ranged:
+// its guns fire at 30% in the first round and 60% in the second. Damage is fire × 32 × roll ÷ the target's hull, spread over targets by
 // size. A side falling below half its starting fighting value withdraws
 // towards its home port.
 //
@@ -603,6 +604,8 @@ function spread(targets: Array<{ s: Ship; w: number }>, power: number, roll: num
 function fireAt(sim: Sim, att: Fleet[], def: Fleet[], round: number, roll: number, hits: Map<Ship, number>): void {
   const fire = sideFire(sim, att, round);
   const defFire = sideFire(sim, def, round);
+  // carriers' aircraft strike before the guns close (submarines' torpedoes come unseen)
+  if (defFire.air > 0 && fire.air <= 0) fire.gun *= C.naval.outranged[Math.min(round, C.naval.outranged.length) - 1];
   const live = def.flatMap((f) => f.ships.filter((s) => s.hp > 0));
   const escorts = live.filter((s) => s.type === 'screen' || s.type === 'cruiser').length;
   const valuables = live.filter((s) => s.type === 'transport' || s.type === 'carrier').length;
@@ -613,7 +616,7 @@ function fireAt(sim: Sim, att: Fleet[], def: Fleet[], round: number, roll: numbe
   spread(surface, fire.gun, roll, hits);
   spread(
     surface.map((t) => ({ s: t.s, w: t.w * (t.s.type === 'capital' || t.s.type === 'carrier' ? 2 : 1) })),
-    (fire.air * 10) / (10 + defFire.aa),
+    (fire.air * C.naval.aaScale) / (C.naval.aaScale + defFire.aa),
     roll,
     hits,
   );
@@ -812,6 +815,7 @@ function blockadeStats(sim: Sim): void {
   for (const nid of sim.world.nationIds) {
     const n = sim.state.nations[nid];
     if (!n.alive) continue;
+    if (fleetsOf(sim, nid).some((f) => f.ships.some((s) => s.type !== 'transport') && f.home && portZone(sim, f.home) !== f.zone)) n.stats.seaWeeks++;
     // count weeks this realm blockades someone else's coast
     for (const f of fleetsOf(sim, nid)) {
       const coast = sim.world.zones[f.zone]?.coasts ?? [];

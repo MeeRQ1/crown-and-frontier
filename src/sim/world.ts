@@ -103,6 +103,7 @@ export function buildWorld(s: ScenarioDef): World {
   for (const r of s.regions) regionProvinces[r.id] = [];
   for (const p of s.provinces) (regionProvinces[p.region] ??= []).push(p.id);
   const straitSet = new Set(s.straits.map(([a, b]) => edgeKey(a, b)));
+  const straitEnds = new Set(s.straits.flat());
   const riverSet = new Set((s.rivers ?? []).map(([a, b]) => edgeKey(a, b)));
   // all-pairs hop distances: one breadth-first search per province into a flat matrix
   const n = provIds.length;
@@ -168,7 +169,7 @@ export function buildWorld(s: ScenarioDef): World {
     const v = zMatrix[i * zn + j];
     return v === UNREACHED ? undefined : v;
   };
-  return { scenario: s, prov, provIds, nationDefs, nationIds: s.nations.map((n) => n.id), regionProvinces, straitSet, riverSet, hop, zones, zoneIds, provZones, straitZone, zoneHop };
+  return { scenario: s, prov, provIds, nationDefs, nationIds: s.nations.map((n) => n.id), regionProvinces, straitSet, straitEnds, riverSet, hop, zones, zoneIds, provZones, straitZone, zoneHop };
 }
 
 export function getWorld(scenarioId: string): World {

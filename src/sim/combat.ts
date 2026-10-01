@@ -452,7 +452,8 @@ export function detectBattles(sim: Sim): void {
   const byProv = new Map<ProvinceId, Army[]>();
   for (const id of Object.keys(st.armies).sort()) {
     const a = st.armies[id];
-    if (a.retreating) continue;
+    // troops at sea fight only once they land (their location is still the port they left)
+    if (a.retreating || a.embarked) continue;
     let arr = byProv.get(a.location);
     if (!arr) byProv.set(a.location, (arr = []));
     arr.push(a);
@@ -547,7 +548,7 @@ export function pruneBattles(sim: Sim): void {
     const b = st.battles[id];
     const valid = (aid: string) => {
       const a = st.armies[aid];
-      return !!a && a.location === b.province && a.battle === b.id && !a.retreating;
+      return !!a && a.location === b.province && a.battle === b.id && !a.retreating && !a.embarked;
     };
     b.attackers = b.attackers.filter(valid);
     b.defenders = b.defenders.filter(valid);

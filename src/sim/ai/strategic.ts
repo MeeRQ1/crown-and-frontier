@@ -128,6 +128,8 @@ function chooseResearch(sim: Sim, nid: NationId): void {
     // a navy matters to coastal realms; aircraft are new arms worth having
     if (t.branch === 'naval') s *= 0.6 + coastalShare(sim, nid);
     if (t.branch === 'air' && t.unlocks) s *= 1.3;
+    // flight is the gateway to the whole air branch
+    if (t.id === 'aviation') s *= 1.8;
     if (n.ai.goal.victory === 'diplomatic' && t.branch === 'society' && (t.effects.opinion || t.effects.envoys)) s *= 1.3;
     if (n.ai.goal.victory === 'economic' && (t.branch === 'industry' || t.effects.integration)) s *= 1.2;
     s *= 1 + (aiRand(sim) - 0.5) * 0.2;
@@ -200,6 +202,12 @@ function planConstruction(sim: Sim, nid: NationId): void {
     let forts = 0;
     for (const pid of ownedProvinces(sim, nid)) forts += st.provinces[pid].fort;
     const owned = ownedProvinces(sim, nid);
+    // the navy needs a port; aircraft need airfields (counting those being built)
+    const building = (k: ProjectKind) => activeProjects(sim, nid).filter((q) => st.provinces[q].project?.kind === k).length;
+    const ports = owned.filter((q) => st.provinces[q].port > 0).length + building('port');
+    const coastShare = owned.filter((q) => sim.world.provZones[q]).length / Math.max(1, owned.length);
+    const fields = owned.filter((q) => st.provinces[q].airfield > 0).length + building('airfield');
+    const wantFields = n.research.done.includes('aviation') ? Math.min(3, 1 + Math.floor(owned.length / 14)) : 0;
     for (const pid of owned) {
       const pr = st.provinces[pid];
       if (pr.controller !== nid || pr.project) continue;
@@ -209,7 +217,9 @@ function planConstruction(sim: Sim, nid: NationId): void {
         const o = st.provinces[nb].owner;
         return !!o && o !== nid && (atWar(sim, nid, o) || opinion(sim, o, nid) < -10 || o === threat);
       });
-      for (const kind of ['dev', 'infra', 'factory', 'fort', 'charter'] as ProjectKind[]) {
+      for (const kind of ['dev', 'infra', 'factory', 'fort', 'charter', 'port', 'airfield'] as ProjectKind[]) {
+        if (kind === 'port' && (!sim.world.provZones[pid] || (ports > 0 && !(pr.port > 0 && pr.port < 2 && coastShare > 0.4)))) continue;
+        if (kind === 'airfield' && (fields >= wantFields || pr.airfield > 0)) continue;
         if (buildProblem(sim, nid, pid, kind, known)) continue;
         const cost = projectCost(sim, nid, pid, kind).crowns;
         if (cost > budget) continue;
@@ -228,6 +238,8 @@ function planConstruction(sim: Sim, nid: NationId): void {
           const wantMateriel = n.materiel < materielCap(sim, nid) * 0.5 ? 1.3 : 1;
           v = ((2.2 * (0.25 + 0.75 * pr.integration / 100) * coal * wantMateriel) / cost) * 100 * (p.id === 'commercial' || n.ai.goal.victory === 'economic' ? 1.2 : 1);
         }
+        if (kind === 'port') v = ports === 0 ? ((3 * (pr.dev + 2)) / cost) * 100 : ((0.6 * coastShare) / cost) * 100;
+        if (kind === 'airfield') v = ((2.5 * (n.capital === pid ? 2 : 1) * (border ? 1.4 : 1) * (pr.dev + 2) * 0.3) / cost) * 100;
         if (kind === 'charter') v = pr.integration < 60 ? (((60 - pr.integration) / 60) * (pr.dev + 2) * 0.6 / cost) * 100 * (n.ai.goal.victory === 'territorial' ? 1.3 : 1) : 0;
         if (kind === 'fort') {
           if (!hostileBorder || forts >= 1 + (owned.length * p.fortLove) / 4 + (n.treasury > grossIncome(n.lastMonth) * 12 ? 2 : 0)) continue;

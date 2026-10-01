@@ -4,6 +4,7 @@
 
 import { buildWingProblem, cancelWing, inRange, missionProblem, MISSION_LABELS, rebaseProblem, startWing } from './air';
 import { C, SHIPS, WINGS } from './config';
+import { nextMemoEpoch } from './index';
 import { buildProblem, cancelProblem, cancelProject, startProject } from './construction';
 import {
   cancelTreaty,
@@ -198,6 +199,15 @@ export function checkCommand(sim: Sim, cmd: Command): string | null {
 export function applyCommand(sim: Sim, cmd: Command): CommandResult {
   const problem = checkCommand(sim, cmd);
   if (problem) return { ok: false, reason: problem };
+  const player = cmd.type === 'continueCampaign' || sim.state.nations[cmd.nation].isPlayer;
+  const r = execute(sim, cmd);
+  // derived values shown to the player (air cover, sea control…) are recomputed after
+  // each player order; replays apply the same commands, so they see the same thing
+  if (player && r.ok) nextMemoEpoch();
+  return r;
+}
+
+function execute(sim: Sim, cmd: Command): CommandResult {
   const st = sim.state;
   if (cmd.type === 'continueCampaign' || st.nations[cmd.nation].isPlayer) logCommand(sim, cmd);
   switch (cmd.type) {

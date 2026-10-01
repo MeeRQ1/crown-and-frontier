@@ -1,6 +1,7 @@
 // Modal ledgers opened from the navigation bar.
 
 import { C, forceLabel, RESOURCE_INFO, STRATEGIC, UNITS, UNIT_TYPES } from '../../sim/config';
+import { navyAirSection } from './sea';
 import { activeProjects, buildSlots, PROJECT_LABELS } from '../../sim/construction';
 import { PERSONALITIES } from '../../sim/data/personalities';
 import { POLICIES, POLICY_COOLDOWN_MONTHS, POLICY_LIST } from '../../sim/data/policies';
@@ -468,7 +469,7 @@ function militaryLedger(app: App): HTMLElement {
         ? h(
             'div',
             { class: 'army-table' },
-            h('div', { class: 'army-head' }, h('span', null, 'Army'), h('span', null, 'Where'), h('span', null, 'F·H·G'), h('span', null, 'Men'), h('span', null, 'Morale'), h('span', null, ''), h('span', null, 'Doing')),
+            h('div', { class: 'army-head' }, h('span', null, 'Army'), h('span', null, 'Where'), h('span', null, 'Mix'), h('span', null, 'Men'), h('span', null, 'Morale'), h('span', null, ''), h('span', null, 'Doing')),
             ...[...byRegion.entries()]
               .sort((x, y) => y[1].length - x[1].length || regionName(x[0]).localeCompare(regionName(y[0])))
               .flatMap(([r, list]) => {
@@ -485,6 +486,8 @@ function militaryLedger(app: App): HTMLElement {
         : h('div', { class: 'callout info' }, icon('info'), 'No armies. Raise regiments from a province panel (select one of your provinces).'),
     ),
   );
+  const navy = navyAirSection(app);
+  if (navy) kids.push(navy);
   kids.push(
     section(
       'In training',
@@ -1126,6 +1129,13 @@ function helpLedger(app: App): HTMLElement {
     sec('Frontier integration', 'Every province has integration 0–100. Low integration means little tax, few recruits, no development, no supply source and more unrest. New conquests start at 10 (25 with a claim), settled land at 20. Roads, garrisons, claims, charters and the Frontier Settlement policy speed it up; too much raw frontier at once overextends your administration.'),
     sec('Economy', 'Crowns come from development and population (scaled by integration and unrest), from trade and from surplus manufactured goods; armies, forts, envoys and research funding cost upkeep. Food feeds armies on supply lines. Deposits yield coal, iron, oil, rubber and nitrates; factories burn coal to make materiel, which equips and reinforces regiments. Trade agreements move surplus resources to partners who need them at fixed prices. Running short of a resource has a named effect shown on the Industry ledger (I). The manpower pool refills from the military reserve, which men under arms already use.'),
     sec('War', 'Declare war with a claim (no trust cost) or a conquest goal (costs trust, alarms neighbours). Battles: terrain, forts, entrenchment, supply, composition, morale and technology decide; forecasts show three outcomes. Winning a battle does not take land — standing in a province besieges it. Peace uses war score; every choice shows whether the enemy would accept and why.'),
+    sec(
+      'Navy and air',
+      'The seas are divided into zones. Fleets sail between zones (select one, then right-click a zone, or press G). Ships are built in ports; each port level is a slipway. Hostile fleets meeting in a zone fight: guns hit surface ships, submarines torpedo big ships and only torpedo boats and cruisers can hunt them, carriers strike from the air.',
+      'Enemy warships that outgun ours in a zone close the straits it commands to our armies and supply. Where every zone on a coast holds enemy warships, that coast is blockaded: it loses a quarter of its crowns and its sea trade.',
+      'Transports carry two regiments each: select an army on a coast with a fleet offshore and choose “Ship by sea”. Troops landing on an enemy coast fight at a disadvantage that week.',
+      'With Aviation, build airfields and raise air wings. Missions: superiority (fighters), ground support, interdiction of enemy supply and movement, strategic bombing of factories, and reconnaissance. Whoever holds 1.5× the enemy’s air power over a province holds the sky there.',
+    ),
     sec('Diplomacy', 'Envoys raise opinion. Pacts forbid war; trade agreements exchange surplus resources and earn commerce; alliances are defensive calls to arms. Proposals show the other side’s reasoning before you send them. Rapid conquest raises alarm, and so does a visible bid for territorial or economic victory; alarmed neighbours form coalitions. A bid for diplomatic leadership instead makes rivals wary (lower opinion) and may cost you their trade.'),
     sec('Saves', 'The game autosaves every few months (Settings) and when the tab is hidden. Saves live in this browser only: they do not sync across devices or sites and can be erased by private browsing or managed-device policies. Use Menu → Export to keep a copy, and Import to restore it.'),
     sec('Fog of war', 'All information is public for everyone — AI realms see exactly what you see and follow the same rules, costs and formulas.'),

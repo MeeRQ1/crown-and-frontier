@@ -10,8 +10,8 @@ economic prosperity or diplomatic leadership.
 ![Crown & Frontier: Aldmere, the standard campaign](docs/screenshots/after-aldmere/laptop-03-map-overview.jpg)
 
 - **Two maps.** *Aldmere*, the standard campaign, has 298 provinces, 14 realms, four mountain
-  ranges with six passes, six rivers and 34 unclaimed frontier provinces. *The Reach*, the
-  quick campaign, has 99 provinces and 9 realms.
+  ranges with six passes, six rivers, 34 unclaimed frontier provinces and 30 sea zones. *The
+  Reach*, the quick campaign, has 99 provinces, 9 realms and 13 sea zones.
 - **A living political atlas.** The map shows printed relief, rivers and lettered seas, with
   realm washes and inked borders. Detail changes with zoom, and seven map modes (political,
   terrain, supply, economy, frontier, diplomacy, military) each come with a legend.
@@ -19,7 +19,11 @@ economic prosperity or diplomatic leadership.
   nitrates), factories, materiel and trade agreements that exchange real resources;
   population and manpower; supply lines; an industrial-age roster (infantry, cavalry,
   artillery, engineers, armour) in battles shaped by terrain, rivers, forts and trenches;
-  sieges; a five-era research tree of 54 technologies with horizon years; national policies;
+  sieges; **navies** (transports, torpedo boats, cruisers, battleships, submarines,
+  carriers) that fight for sea zones, close straits, blockade coasts and carry armies to
+  hostile shores; **air wings** (reconnaissance, fighters, ground attack, bombers) flying
+  from airfields for air superiority, ground support, interdiction and bombing; a five-era
+  research tree of 73 technologies in five branches with horizon years; national policies;
   diplomacy and coalitions; 20 events; and three victory paths.
 - **AI rivals:** five temperaments and three difficulty levels, using exactly the same rules
   and commands as you.
@@ -43,8 +47,11 @@ this if you try.
 
 | Action | Mouse / keyboard | Touch |
 |---|---|---|
-| Select a province or army | Click | Tap |
+| Select a province, army, fleet or sea zone | Click | Tap |
 | Move the selected army | Right-click a province, or **G** / Move then click | Long-press a province, or "March here" in the province card |
+| Sail the selected fleet | Right-click a sea zone or coast, or **G** / Sail then click | "Sail" in the fleet card, then tap |
+| Carry an army by sea | "Ship by sea" in the army card (a fleet with transports off its coast), then click the beach | the same, with taps |
+| Air missions | Select a wing (in its airfield's province card), choose a mission, click the target | the same, with taps |
 | Add a waypoint | **Shift**+right-click | — |
 | Pan / zoom | Drag / mouse wheel, arrow keys, **+ / −** | Drag / pinch |
 | Pause, speed | **Space**, **1–4** | ▶ and speed pips |
@@ -107,11 +114,13 @@ src/sim/        headless simulation — no DOM; runs in tests and CLI tools
   tick.ts       fixed weekly tick order        game.ts     new-game setup
   index.ts      derived lookups (armies by province, provinces by owner, relations)
   economy, construction, integration, military, movement, supply, combat, siege,
+  naval (fleets, sea control, landings), air (airfields, wings, missions),
   war, diplomacy, progression, events, victory, invariants,
   save, migrate (save formats), diagnostics + replay (bug reports)
-src/maps/       map package format, validator (imports are sanitised and size-limited),
-                built-in maps as packages, conversion to the simulation and renderer
-  ai/           strategic, operational/execution layers and difficulty profiles
+src/maps/       map package format (v3: sea zones and ports), validator (imports are
+                sanitised and size-limited), sea-zone generation, built-in maps as packages,
+                conversion to the simulation and renderer
+  ai/           strategic, operational/execution layers, navy and air, difficulty profiles
   data/         technologies, policies, personalities, events
 src/data/       both maps: realms and regions (aldmere.ts, reach.ts), generated province data
                 (aldmere.provinces.json, reach.adjacency.json) and geometry (*.map.json, loaded on demand)
@@ -151,11 +160,14 @@ that the final state matches.
 - **Fog of war:** not implemented. All information is public to everyone, AI included.
 - **Browsers verified:** only headless Chromium 141, on desktop and emulated phone viewports. Firefox,
   Safari, real Chromebooks and real touch devices are untested.
-- **Not yet in the game:** naval and air warfare, sea zones, the map library and editor, the
-  real-world map, peace settlements with several parties and focus trees are planned in the
-  remaining expansion stages (docs/expansion/PLAN.md). Multiplayer, espionage and dynasties
-  are out of scope.
-- **Save format:** 3. Format-1 and format-2 saves are converted on load.
+- **Not yet in the game:** the map library and editor, the real-world map, peace
+  settlements with several parties and focus trees are planned in the remaining expansion
+  stages (docs/expansion/PLAN.md). Multiplayer, espionage and dynasties are out of scope.
+- **Navy and air are abstracted:** fleets fight in sea zones and wings fly missions over a
+  province and its neighbours; there are no individual ships' positions, convoys or air
+  routes. Troops at sea cannot be redirected until they land.
+- **Save format:** 3. Format-1 and format-2 saves are converted on load. Format-3 saves
+  written before Stage C load with empty navies and air arms and a notice.
 
 ## Licence
 

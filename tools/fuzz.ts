@@ -5,7 +5,7 @@
 // untouched, that two identical runs stay identical, and that a game saved and
 // loaded mid-run continues exactly like the original.
 //
-//   npx tsx tools/fuzz.ts [--scenario reach|aldmere] [--seeds 1-5] [--years 10] [--player cal]
+//   npx tsx tools/fuzz.ts [--scenario reach|aldmere] [--seeds 1-5] [--years 10] [--player cal] [--tech all]
 //
 // Exit code 1 if any check fails. Findings are printed with the seed and tick
 // so they can be reproduced.
@@ -21,7 +21,12 @@ import { deserialize, fnv1a, serialize } from '../src/sim/save';
 import { nextFloat, seedState } from '../src/sim/rng';
 import { armiesOf, ownedProvinces, warsOf, type Sim } from '../src/sim/state';
 import { isOver, step } from '../src/sim/tick';
-import type { Command, NationId, ProjectKind, TreatyType, UnitType } from '../src/sim/types';
+import { wingsOf } from '../src/sim/air';
+import { SHIP_TYPES, UNIT_TYPES, WING_TYPES } from '../src/sim/config';
+import { fleetsOf } from '../src/sim/naval';
+import type { AirMission, Command, NationId, ProjectKind, ShipType, TreatyType } from '../src/sim/types';
+
+const AIR_MISSIONS: AirMission[] = ['idle', 'superiority', 'support', 'interdiction', 'bombing', 'recon'];
 
 const args = process.argv.slice(2);
 const get = (k: string, d: string) => {
@@ -32,6 +37,8 @@ const scenario = get('scenario', 'reach');
 const [s0, s1] = get('seeds', '1-3').split('-').map(Number);
 const years = Number(get('years', '10'));
 const playerArg = get('player', '');
+// --tech all: the fuzzed realm starts with the whole tree (ships, carriers, every wing)
+const techAll = get('tech', '') === 'all';
 
 type Rng = number[];
 const pick = <T>(r: Rng, xs: readonly T[]): T | undefined => (xs.length ? xs[Math.floor(nextFloat(r) * xs.length)] : undefined);
@@ -42,11 +49,13 @@ function randomCommand(sim: Sim, nid: NationId, r: Rng): Command | null {
   const armies = armiesOf(sim, nid);
   const others = sim.world.nationIds.filter((x) => x !== nid);
   const anyProv = () => pick(r, sim.world.provIds)!;
-  const kind = Math.floor(nextFloat(r) * 24);
+  const fleets = [...fleetsOf(sim, nid)];
+  const wings = wingsOf(sim, nid);
+  const kind = Math.floor(nextFloat(r) * 36);
   switch (kind) {
     case 0:
     case 1:
-      return { type: 'recruit', nation: nid, province: pick(r, owned) ?? anyProv(), unit: pick(r, ['infantry', 'cavalry', 'artillery'] as UnitType[])!, count: 1 + Math.floor(nextFloat(r) * 3) };
+      return { type: 'recruit', nation: nid, province: pick(r, owned) ?? anyProv(), unit: pick(r, UNIT_TYPES)!, count: 1 + Math.floor(nextFloat(r) * 3) };
     case 2:
       return { type: 'cancelRecruit', nation: nid, province: pick(r, owned) ?? anyProv() };
     case 3:
@@ -87,7 +96,7 @@ function randomCommand(sim: Sim, nid: NationId, r: Rng): Command | null {
     }
     case 11:
     case 12: {
-      const pk = pick(r, ['dev', 'infra', 'fort', 'charter', 'settle'] as ProjectKind[])!;
+      const pk = pick(r, ['dev', 'infra', 'fort', 'charter', 'settle', 'factory', 'port', 'airfield'] as ProjectKind[])!;
       let prov = pick(r, owned) ?? anyProv();
       if (pk === 'settle') {
         const wild = sim.world.provIds.filter((p) => !st.provinces[p].owner && sim.world.prov[p].neighbors.some((n) => st.provinces[n].owner === nid));
@@ -148,13 +157,68 @@ function randomCommand(sim: Sim, nid: NationId, r: Rng): Command | null {
       const k = Math.floor(nextFloat(r) * 3);
       return k === 0 ? { type: 'joinCoalition', nation: nid, target: t } : k === 1 ? { type: 'leaveCoalition', nation: nid, target: t } : { type: 'coalitionWar', nation: nid, target: t };
     }
+    // ── the navy
+    case 24:
+    case 25: {
+      const ports = owned.filter((p) => st.provinces[p].port > 0);
+      return { type: 'buildShip', nation: nid, province: pick(r, ports) ?? pick(r, owned) ?? anyProv(), ship: pick(r, SHIP_TYPES)! };
+    }
+    case 26:
+      return { type: 'cancelShip', nation: nid, province: pick(r, owned) ?? anyProv() };
+    case 27:
+    case 28: {
+      const f = pick(r, fleets);
+      if (!f) return null;
+      const near = sim.world.zoneIds.filter((z) => (sim.world.zoneHop(f.zone, z) ?? 99) <= 3);
+      return nextFloat(r) < 0.85 ? { type: 'moveFleet', nation: nid, fleet: f.id, zone: (nextFloat(r) < 0.9 ? pick(r, near) : pick(r, sim.world.zoneIds)) ?? f.zone } : { type: 'stopFleet', nation: nid, fleet: f.id };
+    }
+    case 29: {
+      const f = pick(r, fleets);
+      if (!f) return null;
+      const k = Math.floor(nextFloat(r) * 3);
+      if (k === 0) return { type: 'splitFleet', nation: nid, fleet: f.id, ships: f.ships.filter(() => nextFloat(r) < 0.5).map((x) => x.id) };
+      if (k === 1) return { type: 'mergeFleets', nation: nid, fleets: fleets.filter((x) => x.zone === f.zone).map((x) => x.id) };
+      return nextFloat(r) < 0.2 ? { type: 'disbandFleet', nation: nid, fleet: f.id } : null;
+    }
+    case 30:
+    case 31: {
+      // mostly plausible: a fleet with transports, an army on its coast, a beach within reach
+      const f = pick(r, nextFloat(r) < 0.8 ? fleets.filter((x) => x.ships.some((sh) => sh.type === 'transport')) : fleets);
+      if (!f) return null;
+      const coast = sim.world.zones[f.zone]?.coasts ?? [];
+      const ashore = armies.filter((a) => !a.embarked && coast.includes(a.location));
+      const carried = nextFloat(r) < 0.85 ? (pick(r, ashore) ? [pick(r, ashore)!.id] : []) : armies.filter(() => nextFloat(r) < 0.5).map((a) => a.id);
+      const beaches = sim.world.provIds.filter((p) => sim.world.provZones[p]?.some((z) => (sim.world.zoneHop(f.zone, z) ?? 99) <= 3));
+      return { type: 'shipArmies', nation: nid, armies: carried, fleet: f.id, dest: pick(r, beaches) ?? anyProv() };
+    }
+    // ── the air arm
+    case 32: {
+      const fields = owned.filter((p) => st.provinces[p].airfield > 0);
+      return nextFloat(r) < 0.8
+        ? { type: 'buildWing', nation: nid, province: pick(r, fields) ?? pick(r, owned) ?? anyProv(), wing: pick(r, WING_TYPES)! }
+        : { type: 'cancelWing', nation: nid, province: pick(r, owned) ?? anyProv() };
+    }
+    case 33:
+    case 34: {
+      const w = pick(r, wings);
+      if (!w) return null;
+      const near = [w.base, ...sim.world.prov[w.base].neighbors.flatMap((q) => [q, ...sim.world.prov[q].neighbors])];
+      return { type: 'airMission', nation: nid, wing: w.id, mission: pick(r, AIR_MISSIONS)!, target: nextFloat(r) < 0.1 ? null : (nextFloat(r) < 0.85 ? pick(r, near) : anyProv()) ?? null };
+    }
+    case 35: {
+      const w = pick(r, wings);
+      if (!w) return null;
+      if (nextFloat(r) < 0.15) return { type: 'disbandWing', nation: nid, wing: w.id };
+      const fields = owned.filter((p) => st.provinces[p].airfield > 0);
+      return { type: 'rebaseWing', nation: nid, wing: w.id, base: pick(r, fields) ?? anyProv() };
+    }
   }
   return null;
 }
 
 /** Commands that reference things that do not exist, or are malformed. */
 function brokenCommand(sim: Sim, nid: NationId, r: Rng): Command {
-  const k = Math.floor(nextFloat(r) * 6);
+  const k = Math.floor(nextFloat(r) * 10);
   const a = pick(r, armiesOf(sim, nid));
   switch (k) {
     case 0:
@@ -167,10 +231,21 @@ function brokenCommand(sim: Sim, nid: NationId, r: Rng): Command {
       return { type: 'peace', nation: nid, war: 'w9999', with: sim.world.nationIds[0], terms: { mode: 'white', provinces: [], gold: 0 } };
     case 4:
       return { type: 'recruit', nation: nid, province: sim.world.provIds[0], unit: 'infantry', count: 99 };
+    case 5:
+      return { type: 'moveFleet', nation: nid, fleet: 'f999999', zone: 'nowhere' };
+    case 6:
+      return { type: 'buildShip', nation: nid, province: sim.world.provIds[0], ship: 'zeppelin' as ShipType };
+    case 7:
+      return { type: 'airMission', nation: nid, wing: pick(r, wingsOf(sim, nid))?.id ?? 'w0', mission: 'bombing', target: 'nowhere' };
+    case 8:
+      return { type: 'splitFleet', nation: nid, fleet: pick(r, [...fleetsOf(sim, nid)])?.id ?? 'f0', ships: ['s-none'] };
     default:
       return { type: 'build', nation: nid, province: sim.world.provIds[0], project: 'castle' as ProjectKind };
   }
 }
+
+/** accepted commands by type, over all runs */
+const accepted = new Map<string, number>();
 
 interface Finding {
   seed: number;
@@ -185,6 +260,7 @@ function hash(sim: Sim): string {
 function runOne(seed: number, findings: Finding[], record?: string[]): { hashes: string[] } {
   const sim = createGame({ scenario, seed, playerNation: playerArg || undefined, campaignYears: years + 5 });
   const nid = sim.state.settings.playerNation!;
+  if (techAll) sim.state.nations[nid].research.done = TECH_LIST.map((t) => t.id);
   const r = seedState(seed * 7919 + 13);
   const hashes: string[] = [];
   const weeks = years * 48;
@@ -215,6 +291,7 @@ function runOne(seed: number, findings: Finding[], record?: string[]): { hashes:
       try {
         const res = applyCommand(sim, cmd);
         record?.push(`${sim.state.tick}:${cmd.type}:${res.ok ? 'ok' : 'no'}`);
+        if (res.ok) accepted.set(cmd.type, (accepted.get(cmd.type) ?? 0) + 1);
       } catch (e) {
         findings.push({ seed, tick: sim.state.tick, what: `applyCommand threw on ${JSON.stringify(cmd).slice(0, 160)}: ${(e as Error).stack?.split('\n').slice(0, 3).join(' | ')}` });
       }
@@ -275,6 +352,7 @@ for (const f of findings) {
   if (ex) ex.count++;
   else uniq.set(key, { ...f, count: 1 });
 }
+console.log(`\nAccepted commands: ${[...accepted].sort((a, b) => (a[0] < b[0] ? -1 : 1)).map(([k, v]) => `${k} ${v}`).join(', ')}`);
 console.log(`\n${findings.length} finding(s), ${uniq.size} distinct (map ${scenario}):`);
 for (const f of uniq.values()) console.log(`  [seed ${f.seed} tick ${f.tick}] ×${f.count} ${f.what}`);
 const hard = findings.filter((f) => !f.what.startsWith('soft:'));

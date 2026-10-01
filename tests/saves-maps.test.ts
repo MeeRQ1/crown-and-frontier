@@ -179,12 +179,17 @@ describe('save format', () => {
       if (n.alive) expect(n.materiel).toBeGreaterThan(0);
     }
     expect(Object.values(sim.state.provinces).some((p) => p.factories > 0)).toBe(true);
+    // the navy: ports from the current map and a home squadron for every realm with a port
+    expect(notices[0]).toMatch(/home squadron/);
+    expect(Object.values(sim.state.provinces).some((p) => p.port > 0)).toBe(true);
+    expect(Object.keys(sim.state.fleets).length).toBeGreaterThan(5);
+    expect(sim.state.wings).toEqual({});
     for (let i = 0; i < 48; i++) step(sim);
     expect(checkInvariants(sim)).toEqual([]);
     expect(readSave(serialize(sim)).notices).toEqual([]);
   });
 
-  it('a format-2 save carrying a custom map upgrades that map and keeps playing', () => {
+  it('a format-2 save carrying a custom map upgrades that map and keeps playing', async () => {
     const before = JSON.parse(FORMAT2_CUSTOM);
     expect(before.mapPackage.version).toBe(1);
     const { sim, notices, mapPackage } = readSave(FORMAT2_CUSTOM);
@@ -194,6 +199,11 @@ describe('save format', () => {
     // old trade goods became industrial deposits
     const vocab = new Set(['food', 'coal', 'iron', 'oil', 'rubber', 'nitrates', null]);
     expect(mapPackage!.provinces.every((p) => vocab.has(p.resource ?? null))).toBe(true);
+    // a format-1 map had no sea zones: they come from its drawn coastline (the same as the
+    // built-in Reach's), with starting ports, and every realm with a port gets its squadron
+    expect(mapPackage!.seaZones.map((z) => z.id)).toEqual((await builtinPackage('reach')).seaZones.map((z) => z.id));
+    expect(mapPackage!.provinces.filter((p) => (p.port ?? 0) > 0).length).toBeGreaterThan(0);
+    expect(Object.keys(sim.state.fleets).length).toBeGreaterThan(0);
     expect(sim.state.map.id).toBe('reach-copy');
     for (let i = 0; i < 48; i++) step(sim);
     expect(checkInvariants(sim)).toEqual([]);
@@ -206,6 +216,17 @@ describe('save format', () => {
     const obj = JSON.parse(FORMAT2_CUSTOM);
     obj.mapPackage.provinces[0].neighbors.push('nowhere');
     expect(() => readSave(JSON.stringify(obj))).toThrow(/cannot be converted|cannot be upgraded|nowhere/);
+  });
+
+  it('a format-3 save from before fleets existed gets ports and home squadrons, with a notice', () => {
+    const obj = JSON.parse(serialize(createGame({ scenario: 'reach', seed: 3, playerNation: 'ser' })));
+    delete obj.state.fleets;
+    delete obj.state.wings;
+    for (const p of Object.values<Record<string, unknown>>(obj.state.provinces)) for (const k of ['port', 'airfield', 'dock', 'hangar']) delete p[k];
+    const { sim, notices } = readSave(reencode(obj));
+    expect(notices.join(' ')).toMatch(/before fleets and air forces existed/);
+    expect(Object.keys(sim.state.fleets).length).toBeGreaterThan(0);
+    expect(checkInvariants(sim)).toEqual([]);
   });
 
   it('an oversized file is refused before it is parsed', () => {

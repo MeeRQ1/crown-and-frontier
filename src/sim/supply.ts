@@ -66,7 +66,14 @@ export function supplyDistances(sim: Sim, nid: NationId): Record<ProvinceId, num
   if (hit && hit.key === key) return hit.dist;
 
   const dist: Record<ProvinceId, number> = {};
-  const friendly = (pid: ProvinceId) => isFriendly(sim, nid, sim.state.provinces[pid].controller);
+  // one friendliness lookup per controlling realm, not per province
+  const friends = new Map<string | null, boolean>();
+  const friendly = (pid: ProvinceId) => {
+    const c = sim.state.provinces[pid].controller;
+    let f = friends.get(c);
+    if (f === undefined) friends.set(c, (f = isFriendly(sim, nid, c)));
+    return f;
+  };
   const open = new CostHeap();
   for (const pid of sim.world.provIds) {
     dist[pid] = Infinity;
@@ -81,8 +88,9 @@ export function supplyDistances(sim: Sim, nid: NationId): Record<ProvinceId, num
     const d = open.peekCost();
     const cur = open.pop();
     if (d > dist[cur]) continue;
+    const straitAt = sim.world.straitEnds.has(cur);
     for (const nb of sim.world.prov[cur].neighbors) {
-      if (sim.world.straitSet.has(edgeKey(cur, nb)) && straitBlocked(sim, nid, cur, nb)) continue;
+      if (straitAt && sim.world.straitSet.has(edgeKey(cur, nb)) && straitBlocked(sim, nid, cur, nb)) continue;
       const nd = d + stepCost(sim, nb);
       if (nd < dist[nb]) {
         dist[nb] = nd;

@@ -205,5 +205,5 @@ export function createGame(opts: NewGameOptions = {}): Sim {
 
 /** Navy and air counters of a realm's statistics (all zero). */
 export function emptyForceStats() {
-  return { shipsBuilt: 0, shipsSunk: 0, shipsLost: 0, navalBattles: 0, landings: 0, blockadeWeeks: 0, wingsBuilt: 0, airMissionWeeks: 0, bombingWeeks: 0 };
+  return { shipsBuilt: 0, shipsSunk: 0, shipsLost: 0, navalBattles: 0, landings: 0, blockadeWeeks: 0, seaWeeks: 0, wingsBuilt: 0, airMissionWeeks: 0, bombingWeeks: 0 };
 }

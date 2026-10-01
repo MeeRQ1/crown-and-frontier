@@ -14,7 +14,6 @@
 import { airfieldRoom, buildWingProblem, inRange, missionProblem, wingsOf, wingUnlocked } from '../air';
 import { SHIPS, WINGS } from '../config';
 import { armiesIn } from '../index';
-import { buildProblem } from '../construction';
 import { grossIncome } from '../economy';
 import {
   buildShipProblem,
@@ -29,7 +28,7 @@ import {
   surfacePower,
   zoneBalance,
 } from '../naval';
-import { armiesOf, atWar, diag, enemiesOf, months, ownedProvinces, type Sim } from '../state';
+import { armiesOf, atWar, diag, enemiesOf, isFriendly, months, ownedProvinces, type Sim } from '../state';
 import type { AirMission, Army, Fleet, NationId, Personality, ProvinceId, ShipType, UnitType, WingType, ZoneId } from '../types';
 import { aiRand, issue, reachFrom } from './common';
 
@@ -63,14 +62,28 @@ function airUpkeepOf(sim: Sim, nid: NationId): number {
   return u;
 }
 
+/** Ships on the slipways, by realm (one pass over the map). */
+function slipways(sim: Sim): Map<NationId, Record<ShipType, number>> {
+  const m = new Map<NationId, Record<ShipType, number>>();
+  for (const pid of sim.world.provIds) {
+    for (const o of sim.state.provinces[pid].dock) {
+      let c = m.get(o.nation);
+      if (!c) m.set(o.nation, (c = { transport: 0, screen: 0, cruiser: 0, capital: 0, submarine: 0, carrier: 0 }));
+      c[o.ship]++;
+    }
+  }
+  return m;
+}
+
 /** Ship counts afloat and on the slipways. */
-function navyCounts(sim: Sim, nid: NationId): Record<ShipType, number> {
+function navyCounts(sim: Sim, nid: NationId, docks = slipways(sim)): Record<ShipType, number> {
   const c: Record<ShipType, number> = { transport: 0, screen: 0, cruiser: 0, capital: 0, submarine: 0, carrier: 0 };
   for (const f of fleetsOf(sim, nid)) {
     const k = shipCount(f);
     for (const t of Object.keys(c) as ShipType[]) c[t] += k[t];
   }
-  for (const pid of sim.world.provIds) for (const o of sim.state.provinces[pid].dock) if (o.nation === nid) c[o.ship]++;
+  const d = docks.get(nid);
+  if (d) for (const t of Object.keys(c) as ShipType[]) c[t] += d[t];
   return c;
 }
 
@@ -80,8 +93,9 @@ function rivalsMix(sim: Sim, nid: NationId): { capital: number; submarine: numbe
   let submarine = 0;
   const foes = enemiesOf(sim, nid);
   const pool = foes.length ? foes : sim.world.nationIds.filter((o) => o !== nid && sim.state.nations[o].alive);
+  const docks = slipways(sim);
   for (const o of pool) {
-    const c = navyCounts(sim, o);
+    const c = navyCounts(sim, o, docks);
     capital += c.capital;
     submarine += c.submarine;
   }
@@ -121,12 +135,8 @@ export function navalStrategy(sim: Sim, nid: NationId, reserve: number): void {
   // ── the fleet
   if (coast > 0) {
     const ports = portsOf(sim, nid);
-    if (!ports.length) {
-      const site = ownedProvinces(sim, nid)
-        .filter((p) => sim.world.provZones[p] && !buildProblem(sim, nid, p, 'port'))
-        .sort((a, b) => st.provinces[b].dev - st.provinces[a].dev || (a < b ? -1 : 1))[0];
-      if (site && n.treasury - reserve > 60) issue(sim, { type: 'build', nation: nid, province: site, project: 'port' }, 'Navy: a first port');
-    } else {
+    // a first port is chosen with the other construction projects (planConstruction)
+    if (ports.length) {
       const share = NAVY_SHARE[n.ai.personality][war ? 1 : 0] * (0.5 + coast);
       const budget = gross * share;
       for (let k = 0; k < 2; k++) {
@@ -151,21 +161,8 @@ export function navalStrategy(sim: Sim, nid: NationId, reserve: number): void {
   }
   // ── the air arm
   if (!n.research.done.includes('aviation')) return;
+  // airfields are chosen with the other construction projects (planConstruction)
   const fields = ownedProvinces(sim, nid).filter((p) => st.provinces[p].airfield > 0);
-  const wantFields = Math.min(3, 1 + Math.floor(ownedProvinces(sim, nid).length / 14));
-  if (fields.length < wantFields && n.treasury - reserve > 60) {
-    // the capital first, then provinces nearest the enemy or the most valuable border
-    const enemy = enemiesOf(sim, nid);
-    const site = ownedProvinces(sim, nid)
-      .filter((p) => st.provinces[p].controller === nid && !buildProblem(sim, nid, p, 'airfield') && st.provinces[p].airfield === 0)
-      .map((p) => {
-        let near = 9;
-        for (const o of enemy.length ? enemy : sim.world.nationIds.filter((x) => x !== nid)) for (const q of ownedProvinces(sim, o)) near = Math.min(near, sim.world.hop(p, q) ?? 9);
-        return { p, v: (n.capital === p ? 6 : 0) + st.provinces[p].dev - Math.abs(near - 2) * 2 };
-      })
-      .sort((a, b) => b.v - a.v || (a.p < b.p ? -1 : 1))[0];
-    if (site) issue(sim, { type: 'build', nation: nid, province: site.p, project: 'airfield' }, 'Air: a new airfield');
-  }
   const budget = gross * AIR_SHARE[war ? 1 : 0];
   if (airUpkeepOf(sim, nid) >= budget) return;
   const have: Record<WingType, number> = { recon: 0, fighter: 0, attack: 0, bomber: 0 };
@@ -176,13 +173,14 @@ export function navalStrategy(sim: Sim, nid: NationId, reserve: number): void {
     ['fighter', 0.45],
     ['attack', 0.3],
     ['bomber', 0.15],
-    ['recon', total < 2 ? 0.5 : 0.1],
+    // spotters lead only until fighters are known
+    ['recon', total < 2 && !wingUnlocked(sim, nid, 'fighter') ? 0.5 : 0.1],
   ];
   let type: WingType | null = null;
   let gap = -Infinity;
   for (const [t, share] of mix) {
     if (!wingUnlocked(sim, nid, t)) continue;
-    if (t === 'recon' && have.recon >= 2) continue; // spotters: two are enough
+    if (t === 'recon' && have.recon >= (wingUnlocked(sim, nid, 'fighter') ? 1 : 2)) continue; // spotters: one or two are enough
     const g = share - have[t] / Math.max(1, total);
     if (g > gap) (gap = g), (type = t);
   }
@@ -218,6 +216,42 @@ function zoneValue(sim: Sim, nid: NationId, zone: ZoneId, power: number): number
   return v;
 }
 
+/**
+ * Where a fleet keeps station at peace: off the coasts of the realm we plan to
+ * fight, off coasts we claim, on a strait beside our shores, or watching the
+ * waters off a rival navy's home. Null means home.
+ */
+function peaceStation(sim: Sim, nid: NationId, from: ZoneId): ZoneId | null {
+  const st = sim.state;
+  const target = st.nations[nid].ai.warPlan?.target ?? null;
+  // realms not allied to us that keep warships
+  const navies = new Set<NationId>();
+  for (const id of Object.keys(st.fleets)) {
+    const f = st.fleets[id];
+    if (f.nation !== nid && !isFriendly(sim, nid, f.nation) && warships(f)) navies.add(f.nation);
+  }
+  let best: ZoneId | null = null;
+  let bv = 1.5;
+  for (const z of sim.world.zoneIds) {
+    const hops = sim.world.zoneHop(from, z);
+    if (hops === undefined || hops > 4) continue;
+    const zone = sim.world.zones[z];
+    let v = 0;
+    let ours = false;
+    for (const pid of zone.coasts) {
+      const p = st.provinces[pid];
+      if (p.owner === nid) (v += 0.5), (ours = true);
+      else if (target && p.owner === target) v += 1.5 + p.port;
+      else if (p.claims.includes(nid)) v += 1;
+      else if (p.owner && navies.has(p.owner)) v += 0.4 + 0.3 * p.port;
+    }
+    if (ours) v += (zone.straits?.length ?? 0) * 2;
+    v /= 1 + 0.5 * hops;
+    if (v > bv + 0.01 || (Math.abs(v - bv) <= 0.01 && best !== null && z < best)) (bv = v), (best = z);
+  }
+  return best;
+}
+
 function fleetOps(sim: Sim, nid: NationId): void {
   const fleets = [...fleetsOf(sim, nid)].filter((f) => !f.cargo.length);
   if (!fleets.length) return;
@@ -238,7 +272,13 @@ function fleetOps(sim: Sim, nid: NationId): void {
       continue;
     }
     if (!war) {
-      if (home && f.zone !== home && !f.path.length) issue(sim, { type: 'moveFleet', nation: nid, fleet: f.id, zone: home });
+      if (f.path.length) continue;
+      // at peace: station where a coming war would be fought, else at home
+      const station = peaceStation(sim, nid, home ?? f.zone) ?? home;
+      if (station && f.zone !== station) {
+        f.task = 'patrol';
+        issue(sim, { type: 'moveFleet', nation: nid, fleet: f.id, zone: station }, `${f.name} takes station in ${sim.world.zones[station].name}`);
+      }
       continue;
     }
     const power = surfacePower(f) + subPower(f);
@@ -417,6 +457,26 @@ function airOps(sim: Sim, nid: NationId): void {
         .sort((a, b) => st.provinces[b].factories - st.provinces[a].factories || (a < b ? -1 : 1))
     : [];
   const cap = st.nations[nid].capital;
+  // our border provinces, most foreign troops next door first (the frontier watch)
+  let watch: ProvinceId[] | null = null;
+  const frontier = () => {
+    if (watch) return watch;
+    const rows: Array<[ProvinceId, number]> = [];
+    for (const pid of ownedProvinces(sim, nid)) {
+      if (st.provinces[pid].controller !== nid) continue;
+      let foreign = 0;
+      let border = false;
+      for (const q of sim.world.prov[pid].neighbors) {
+        const c = st.provinces[q].controller;
+        if (!c || c === nid) continue;
+        border = true;
+        for (const a of armiesIn(sim, q)) if (a.nation !== nid) foreign += a.regiments.length;
+      }
+      if (border) rows.push([pid, foreign]);
+    }
+    rows.sort((a, b) => b[1] - a[1] || (a[0] < b[0] ? -1 : 1));
+    return (watch = rows.map((r) => r[0]));
+  };
   for (const w of wings) {
     let mission: AirMission = 'idle';
     let target: ProvinceId | null = null;
@@ -431,11 +491,11 @@ function airOps(sim: Sim, nid: NationId): void {
         target = pick(factories);
         mission = 'bombing';
         if (!target) (target = pick(enemyArmies)), (mission = 'interdiction');
-      } else (target = pick(front)), (mission = 'recon');
-    } else if (w.type === 'fighter' && cap && inRange(sim, w, cap)) {
+      } else (target = pick(front) ?? pick(frontier())), (mission = 'recon');
+    } else if (w.type === 'fighter') {
       mission = 'superiority';
-      target = cap;
-    }
+      target = cap && inRange(sim, w, cap) ? cap : pick(frontier());
+    } else if (w.type === 'recon') (target = pick(frontier())), (mission = 'recon');
     if (!target) mission = 'idle';
     if (mission === w.mission && target === w.target) continue;
     if (mission !== 'idle' && missionProblem(sim, nid, w.id, mission, target)) continue;

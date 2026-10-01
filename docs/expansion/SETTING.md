@@ -2,8 +2,9 @@
 
 Status: decided in Stage A. **Stage B implemented** the calendar, the six resources,
 industry, trade, the research eras for land, industry and society, the land roster and
-save format 3. Fleets, sea zones, aircraft and the naval and air technologies follow in
-Stage C. The decisions taken while implementing are listed at the end.
+save format 3. **Stage C implemented** sea zones (map format 3), ports, fleets, naval
+combat, blockades and landings, airfields and air wings, and the naval and air
+technologies. The decisions taken while implementing are listed at the end.
 
 ## The decision
 
@@ -146,3 +147,31 @@ always explained to the player:
 - **Trade** moves surplus above 40% of a stockpile to a partner below 40%, at fixed prices,
   plus 1 crown of commerce per agreement. The flat income bonus is gone; in AI batches trade
   is about 10–12% of income at year 25 (it was about half).
+
+## Decisions taken in Stage C
+
+- **Sea zones are generated, then stored.** Zones come from the drawn coastline by a
+  deterministic method (`src/maps/seazones.ts`), so every existing map, including
+  imported format 1 and 2 packages, gets a navy without hand authoring. Map format 3
+  stores them, so an author can change them later (Stage D's editor).
+- **Ports are a province project** (levels 1–3), like forts; the built-in maps start with
+  ports at the realms' main harbours. One slipway per level.
+- **Fleets fight in zones, armies on land.** Troops at sea take no part in land battles
+  and cannot be ordered; they land on the coast they were sent to and fight at 75% that
+  week. A full amphibious-assault model (beaches, naval gunfire) was rejected as more
+  bookkeeping than decisions.
+- **Sea control has two effects only:** straits (closed while enemy warships outgun ours in
+  the commanding zone) and blockades (a quarter of a coast's crowns and its share of sea
+  trade). Convoy raiding as a separate mission was rejected: submarines already blockade.
+- **Aircraft are wings, not individual planes**, based at airfields (two per level) and
+  flying one mission each over a province and its neighbours. Range is counted in province
+  hops, so it means the same on every map.
+- **Carriers strike before the guns close.** Without that, carrier groups lost every
+  equal-cost pairing in the combat matrix; with it, each fleet type beats at least one other
+  and none beats all (`reports/stage-c/combat-matrix.md`).
+- **The tree has 73 technologies** (land 19, industry 18, society 17, naval 12, air 7).
+  Every realm starts with those five or more years before the start (7 on Aldmere, 23 on
+  the Reach).
+- **Saves stay at format 3.** Fleets, ports and wings were added to format 3 with defaults
+  and a notice, instead of a format 4: no Stage C release was published between them.
+

@@ -135,7 +135,7 @@ export const SHIPS: Record<ShipType, ShipRules> = {
   cruiser: {
     label: 'Cruiser', plural: 'Cruisers', abbr: 'Cr', requires: null,
     cost: 45, materiel: 40, resources: { iron: 6 }, weeks: 20, upkeep: 1.5, fuel: 0.3, oil: false,
-    gun: 3, torpedo: 0.5, antiSub: 1, aa: 1, air: 0, hull: 4, speed: 2, capacity: 0,
+    gun: 3.5, torpedo: 0.5, antiSub: 1, aa: 1, air: 0, hull: 4, speed: 2, capacity: 0,
     description: 'Fast and versatile: patrols, blockades and escorts.',
   },
   capital: {
@@ -153,7 +153,7 @@ export const SHIPS: Record<ShipType, ShipRules> = {
   carrier: {
     label: 'Carrier', plural: 'Carriers', abbr: 'Cv', requires: 'naval_aviation',
     cost: 100, materiel: 100, resources: { iron: 12, rubber: 2 }, weeks: 40, upkeep: 3.5, fuel: 0.5, oil: true,
-    gun: 0.5, torpedo: 0, antiSub: 1, aa: 3, air: 6, hull: 9, speed: 1.5, capacity: 0,
+    gun: 0.5, torpedo: 0, antiSub: 1, aa: 3, air: 7, hull: 9, speed: 1.5, capacity: 0,
     description: 'Strikes first from the air before the guns can reach; needs screens around it.',
   },
 };
@@ -423,6 +423,10 @@ export const C = {
     landing: 0.75,
     unfuelled: 0.6,
     startFleetPorts: 3,
+    /** anti-aircraft fire halves a carrier strike at this many points */
+    aaScale: 20,
+    /** by round: guns fire at this share against a side with carrier aircraft when they have none (the strikes come before the guns close) */
+    outranged: [0.3, 0.6, 1] as number[],
   },
 
   air: {

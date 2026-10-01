@@ -42,13 +42,13 @@ export function moveCost(sim: Sim, from: ProvinceId, to: ProvinceId, nid?: Natio
   const t = TERRAIN[sim.world.prov[to].terrain].move;
   const infra = (sim.state.provinces[from].infra + sim.state.provinces[to].infra) / 2;
   let c = t * (1 - 0.12 * infra);
-  if (sim.world.straitSet.has(edgeKey(from, to))) c += Math.max(0, STRAIT_COST + (nid ? nationMods(sim, nid).straitCost : 0));
+  if (sim.world.straitEnds.has(from) && sim.world.straitSet.has(edgeKey(from, to))) c += Math.max(0, STRAIT_COST + (nid ? nationMods(sim, nid).straitCost : 0));
   return c;
 }
 
 /** Is the step from `a` to `b` closed to `nid` (a strait held by enemy warships)? */
 export function stepClosed(sim: Sim, nid: NationId, a: ProvinceId, b: ProvinceId): boolean {
-  return sim.world.straitSet.has(edgeKey(a, b)) && straitBlocked(sim, nid, a, b);
+  return sim.world.straitEnds.has(a) && sim.world.straitSet.has(edgeKey(a, b)) && straitBlocked(sim, nid, a, b);
 }
 
 /** True when the border between two provinces is a river. */

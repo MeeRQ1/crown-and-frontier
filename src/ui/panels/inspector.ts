@@ -21,12 +21,17 @@ import { fmt, men, plural, signed, weeks } from '../format';
 import { icon, type IconName } from '../icons';
 import { section, shield, tip } from './common';
 import { confirmDialog } from './dialogs';
+import { airfieldSection, fleetCard, portSection, wingCard, zoneCard } from './sea';
+import { transportFor } from '../../sim/naval';
 
 export function renderInspector(app: App): void {
   const sim = app.sim!;
   const el = app.inspectorEl;
   const army = app.selectedArmy ? sim.state.armies[app.selectedArmy] : undefined;
-  const open = !!army || !!app.selectedProvince;
+  const fleet = app.selectedFleet ? sim.state.fleets[app.selectedFleet] : undefined;
+  const wing = app.selectedWing ? sim.state.wings[app.selectedWing] : undefined;
+  const zone = app.selectedZone && sim.world.zones[app.selectedZone] ? app.selectedZone : null;
+  const open = !!army || !!app.selectedProvince || !!fleet || !!wing || !!zone;
   el.classList.toggle('closed', !open);
   el.setAttribute('aria-hidden', open ? 'false' : 'true');
   if (!open) {
@@ -34,12 +39,12 @@ export function renderInspector(app: App): void {
     return;
   }
   rebuild(el, () => {
-    const card = army ? armyCard(app, army) : provinceCard(app, app.selectedProvince!);
+    const card = fleet ? fleetCard(app, fleet) : wing ? wingCard(app, wing) : zone ? zoneCard(app, zone) : army ? armyCard(app, army) : provinceCard(app, app.selectedProvince!);
     setChildren(el, ...card);
   });
 }
 
-function head(app: App, nid: string | null, title: string, sub: (Node | string)[], tags: HTMLElement[] = []): HTMLElement {
+export function head(app: App, nid: string | null, title: string, sub: (Node | string)[], tags: HTMLElement[] = []): HTMLElement {
   const close = h('button', { class: 'btn quiet small icon close', type: 'button', 'aria-label': 'Close (Esc)', 'data-fk': 'ins-close' }, icon('close'));
   close.addEventListener('click', () => app.clearSelection());
   const grab = h('button', { class: 'grab', type: 'button', 'aria-label': app.ui.inspectorPeek ? 'Expand details' : 'Collapse details' });
@@ -55,13 +60,13 @@ function head(app: App, nid: string | null, title: string, sub: (Node | string)[
   );
 }
 
-function tile(label: string, big: Node | string, sub?: Node | string | null, tipText?: string): HTMLElement {
+export function tile(label: string, big: Node | string, sub?: Node | string | null, tipText?: string): HTMLElement {
   const t = h('div', { class: 'stat-tile' }, h('div', { class: 'eyebrow' }, label), h('div', { class: 'big' }, big), sub ? h('div', { class: 'sub' }, sub) : null);
   if (tipText) tip(t, tipText);
   return t;
 }
 
-function quick(ic: IconName, label: string, onClick: () => void, problem: string | null, detail: string, cls = ''): HTMLElement {
+export function quick(ic: IconName, label: string, onClick: () => void, problem: string | null, detail: string, cls = ''): HTMLElement {
   const b = button(label, onClick, { cls: `small ${cls}`, icon: ic, disabled: problem });
   tip(b, () => h('div', null, h('b', { class: 't' }, label), h('p', null, detail), problem ? h('p', { class: 'bad' }, problem) : null));
   return b;
@@ -249,6 +254,11 @@ function provinceCard(app: App, pid: ProvinceId): HTMLElement[] {
   }
   const here = armiesAt(sim, pid);
   if (here.length) body.appendChild(section('Armies here', ...here.map((a) => armyRow(app, a))));
+  // the navy and the air arm
+  const port = portSection(app, pid);
+  if (port) body.appendChild(port);
+  const air = airfieldSection(app, pid);
+  if (air) body.appendChild(air);
   if (me && p.owner && p.owner !== me) {
     body.appendChild(
       section(
@@ -283,6 +293,10 @@ function armyRow(app: App, a: Army): HTMLElement {
 export function armyStatus(app: App, a: Army): string {
   const sim = app.sim!;
   const st = sim.state;
+  if (a.embarked) {
+    const f = st.fleets[a.embarked];
+    return f?.landing ? `At sea aboard ${f.name}, bound for ${provName(sim, f.landing)}` : `At sea aboard ${f?.name ?? 'a fleet'}`;
+  }
   if (a.battle) return `In battle at ${provName(sim, a.location)}`;
   if (a.retreating) return `Retreating to ${provName(sim, a.path[0])}`;
   if (a.path.length) return `Marching to ${provName(sim, a.path[a.path.length - 1])} · ${weeks(etaWeeks(sim, a, a.path, a.progress))}`;
@@ -303,12 +317,25 @@ function armyCard(app: App, a: Army): HTMLElement[] {
   out.push(head(app, a.nation, a.name, [`${sim.world.nationDefs[a.nation].short} · ${armyStatus(app, a)}`], tags));
 
   if (mine) {
-    const moveProb = a.battle ? 'The army is engaged in battle.' : a.retreating ? 'Retreating armies cannot take orders.' : null;
+    const moveProb = a.embarked ? 'The army is at sea; it takes orders again once it lands.' : a.battle ? 'The army is engaged in battle.' : a.retreating ? 'Retreating armies cannot take orders.' : null;
     const prim: HTMLElement[] = [];
     prim.push(quick('move', app.moveMode ? 'Choose destination…' : 'Move', () => app.startMoveMode(), moveProb, 'Then click a province on the map (or right-click it directly). Hold Shift to add a waypoint after the current route.', 'primary'));
     if (a.path.length && !a.retreating) prim.push(quick('stop', 'Halt', () => app.do({ type: 'stop', army: a.id }), null, 'Stop at the current province.'));
+    if (sim.world.provZones[a.location] && !a.embarked) {
+      const regs = a.regiments.length;
+      const f = transportFor(sim, a.nation, a.location, regs);
+      prim.push(
+        quick(
+          'ship',
+          app.targeting?.kind === 'ship' ? 'Choose a beach…' : 'Ship by sea',
+          () => app.startShipTarget([a.id]),
+          moveProb ?? (f ? null : `No fleet with room for ${regs} regiments lies off this coast (transports carry 2 each).`),
+          'A fleet with transports in a sea zone on this coast carries the army to another coast (yours, a friend’s, unclaimed, or an enemy’s). Troops landing under fire fight at a disadvantage that week.',
+        ),
+      );
+    }
     const others = armiesAt(sim, a.location).filter((x) => x.nation === a.nation && x.id !== a.id);
-    if (others.length) {
+    if (others.length && !a.embarked) {
       const ids = [a.id, ...others.map((o) => o.id)];
       prim.push(quick('merge', `Merge ${ids.length}`, () => app.do({ type: 'merge', armies: ids }), mergeProblem(sim, a.nation, ids), 'Combine every army of ours in this province into this one.'));
     }

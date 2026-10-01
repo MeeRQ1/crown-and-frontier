@@ -75,12 +75,16 @@ function recruit(sim: Sim, nid: NationId): void {
   const counts = regimentsByType(sim, nid);
   let total = UNIT_TYPES.reduce((t, u) => t + counts[u], 0);
   const war = warsOf(sim, nid).length > 0;
-  // shrink an army that is too costly for the treasury in peace
-  if (!war && total > n.ai.armyTarget + 2 && n.lastMonth.net < 0) {
+  // shrink an army that is too costly for the treasury in peace; when bankruptcy is
+  // a few months away at the current deficit, stand down the smallest army even at
+  // war (bankruptcy dissolves a fifth of the regiments anyway, and costs far more)
+  const net = n.lastMonth.net;
+  const broke = n.treasury < 0 && net < 0 && (Math.max(5, grossIncome(n.lastMonth)) * C.economy.creditMonths + n.treasury) / -net <= 4;
+  if ((broke || !war) && total > n.ai.armyTarget + (broke ? 0 : 2) && n.lastMonth.net < 0) {
     const smallest = armiesOf(sim, nid)
-      .filter((a) => !a.battle && !a.retreating)
+      .filter((a) => !a.battle && !a.retreating && !a.embarked)
       .sort((a, b) => a.regiments.length - b.regiments.length || (a.id < b.id ? -1 : 1))[0];
-    if (smallest && smallest.regiments.length <= total - n.ai.armyTarget) issue(sim, { type: 'disband', nation: nid, army: smallest.id }, `Disbanded ${smallest.name} to balance the budget`);
+    if (smallest && (broke || smallest.regiments.length <= total - n.ai.armyTarget)) issue(sim, { type: 'disband', nation: nid, army: smallest.id }, `Disbanded ${smallest.name} to balance the budget`);
     return;
   }
   const comp = targetComposition(sim, nid);
