@@ -2,27 +2,11 @@
 // plus derived indexes (paths, bounding boxes, a spatial grid for picking and
 // culling, label anchors and deterministic terrain-art placements).
 
-export interface MapGeometry {
-  id: string;
-  bounds: { minX: number; minY: number; maxX: number; maxY: number };
-  provinces: Record<string, { poly: number[]; cx: number; cy: number; area: number }>;
-  /** province–province and province–water/waste border polylines (shared, so borders match exactly) */
-  edges: Array<{ a: string; b: string; pts: number[]; river?: number }>;
-  /** impassable cells: 'peak' (mountain range) or 'lake' */
-  waste: Array<{ kind: string; poly: number[] }>;
-  straits: Array<[string, string]>;
-  /** named geography for lettering */
-  labels?: MapLabel[];
-}
+import type { DrawnMap, MapLabelDef } from '../../maps/format';
 
-export interface MapLabel {
-  kind: 'sea' | 'lake' | 'range' | 'region' | 'river';
-  name: string;
-  x: number;
-  y: number;
-  size?: number; // world units
-  angle?: number; // radians
-}
+/** A drawable map (province outlines, shared borders, wastes, straits, labels). */
+export type MapGeometry = DrawnMap;
+export type MapLabel = MapLabelDef;
 
 export type BBox = [number, number, number, number];
 

@@ -139,8 +139,13 @@ export interface Seg {
   v1: Pt;
   k0: string;
   k1: string;
-  /** noisy polyline from v0 to v1 */
+  /** noisy polyline from d0 to d1 (the drawn endpoints) */
   path: Pt[];
+  /** drawn endpoints: v0/v1, except where a contact too short to be a route was collapsed to a point */
+  d0?: Pt;
+  d1?: Pt;
+  /** a contact too short to be a route that could not be collapsed: drawn straight, without noise */
+  flat?: boolean;
 }
 
 export interface EdgeOut {
@@ -171,7 +176,11 @@ export const flat = (p: Pt[]): number[] => p.flatMap(([x, y]) => [r1(x), r1(y)])
 
 /**
  * Builds cells, noisy borders, adjacency and edges from the seeds.
- * `minBorder`: shorter land borders are drawn but do not count as adjacency.
+ * `minBorder`: land borders shorter than this are not routes. They are not
+ * drawn as borders either: the two corners of such a contact are joined into
+ * one point, so the provinces meet only at a corner (a drawn border is always a
+ * route). Where that is not possible the contact is drawn straight and short.
+ * Adjacency, rivers and attributes use the original corners (v0/v1).
  */
 export function buildMap(seeds: Seed[], bounds: Bounds, straits: Array<[string, string]>, opts: { minBorder?: number; noiseMin?: number; noiseFactor?: number } = {}): BuiltMap {
   const minBorder = opts.minBorder ?? 14;
@@ -199,9 +208,55 @@ export function buildMap(seeds: Seed[], bounds: Bounds, straits: Array<[string, 
   }
 
   const kindOf = (i: number) => seeds[i].kind;
+  // contacts between provinces too short to be routes collapse to one point
+  {
+    const isShort = (sg: Seg) => sg.cells.length === 2 && kindOf(sg.cells[0]) === 'prov' && kindOf(sg.cells[1]) === 'prov' && dist(sg.v0, sg.v1) < minBorder;
+    const byVertex = new Map<string, Seg[]>();
+    const vertexAt = new Map<string, Pt>();
+    for (const sg of segs.values()) {
+      for (const k of [sg.k0, sg.k1]) (byVertex.get(k) ?? byVertex.set(k, []).get(k)!).push(sg);
+      vertexAt.set(sg.k0, sg.v0);
+      vertexAt.set(sg.k1, sg.v1);
+    }
+    const parent = new Map<string, string>();
+    const members = new Map<string, Array<{ k: string; p: Pt }>>();
+    const find = (k: string): string => {
+      let r = k;
+      while (parent.get(r) !== undefined && parent.get(r) !== r) r = parent.get(r)!;
+      return r;
+    };
+    const setOf = (k: string) => members.get(find(k)) ?? [{ k, p: vertexAt.get(k)! }];
+    const short = [...segs.entries()].filter(([, sg]) => isShort(sg)).sort((x, y) => (x[0] < y[0] ? -1 : 1));
+    for (const [, sg] of short) {
+      const r0 = find(sg.k0);
+      const r1 = find(sg.k1);
+      if (r0 === r1) continue;
+      const merged = [...setOf(sg.k0), ...setOf(sg.k1)];
+      const inSet = new Set(merged.map((m) => m.k));
+      // joining must not swallow any other border (a route, or a coast)
+      let swallows = false;
+      for (const m of merged) for (const o of byVertex.get(m.k) ?? []) if (!isShort(o) && inSet.has(o.k0) && inSet.has(o.k1)) swallows = true;
+      if (swallows) {
+        sg.flat = true;
+        continue;
+      }
+      parent.set(r0, r0);
+      parent.set(r1, r0);
+      members.delete(r1);
+      members.set(r0, merged);
+    }
+    const drawn = new Map<string, Pt>();
+    for (const [r, ms] of members) drawn.set(r, [ms.reduce((s, m) => s + m.p[0], 0) / ms.length, ms.reduce((s, m) => s + m.p[1], 0) / ms.length]);
+    for (const sg of segs.values()) {
+      sg.d0 = drawn.get(find(sg.k0)) ?? sg.v0;
+      sg.d1 = drawn.get(find(sg.k1)) ?? sg.v1;
+    }
+  }
   for (const [sk, seg] of segs) {
-    if (seg.cells.length !== 2) {
-      seg.path = [seg.v0, seg.v1];
+    const d0 = seg.d0!;
+    const d1 = seg.d1!;
+    if (seg.cells.length !== 2 || seg.flat || (d0[0] === d1[0] && d0[1] === d1[1])) {
+      seg.path = [d0, d1];
       continue;
     }
     const [i, j] = seg.cells;
@@ -209,18 +264,18 @@ export function buildMap(seeds: Seed[], bounds: Bounds, straits: Array<[string, 
     const kj = kindOf(j);
     const plain = ki === kj && ki !== 'prov';
     if (plain) {
-      seg.path = [seg.v0, seg.v1];
+      seg.path = [d0, d1];
       continue;
     }
     const rnd = mulberry(hashStr(sk));
-    const mid = lerp(seg.v0, seg.v1, 0.5);
+    const mid = lerp(d0, d1, 0.5);
     const si: Pt = [seeds[i].x, seeds[i].y];
     const sj: Pt = [seeds[j].x, seeds[j].y];
     const Bq = lerp(mid, si, f);
     const Dq = lerp(mid, sj, f);
-    const pts: Pt[] = [seg.v0];
-    noisy(seg.v0, Bq, seg.v1, Dq, rnd, noiseMin, pts);
-    pts.push(seg.v1);
+    const pts: Pt[] = [d0];
+    noisy(d0, Bq, d1, Dq, rnd, noiseMin, pts);
+    pts.push(d1);
     seg.path = pts;
   }
 
@@ -282,7 +337,9 @@ export function buildMap(seeds: Seed[], bounds: Bounds, straits: Array<[string, 
       if (len >= minBorder) {
         neighbors[a.id].push(b.id);
         neighbors[b.id].push(a.id);
-      } else warnings.push(`tiny border ${a.id}-${b.id} (${len.toFixed(1)}) ignored for adjacency`);
+      } else warnings.push(`tiny border ${a.id}-${b.id} (${len.toFixed(1)}) ignored for adjacency${seg.flat ? ', drawn straight' : ', drawn as a corner'}`);
+      // a collapsed contact is a single point: nothing to draw
+      if (seg.path.length === 2 && seg.path[0][0] === seg.path[1][0] && seg.path[0][1] === seg.path[1][1]) continue;
       push(a.id < b.id ? { a: a.id, b: b.id, pts: flat(seg.path) } : { a: b.id, b: a.id, pts: flat([...seg.path].reverse()) }, sk);
     } else {
       const p = a.kind === 'prov' ? a : b;

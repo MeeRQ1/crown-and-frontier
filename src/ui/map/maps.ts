@@ -1,32 +1,29 @@
 // Campaign map geometry, loaded on demand so each map's shapes download only
-// when that map is played or previewed. The simulation needs only adjacency,
-// which ships with the scenario definitions.
+// when that map is played or previewed. The simulation needs only the gameplay
+// half of the map package, which ships with the scenario definitions.
 
-import { REACH_LABELS } from '../../data/reach';
+import { BUILTIN_MAPS, builtinGeometry, builtinScenario, type BuiltinMapId } from '../../maps/builtin';
+import { drawnFromPackage } from '../../maps/convert';
+import type { MapPackage } from '../../maps/format';
 import type { MapGeometry } from './geometry';
-import { ringFromEdges } from './rings';
 
 type Loader = () => Promise<MapGeometry>;
 
-const LOADERS: Record<string, Loader> = {
-  aldmere: async () => {
-    const { default: g } = await import('../../data/aldmere.map.json');
-    const raw = g as unknown as Omit<MapGeometry, 'id' | 'provinces'> & { provinces: Record<string, { cx: number; cy: number; area: number }> };
-    const provinces: MapGeometry['provinces'] = {};
-    for (const [id, p] of Object.entries(raw.provinces)) provinces[id] = { ...p, poly: ringFromEdges(id, raw.edges) };
-    return { ...raw, provinces, id: 'aldmere' };
-  },
-  reach: async () => {
-    const { default: g } = await import('../../data/reach.map.json');
-    const raw = g as unknown as Omit<MapGeometry, 'id' | 'labels'>;
-    return { ...raw, id: 'reach', labels: REACH_LABELS };
-  },
-};
+const LOADERS: Record<string, Loader> = {};
+for (const id of BUILTIN_MAPS) {
+  LOADERS[id] = async () => drawnFromPackage({ id, straits: builtinScenario(id as BuiltinMapId).straits, geometry: await builtinGeometry(id as BuiltinMapId) });
+}
 
 const loaded = new Map<string, Promise<MapGeometry>>();
 
 export function registerGeometry(id: string, loader: Loader): void {
   LOADERS[id] = loader;
+  loaded.delete(id);
+}
+
+/** Makes a whole (validated) package drawable. */
+export function registerPackageGeometry(pkg: MapPackage): void {
+  registerGeometry(pkg.id, async () => drawnFromPackage(pkg));
 }
 
 export function loadGeometry(id: string): Promise<MapGeometry> {

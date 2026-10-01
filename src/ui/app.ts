@@ -16,7 +16,9 @@ import { fontsReady } from './fonts';
 import { weeks } from './format';
 import { icon } from './icons';
 import type { MapGeometry } from './map/geometry';
-import { loadGeometry } from './map/maps';
+import { loadGeometry, registerPackageGeometry } from './map/maps';
+import { parseMapPackage, type MapCheck } from '../maps/validate';
+import { registerMapScenario } from '../sim/world';
 import { MODES, type MapMode } from './map/modes';
 import { MapRenderer } from './map/renderer';
 import { hideTip, installTips, shield, tip } from './panels/common';
@@ -219,6 +221,19 @@ export class App {
   showMenu(): void {
     this.setSpeed(0);
     this.showScreen(renderMenu(this));
+  }
+
+  /**
+   * Makes a map package playable in this session: parsed, validated (with
+   * actionable problems returned) and registered for the simulation and the
+   * renderer. Nothing is registered when the map has errors.
+   */
+  registerMapPackage(text: string): { id: string | null; check: MapCheck } {
+    const { pkg, check } = parseMapPackage(text);
+    if (!pkg) return { id: null, check };
+    registerMapScenario(pkg);
+    registerPackageGeometry(pkg);
+    return { id: pkg.id, check };
   }
 
   newGame(opts: NewGameOptions, tutorial: boolean): void {

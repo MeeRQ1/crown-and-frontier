@@ -1,17 +1,29 @@
 // Static world construction and scenario registry.
 
-import aldmere from '../data/aldmere.provinces.json';
-import { ALDMERE_NATIONS, ALDMERE_REGIONS } from '../data/aldmere';
-import adjacency from '../data/reach.adjacency.json';
-import { REACH_NATIONS, REACH_PROVINCES, REACH_REGIONS, STRAITS } from '../data/reach';
-import type { ProvinceDef, ProvinceId, ScenarioDef, World } from './types';
+import { builtinScenario } from '../maps/builtin';
+import { scenarioFromPackage } from '../maps/convert';
+import type { MapScenarioPart } from '../maps/format';
+import type { ProvinceId, ScenarioDef, World } from './types';
 
 const registry = new Map<string, () => ScenarioDef>();
 const worldCache = new Map<string, World>();
+/** gameplay halves of registered map packages, by scenario id */
+const packages = new Map<string, MapScenarioPart>();
 
 export function registerScenario(id: string, build: () => ScenarioDef): void {
   registry.set(id, build);
   worldCache.delete(id);
+}
+
+/** Registers a (validated) map package as a playable scenario. */
+export function registerMapScenario(pkg: MapScenarioPart): void {
+  packages.set(pkg.id, pkg);
+  registerScenario(pkg.id, () => scenarioFromPackage(pkg));
+}
+
+/** The map package behind a scenario, if it was registered from one. */
+export function mapScenarioPart(id: string): MapScenarioPart | undefined {
+  return packages.get(id);
 }
 
 export function scenarioIds(): string[] {
@@ -22,43 +34,15 @@ export function scenarioIds(): string[] {
 export const DEFAULT_SCENARIO = 'aldmere';
 
 export function buildAldmereScenario(): ScenarioDef {
-  const data = aldmere as unknown as { provinces: ProvinceDef[]; straits: Array<[string, string]>; rivers: Array<[string, string]> };
-  return {
-    id: 'aldmere',
-    name: 'Aldmere, 1640',
-    description: 'Fourteen realms across a continent of passes, rivers and open frontier.',
-    blurb: 'The standard campaign: about 300 provinces, several fronts for every realm, and long marches.',
-    startYear: 1640,
-    // fourteen realms share the land: dominance is a smaller share than on the Reach
-    // (thresholds scaled from the Reach's multiple of an average realm; see DESIGN.md)
-    victory: { territorialRegions: 6, territorialShare: 0.18, economicShare: 0.18, diplomaticInfluencePerRealm: 0.85 },
-    // larger realms research faster; the tree should last a 60-year campaign
-    researchCostMul: 1.35,
-    nations: ALDMERE_NATIONS,
-    regions: ALDMERE_REGIONS,
-    straits: data.straits,
-    rivers: data.rivers,
-    provinces: data.provinces.map((p) => ({ ...p, claims: [...p.claims], neighbors: [...p.neighbors] })),
-  };
+  return scenarioFromPackage(builtinScenario('aldmere'));
 }
 
 export function buildReachScenario(): ScenarioDef {
-  const neighbors = (adjacency as { neighbors: Record<string, string[]> }).neighbors;
-  return {
-    id: 'reach',
-    name: 'The Reach, 1640',
-    description: 'Nine crowns and an unsettled frontier divided by the Greyspine mountains.',
-    blurb: 'The quick campaign: 99 provinces and nine realms, wars decided in a few seasons.',
-    startYear: 1640,
-    nations: REACH_NATIONS,
-    regions: REACH_REGIONS,
-    straits: STRAITS,
-    provinces: REACH_PROVINCES.map((p) => ({ ...p, claims: [...p.claims], neighbors: [...(neighbors[p.id] ?? [])] })),
-  };
+  return scenarioFromPackage(builtinScenario('reach'));
 }
 
-registerScenario('aldmere', buildAldmereScenario);
-registerScenario('reach', buildReachScenario);
+registerMapScenario(builtinScenario('aldmere'));
+registerMapScenario(builtinScenario('reach'));
 
 export function edgeKey(a: ProvinceId, b: ProvinceId): string {
   return a < b ? `${a}|${b}` : `${b}|${a}`;
