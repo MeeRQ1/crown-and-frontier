@@ -17,7 +17,12 @@
     "verify:web": "tsx tools/verify-web.ts",
     "examples": "tsx tools/combat-examples.ts",
     "check": "npm run typecheck && npm test && npm run build && npm run package && npm run verify:web",
-    "genworld": "tsx tools/genworld.ts"
+    "genworld": "tsx tools/genworld.ts",
+    "genstress": "tsx tools/genstress.ts",
+    "bench": "node --expose-gc --import tsx tools/bench.ts",
+    "bench:web": "tsx tools/bench-web.ts",
+    "rulecheck": "tsx tools/rulecheck.ts",
+    "fuzz": "tsx tools/fuzz.ts"
   },
   "devDependencies": {
     "@types/d3-delaunay": "^6.0.4",
