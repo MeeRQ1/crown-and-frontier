@@ -500,6 +500,11 @@ export function parseMapPackage(text: string): { pkg: MapPackage | null; check: 
   } catch {
     return { pkg: null, check: { ok: false, errors: [{ code: 'json', message: 'The file is not readable JSON: it may be truncated or not a map file.' }], warnings: [] } };
   }
+  return checkMapObject(raw);
+}
+
+/** Sanitises and validates an already-parsed package (a file, or a map embedded in a save). */
+export function checkMapObject(raw: unknown): { pkg: MapPackage | null; check: MapCheck } {
   const { pkg, errors } = normalizeMapPackage(raw);
   if (errors.length) return { pkg: null, check: { ok: false, errors, warnings: [] } };
   const check = validateMapPackage(pkg);

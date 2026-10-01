@@ -1,29 +1,74 @@
 // Static world construction and scenario registry.
 
-import { builtinScenario } from '../maps/builtin';
+import { BUILTIN_MAPS, builtinScenario } from '../maps/builtin';
 import { scenarioFromPackage } from '../maps/convert';
-import type { MapScenarioPart } from '../maps/format';
-import type { ProvinceId, ScenarioDef, World } from './types';
+import { mapChecksum, type MapPackage, type MapScenarioPart } from '../maps/format';
+import type { MapFingerprint, ProvinceId, ScenarioDef, World } from './types';
 
 const registry = new Map<string, () => ScenarioDef>();
 const worldCache = new Map<string, World>();
 /** gameplay halves of registered map packages, by scenario id */
 const packages = new Map<string, MapScenarioPart>();
+/**
+ * Whole packages (with geometry) of maps that do not ship with the game, by
+ * checksum: a campaign always saves the exact map it runs on, even if another
+ * map with the same id is imported later in the session.
+ */
+const customPackages = new Map<string, MapPackage>();
+const fingerprints = new Map<string, MapFingerprint>();
 
 export function registerScenario(id: string, build: () => ScenarioDef): void {
   registry.set(id, build);
   worldCache.delete(id);
+  fingerprints.delete(id);
+  packages.delete(id);
 }
 
-/** Registers a (validated) map package as a playable scenario. */
-export function registerMapScenario(pkg: MapScenarioPart): void {
-  packages.set(pkg.id, pkg);
+/** Forgets a scenario (an imported map that is no longer needed; tests). */
+export function unregisterScenario(id: string): void {
+  registerScenario(id, () => {
+    throw new Error(`Unknown scenario "${id}"`);
+  });
+  registry.delete(id);
+}
+
+/**
+ * Registers a (validated) map package as a playable scenario. A whole package
+ * of a map that does not ship with the game is kept, so saves can embed it.
+ */
+export function registerMapScenario(pkg: MapScenarioPart | MapPackage): void {
   registerScenario(pkg.id, () => scenarioFromPackage(pkg));
+  packages.set(pkg.id, pkg);
+  if ('geometry' in pkg && !isBuiltinMap(pkg.id)) customPackages.set(mapFingerprint(pkg.id).checksum, pkg);
 }
 
 /** The map package behind a scenario, if it was registered from one. */
 export function mapScenarioPart(id: string): MapScenarioPart | undefined {
   return packages.get(id);
+}
+
+/** Whether a map id belongs to a map that ships with the game. */
+export function isBuiltinMap(id: string): boolean {
+  return (BUILTIN_MAPS as readonly string[]).includes(id);
+}
+
+/** The whole package of a map that does not ship with the game, if it was registered. */
+export function customMapPackage(fp: MapFingerprint): MapPackage | undefined {
+  return isBuiltinMap(fp.id) ? undefined : customPackages.get(fp.checksum);
+}
+
+/**
+ * The fingerprint saves record for a scenario. Scenarios registered without a
+ * package (test fixtures) have no revision and a fixed checksum.
+ */
+export function mapFingerprint(id: string): MapFingerprint {
+  let fp = fingerprints.get(id);
+  if (!fp) {
+    const part = packages.get(id);
+    fp = part ? { id, revision: part.revision, checksum: mapChecksum(part) } : { id, revision: 0, checksum: 'unversioned' };
+    fingerprints.set(id, fp);
+  }
+  return fp;
 }
 
 export function scenarioIds(): string[] {

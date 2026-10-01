@@ -10,7 +10,7 @@ import { SCHEMA_VERSION } from '../sim/config';
 import { dateOf, nationName, ownedProvinces, type Sim } from '../sim/state';
 import type { Difficulty, NationId } from '../sim/types';
 import { VICTORY_LABELS } from '../sim/victory';
-import { DEFAULT_SCENARIO, getWorld, scenarioIds } from '../sim/world';
+import { DEFAULT_SCENARIO, getWorld, mapScenarioPart, scenarioIds } from '../sim/world';
 import type { App } from './app';
 import { AtlasView, startOf } from './atlas-view';
 import { button, h, setChildren, type Child } from './dom';
@@ -34,7 +34,11 @@ const MAP_INFO: Record<string, { title: string; kind: string; lengths: Array<[nu
 };
 
 function mapInfo(id: string) {
-  return MAP_INFO[id] ?? { title: id, kind: 'Campaign', lengths: [[40, '40 years']] as Array<[number, string]>, defaultYears: 40 };
+  if (MAP_INFO[id]) return MAP_INFO[id];
+  // an imported map: its package says what it is
+  const part = mapScenarioPart(id);
+  const years = part?.rules.campaignYears ?? { options: [40], default: 40 };
+  return { title: part?.meta.name ?? id, kind: 'Custom campaign', lengths: years.options.map((y) => [y, `${y} years`]) as Array<[number, string]>, defaultYears: years.default };
 }
 
 function backBtn(app: App, label = 'Back'): HTMLElement {
@@ -368,8 +372,10 @@ export function renderLoad(app: App): HTMLElement {
       slots.length
         ? slots.map((s) => {
             const m = s.meta;
-            const known = m && scenarioIds().includes(m.scenario);
-            const def = known && m.nation ? getWorld(m.scenario).nationDefs[m.nation] : null;
+            const registered = !!m && scenarioIds().includes(m.scenario);
+            // a save of a custom map carries the map itself
+            const known = registered || !!m?.customMap;
+            const def = registered && m.nation ? getWorld(m.scenario).nationDefs[m.nation] : null;
             const why = !m ? 'This save cannot be read.' : !known ? `This save uses a map ("${m.scenario}") that this version does not include.` : null;
             return h(
               'div',
@@ -379,7 +385,7 @@ export function renderLoad(app: App): HTMLElement {
                 'div',
                 { class: 'grow' },
                 h('div', { class: 'sv-t' }, m ? m.nationName : s.key),
-                h('div', { class: 'sv-s' }, m ? `${mapInfo(m.scenario).title} · ${m.date} · saved ${new Date(m.savedAt).toLocaleString()}` : 'Unreadable save'),
+                h('div', { class: 'sv-s' }, m ? `${MAP_INFO[m.scenario]?.title ?? m.mapName ?? m.scenario} · ${m.date} · saved ${new Date(m.savedAt).toLocaleString()}` : 'Unreadable save'),
                 h('div', { class: 'sv-k' }, s.key.startsWith('autosave') ? 'Autosave' : s.key.replace('slot-', 'Slot ')),
                 why ? h('div', { class: 'small bad' }, why) : null,
               ),

@@ -19,6 +19,12 @@ import type {
 export interface Sim {
   world: World;
   state: GameState;
+  /**
+   * Where the player's command log starts (not saved): a campaign loaded from a
+   * save, or one whose log was rolled over, replays from this checkpoint save
+   * instead of from a fresh game.
+   */
+  origin?: { save: string; tick: number; /** length of the command log at the checkpoint */ logLength: number };
 }
 
 export const WEEKS_PER_MONTH = C.time.weeksPerMonth;

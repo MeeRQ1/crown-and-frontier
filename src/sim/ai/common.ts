@@ -8,7 +8,7 @@ import { armyStrength } from '../military';
 import { canEnter, moveCost } from '../movement';
 import { nextFloat } from '../rng';
 import { atWar, diag, type Sim } from '../state';
-import type { Army, Command, CommandResult, Difficulty, NationId, ProvinceId } from '../types';
+import type { Army, CommandResult, Difficulty, NationId, ProvinceId, RealmCommand } from '../types';
 
 export interface DifficultyProfile {
   label: string;
@@ -45,7 +45,7 @@ export function aiRand(sim: Sim): number {
 }
 
 /** Issues an order through the shared command path; rejected orders are recorded. */
-export function issue(sim: Sim, cmd: Command, why?: string): CommandResult {
+export function issue(sim: Sim, cmd: RealmCommand, why?: string): CommandResult {
   const r = applyCommand(sim, cmd);
   if (!r.ok) diag(sim, cmd.nation, 'execution', `Rejected ${cmd.type}: ${r.reason}`);
   else if (why) diag(sim, cmd.nation, 'execution', why);

@@ -275,6 +275,15 @@ async function main(): Promise<void> {
       const msg = await page.locator('.modal h2', { hasText: 'Cannot load this save' }).count();
       const still = await page.evaluate(() => (window as any).cnf.sim?.state.tick);
       record('A damaged save is rejected and the campaign is kept', msg === 1 && still === tick);
+      // a save from the first release (format 1) is converted, and the player is told
+      await page.locator('.modal footer button').first().click();
+      await page.getByRole('button', { name: 'Game menu' }).click();
+      const [chooser3] = await Promise.all([page.waitForEvent('filechooser'), page.getByRole('button', { name: 'Import file' }).click()]);
+      await chooser3.setFiles(join('tests', 'fixtures', 'reach-save-main-c29aea6.json'));
+      await page.waitForSelector('.modal h2:has-text("This save was converted")', { timeout: 10000 }).catch(() => null);
+      const old = await page.evaluate(() => ({ tick: (window as any).cnf.sim?.state.tick, schema: (window as any).cnf.sim?.state.schema, map: (window as any).cnf.sim?.state.scenarioId }));
+      const notice = await page.locator('.modal', { hasText: 'save format 1' }).count();
+      record('A format-1 save is converted on import, with a notice', old.tick === 60 && old.schema === 2 && old.map === 'reach' && notice === 1, `tick ${old.tick}, format ${old.schema}, ${old.map}`);
       record('No errors during the session', problems.length === 0, problems.slice(0, 3).join('; '));
       await page.close();
     }

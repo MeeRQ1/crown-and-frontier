@@ -481,9 +481,21 @@ export interface AIDiagnostic {
   detail?: string[];
 }
 
+/**
+ * Which map a campaign is played on: the map package's id and content
+ * revision, and the checksum of its gameplay content (src/maps/format.ts).
+ */
+export interface MapFingerprint {
+  id: string;
+  revision: number;
+  checksum: string;
+}
+
 export interface GameState {
   schema: number;
   scenarioId: string;
+  /** the exact map this campaign was created on (save format 2) */
+  map: MapFingerprint;
   tick: number;
   /** revision counter bumped on any control/ownership/war/treaty change (cache key) */
   rev: number;
@@ -543,6 +555,11 @@ export type Command =
   | { type: 'eventChoice'; nation: NationId; instance: string; choice: number }
   | { type: 'joinCoalition'; nation: NationId; target: NationId }
   | { type: 'leaveCoalition'; nation: NationId; target: NationId }
-  | { type: 'coalitionWar'; nation: NationId; target: NationId };
+  | { type: 'coalitionWar'; nation: NationId; target: NationId }
+  /** play on after the campaign result (logged so replays match; null for an observer) */
+  | { type: 'continueCampaign'; nation: NationId | null };
+
+/** A command issued by a realm (everything except the campaign-level ones). */
+export type RealmCommand = Exclude<Command, { type: 'continueCampaign' }>;
 
 export type CommandResult = { ok: true; message?: string } | { ok: false; reason: string };

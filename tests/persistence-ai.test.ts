@@ -1,6 +1,7 @@
 import { readdirSync, readFileSync, statSync } from 'node:fs';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
+import { SCHEMA_VERSION } from '../src/sim/config';
 import { createGame } from '../src/sim/game';
 import { checkInvariants } from '../src/sim/invariants';
 import { deserialize, SaveError, serialize } from '../src/sim/save';
@@ -83,7 +84,7 @@ describe('persistence', () => {
     expect(() => deserialize(text.slice(0, text.length / 2))).toThrow(SaveError);
     expect(() => deserialize(text.slice(0, text.length / 2))).toThrow(/truncated|corrupted/);
     expect(() => deserialize('{"hello":1}')).toThrow(/not a Crown & Frontier save/);
-    expect(() => deserialize(text.replace('"schema":1', '"schema":99'))).toThrow(/newer version/);
+    expect(() => deserialize(text.replace(`"schema":${SCHEMA_VERSION}`, '"schema":99'))).toThrow(/newer version/);
     expect(() => deserialize(text.replace('"treasury":', '"treasury":1'))).toThrow(/integrity/);
     const obj = JSON.parse(text);
     delete obj.state.provinces.aurelon;

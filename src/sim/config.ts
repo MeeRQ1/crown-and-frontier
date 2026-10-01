@@ -277,6 +277,13 @@ export const C = {
     exposureWeight: 0.15, // share of each open neighbour's strength counted against a war plan (beyond two open borders)
     secondFrontExhaustion: 25, // an AI at war and this exhausted refuses a call to a second front
   },
+
+  /** player commands kept for bug-report replays before the log rolls over to a checkpoint */
+  playerLogMax: 2000,
 } as const;
 
-export const SCHEMA_VERSION = 1;
+/**
+ * Save format. 1: first release. 2: records the map fingerprint (id, revision,
+ * checksum) and embeds custom maps; schema-1 saves are migrated (src/sim/migrate.ts).
+ */
+export const SCHEMA_VERSION = 2;

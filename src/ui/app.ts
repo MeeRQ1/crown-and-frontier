@@ -6,7 +6,7 @@ import { applyCommand } from '../sim/commands';
 import { buildProblem, projectCost } from '../sim/construction';
 import { createGame, type NewGameOptions } from '../sim/game';
 import { canEnter, etaWeeks, findPath } from '../sim/movement';
-import { deserialize, SaveError, serialize } from '../sim/save';
+import { readSave, SaveError, serialize } from '../sim/save';
 import { atWar, dateOf, months, ownedProvinces, provName, type Sim } from '../sim/state';
 import { isOver, step } from '../sim/tick';
 import type { Army, Command, CommandResult, NationId, ProvinceId } from '../sim/types';
@@ -18,7 +18,7 @@ import { icon } from './icons';
 import type { MapGeometry } from './map/geometry';
 import { loadGeometry, registerPackageGeometry } from './map/maps';
 import { parseMapPackage, type MapCheck } from '../maps/validate';
-import { registerMapScenario } from '../sim/world';
+import { isBuiltinMap, registerMapScenario } from '../sim/world';
 import { MODES, type MapMode } from './map/modes';
 import { MapRenderer } from './map/renderer';
 import { hideTip, installTips, shield, tip } from './panels/common';
@@ -233,6 +233,9 @@ export class App {
   registerMapPackage(text: string): { id: string | null; check: MapCheck } {
     const { pkg, check } = parseMapPackage(text);
     if (!pkg) return { id: null, check };
+    if (isBuiltinMap(pkg.id)) {
+      return { id: null, check: { ok: false, errors: [{ code: 'id', message: `"${pkg.id}" is the id of a built-in map; give the map another id.` }], warnings: check.warnings } };
+    }
     registerMapScenario(pkg);
     registerPackageGeometry(pkg);
     return { id: pkg.id, check };
@@ -592,7 +595,8 @@ export class App {
 
   continueAfterEnd(): void {
     if (!this.sim) return;
-    this.sim.state.continueAfterResult = true;
+    // a logged command, so a bug report from the continued campaign still replays
+    applyCommand(this.sim, { type: 'continueCampaign', nation: this.player });
     this.hideScreen();
     this.refresh();
   }
@@ -1018,8 +1022,13 @@ export class App {
 
   loadText(text: string): boolean {
     try {
-      const sim = deserialize(text);
-      void this.startGame(sim, false).then(() => this.toast(`Loaded ${dateOf(sim).label}.`, 'good'));
+      const { sim, notices, mapPackage } = readSave(text);
+      if (mapPackage) registerPackageGeometry(mapPackage);
+      void this.startGame(sim, false).then(() => {
+        this.toast(`Loaded ${dateOf(sim).label}.`, 'good');
+        // converted from an older format, or a map that changed since: say so plainly
+        if (notices.length) dialog(this, 'This save was converted', notices.map((n) => h('p', null, n)));
+      });
       return true;
     } catch (e) {
       const msg = e instanceof SaveError ? e.message : `Could not load: ${(e as Error).message}`;

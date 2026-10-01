@@ -22,7 +22,7 @@ import { adminCapacity, frontierLoad, overextension } from '../../sim/integratio
 import { maxMorale, nationStrength } from '../../sim/military';
 import { describeEffects } from '../../sim/modifiers';
 import { policyProblem, policySwitchCost, researchProblem, researchRate, techCost } from '../../sim/progression';
-import { fnv1a } from '../../sim/save';
+import { diagnosticBundle } from '../../sim/diagnostics';
 import {
   aliveNations,
   alliesOf,
@@ -912,20 +912,7 @@ function logLedger(app: App): HTMLElement {
   const reports = sim.state.reports.filter((r) => !me || r.attackerNations.includes(me) || r.defenderNations.includes(me)).slice(-30).reverse();
   const bugReport = () => {
     const st = sim.state;
-    const report = {
-      game: 'crown-and-frontier',
-      build: import.meta.env?.MODE ?? 'unknown',
-      userAgent: navigator.userAgent,
-      scenario: st.scenarioId,
-      settings: st.settings,
-      tick: st.tick,
-      date: dateOf(sim).label,
-      stateChecksum: fnv1a(JSON.stringify(st)),
-      playerCommands: st.playerLog,
-      recentNotifications: st.notifications.slice(-60),
-      aiDiagnostics: st.diagnostics.slice(-150),
-      howToReproduce: 'npx tsx tools/replay.ts <this file> — replays playerCommands on a fresh game with these settings and compares stateChecksum.',
-    };
+    const report = diagnosticBundle(sim, { build: import.meta.env?.MODE ?? 'unknown', userAgent: navigator.userAgent });
     downloadText(`crown-and-frontier-bug-${st.settings.seed}-${st.tick}.json`, JSON.stringify(report, null, 1));
   };
   return h(

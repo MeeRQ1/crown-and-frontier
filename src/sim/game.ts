@@ -8,7 +8,7 @@ import { createArmy, newRegiment } from './military';
 import { seedState } from './rng';
 import { months, ownedProvinces, type Sim } from './state';
 import type { Difficulty, GameState, MonthlyLedger, NationId, NationState, Regiment, Settings, UnitType } from './types';
-import { getWorld, validateScenario } from './world';
+import { getWorld, mapFingerprint, validateScenario } from './world';
 import { validateContent } from './content';
 
 export interface NewGameOptions {
@@ -40,6 +40,7 @@ export function createGame(opts: NewGameOptions = {}): Sim {
   const st: GameState = {
     schema: SCHEMA_VERSION,
     scenarioId: world.scenario.id,
+    map: { ...mapFingerprint(world.scenario.id) },
     tick: 0,
     rev: 0,
     settings,

@@ -2,6 +2,7 @@
 // checkCommand() never mutates state; applyCommand() validates first and
 // leaves state untouched when it fails (returning a player-readable reason).
 
+import { C } from './config';
 import { buildProblem, cancelProblem, cancelProject, startProject } from './construction';
 import {
   cancelTreaty,
@@ -26,12 +27,14 @@ import { choiceProblem, resolveEvent } from './events';
 import { cancelRecruits, disbandProblem, doDisband, doMerge, doSplit, mergeProblem, orderRecruit, recruitProblem, splitProblem } from './military';
 import { enterProblem, findPath, stationProblem } from './movement';
 import { policyProblem, researchProblem, setPolicy } from './progression';
+import { serialize } from './save';
 import { nationName, notify, type Sim } from './state';
 import type { Command, CommandResult } from './types';
 import { answerCallToArms, applyPeace, declareWar, declareWarProblem, evaluatePeace, goalOptions, peaceProblem } from './war';
 
 export function checkCommand(sim: Sim, cmd: Command): string | null {
   const st = sim.state;
+  if (cmd.type === 'continueCampaign') return st.result && !st.continueAfterResult ? null : 'The campaign has not ended.';
   const n = st.nations[cmd.nation];
   if (!n) return 'Unknown realm.';
   if (!n.alive) return 'Your realm has fallen.';
@@ -139,12 +142,11 @@ export function applyCommand(sim: Sim, cmd: Command): CommandResult {
   const problem = checkCommand(sim, cmd);
   if (problem) return { ok: false, reason: problem };
   const st = sim.state;
-  const n = st.nations[cmd.nation];
-  if (n.isPlayer) {
-    st.playerLog.push({ tick: st.tick, cmd: JSON.parse(JSON.stringify(cmd)) });
-    if (st.playerLog.length > 2000) st.playerLog.splice(0, st.playerLog.length - 2000);
-  }
+  if (cmd.type === 'continueCampaign' || st.nations[cmd.nation].isPlayer) logCommand(sim, cmd);
   switch (cmd.type) {
+    case 'continueCampaign':
+      st.continueAfterResult = true;
+      return { ok: true };
     case 'recruit': {
       const count = cmd.count ?? 1;
       let done = 0;
@@ -216,10 +218,10 @@ export function applyCommand(sim: Sim, cmd: Command): CommandResult {
       cancelProject(sim, cmd.province);
       return { ok: true, message: 'Project cancelled; half the cost refunded.' };
     case 'research':
-      n.research.current = cmd.tech;
+      st.nations[cmd.nation].research.current = cmd.tech;
       return { ok: true };
     case 'funding':
-      n.research.funding = cmd.level;
+      st.nations[cmd.nation].research.funding = cmd.level;
       return { ok: true };
     case 'policy':
       setPolicy(sim, cmd.nation, cmd.policy);
@@ -295,6 +297,20 @@ export function applyCommand(sim: Sim, cmd: Command): CommandResult {
       return { ok: true, message: `${w.name} begins.` };
     }
   }
+}
+
+/**
+ * Player commands are logged so a bug report can replay the campaign. A full log
+ * rolls over: the state before this command becomes the replay checkpoint (it
+ * already contains every earlier command's effect) and the log starts afresh.
+ */
+function logCommand(sim: Sim, cmd: Command): void {
+  const st = sim.state;
+  if (st.playerLog.length >= C.playerLogMax) {
+    sim.origin = { save: serialize(sim), tick: st.tick, logLength: 0 };
+    st.playerLog = [];
+  }
+  st.playerLog.push({ tick: st.tick, cmd: JSON.parse(JSON.stringify(cmd)) });
 }
 
 /** Proposal expiry: unanswered calls to arms are honoured, everything else lapses. */
