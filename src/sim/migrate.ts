@@ -6,10 +6,16 @@
 // Format history (SCHEMA_VERSION in config.ts):
 //   1  first release (v0.1, v0.2)
 //   2  the state records its map fingerprint; saves of custom maps embed the map
+//   3  the industrial age: new unit roster, resources, industry, research eras
 
-import { SCHEMA_VERSION } from './config';
+import { checkMapObject } from '../maps/validate';
+import { mapChecksum } from '../maps/format';
+import { C, SCHEMA_VERSION, STRATEGIC } from './config';
+import { LEGACY_TECHS, startingTechs } from './data/techs';
+import { emptyFlows } from './economy';
+import { defaultFactories } from './game';
 import type { MapFingerprint } from './types';
-import { mapScenarioPart } from './world';
+import { getWorld, isBuiltinMap, mapFingerprint, mapScenarioPart, scenarioIds } from './world';
 
 /** A save as parsed from JSON, before validation. */
 export interface RawSave {
@@ -50,6 +56,60 @@ const STEPS: Record<number, Step> = {
     notices.push(
       `This save was made by an earlier version of the game (save format 1) and was converted to format 2. ` +
         `Format 1 did not record which version of the map it used, so the campaign continues on ${name} as this version of the game has it. Saving again writes the new format.`,
+    );
+  },
+  // 2 → 3: the 17th-century campaign moves into the industrial age
+  2: (save, notices) => {
+    const st = save.state as Record<string, any>;
+    // the map: a built-in map continues on its current revision; an embedded map is upgraded
+    if (save.mapPackage !== undefined) {
+      const { pkg, check } = checkMapObject(save.mapPackage);
+      if (!pkg) throw new MigrationError(`the map stored in the save cannot be upgraded (${check.errors.slice(0, 2).map((e) => e.message).join('; ')})`);
+      save.mapPackage = pkg;
+      st.map = { id: pkg.id, revision: pkg.revision, checksum: mapChecksum(pkg) };
+    } else if (typeof st.scenarioId === 'string' && isBuiltinMap(st.scenarioId)) {
+      st.map = { ...mapFingerprint(st.scenarioId) };
+    }
+    const startYear = typeof st.scenarioId === 'string' && scenarioIds().includes(st.scenarioId) ? getWorld(st.scenarioId).scenario.startYear : 1880;
+    const UNIT: Record<string, string> = { foot: 'infantry', horse: 'cavalry', guns: 'artillery' };
+    const unit = (u: unknown) => (typeof u === 'string' ? (UNIT[u] ?? u) : u);
+    for (const a of Object.values<any>(st.armies ?? {})) for (const r of a.regiments ?? []) r.type = unit(r.type);
+    const capitals = new Set(Object.values<any>(st.nations ?? {}).map((n) => n.capital));
+    for (const p of Object.values<any>(st.provinces ?? {})) {
+      for (const o of p.recruits ?? []) o.unit = unit(o.unit);
+      p.factories = p.owner ? defaultFactories(p.dev ?? 1, capitals.has(p.id)) : 0;
+    }
+    const known = startingTechs(startYear);
+    for (const n of Object.values<any>(st.nations ?? {})) {
+      let dev = 0;
+      let factories = 0;
+      for (const p of Object.values<any>(st.provinces ?? {})) {
+        if (p.owner !== n.id) continue;
+        dev += p.dev ?? 0;
+        factories += p.factories;
+      }
+      const rcap = C.resources.stockBase + C.resources.stockPerDev * dev;
+      n.stock = Object.fromEntries(STRATEGIC.map((r) => [r, Math.round(rcap * C.resources.startShare)]));
+      n.materiel = Math.round((C.industry.materielBase + C.industry.materielPerFactory * factories) * C.industry.startMaterielShare);
+      n.shortages = [];
+      const done = new Set<string>(known);
+      for (const t of n.research?.done ?? []) if (LEGACY_TECHS[t]) done.add(LEGACY_TECHS[t]);
+      n.research = { ...n.research, current: null, done: [...done] };
+      if (n.lastMonth) n.lastMonth = { ...n.lastMonth, resources: emptyFlows(), industry: 0, materielIn: 0 };
+    }
+    for (const e of st.playerLog ?? []) {
+      const cmd = e.cmd;
+      if (cmd?.type === 'recruit') cmd.unit = unit(cmd.unit);
+      if (cmd?.type === 'split' && cmd.counts) cmd.counts = Object.fromEntries(Object.entries(cmd.counts).map(([k, v]) => [unit(k), v]));
+    }
+    st.schema = 3;
+    save.schema = 3;
+    const tick = typeof st.tick === 'number' ? st.tick : 0;
+    const year = startYear + Math.floor(tick / (C.time.weeksPerMonth * C.time.monthsPerYear));
+    notices.push(
+      `This campaign was made with the 17th-century rules (save format 2) and was converted to the industrial age (format 3). ` +
+        `Foot became infantry, horse cavalry and guns artillery; researched technologies were mapped to their nearest equivalents in the new tree; ` +
+        `factories, resource stockpiles and materiel were added; and the calendar now begins in ${startYear}, so the campaign continues in ${year}.`,
     );
   },
 };

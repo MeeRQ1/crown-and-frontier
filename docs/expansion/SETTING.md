@@ -1,7 +1,9 @@
 # Setting decision: the Industrial Age (c. 1870–1950)
 
-Status: decided in Stage A. Implementation starts in Stage B. Nothing in this document
-is in the game yet.
+Status: decided in Stage A. **Stage B implemented** the calendar, the six resources,
+industry, trade, the research eras for land, industry and society, the land roster and
+save format 3. Fleets, sea zones, aircraft and the naval and air technologies follow in
+Stage C. The decisions taken while implementing are listed at the end.
 
 ## The decision
 
@@ -73,7 +75,7 @@ unit for every model.
   destroyers), cruisers, capital ships, submarines (era III) and carriers (era IV/V).
 - **Air:** reconnaissance (era III), fighters, ground attack, strategic bombers (era IV).
 
-Naval units live in **sea zones**, a new node type in map package v2 (Stage C). Aircraft
+Naval units live in **sea zones**, a new node type in map package v3 (Stage C; v2 added the deposits in Stage B). Aircraft
 fly from **airfields** in provinces, with a range in map distance.
 
 ## Resources
@@ -113,7 +115,34 @@ always explained to the player:
    nearest era-I equivalents. The calendar is rebased to the map's new start year plus
    the elapsed time. A notice lists what was converted and what was approximated.
 2. **If a conversion is not possible** (for example, an unknown map), the save is never
-   deleted. It stays in the save list, marked "made with the 1640 rules (game version
-   0.2)", with its reason, and it can still be exported.
+   deleted. It stays in the save list, marked "made by an earlier version (save format
+   N)", and loading it shows the reason. It can still be exported from the save list.
 3. Unit tests cover every conversion with fixtures from formats 1 and 2. A browser
    check covers the notice.
+
+## Decisions taken in Stage B
+
+- **Materiel** is the one industrial output. Factories turn coal into materiel; regiments
+  cost materiel and resources besides crowns, and replacing losses costs materiel. A
+  separate production line per unit type was rejected: it would add a screen of
+  bookkeeping without a new decision.
+- **Food** is the existing supply stockpile, renamed. Food deposits replace grain.
+- **Coal never stops the game.** A factory without coal keeps 30% of its capacity (water
+  power, short shifts). Missing iron or rubber does block building the units that need
+  them, and the recruit buttons say so; nothing else stops.
+- **The tree has 54 technologies after Stage B** (land 19, industry 18, society 17 across
+  the five eras). Stage C adds the naval and air branches, which brings it to the planned
+  60–80. Every realm starts with the technologies whose horizon is five or more years
+  before the start (7 on Aldmere, 20 on the Reach).
+- **Land roster:** infantry, cavalry, artillery, engineers (Engineering Corps, 1885) and
+  armour (Tanks, 1916). Cavalry fades through machine guns, which cut its fire, rather than
+  by removal.
+- **Resource placement on existing maps** is converted deterministically from each
+  province's old resource, terrain and id (`src/maps/deposits.ts`), so the maps keep their
+  character: grain becomes food; iron becomes iron or coal; the horse steppes hold oil or
+  food; old trading wealth becomes coal or nitrates; and some provinces without a resource
+  gain coal (hills, mountains), oil and rubber (marsh, forest) or nitrates (steppe, plains).
+  Oil and rubber stay rare.
+- **Trade** moves surplus above 40% of a stockpile to a partner below 40%, at fixed prices,
+  plus 1 crown of commerce per agreement. The flat income bonus is gone; in AI batches trade
+  is about 10–12% of income at year 25 (it was about half).

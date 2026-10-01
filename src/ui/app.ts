@@ -56,6 +56,7 @@ export interface UIState {
 
 const RAIL: Array<{ tab: LedgerTab; label: string; icon: Parameters<typeof icon>[0]; key: string; desk?: boolean }> = [
   { tab: 'realm', label: 'Realm', icon: 'crown', key: 'B' },
+  { tab: 'industry', label: 'Industry', icon: 'factory', key: 'I' },
   { tab: 'military', label: 'Military', icon: 'military', key: 'M' },
   { tab: 'research', label: 'Research', icon: 'research', key: 'T' },
   { tab: 'policy', label: 'Policy', icon: 'policy', key: 'P', desk: true },
@@ -1273,7 +1274,7 @@ export class App {
       e.preventDefault();
       return;
     }
-    const ledgers: Record<string, LedgerTab> = { b: 'realm', m: 'military', t: 'research', p: 'policy', d: 'diplomacy', w: 'wars', v: 'victory', l: 'log', h: 'help' };
+    const ledgers: Record<string, LedgerTab> = { b: 'realm', i: 'industry', m: 'military', t: 'research', p: 'policy', d: 'diplomacy', w: 'wars', v: 'victory', l: 'log', h: 'help' };
     const lk = k.toLowerCase();
     if (k === ' ') {
       this.togglePause();

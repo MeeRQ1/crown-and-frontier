@@ -11,7 +11,8 @@ import { TERRAIN } from '../sim/config';
 import type { NationDef, NationTraits, ProvinceDef, RegionDef, Resource, Terrain } from '../sim/types';
 import { MAP_FORMAT, MAP_FORMAT_VERSION, NON_PROVINCE_SIDES, type MapEdge, type MapLabelDef, type MapPackage } from './format';
 import { degenerate, loopsFromEdges } from './rings';
-import { CHARGE_NAMES, ORDINARY_NAMES, PERSONALITY_IDS, RESOURCES, TERRAINS, TINCTURE_NAMES, TRAIT_BOUNDS } from './vocab';
+import { industrialDeposit, LEGACY_RESOURCES, type LegacyResource } from './deposits';
+import { CHARGE_NAMES, LEGACY_TRAITS, ORDINARY_NAMES, PERSONALITY_IDS, RESOURCES, TERRAINS, TINCTURE_NAMES, TRAIT_BOUNDS } from './vocab';
 
 export interface MapIssue {
   code: string;
@@ -127,7 +128,8 @@ class Reader {
 function readTraits(r: Reader, v: unknown, ref: string): NationTraits {
   const o = r.obj(v ?? {}, 'Realm traits', ref);
   const out: Record<string, number> = {};
-  for (const [k, val] of Object.entries(o)) {
+  for (const [key, val] of Object.entries(o)) {
+    const k = LEGACY_TRAITS[key] ?? key;
     const b = TRAIT_BOUNDS[k];
     if (!b) {
       r.err('value', `Unknown realm trait "${k}".`, ref);
@@ -136,6 +138,15 @@ function readTraits(r: Reader, v: unknown, ref: string): NationTraits {
     out[k] = r.num(val, `Trait ${k}`, b[0], b[1], ref);
   }
   return out as NationTraits;
+}
+
+/** A province's deposit; format-1 maps name 17th-century resources, converted here. */
+function readResource(r: Reader, v: unknown, version: number, terrain: Terrain, pid: string): Resource {
+  if (version < 2) {
+    const old = v === null || v === undefined ? null : (r.oneOf(v, LEGACY_RESOURCES, 'Resource', pid) as LegacyResource);
+    return (TERRAINS as readonly string[]).includes(terrain) ? industrialDeposit(old, terrain, pid) : null;
+  }
+  return v === null || v === undefined ? null : (r.oneOf(v, RESOURCES, 'Resource', pid) as Resource);
 }
 
 /** Rebuilds a package from untrusted data with only known, well-typed fields. */
@@ -239,7 +250,7 @@ export function normalizeMapPackage(raw: unknown): { pkg: MapPackage; errors: Ma
       id: pid,
       name: r.str(po.name, 'Province name', MAP_LIMITS.nameLength, pid),
       terrain: r.oneOf(po.terrain, TERRAINS, 'Terrain', pid) as Terrain,
-      resource: po.resource === null || po.resource === undefined ? null : (r.oneOf(po.resource, RESOURCES, 'Resource', pid) as Resource),
+      resource: readResource(r, po.resource, version, po.terrain as Terrain, pid),
       owner: po.owner === null || po.owner === undefined ? null : r.id(po.owner, 'Owner', pid),
       dev: r.int(po.dev, 'Development', 1, 20, pid),
       pop: r.num(po.pop, 'Population', 1, 10000, pid),
@@ -250,6 +261,7 @@ export function normalizeMapPackage(raw: unknown): { pkg: MapPackage; errors: Ma
       claims: r.arr(po.claims ?? [], 'Claims', 32).map((c) => r.id(c, 'Claimant', pid)),
       neighbors: r.arr(po.neighbors ?? [], 'Neighbours', 64).map((nb) => r.id(nb, 'Neighbour', pid)),
     };
+    if (po.factories !== undefined) p.factories = r.int(po.factories, 'Factories', 0, 5, pid);
     pkg.provinces.push(p);
   }
   for (const x of r.arr(o.straits ?? [], 'Straits', 2000)) {

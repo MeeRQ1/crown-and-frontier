@@ -11,9 +11,13 @@ export type PolicyId = string;
 export type EventId = string;
 
 export type Terrain = 'plains' | 'forest' | 'hills' | 'mountains' | 'marsh' | 'steppe';
-export type Resource = 'grain' | 'iron' | 'horses' | 'goods' | null;
-export type UnitType = 'foot' | 'horse' | 'guns';
-export type ProjectKind = 'dev' | 'infra' | 'fort' | 'charter' | 'settle';
+/** Strategic resources mined or grown in provinces; food is the realm's provisions stockpile. */
+export type StrategicResource = 'coal' | 'iron' | 'oil' | 'rubber' | 'nitrates';
+export type ResourceKind = 'food' | StrategicResource;
+/** A province's deposit (one at most). */
+export type Resource = ResourceKind | null;
+export type UnitType = 'infantry' | 'cavalry' | 'artillery' | 'engineers' | 'armour';
+export type ProjectKind = 'dev' | 'infra' | 'fort' | 'charter' | 'settle' | 'factory';
 export type Personality = 'expansionist' | 'defensive' | 'commercial' | 'opportunist' | 'diplomat';
 export type Difficulty = 'easy' | 'normal' | 'hard';
 export type VictoryPath = 'territorial' | 'economic' | 'diplomatic';
@@ -32,9 +36,9 @@ export interface NationTraits {
   siegeMul?: number;
   devCostMul?: number;
   popGrowthMul?: number;
-  gunsCostMul?: number;
-  horseCostMul?: number;
-  horseAttackAdd?: number;
+  artilleryCostMul?: number;
+  cavalryCostMul?: number;
+  cavalryAttackAdd?: number;
   integrationMul?: number;
   envoyAdd?: number;
   opinionAdd?: number;
@@ -77,6 +81,8 @@ export interface ProvinceDef {
   integration: number;
   claims: NationId[];
   neighbors: ProvinceId[];
+  /** factory levels at the start (default: derived from development) */
+  factories?: number;
 }
 
 export interface RegionDef {
@@ -152,6 +158,8 @@ export interface ProvinceState {
   dev: number;
   infra: number;
   fort: number;
+  /** factory levels (industry) */
+  factories: number;
   integration: number; // 0..100
   unrest: number; // 0..100
   project: Project | null;
@@ -347,6 +355,7 @@ export interface ModifierEffects {
   integrationMul?: number;
   moraleRecoveryMul?: number;
   upkeepMul?: number;
+  industryMul?: number;
 }
 
 export interface PendingEvent {
@@ -406,8 +415,15 @@ export interface NationState {
   isPlayer: boolean;
   capital: ProvinceId | null;
   treasury: number;
+  /** food: the provisions stockpile armies draw on (shown as "Food") */
   supplies: number;
   manpower: number;
+  /** strategic resource stockpiles */
+  stock: Record<StrategicResource, number>;
+  /** equipment produced by industry, spent on regiments and replacements */
+  materiel: number;
+  /** resources the realm ran out of at the last monthly settlement */
+  shortages: StrategicResource[];
   research: {
     current: TechId | null;
     progress: number;
@@ -441,6 +457,19 @@ export interface MonthlyLedger {
   researchGain: number;
   net: number;
   netSupplies: number;
+  /** strategic resources: produced, used, bought and sold this month */
+  resources: Record<StrategicResource, ResourceFlow>;
+  /** industrial capacity (factory output after coal and efficiency) */
+  industry: number;
+  /** materiel added to the stockpile this month */
+  materielIn: number;
+}
+
+export interface ResourceFlow {
+  produced: number;
+  used: number;
+  imported: number;
+  exported: number;
 }
 
 export interface Notification {

@@ -1,7 +1,8 @@
 # Crown & Frontier
 
 A single-player grand strategy game for the browser. You rule a young crown on a divided
-continent in 1640. Grow by settlement, investment or conquest, but every province you gain
+continent at the dawn of the industrial age (Aldmere from 1880, the Reach from 1895). Grow by
+settlement, investment or conquest, but every province you gain
 beyond your heartland is **raw frontier**: it pays little, raises no troops and supplies no
 armies until you integrate it. Outlast your AI rivals and win by territorial dominance,
 economic prosperity or diplomatic leadership.
@@ -14,9 +15,12 @@ economic prosperity or diplomatic leadership.
 - **A living political atlas.** The map shows printed relief, rivers and lettered seas, with
   realm washes and inked borders. Detail changes with zoom, and seven map modes (political,
   terrain, supply, economy, frontier, diplomacy, military) each come with a legend.
-- **Systems:** economy, population and manpower, supply lines, battles shaped by terrain,
-  rivers and forts, sieges, research, national policies, diplomacy and coalitions, 17 events,
-  and three victory paths.
+- **Systems:** an industrial economy with six resources (food, coal, iron, oil, rubber,
+  nitrates), factories, materiel and trade agreements that exchange real resources;
+  population and manpower; supply lines; an industrial-age roster (infantry, cavalry,
+  artillery, engineers, armour) in battles shaped by terrain, rivers, forts and trenches;
+  sieges; a five-era research tree of 54 technologies with horizon years; national policies;
+  diplomacy and coalitions; 20 events; and three victory paths.
 - **AI rivals:** five temperaments and three difficulty levels, using exactly the same rules
   and commands as you.
 - **Help and saving:** a tutorial, rich tooltips, visible reasons for every unavailable
@@ -44,7 +48,7 @@ this if you try.
 | Add a waypoint | **Shift**+right-click | — |
 | Pan / zoom | Drag / mouse wheel, arrow keys, **+ / −** | Drag / pinch |
 | Pause, speed | **Space**, **1–4** | ▶ and speed pips |
-| Ledgers | **B** realm, **M** military, **T** research, **P** policy, **D** diplomacy, **W** wars, **V** victory, **L** chronicle, **H** help | Bottom bar |
+| Ledgers | **B** realm, **I** industry, **M** military, **T** research, **P** policy, **D** diplomacy, **W** wars, **V** victory, **L** chronicle, **H** help | Bottom bar |
 | Map modes | **Shift+1…7**, **O** cycles | Mode bar |
 | Navigate | **F** whole map, **C** centre selection, **Home** capital, **N** next army, **Shift+N** next army group, **K** next battle, **J** latest alert | Navigation buttons |
 | Close | **Esc** cancels, closes, then opens the menu | ✕ buttons |
@@ -62,8 +66,10 @@ this if you try.
   your current campaign is kept.
 - **Each save keeps its map.** A save records exactly which map and map revision it was played
   on. Saves of imported maps carry the map with them.
-- **Older saves are converted, never discarded.** Saves from earlier releases (format 1) are
-  converted to the current format (2) when loaded, and the game says so.
+- **Older saves are converted, never discarded.** Saves from earlier releases (formats 1 and
+  2, the 17th-century rules) are converted to the industrial age (format 3) when loaded, and
+  the game says what changed. A save that cannot be converted stays in the list with the
+  reason and can still be exported.
 
 ## Develop
 
@@ -137,16 +143,19 @@ that the final state matches.
 
 ## Known limitations
 
-- **Balance:** tuned against AI-only campaigns on both maps (see STATUS.md). The richest
-  heartland wins most often: Lessia on Aldmere (15 of 30) and Aurel on the Reach (15 of 30).
-  Some small or exposed realms shrink on average. No external players have tested either
-  map yet.
+- **Balance:** tuned against AI-only campaigns on both maps (see STATUS.md and
+  `reports/stage-b/`). Under the industrial rules (10 seeds per map) the wins spread across
+  six realms on the Reach; on Aldmere, Morvaine and Tarsk win 4 of 10 each and Lessia 2.
+  Hrafnmark and some other small or exposed realms shrink on average. No external players
+  have tested either map yet.
 - **Fog of war:** not implemented. All information is public to everyone, AI included.
 - **Browsers verified:** only headless Chromium 141, on desktop and emulated phone viewports. Firefox,
   Safari, real Chromebooks and real touch devices are untested.
-- **Out of scope for now:** naval and air warfare, resources and industry are planned in the
-  expansion stages (docs/expansion/PLAN.md). Multiplayer, espionage and dynasties are out of scope.
-- **Save format:** 2. Format-1 saves are converted on load.
+- **Not yet in the game:** naval and air warfare, sea zones, the map library and editor, the
+  real-world map, peace settlements with several parties and focus trees are planned in the
+  remaining expansion stages (docs/expansion/PLAN.md). Multiplayer, espionage and dynasties
+  are out of scope.
+- **Save format:** 3. Format-1 and format-2 saves are converted on load.
 
 ## Licence
 

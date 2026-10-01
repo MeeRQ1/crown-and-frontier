@@ -129,7 +129,7 @@ export function supplyAt(sim: Sim, nid: NationId, pid: ProvinceId, extraRegiment
       remedies.push('Hold provinces back toward home, integrate frontier land to 50+, build a fort nearby, or research Supply Trains.');
     } else if (stock <= 0) {
       reasons.push('The national supply stockpile is empty.');
-      remedies.push('Reduce army size, secure grain provinces, or research Crop Rotation.');
+      remedies.push('Reduce army size, secure grain provinces, or research Refrigeration.');
     }
     const effCap = connected ? 2 * capacity : C.supply.disconnectedMul * capacity;
     if (load > effCap) {

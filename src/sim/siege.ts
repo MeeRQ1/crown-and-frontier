@@ -4,7 +4,8 @@
 // not retreating) in a province whose controller it is at war with besieges it:
 //   no fort: 100 progress in 2 weeks
 //   fort L : 100 progress in 10*L weeks, requires >= 2*L regiments present
-//   x (1 + 0.25 per guns regiment, max 6) x (1 + siege tech) x 0.5 if unsupplied
+//   x (1 + 0.25 per artillery regiment, max 6) x (1 + 0.5 per engineer regiment, max 2)
+//   x (1 + siege tech) x 0.5 if unsupplied
 //   x 2 when the legal owner (or its friend) is retaking its own province
 // At 100 the controller changes (to the legal owner if the besiegers are not at
 // war with it). Progress resets if the besiegers leave.
@@ -43,15 +44,20 @@ export function siegeInfo(sim: Sim, pid: ProvinceId, battleAt?: Set<ProvinceId>)
   const lead = [...byNation.entries()].sort((x, y) => y[1] - x[1] || (x[0] < y[0] ? -1 : 1))[0][0];
   const team = present.filter((a) => isFriendly(sim, lead, a.nation));
   const regiments = team.reduce((s, a) => s + a.regiments.length, 0);
-  const guns = team.reduce((s, a) => s + a.regiments.filter((r) => r.type === 'guns').length, 0);
+  const guns = team.reduce((s, a) => s + a.regiments.filter((r) => r.type === 'artillery').length, 0);
   const required = Math.max(1, C.siege.minRegimentsPerLevel * p.fort);
   const notes: string[] = [];
   let rate = p.fort > 0 ? 100 / (C.siege.fortWeeksPerLevel * p.fort) : 100 / C.siege.noFortWeeks;
   if (p.fort > 0) notes.push(`Fort level ${p.fort}: ${C.siege.fortWeeksPerLevel * p.fort} weeks base`);
-  const g = Math.min(C.siege.gunsMax, guns);
+  const sappers = Math.min(C.siege.engineerMax, team.reduce((s, a) => s + a.regiments.filter((r) => r.type === 'engineers').length, 0));
+  if (sappers > 0) {
+    rate *= 1 + C.siege.engineerBonus * sappers;
+    notes.push(`${sappers} engineer regiment(s) +${Math.round(C.siege.engineerBonus * sappers * 100)}%`);
+  }
+  const g = Math.min(C.siege.artilleryMax, guns);
   if (g && p.fort > 0) {
-    rate *= 1 + C.siege.gunsBonus * g;
-    notes.push(`${g} guns regiment(s) +${Math.round(C.siege.gunsBonus * g * 100)}%`);
+    rate *= 1 + C.siege.artilleryBonus * g;
+    notes.push(`${g} artillery regiment(s) +${Math.round(C.siege.artilleryBonus * g * 100)}%`);
   }
   const sm = nationMods(sim, lead).siege;
   if (sm) {

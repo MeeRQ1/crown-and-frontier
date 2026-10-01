@@ -1,60 +1,85 @@
 # Status
 
-Last updated at **Stage A of the strategic depth expansion** (version 0.3.0, save format 2).
-Stage A covers the audit, fixes, foundations and plan. **It is not the expansion itself.**
-The new era, economy, navy, air, maps, editor, diplomacy and focus trees are planned in
-Stages B–F ([docs/expansion/PLAN.md](docs/expansion/PLAN.md)). The rest of this file
-below the expansion section describes the redesign release (0.2.0) and is kept for its
-evidence. Where Stage A changed a fact, it is corrected in place.
+Last updated at **Stage B of the strategic depth expansion** (version 0.3.0, save format 3).
+Stages A and B are done in this branch. **This is not the finished expansion:** navy, air,
+sea zones, the map library and editor, the real-world map, peace settlements and focus
+trees are planned in Stages C–F ([docs/expansion/PLAN.md](docs/expansion/PLAN.md)). The
+rest of this file below the expansion section describes the redesign release (0.2.0) and
+is kept for its evidence. Where a stage changed a fact, it is corrected in place.
 
 ## Expansion progress
 
 | Stage | Status |
 |---|---|
 | A · Foundations | **Done in this branch** (draft pull request, not merged) |
-| B · Industrial economy and research | Not started |
+| B · Industrial economy and research | **Done in this branch** (same draft pull request) |
 | C · War on land, at sea and in the air | Not started |
 | D · Maps, editor, real-world map | Not started |
 | E · Diplomacy, settlements, national focus | Not started |
 | F · Onboarding, balance, delivery | Not started |
 
-**Stage A delivered:**
-- An audit with evidence ([AUDIT.md](docs/expansion/AUDIT.md)), the plan and requirement
-  ledger ([PLAN.md](docs/expansion/PLAN.md)), and the setting decision
-  ([SETTING.md](docs/expansion/SETTING.md)).
-- 11 confirmed bugs fixed, each with a regression test (AUDIT.md lists the evidence).
-- Derived indexes and faster searches. The average week went from 14 to 6 ms on Aldmere
-  and from 125 to 29 ms on a 900-province map, with identical rules proven by the rule
-  check.
-- Versioned map packages with a sanitising validator and import limits; the built-in maps
-  load through it.
-- Save format 2: a map fingerprint, embedded custom maps, conversion of format-1 saves with
-  a notice, and refusal of oversized files.
-- Bug reports that replay campaigns that were loaded, long, continued past the result or
-  played on custom maps.
-- Measurement tools: `bench`, `bench:web`, `fuzz`, `rulecheck` and `genstress`.
+**Stage B delivered:**
+- **The industrial age:** Aldmere starts in 1880 (40/60/70 years), the Reach in 1895
+  (25/40/60). Era texts, events (factory strikes, mine disasters, oil booms), nation traits
+  and the tutorial were rewritten for the era.
+- **Six resources:** food plus coal, iron, oil, rubber and nitrates from province deposits,
+  with stockpiles, shortages and their effects. Map format 2 carries the deposits and
+  factories; the built-in maps are at revision 2.
+- **Industry:** factories (a construction project), coal, materiel, and surplus sold as
+  manufactured goods. Units cost materiel and resources; replacements cost materiel.
+- **Trade** exchanges real resource surpluses at fixed prices, plus a little commerce. It
+  replaces the flat income bonus.
+- **Research:** a 54-technology tree in five eras for land, industry and society, with
+  horizon years (15% dearer per year early, at most 10 years early).
+- **Land roster:** infantry, cavalry, artillery, engineers and armour, data-driven. Machine
+  guns cut cavalry; armour breaks through forts and trenches; engineers dig in faster,
+  besiege faster and bridge rivers; armour without oil and artillery without nitrates fight
+  weaker.
+- **AI** for every Stage B system: factories gated on its own coal, resource-aware
+  research, unit mix, trade treaties by value. AI reports now include a system-usage
+  section (`tools/usage.ts`).
+- **Save format 3:** formats 1 and 2 convert with a notice; a save that cannot convert
+  stays listed with its reason and can be exported from the load screen.
+- **Interface:** an Industry & Trade ledger (I), research by era, resource and factory rows
+  on province cards, recruit costs, start years on the setup screen.
+
+**Stage B measurements** (details in PLAN.md "B (done)"):
+- 108 Vitest tests pass (20 more than Stage A, among them 14 for industry, resources, trade and the roster, and 3 for format-2 conversion).
+- 31 of 31 browser checks pass (new: format-2 conversion notice; an unconvertible save
+  listed, refused with a reason and exported).
+- AI batches, 10 seeds per map (`reports/stage-b/`): every Stage B check passes, no
+  invariant failures.
+- Benchmarks (`reports/perf/stageB-*.md`, `web-stageB.md`): Aldmere 8.5 and 7.2 ms a week
+  on average (p99 21.4 and 16.8 ms), the Reach 2.3–3.6 ms; 36 of 36 weeks at fastest speed
+  in the browser on all three maps. The worker decision is unchanged.
+- Fuzzer: 0 findings on the Reach (seeds 1–7, 10 years) and Aldmere (seeds 1–2, 8 years).
+- Screenshots: `docs/screenshots/stage-b/` (setup with start years, Industry ledger,
+  research by era, province card, format-2 conversion notice).
 
 **Checkpoint for continuing:**
-- **Working state:** all of these pass at the end of Stage A.
+- **Working state:** all of these pass at the end of Stage B.
   ```bash
   npm ci && npm run typecheck && npm test && npm run build && npm run package && npm run verify:web
   npm run fuzz -- --scenario reach --seeds 1-7 --years 10 && npm run fuzz -- --scenario aldmere --seeds 1-2 --years 8
   ```
 - **Unresolved failures:** none known.
-- **Requirement status:** every brief requirement is in the ledger in PLAN.md, with its
-  stage and status. Nothing has been dropped. Requirements 11–25 are planned, not
-  started.
-- **Next steps:** Stage B, in the order listed at the end of PLAN.md. Start with the era
-  calendar and the data-driven unit roster (rule-check identical), then save format 3
-  with conversion fixtures.
+- **Known Stage B gaps** (tracked for later stages): oil, rubber, nitrates and iron were
+  never short in AI batches, because little burns them before armour (1916) and before
+  fleets and aircraft (Stage C); coal is the binding resource. Hrafnmark still shrinks on
+  Aldmere. A small coal exporter can draw most of its income from trade although the
+  average is 11–12%. No map mode shows deposits yet (the province card and the Industry
+  ledger do); Stage F adds it with the other map modes.
+- **Requirement status:** PLAN.md's ledger lists every requirement with its stage and
+  status. Nothing has been dropped.
+- **Next steps:** Stage C, in the order listed at the end of PLAN.md.
 
 ## Evidence, kept separate
 
 | Kind | What was done | Where |
 |---|---|---|
-| Automated tests | **Stage A: 88 Vitest tests** (22 new: the regression tests, save format and migration, map packages, bug-report replays). At the redesign: 66 Vitest tests. The 53 from the previous release still pass, plus new ones: Aldmere's validity, connectivity and homelands; fortified passes; river borders and the river combat rule; Hrafnmark's straits; five AI years on Aldmere; army groups, station orders and waypoints; front detection for multi-front wars; and a real save from the previous release that loads on the Reach, plays a year and re-saves | `tests/`, `npm test` |
-| AI-only campaigns | 30 campaigns on each map (seeds 1–10 × easy/normal/hard): Aldmere 60 years, the Reach 40 years | `reports/ai-campaigns-aldmere.md`, `reports/ai-campaigns.md`, `npm run sim` |
-| Browser verification | **Stage A: 29 automated checks, all passing** (new: map mode restored after Diplomacy; a format-1 save converted on import with a notice). At the redesign: 27 automated checks, all passing, in headless Chromium 141. Covered: site root and project sub-path (both starting Aldmere), unpacked ZIP, choosing the Reach and a realm in setup, map-mode and navigation keys, iframe (resize, wheel isolation), hidden tab, audio gating, keyboard, slot save/load, export/import, damaged import, blocked storage, five laptop sizes and UI scaling, phone touch, and a performance probe | `reports/web-verification.md`, `npm run verify:web` |
+| Automated tests | **Stage B: 108 Vitest tests** (resources, industry, trade, roster, format-2 conversion). **Stage A: 88 Vitest tests** (22 new: the regression tests, save format and migration, map packages, bug-report replays). At the redesign: 66 Vitest tests. The 53 from the previous release still pass, plus new ones: Aldmere's validity, connectivity and homelands; fortified passes; river borders and the river combat rule; Hrafnmark's straits; five AI years on Aldmere; army groups, station orders and waypoints; front detection for multi-front wars; and a real save from the previous release that loads on the Reach, plays a year and re-saves | `tests/`, `npm test` |
+| AI-only campaigns | **Stage B:** 10 campaigns per map at normal difficulty with system usage (`reports/stage-b/`). Before: 30 campaigns on each map (seeds 1–10 × easy/normal/hard): Aldmere 60 years, the Reach 40 years | `reports/ai-campaigns-aldmere.md`, `reports/ai-campaigns.md`, `npm run sim` |
+| Browser verification | **Stage B: 31 automated checks, all passing** (format-2 conversion; unconvertible save kept and exportable). **Stage A: 29 automated checks, all passing** (new: map mode restored after Diplomacy; a format-1 save converted on import with a notice). At the redesign: 27 automated checks, all passing, in headless Chromium 141. Covered: site root and project sub-path (both starting Aldmere), unpacked ZIP, choosing the Reach and a realm in setup, map-mode and navigation keys, iframe (resize, wheel isolation), hidden tab, audio gating, keyboard, slot save/load, export/import, damaged import, blocked storage, five laptop sizes and UI scaling, phone touch, and a performance probe | `reports/web-verification.md`, `npm run verify:web` |
 | Screenshots | **Stage A:** the conversion notice for a format-1 save (`docs/screenshots/stage-a/format1-save-converted.png`). At the redesign: before (previous release) and after, from the same scripted tour (Calder, seed 7, 30 weeks), at 1366×768 and 390×844: the Reach (matching pairs) and Aldmere | `docs/screenshots/`, `e2e/capture.mjs` |
 | Flows I exercised by script, with screenshots reviewed | Menu → setup (both maps, several realms) → campaign; every ledger at laptop and phone size; army groups and orders; attention list and decisions mid-war; settings, how to play, load; menu, setup and ledgers at phone size | `.scratch` scripts during development; `e2e/capture.mjs` |
 | External player feedback | **None.** No one but me has played the redesign. | — |

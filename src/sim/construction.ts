@@ -1,14 +1,16 @@
-// Province projects: development, roads, forts, and settling unclaimed land.
-// One project per province; a realm runs at most `slots` projects at once
-// (2 + 1 per 10 provinces + technology). Costs are paid up front; cancelling
-// refunds 50%. Projects pause while a province is occupied or in revolt.
+// Province projects: development, railways, forts, factories, charters and
+// settling unclaimed land. One project per province; a realm runs at most
+// `slots` projects at once (2 + 1 per 10 provinces + technology). Costs are
+// paid up front; cancelling refunds 50% of the crowns. Projects pause while a
+// province is occupied or in revolt.
 //
 // Development: 20 * dev * (1 + dev/4) * terrain factor crowns, 16 weeks (needs integration >= 40);
 //              beyond the terrain's cap (up to +3) each level costs 2.5x
-// Roads:       40 * (level+1) * (1 + level/2), 12 weeks, max 3
-// Fort:        60 * (level+1) * (1 + level/2) crowns + 10 supplies, 16 weeks, max 3, upkeep 1/level/month
+// Railways:    40 * (level+1) * (1 + level/2) crowns + 4 iron per level, 12 weeks, max 3
+// Fort:        60 * (level+1) * (1 + level/2) crowns + 10 food + 5 iron, 16 weeks, max 3, upkeep 1/level/month
+// Factory:     80 * (level+1) crowns + 10 iron, 20 weeks, max min(5, 1 + dev/2) (needs integration >= 50)
 // Charter:     20 + 6*dev crowns, 8 weeks: +25 integration (frontier provinces below 90)
-// Settle:      50 crowns, 500 men, 20 supplies, 16 weeks; unclaimed province next to our land
+// Settle:      50 crowns, 500 men, 20 food, 16 weeks; unclaimed province next to our land
 
 import { C, TERRAIN } from './config';
 import { ownedBy } from './index';
@@ -18,17 +20,25 @@ import type { NationId, ProjectKind, ProvinceId } from './types';
 
 export const PROJECT_LABELS: Record<ProjectKind, string> = {
   dev: 'Develop',
-  infra: 'Build roads',
+  infra: 'Build railway',
   fort: 'Fortify',
+  factory: 'Build factory',
   charter: 'Grant charters',
   settle: 'Settle',
 };
 
 export interface ProjectCost {
   crowns: number;
+  /** food */
   supplies: number;
+  iron: number;
   manpower: number;
   weeks: number;
+}
+
+/** Most factory levels a province can hold. */
+export function factoryMax(sim: Sim, pid: ProvinceId): number {
+  return Math.min(C.construction.factoryMax, 1 + Math.floor(sim.state.provinces[pid].dev / 2));
 }
 
 export function buildSlots(sim: Sim, nid: NationId): number {
@@ -48,26 +58,41 @@ export function projectCost(sim: Sim, nid: NationId, pid: ProvinceId, kind: Proj
       return {
         crowns: Math.round(C.construction.devBase * p.dev * (1 + p.dev / 4) * terr.devCost * Math.max(0.3, 1 + m.devCost) * (p.dev >= terr.devCap ? C.construction.devOvercapMul : 1)),
         supplies: 0,
+        iron: 0,
         manpower: 0,
         weeks: C.construction.devWeeks,
       };
     case 'infra':
-      return { crowns: Math.round(C.construction.infraBase * (p.infra + 1) * (1 + p.infra / 2) * Math.max(0.3, 1 + m.infraCost)), supplies: 0, manpower: 0, weeks: C.construction.infraWeeks };
-    case 'fort': {
-      const ironDiscount = 0;
       return {
-        crowns: Math.round(C.construction.fortBase * (p.fort + 1) * (1 + p.fort / 2) * Math.max(0.3, 1 + m.fortCost - ironDiscount)),
+        crowns: Math.round(C.construction.infraBase * (p.infra + 1) * (1 + p.infra / 2) * Math.max(0.3, 1 + m.infraCost)),
+        supplies: 0,
+        iron: C.construction.infraIron * (p.infra + 1),
+        manpower: 0,
+        weeks: C.construction.infraWeeks,
+      };
+    case 'fort':
+      return {
+        crowns: Math.round(C.construction.fortBase * (p.fort + 1) * (1 + p.fort / 2) * Math.max(0.3, 1 + m.fortCost)),
         supplies: C.construction.fortSupplies,
+        iron: C.construction.fortIron,
         manpower: 0,
         weeks: C.construction.fortWeeks,
       };
-    }
+    case 'factory':
+      return {
+        crowns: Math.round(C.construction.factoryBase * (p.factories + 1) * Math.max(0.3, 1 + m.factoryCost)),
+        supplies: 0,
+        iron: C.construction.factoryIron,
+        manpower: 0,
+        weeks: C.construction.factoryWeeks,
+      };
     case 'charter':
-      return { crowns: Math.round(C.construction.charterBase + C.construction.charterPerDev * p.dev), supplies: 0, manpower: 0, weeks: C.construction.charterWeeks };
+      return { crowns: Math.round(C.construction.charterBase + C.construction.charterPerDev * p.dev), supplies: 0, iron: 0, manpower: 0, weeks: C.construction.charterWeeks };
     case 'settle':
       return {
         crowns: Math.round(C.construction.settleCost * Math.max(0.3, 1 + m.settleCost)),
         supplies: C.construction.settleSupplies,
+        iron: 0,
         manpower: C.construction.settleManpower,
         weeks: C.construction.settleWeeks,
       };
@@ -108,15 +133,20 @@ export function buildProblem(sim: Sim, nid: NationId, pid: ProvinceId, kind: Pro
       if (p.dev >= devMax(sim, pid)) return `Development is at its maximum (${devMax(sim, pid)}).`;
       if (p.integration < C.integration.developMin) return `Integrate the province first (${Math.floor(p.integration)}/${C.integration.developMin}).`;
     }
-    if (kind === 'infra' && p.infra >= C.construction.infraMax) return 'Roads are already at the maximum level.';
+    if (kind === 'infra' && p.infra >= C.construction.infraMax) return 'The railway is already at the maximum level.';
     if (kind === 'fort' && p.fort >= C.construction.fortMax) return 'The fort is already at the maximum level.';
+    if (kind === 'factory') {
+      if (p.factories >= factoryMax(sim, pid)) return `Factories are at the maximum for this development (${factoryMax(sim, pid)}).`;
+      if (p.integration < C.construction.factoryMinIntegration) return `Integrate the province first (${Math.floor(p.integration)}/${C.construction.factoryMinIntegration}).`;
+    }
     if (kind === 'charter' && p.integration >= 90) return 'The province is already well integrated (charters need integration below 90).';
   }
   const slots = known?.slots ?? buildSlots(sim, nid);
   if ((known?.active ?? activeProjects(sim, nid).length) >= slots) return `All ${slots} construction slots are in use.`;
   const cost = projectCost(sim, nid, pid, kind);
   if (n.treasury < cost.crowns) return `Needs ${cost.crowns} crowns (treasury ${Math.floor(n.treasury)}).`;
-  if (n.supplies < cost.supplies) return `Needs ${cost.supplies} supplies.`;
+  if (n.supplies < cost.supplies) return `Needs ${cost.supplies} food.`;
+  if (n.stock.iron < cost.iron) return `Needs ${cost.iron} iron (stockpile ${Math.floor(n.stock.iron)}).`;
   if (n.manpower < cost.manpower) return `Needs ${cost.manpower} men from the manpower pool.`;
   return null;
 }
@@ -126,6 +156,7 @@ export function startProject(sim: Sim, nid: NationId, pid: ProvinceId, kind: Pro
   const cost = projectCost(sim, nid, pid, kind);
   n.treasury -= cost.crowns;
   n.supplies -= cost.supplies;
+  n.stock.iron -= cost.iron;
   n.manpower -= cost.manpower;
   sim.state.provinces[pid].project = { kind, progress: 0, total: cost.weeks, cost: cost.crowns, nation: nid };
 }
@@ -172,8 +203,12 @@ export function weeklyConstruction(sim: Sim): void {
         break;
       case 'infra':
         p.infra = Math.min(C.construction.infraMax, p.infra + 1);
-        notify(sim, pr.nation, 'low', 'build', `Roads in ${provName(sim, pid)} improved to level ${p.infra}.`, { province: pid });
+        notify(sim, pr.nation, 'low', 'build', `The railway in ${provName(sim, pid)} has reached level ${p.infra}.`, { province: pid });
         bump(sim);
+        break;
+      case 'factory':
+        p.factories = Math.min(factoryMax(sim, pid), p.factories + 1);
+        notify(sim, pr.nation, 'low', 'build', `A new factory opened in ${provName(sim, pid)} (${p.factories} in the province).`, { province: pid });
         break;
       case 'fort':
         p.fort = Math.min(C.construction.fortMax, p.fort + 1);

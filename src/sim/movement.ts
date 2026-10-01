@@ -1,15 +1,15 @@
 // Army movement over the province graph.
 //
-// Each week a moving army gains `speed` movement points (1.0 foot, 1.5 if all
-// horse, 0.8 with guns, x technology/policy). Entering a province costs the
-// destination terrain's move value (plains 2 … mountains 5), -12% per road
+// Each week a moving army gains `speed` movement points (its slowest regiment:
+// infantry 1.0, cavalry 1.5, artillery 0.8, armour 1.2; x technology/policy). Entering a province costs the
+// destination terrain's move value (plains 2 … mountains 5), -12% per railway
 // level (average of both ends), +2 for a sea strait. An army stays located in
 // its origin until it arrives, so contact happens on arrival. Armies are
 // processed in id order; an army cannot leave a province that holds a hostile
 // army (it is pinned), so hostile armies crossing on one edge always meet.
 // Paths are revalidated every step; a blocked route is re-planned or halted.
 
-import { TERRAIN } from './config';
+import { TERRAIN, UNITS } from './config';
 import { CostHeap } from './heap';
 import { armiesIn, touchArmies } from './index';
 import { nationMods } from './modifiers';
@@ -50,10 +50,9 @@ export function isRiver(sim: Sim, a: ProvinceId, b: ProvinceId): boolean {
 }
 
 export function armySpeed(sim: Sim, a: Army): number {
-  let base = 1.0;
-  const types = new Set(a.regiments.map((r) => r.type));
-  if (types.has('guns')) base = 0.8;
-  else if (types.size === 1 && types.has('horse')) base = 1.5;
+  // the slowest regiment sets the pace (infantry 1.0, cavalry 1.5, artillery 0.8, armour 1.2)
+  let base = a.regiments.length ? Infinity : 1.0;
+  for (const r of a.regiments) base = Math.min(base, UNITS[r.type].speed);
   return base * Math.max(0.3, 1 + nationMods(sim, a.nation).moveSpeed);
 }
 

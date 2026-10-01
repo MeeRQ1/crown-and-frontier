@@ -2,12 +2,12 @@ import { describe, expect, it } from 'vitest';
 import { applyCommand, checkCommand } from '../src/sim/commands';
 import { EVENTS, EVENT_MAP } from '../src/sim/data/events';
 import { POLICIES } from '../src/sim/data/policies';
-import { TECHS, TECH_LIST } from '../src/sim/data/techs';
+import { startingTechs, TECHS, TECH_LIST } from '../src/sim/data/techs';
 import { joinCoalition, memoriesOf, signTreaty } from '../src/sim/diplomacy';
 import { defaultChoice, eventCtx, monthlyEvents } from '../src/sim/events';
 import { createGame } from '../src/sim/game';
 import { computeMods } from '../src/sim/modifiers';
-import { monthlyResearch } from '../src/sim/progression';
+import { monthlyResearch, techCost } from '../src/sim/progression';
 import { bump, months } from '../src/sim/state';
 import { runTicks } from '../src/sim/tick';
 import { monthlyVictory, victoryProgress } from '../src/sim/victory';
@@ -18,13 +18,36 @@ import { lineGame } from './helpers';
 describe('research and policy', () => {
   it('enforces prerequisites and completes the selected technology', () => {
     const sim = lineGame();
-    expect(checkCommand(sim, { type: 'research', nation: 'a', tech: 'cuirassiers' })).toMatch(/Drilled Musketry/);
-    expect(applyCommand(sim, { type: 'research', nation: 'a', tech: 'drill' }).ok).toBe(true);
-    sim.state.nations.a.research.progress = TECHS.drill.cost;
+    expect(checkCommand(sim, { type: 'research', nation: 'a', tech: 'general_staff' })).toMatch(/Field Telegraph/);
+    expect(applyCommand(sim, { type: 'research', nation: 'a', tech: 'field_telegraph' }).ok).toBe(true);
+    sim.state.nations.a.research.progress = techCost(sim, 'field_telegraph');
     monthlyResearch(sim);
-    expect(sim.state.nations.a.research.done).toContain('drill');
+    expect(sim.state.nations.a.research.done).toContain('field_telegraph');
     expect(sim.state.nations.a.research.current).toBeNull();
-    expect(checkCommand(sim, { type: 'research', nation: 'a', tech: 'cuirassiers' })).toBeNull();
+    expect(checkCommand(sim, { type: 'research', nation: 'a', tech: 'general_staff' })).toBeNull();
+  });
+
+  it('a campaign starts with the technologies of its era', () => {
+    const sim = lineGame(); // starts in 1880: horizons up to 1875 are known
+    expect(sim.state.nations.a.research.done).toEqual(expect.arrayContaining(['breech_rifles', 'bessemer', 'telegraph_network']));
+    expect(sim.state.nations.a.research.done).not.toContain('field_telegraph');
+    expect(startingTechs(1895)).toEqual(expect.arrayContaining(['engineering_corps', 'magazine_rifles']));
+  });
+
+  it('research ahead of its time costs more and is capped at ten years early', () => {
+    const sim = lineGame(); // 1880
+    // Magazine Rifles: horizon 1886, six years early
+    expect(techCost(sim, 'magazine_rifles')).toBe(Math.round(TECHS.magazine_rifles.cost * (1 + 0.15 * 6)));
+    // Machine Guns (1900) needs Magazine Rifles; with it, still twenty years early
+    sim.state.nations.a.research.done.push('magazine_rifles');
+    expect(checkCommand(sim, { type: 'research', nation: 'a', tech: 'machine_guns' })).toMatch(/ahead of its time.*1890/);
+    // ten years on it may begin
+    sim.state.tick = 10 * 48;
+    expect(checkCommand(sim, { type: 'research', nation: 'a', tech: 'machine_guns' })).toBeNull();
+  });
+
+  it('every horizon follows its prerequisites', () => {
+    for (const t of TECH_LIST) for (const r of t.requires) expect(TECHS[r].year, `${t.id} needs ${r}`).toBeLessThanOrEqual(t.year);
   });
 
   it('every prerequisite exists and no branch needs another branch', () => {
@@ -51,9 +74,9 @@ describe('research and policy', () => {
     const sim = lineGame();
     const n = sim.state.nations.a;
     n.policy = 'commerce';
-    n.research.done = ['charters'];
+    n.research.done = ['joint_stock'];
     const m = computeMods(sim, 'a');
-    expect(m.income).toBeCloseTo((POLICIES.commerce.effects.income ?? 0) + (TECHS.charters.effects.income ?? 0), 9);
+    expect(m.income).toBeCloseTo((POLICIES.commerce.effects.income ?? 0) + (TECHS.joint_stock.effects.income ?? 0), 9);
   });
 });
 

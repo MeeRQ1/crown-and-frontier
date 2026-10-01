@@ -19,9 +19,9 @@ export interface Mods {
   moraleMax: number;
   moraleRecovery: number;
   attack: number;
-  footAttack: number;
-  horseAttack: number;
-  gunsAttack: number;
+  infantryAttack: number;
+  cavalryAttack: number;
+  artilleryAttack: number;
   defense: number;
   siege: number;
   supplyRange: number;
@@ -35,9 +35,9 @@ export interface Mods {
   fortCost: number;
   settleCost: number;
   recruitCost: number;
-  footCost: number;
-  horseCost: number;
-  gunsCost: number;
+  infantryCost: number;
+  cavalryCost: number;
+  artilleryCost: number;
   upkeep: number;
   fortUpkeep: number;
   envoys: number;
@@ -51,13 +51,31 @@ export interface Mods {
   opinion: number;
   reinforce: number;
   trustGain: number;
+  // industrial age
+  armourAttack: number;
+  armourCost: number;
+  /** enemy cavalry fire against us is reduced by this share (machine guns) */
+  antiCavalry: number;
+  materielCost: number;
+  resourceOutput: number;
+  coalOutput: number;
+  ironOutput: number;
+  oilOutput: number;
+  rubberOutput: number;
+  nitratesOutput: number;
+  industry: number;
+  factoryCost: number;
+  factoryCoal: number;
+  syntheticNitrates: number;
+  syntheticOil: number;
+  syntheticRubber: number;
 }
 
 export type ModEffects = Partial<Mods>;
 
-export const MOD_LABELS: Record<keyof Mods, [string, 'pct' | 'flat']> = {
+export const MOD_LABELS: Record<keyof Mods, [string, 'pct' | 'flat' | 'neg']> = {
   income: ['Crown income', 'pct'],
-  supplyProd: ['Supply production', 'pct'],
+  supplyProd: ['Food production', 'pct'],
   manpower: ['Military reserve', 'pct'],
   manpowerRegen: ['Reserve recovery', 'pct'],
   research: ['Research speed', 'pct'],
@@ -67,9 +85,9 @@ export const MOD_LABELS: Record<keyof Mods, [string, 'pct' | 'flat']> = {
   moraleMax: ['Maximum morale', 'flat'],
   moraleRecovery: ['Morale recovery', 'pct'],
   attack: ['Army damage', 'pct'],
-  footAttack: ['Foot damage', 'pct'],
-  horseAttack: ['Horse damage', 'pct'],
-  gunsAttack: ['Guns damage', 'pct'],
+  infantryAttack: ['Infantry damage', 'pct'],
+  cavalryAttack: ['Cavalry damage', 'pct'],
+  artilleryAttack: ['Artillery damage', 'pct'],
   defense: ['Defensive bonus', 'pct'],
   siege: ['Siege speed', 'pct'],
   supplyRange: ['Supply range', 'flat'],
@@ -79,13 +97,13 @@ export const MOD_LABELS: Record<keyof Mods, [string, 'pct' | 'flat']> = {
   moveSpeed: ['Movement speed', 'pct'],
   straitCost: ['Sea crossing cost (movement points)', 'flat'],
   devCost: ['Development cost', 'pct'],
-  infraCost: ['Road cost', 'pct'],
+  infraCost: ['Railway cost', 'pct'],
   fortCost: ['Fort cost', 'pct'],
   settleCost: ['Settlement cost', 'pct'],
   recruitCost: ['Recruitment cost', 'pct'],
-  footCost: ['Foot cost', 'pct'],
-  horseCost: ['Horse cost', 'pct'],
-  gunsCost: ['Guns cost', 'pct'],
+  infantryCost: ['Infantry cost', 'pct'],
+  cavalryCost: ['Cavalry cost', 'pct'],
+  artilleryCost: ['Artillery cost', 'pct'],
   upkeep: ['Army upkeep', 'pct'],
   fortUpkeep: ['Fort upkeep', 'pct'],
   envoys: ['Envoys', 'flat'],
@@ -99,6 +117,22 @@ export const MOD_LABELS: Record<keyof Mods, [string, 'pct' | 'flat']> = {
   opinion: ['Opinion of us', 'flat'],
   reinforce: ['Reinforcement speed', 'pct'],
   trustGain: ['Trust recovery', 'pct'],
+  armourAttack: ['Armour damage', 'pct'],
+  armourCost: ['Armour cost', 'pct'],
+  antiCavalry: ['Enemy cavalry damage against us', 'neg'],
+  materielCost: ['Materiel needed for regiments', 'pct'],
+  resourceOutput: ['Mine and well output', 'pct'],
+  coalOutput: ['Coal output', 'pct'],
+  ironOutput: ['Iron output', 'pct'],
+  oilOutput: ['Oil output', 'pct'],
+  rubberOutput: ['Rubber output', 'pct'],
+  nitratesOutput: ['Nitrate output', 'pct'],
+  industry: ['Industrial capacity', 'pct'],
+  factoryCost: ['Factory cost', 'pct'],
+  factoryCoal: ['Coal burned by factories', 'pct'],
+  syntheticNitrates: ['Synthetic nitrates per factory (from coal)', 'flat'],
+  syntheticOil: ['Synthetic fuel per factory (from coal)', 'flat'],
+  syntheticRubber: ['Synthetic rubber per factory (from coal)', 'flat'],
 };
 
 export function emptyMods(): Mods {
@@ -126,9 +160,9 @@ export function traitMods(t: NationTraits): ModEffects {
     siege: t.siegeMul ?? 0,
     devCost: t.devCostMul ?? 0,
     popGrowth: t.popGrowthMul ?? 0,
-    gunsCost: t.gunsCostMul ?? 0,
-    horseCost: t.horseCostMul ?? 0,
-    horseAttack: t.horseAttackAdd ?? 0,
+    artilleryCost: t.artilleryCostMul ?? 0,
+    cavalryCost: t.cavalryCostMul ?? 0,
+    cavalryAttack: t.cavalryAttackAdd ?? 0,
     integration: t.integrationMul ?? 0,
     envoys: t.envoyAdd ?? 0,
     opinion: t.opinionAdd ?? 0,
@@ -181,6 +215,7 @@ export function computeMods(sim: Sim, nid: string): Mods {
       integration: e.integrationMul ?? 0,
       moraleRecovery: e.moraleRecoveryMul ?? 0,
       upkeep: e.upkeepMul ?? 0,
+      industry: e.industryMul ?? 0,
     });
   }
   if (n.bankruptUntil > sim.state.tick) addMods(m, { income: -0.25, moraleRecovery: -0.5, unrest: 5 });
@@ -197,7 +232,9 @@ export function describeEffects(e: ModEffects): string[] {
     const [label, kind] = MOD_LABELS[key];
     const sign = v > 0 ? '+' : '−';
     const abs = Math.abs(v);
-    out.push(kind === 'pct' ? `${label} ${sign}${Math.round(abs * 100)}%` : `${label} ${sign}${Math.round(abs * 100) / 100}`);
+    // 'neg': a positive value reduces what the label names (shown as a reduction)
+    if (kind === 'neg') out.push(`${label} ${v > 0 ? '−' : '+'}${Math.round(abs * 100)}%`);
+    else out.push(kind === 'pct' ? `${label} ${sign}${Math.round(abs * 100)}%` : `${label} ${sign}${Math.round(abs * 100) / 100}`);
   }
   return out;
 }

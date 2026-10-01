@@ -5,7 +5,9 @@
 //          ──── m1 ─────          (m1: unclaimed mountains)
 //   a1 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ c2   (sea strait)
 //   a3 | b3 is a river border
+//   deposits: a2 coal, b1 iron, b2 oil, c1 rubber, c2 nitrates
 
+import { UNIT_TYPES } from '../src/sim/config';
 import { createGame, type NewGameOptions } from '../src/sim/game';
 import { createArmy, newRegiment } from '../src/sim/military';
 import type { Sim } from '../src/sim/state';
@@ -25,20 +27,20 @@ export function lineScenario(): ScenarioDef {
     id: 'test-line',
     name: 'Test line',
     description: 'synthetic',
-    startYear: 1600,
+    startYear: 1880,
     nations: [nation('a', 'a1'), nation('b', 'b1'), nation('c', 'c1')],
     regions: [{ id: 'a', name: 'A' }, { id: 'b', name: 'B' }, { id: 'c', name: 'C' }, { id: 'wild', name: 'Wild' }],
     straits: [['a1', 'c2']],
     rivers: [['a3', 'b3']],
     provinces: [
       prov('a1', 'plains', 'a', ['a2', 'c2']),
-      prov('a2', 'plains', 'a', ['a1', 'a3', 'm1']),
+      prov('a2', 'plains', 'a', ['a1', 'a3', 'm1'], { resource: 'coal' }),
       prov('a3', 'hills', 'a', ['a2', 'b3']),
       prov('b3', 'forest', 'b', ['a3', 'b1']),
-      prov('b1', 'plains', 'b', ['b3', 'b2', 'm1']),
-      prov('b2', 'plains', 'b', ['b1', 'c1']),
-      prov('c1', 'plains', 'c', ['b2', 'c2']),
-      prov('c2', 'plains', 'c', ['c1', 'a1']),
+      prov('b1', 'plains', 'b', ['b3', 'b2', 'm1'], { resource: 'iron' }),
+      prov('b2', 'plains', 'b', ['b1', 'c1'], { resource: 'oil' }),
+      prov('c1', 'plains', 'c', ['b2', 'c2'], { resource: 'rubber' }),
+      prov('c2', 'plains', 'c', ['c1', 'a1'], { resource: 'nitrates' }),
       prov('m1', 'mountains', null, ['a2', 'b1'], { dev: 1, pop: 5 }),
     ],
   };
@@ -55,7 +57,7 @@ export function lineGame(opts: NewGameOptions = {}, keepArmies = false): Sim {
 
 export function addArmy(sim: Sim, nid: string, pid: string, units: Partial<Record<UnitType, number>>, men = 1000) {
   const regs = [];
-  for (const t of ['foot', 'horse', 'guns'] as UnitType[]) for (let i = 0; i < (units[t] ?? 0); i++) regs.push(newRegiment(sim, t, men));
+  for (const t of UNIT_TYPES) for (let i = 0; i < (units[t] ?? 0); i++) regs.push(newRegiment(sim, t, men));
   return createArmy(sim, nid, pid, regs);
 }
 

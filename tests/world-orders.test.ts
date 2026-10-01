@@ -101,8 +101,8 @@ describe('rivers', () => {
   it('attackers who cross a river to open a battle fight at a disadvantage', () => {
     const sim = lineGame();
     declareWar(sim, 'a', 'b', { type: 'conquest', provinces: ['b3'] });
-    const def = addArmy(sim, 'b', 'b3', { foot: 4 });
-    const att = addArmy(sim, 'a', 'a3', { foot: 6 });
+    const def = addArmy(sim, 'b', 'b3', { infantry: 4 });
+    const att = addArmy(sim, 'a', 'a3', { infantry: 6 });
     const f = forecastBattle(sim, 'b3', [att], [def]);
     expect(f.factors.some((x) => /river/i.test(x))).toBe(true);
     // the same fight from the far side of b3 (not across the river) has no river factor
@@ -123,10 +123,10 @@ describe('rivers', () => {
 describe('army groups and standing orders', () => {
   it('groups are numbered 1 to 9 and survive a split', () => {
     const sim = lineGame();
-    const a = addArmy(sim, 'a', 'a1', { foot: 4 });
+    const a = addArmy(sim, 'a', 'a1', { infantry: 4 });
     expect(checkCommand(sim, { type: 'setGroup', nation: 'a', army: a.id, group: 12 })).toMatch(/1 to 9/);
     expect(applyCommand(sim, { type: 'setGroup', nation: 'a', army: a.id, group: 2 }).ok).toBe(true);
-    expect(applyCommand(sim, { type: 'split', nation: 'a', army: a.id, counts: { foot: 2 } }).ok).toBe(true);
+    expect(applyCommand(sim, { type: 'split', nation: 'a', army: a.id, counts: { infantry: 2 } }).ok).toBe(true);
     const groups = Object.values(sim.state.armies).filter((x) => x.nation === 'a').map((x) => x.group);
     expect(groups).toEqual([2, 2]);
     expect(checkCommand(sim, { type: 'setGroup', nation: 'b', army: a.id, group: 1 })).toMatch(/Not your army/);
@@ -134,7 +134,7 @@ describe('army groups and standing orders', () => {
 
   it('a stationed army marches back whenever it is idle elsewhere, and a new march cancels the order', () => {
     const sim = lineGame();
-    const a = addArmy(sim, 'a', 'a2', { foot: 2 });
+    const a = addArmy(sim, 'a', 'a2', { infantry: 2 });
     expect(checkCommand(sim, { type: 'setOrder', nation: 'a', army: a.id, order: { kind: 'station', province: 'b1' } })).toMatch(/control/);
     expect(applyCommand(sim, { type: 'setOrder', nation: 'a', army: a.id, order: { kind: 'station', province: 'a1' } }).ok).toBe(true);
     for (let i = 0; i < 4; i++) step(sim, { noAI: true });
@@ -153,7 +153,7 @@ describe('army groups and standing orders', () => {
 
   it('a station lost to the enemy cancels the order with a notice', () => {
     const sim = lineGame();
-    const a = addArmy(sim, 'a', 'a1', { foot: 2 });
+    const a = addArmy(sim, 'a', 'a1', { infantry: 2 });
     applyCommand(sim, { type: 'setOrder', nation: 'a', army: a.id, order: { kind: 'station', province: 'a3' } });
     declareWar(sim, 'b', 'a', { type: 'conquest', provinces: ['a3'] });
     sim.state.provinces.a3.controller = 'b';
@@ -165,7 +165,7 @@ describe('army groups and standing orders', () => {
 
   it('waypoints extend the current route instead of replacing it', () => {
     const sim = lineGame();
-    const a = addArmy(sim, 'a', 'a1', { foot: 1 });
+    const a = addArmy(sim, 'a', 'a1', { infantry: 1 });
     applyCommand(sim, { type: 'move', nation: 'a', army: a.id, dest: 'a2' });
     expect(applyCommand(sim, { type: 'move', nation: 'a', army: a.id, dest: 'a3', append: true }).ok).toBe(true);
     expect(a.path).toEqual(['a2', 'a3']);
@@ -179,8 +179,8 @@ describe('AI on several fronts', () => {
     const sim = lineGame();
     declareWar(sim, 'a', 'b', { type: 'conquest', provinces: ['b3'] });
     declareWar(sim, 'c', 'b', { type: 'conquest', provinces: ['b2'] });
-    addArmy(sim, 'a', 'a3', { foot: 6 });
-    addArmy(sim, 'c', 'c1', { foot: 2 });
+    addArmy(sim, 'a', 'a3', { infantry: 6 });
+    addArmy(sim, 'c', 'c1', { infantry: 2 });
     const posts = frontPosts(sim, 'b');
     expect(posts.map((p) => [p.enemy, p.post])).toEqual([
       ['a', 'b3'],

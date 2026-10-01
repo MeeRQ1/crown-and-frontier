@@ -178,6 +178,12 @@ function embeddedMap(raw: unknown, recorded: MapFingerprint): MapPackage {
 }
 
 /** Reads only the metadata (for save slot lists) without full validation. */
+/** The save format number, read without parsing the whole file. */
+export function peekSchema(text: string): number | null {
+  const m = /"schema":(\d+)/.exec(text.slice(0, 200));
+  return m ? Number(m[1]) : null;
+}
+
 export function peekMeta(text: string): SaveMeta | null {
   try {
     const i = text.indexOf('"meta":');

@@ -51,7 +51,7 @@ describe('replay and content', () => {
     const sim = createGame({ seed: 5, playerNation: 'vos' });
     applyCommand(sim, { type: 'research', nation: 'vos', tech: 'drill' });
     runTicks(sim, 30);
-    applyCommand(sim, { type: 'recruit', nation: 'vos', province: 'vostburg', unit: 'foot', count: 2 });
+    applyCommand(sim, { type: 'recruit', nation: 'vos', province: 'vostburg', unit: 'infantry', count: 2 });
     applyCommand(sim, { type: 'build', nation: 'vos', province: 'harnfeld', project: 'infra' });
     runTicks(sim, 70);
     const r = replayCommands(sim.state.settings, 'reach', sim.state.playerLog, sim.state.tick);
@@ -114,16 +114,20 @@ describe('AI campaigns', () => {
   // Stage A fix: the yearly note was tested with (tick / 4) % 12 === 0, which only
   // realms whose staggered turn falls in the first week of a month could ever pass.
   it('every realm, whatever its turn week, explains a war it declined at most once a year', () => {
-    const sim = createGame({ scenario: 'reach', seed: 1, playerNation: null, campaignYears: 40 });
-    const seen: Array<{ nation: string; tick: number }> = [];
-    for (let t = 0; t < 48 * 6; t++) {
-      step(sim);
-      // the log keeps only the latest entries, so collect each week's as it happens
-      for (const d of sim.state.diagnostics) if (d.tick === sim.state.tick - 1 && d.summary.startsWith('War considered')) seen.push({ nation: d.nation, tick: d.tick });
+    const all: Array<{ nation: string; tick: number }> = [];
+    for (const seed of [1, 2, 3]) {
+      const sim = createGame({ scenario: 'reach', seed, playerNation: null, campaignYears: 40 });
+      const seen: Array<{ nation: string; tick: number }> = [];
+      for (let t = 0; t < 48 * 10; t++) {
+        step(sim);
+        // the log keeps only the latest entries, so collect each week's as it happens
+        for (const d of sim.state.diagnostics) if (d.tick === sim.state.tick - 1 && d.summary.startsWith('War considered')) seen.push({ nation: d.nation, tick: d.tick });
+      }
+      const perYear = new Set(seen.map((d) => `${d.nation}@${Math.floor(d.tick / 48)}`));
+      expect(perYear.size, `seed ${seed}`).toBe(seen.length);
+      all.push(...seen);
     }
-    expect(seen.length).toBeGreaterThan(0);
-    expect(seen.some((d) => d.tick % 4 !== 0)).toBe(true);
-    const perYear = new Set(seen.map((d) => `${d.nation}@${Math.floor(d.tick / 48)}`));
-    expect(perYear.size).toBe(seen.length);
+    expect(all.length).toBeGreaterThan(0);
+    expect(all.some((d) => d.tick % 4 !== 0)).toBe(true);
   });
 });

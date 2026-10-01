@@ -19,8 +19,8 @@ function atWarGame() {
 describe('combat — worked examples', () => {
   it('comparable armies on plains: the outcome depends on the rolls', () => {
     const sim = atWarGame();
-    const att = addArmy(sim, 'a', 'b1', { foot: 6, horse: 2 });
-    const def = addArmy(sim, 'b', 'b1', { foot: 6, horse: 2 });
+    const att = addArmy(sim, 'a', 'b1', { infantry: 6, cavalry: 2 });
+    const def = addArmy(sim, 'b', 'b1', { infantry: 6, cavalry: 2 });
     def.stationary = 0;
     const f = forecastBattle(sim, 'b1', [att], [def]);
     expect(f.verdict).toBe('Uncertain');
@@ -34,23 +34,23 @@ describe('combat — worked examples', () => {
     bump(sim); // direct edit: refresh derived lookups
     sim.state.provinces.m1.integration = 100;
     sim.state.provinces.m1.fort = 1;
-    const att = addArmy(sim, 'a', 'm1', { foot: 9 });
-    const def = addArmy(sim, 'b', 'm1', { foot: 5 });
+    const att = addArmy(sim, 'a', 'm1', { infantry: 9 });
+    const def = addArmy(sim, 'b', 'm1', { infantry: 5 });
     def.stationary = 6;
     const f = forecastBattle(sim, 'm1', [att], [def]);
     expect(f.verdict).toBe('Likely defeat');
     expect(f.factors.join(' ')).toMatch(/Mountains/);
     expect(f.factors.join(' ')).toMatch(/Frontage 6/);
     // the same armies on open plains favour the larger side
-    const att2 = addArmy(sim, 'a', 'b1', { foot: 9 });
-    const def2 = addArmy(sim, 'b', 'b1', { foot: 5 });
+    const att2 = addArmy(sim, 'a', 'b1', { infantry: 9 });
+    const def2 = addArmy(sim, 'b', 'b1', { infantry: 5 });
     expect(forecastBattle(sim, 'b1', [att2], [def2]).verdict).toBe('Likely victory');
   });
 
   it('a larger but unsupplied attacker fares worse than the same army supplied', () => {
     const sim = atWarGame();
-    const att = addArmy(sim, 'a', 'b1', { foot: 8 });
-    const def = addArmy(sim, 'b', 'b1', { foot: 6 });
+    const att = addArmy(sim, 'a', 'b1', { infantry: 8 });
+    const def = addArmy(sim, 'b', 'b1', { infantry: 6 });
     def.stationary = 3;
     att.supply = 1;
     const supplied = forecastBattle(sim, 'b1', [att], [def]);
@@ -66,8 +66,8 @@ describe('combat — worked examples', () => {
 describe('combat — live battles', () => {
   it('conserves men: every lost soldier is reported as a casualty', () => {
     const sim = atWarGame();
-    addArmy(sim, 'a', 'b1', { foot: 6, horse: 2 });
-    addArmy(sim, 'b', 'b1', { foot: 5, guns: 1 });
+    addArmy(sim, 'a', 'b1', { infantry: 6, cavalry: 2 });
+    addArmy(sim, 'b', 'b1', { infantry: 5, artillery: 1 });
     const before = totalMen(sim);
     for (let i = 0; i < 12 && (Object.keys(sim.state.battles).length || sim.state.reports.length === 0); i++) step(sim, { noAI: true });
     const rep = sim.state.reports[0];
@@ -86,10 +86,10 @@ describe('combat — live battles', () => {
   it('an army with no legal retreat surrenders', () => {
     const sim = atWarGame();
     // b's army stands in a3; a holds both neighbours (a2, b3) with troops
-    const trapped = addArmy(sim, 'b', 'a3', { foot: 2 });
-    addArmy(sim, 'a', 'a3', { foot: 8 });
-    addArmy(sim, 'a', 'a2', { foot: 2 });
-    addArmy(sim, 'a', 'b3', { foot: 2 });
+    const trapped = addArmy(sim, 'b', 'a3', { infantry: 2 });
+    addArmy(sim, 'a', 'a3', { infantry: 8 });
+    addArmy(sim, 'a', 'a2', { infantry: 2 });
+    addArmy(sim, 'a', 'b3', { infantry: 2 });
     for (let i = 0; i < 10 && sim.state.armies[trapped.id]; i++) step(sim, { noAI: true });
     expect(sim.state.armies[trapped.id]).toBeUndefined();
     expect(sim.state.notifications.some((n) => n.kind === 'surrender' && n.nation === 'b')).toBe(true);
@@ -115,10 +115,10 @@ describe('combat — live battles', () => {
     };
     // surrounded: the beaten army surrenders
     const trapped = lastWeek((sim) => {
-      const t = addArmy(sim, 'b', 'a3', { foot: 2 });
-      addArmy(sim, 'a', 'a3', { foot: 8 });
-      addArmy(sim, 'a', 'a2', { foot: 2 });
-      addArmy(sim, 'a', 'b3', { foot: 2 });
+      const t = addArmy(sim, 'b', 'a3', { infantry: 2 });
+      addArmy(sim, 'a', 'a3', { infantry: 8 });
+      addArmy(sim, 'a', 'a2', { infantry: 2 });
+      addArmy(sim, 'a', 'b3', { infantry: 2 });
       return t.id;
     });
     expect(trapped.gone).toBe(true);
@@ -126,8 +126,8 @@ describe('combat — live battles', () => {
     expect(trapped.gained).toBeGreaterThan(trapped.expected * 0.9);
     // routed in the open: the winners' horse pursue
     const routed = lastWeek((sim) => {
-      const r = addArmy(sim, 'b', 'b1', { foot: 3 });
-      addArmy(sim, 'a', 'b1', { foot: 4, horse: 8 });
+      const r = addArmy(sim, 'b', 'b1', { infantry: 3 });
+      addArmy(sim, 'a', 'b1', { infantry: 4, cavalry: 8 });
       return r.id;
     });
     expect(routed.gained).toBeGreaterThan(routed.expected * 0.9);
@@ -135,12 +135,12 @@ describe('combat — live battles', () => {
 
   it('armies arriving during a battle join the right side', () => {
     const sim = atWarGame();
-    addArmy(sim, 'a', 'b1', { foot: 6 });
-    addArmy(sim, 'b', 'b1', { foot: 7 });
+    addArmy(sim, 'a', 'b1', { infantry: 6 });
+    addArmy(sim, 'b', 'b1', { infantry: 7 });
     step(sim, { noAI: true });
     const b = Object.values(sim.state.battles)[0];
     expect(b).toBeDefined();
-    const late = addArmy(sim, 'b', 'b1', { foot: 2 });
+    const late = addArmy(sim, 'b', 'b1', { infantry: 2 });
     step(sim, { noAI: true });
     const b2 = sim.state.battles[b.id];
     if (b2) expect(b2.defenders).toContain(late.id);
@@ -149,7 +149,7 @@ describe('combat — live battles', () => {
 
   it('winning a battle does not transfer the province; a siege does', () => {
     const sim = atWarGame();
-    addArmy(sim, 'a', 'b2', { foot: 6 });
+    addArmy(sim, 'a', 'b2', { infantry: 6 });
     step(sim, { noAI: true });
     expect(sim.state.provinces.b2.controller).toBe('b');
     step(sim, { noAI: true });

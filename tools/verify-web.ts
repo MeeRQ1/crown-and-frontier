@@ -283,7 +283,46 @@ async function main(): Promise<void> {
       await page.waitForSelector('.modal h2:has-text("This save was converted")', { timeout: 10000 }).catch(() => null);
       const old = await page.evaluate(() => ({ tick: (window as any).cnf.sim?.state.tick, schema: (window as any).cnf.sim?.state.schema, map: (window as any).cnf.sim?.state.scenarioId }));
       const notice = await page.locator('.modal', { hasText: 'save format 1' }).count();
-      record('A format-1 save is converted on import, with a notice', old.tick === 60 && old.schema === 2 && old.map === 'reach' && notice === 1, `tick ${old.tick}, format ${old.schema}, ${old.map}`);
+      record('A format-1 save is converted on import, with a notice', old.tick === 60 && old.schema === 3 && old.map === 'reach' && notice === 1, `tick ${old.tick}, format ${old.schema}, ${old.map}`);
+      // a format-2 save (Stage A build) is converted to the industrial age, and the player is told
+      await page.locator('.modal footer button').first().click();
+      await page.getByRole('button', { name: 'Game menu' }).click();
+      const [chooser4] = await Promise.all([page.waitForEvent('filechooser'), page.getByRole('button', { name: 'Import file' }).click()]);
+      await chooser4.setFiles(join('tests', 'fixtures', 'aldmere-save-format2-168569b.json'));
+      await page.waitForSelector('.modal h2:has-text("This save was converted")', { timeout: 10000 }).catch(() => null);
+      const f2 = await page.evaluate(() => {
+        const sim = (window as any).cnf.sim;
+        const regs = Object.values<any>(sim?.state.armies ?? {}).flatMap((a) => a.regiments.map((r: any) => r.type));
+        return { tick: sim?.state.tick, schema: sim?.state.schema, map: sim?.state.scenarioId, oldUnits: regs.filter((t: string) => ['foot', 'horse', 'guns'].includes(t)).length };
+      });
+      const notice2 = await page.locator('.modal', { hasText: 'industrial age' }).count();
+      record('A format-2 save is converted to the industrial age on import, with a notice', f2.tick === 240 && f2.schema === 3 && f2.map === 'aldmere' && f2.oldUnits === 0 && notice2 === 1, `tick ${f2.tick}, format ${f2.schema}, ${f2.map}`);
+      // a stored save that cannot be converted stays listed, is refused with a reason, and can still be exported
+      const unconvertible = JSON.parse(readFileSync(join('tests', 'fixtures', 'custom-map-save-format2-168569b.json'), 'utf8'));
+      unconvertible.mapPackage.provinces[0].neighbors.push('nowhere');
+      const unconvertibleText = JSON.stringify(unconvertible);
+      await page.evaluate((t) => (window as any).cnf.store.put('slot-9', t), unconvertibleText);
+      await page.locator('.modal footer button').first().click();
+      await page.getByRole('button', { name: 'Game menu' }).click();
+      await page.getByRole('button', { name: 'Save and quit to menu' }).click();
+      await page.waitForSelector('.screen .menu-list button');
+      await page.getByRole('button', { name: /Load or import/ }).click();
+      const card9 = page.locator('.save-card', { hasText: 'Slot 9' });
+      await card9.waitFor({ timeout: 5000 }).catch(() => null);
+      const olderNote = await card9.locator('text=earlier version').count();
+      await card9.getByRole('button', { name: 'Load' }).click();
+      const refusal = page.locator('.modal', { hasText: 'Cannot load this save' });
+      await refusal.waitFor({ timeout: 5000 }).catch(() => null);
+      const reason = (await refusal.textContent().catch(() => '')) ?? '';
+      await refusal.locator('footer button').first().click().catch(() => null);
+      const [dl9] = await Promise.all([page.waitForEvent('download', { timeout: 5000 }), card9.getByRole('button', { name: 'Export this save to a file' }).click()]).catch(() => [null]);
+      const dlPath = dl9 ? await dl9.path() : null;
+      const exportedSame = !!dlPath && readFileSync(dlPath, 'utf8') === unconvertibleText;
+      record(
+        'A save that cannot be converted stays listed, is refused with a reason and can be exported',
+        olderNote === 1 && /cannot be/.test(reason) && (await card9.count()) === 1 && exportedSame,
+        reason.replace(/\s+/g, ' ').slice(0, 140),
+      );
       record('No errors during the session', problems.length === 0, problems.slice(0, 3).join('; '));
       await page.close();
     }

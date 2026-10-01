@@ -157,7 +157,7 @@ const name = (i: number) => {
   return s[0].toUpperCase() + s.slice(1);
 };
 const terrains: Terrain[] = ['plains', 'plains', 'forest', 'hills', 'steppe', 'marsh', 'mountains'];
-const resources: Array<Resource> = [null, null, null, null, null, 'grain', 'iron', 'horses', 'goods'];
+const resources: Array<Resource> = [null, null, null, null, null, 'food', 'food', 'coal', 'iron', 'oil', 'rubber', 'nitrates'];
 const personalities: Personality[] = ['expansionist', 'defensive', 'commercial', 'opportunist', 'diplomat'];
 const palette = ['#9a7fb8', '#c46a5c', '#6f9d7a', '#d0a24b', '#5f8fb0', '#b5794a', '#8aa05a', '#c0607e', '#4f9a9a', '#a39060', '#7a86b8', '#c4834f'];
 

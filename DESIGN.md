@@ -14,8 +14,9 @@ integrate it. You expand by settlement, investment or conquest, you bind the new
 the crown before rivals exploit its weakness, and you win the Reach through dominance,
 prosperity or leadership.
 
-**Setting.** Two original early-modern (pike-and-shot) maps, both in 1640. Every name,
-place and event is fictional.
+**Setting.** The industrial age (docs/expansion/SETTING.md): rifles and railways at the
+start, machine guns, steel and engines later, the first tanks near the end. Aldmere begins in
+1880 and the Reach in 1895. Every name, place and event is fictional.
 
 | | Aldmere (standard campaign) | The Reach (quick campaign) |
 |---|---|---|
@@ -26,7 +27,8 @@ place and event is fictional.
 | Rivers | Aldwater, Vess, Serre, Drevna, Kolva, Tarn: 65 river borders | none |
 | Straits | 15 | 10 |
 | Graph diameter | 26 provinces | 15 provinces |
-| Default length | 60 years (40 / 60 / 80) | 40 years (25 / 40 / 60) |
+| Start year | 1880 | 1895 |
+| Default length | 60 years (40 / 60 / 70) | 40 years (25 / 40 / 60) |
 
 The nine realms of the Reach return on Aldmere with larger holdings, joined by Carrow
 (highland clans), Hrafnmark (a seafaring peninsula), Solmarre (a vineyard peninsula),
@@ -71,8 +73,8 @@ penalties grow. Rapid expansion is therefore self-limiting, and the new land is
 weak, restless and poor at supplying armies. That is the moment rivals and
 coalitions exploit it.
 
-**Core loop.** Read the world → choose a priority → commit crowns, supplies and
-men → observe consequences → adapt. Orders persist until they complete or
+**Core loop.** Read the world → choose a priority → commit crowns, materiel, resources
+and men → observe consequences → adapt. Orders persist until they complete or
 become invalid.
 
 ## Time and tick order (`src/sim/tick.ts`)
@@ -101,24 +103,50 @@ changes outcomes: `step()` is a pure function of state.
 
 ## Economy and population (`economy.ts`)
 
-- **Crowns per province per month:** (0.8 × dev + 0.012 × pop + 2 for a goods resource + 3 at the capital)
+- **Crowns per province per month:** (0.8 × dev + 0.012 × pop + 3 at the capital)
   × efficiency. Efficiency is integration factor × (1 − unrest/200), and 0 if the
   province is occupied or in revolt. An occupier levies 30% of the base value.
-- **Supplies per province per month:** (0.5 × dev × terrain factor + 3 for grain) × efficiency.
-  The stockpile limit is 60 + 5 × total dev. Armies on a supply line consume
-  supplies each month (foot 0.5, horse 1, guns 1 per regiment); cut-off armies forage
-  instead of drawing from the stockpile.
-- **Expenses per month:** regiment upkeep (foot 1, horse 2, guns 2.4 crowns, scaled by
-  strength), 1 crown per fort level, 1.5 per envoy, research funding (0 / 8 / 18 /
-  32% of gross income for ×1.0 / 1.4 / 1.8 / 2.2 research), and 2% interest on debt.
+- **Food per province per month:** (0.5 × dev × terrain factor + 3 for a food deposit) ×
+  efficiency. The food stockpile (the `supplies` field) holds 60 + 5 × total dev. Armies on a
+  supply line eat from it each month (infantry 0.5, cavalry 1, artillery 0.8, engineers 0.6,
+  armour 0.4 per regiment); cut-off armies forage instead.
+- **Strategic resources:** coal, iron, oil, rubber and nitrates. Each province has at most one
+  deposit (food or one of the five). A deposit yields its base (coal 4, the others 3) +
+  0.25 × dev a month × efficiency × (1 + technology). Each resource has its own stockpile,
+  capped at 40 + 3 × total dev. Together with food that makes six resources.
+- **Industry:** provinces hold 0–5 factory levels (at most 1 + dev/2). Industrial capacity is
+  Σ factories × efficiency × (1 + technology). Each factory level burns 0.6 coal a month;
+  without coal a factory keeps 30% of its capacity (water power, short shifts), with partial
+  coal it scales in between. Capacity makes 4 **materiel** a month per point, and workshops
+  add 0.15 per integrated dev everywhere. Materiel is stockpiled up to 80 + 40 per factory;
+  output beyond that is sold as manufactured goods at 0.35 crowns each.
+- **Materiel and resources buy the army.** Raising a regiment costs crowns, materiel,
+  resources and 1,000 men (table under Combat). Replacing 1,000 lost men costs half the
+  regiment's materiel. Armour burns 0.6 oil a month per regiment; artillery burns 0.25
+  nitrates a month while its realm is at war.
+- **Shortages.** A realm covering less than 95% of a need is short, is told at once with the
+  effect, and the Industry ledger shows it: coal → factories at 30%; iron → no new artillery,
+  armour, factories, forts or railways; oil → armour at half strength; nitrates → artillery at
+  60% in battle; rubber → no new armour.
+- **Trade** (each trade agreement): every month each partner's surplus above 40% of its cap
+  flows to the other's need (up to 40% of the buyer's cap), resource by resource and
+  agreement by agreement in id order, at fixed prices (food 1, coal 1.5, iron 2, oil 3,
+  rubber 3, nitrates 2.5; the exporter's trade modifier raises its price). The buyer pays,
+  the seller earns, and both get 1 crown of commerce per agreement. A realm in debt does not
+  buy. All flows of a month are computed from the state at the start of the settlement, so
+  the order of realms does not matter.
+- **Expenses per month:** regiment upkeep (infantry 1, cavalry 1.6, artillery 2, engineers
+  1.4, armour 3 crowns, scaled by strength), 1 crown per fort level, 1.5 per envoy, research
+  funding (0 / 8 / 18 / 32% of gross income for ×1.0 / 1.4 / 1.8 / 2.2 research), resource
+  purchases, and 2% interest on debt.
 - **Military reserve:** pop × 40 men per thousand × (0.2 + 0.8 × integration).
   The **manpower pool** can never exceed reserve minus men already serving
   (regiments plus recruits in training), so soldiers are never double-counted. A shrinking
   reserve shrinks the pool. It is trimmed to the cap at every monthly settlement, and at once
   when an owner loses control of a province. Recruiting moves 1,000
   men from the pool into training. Reinforcement moves men from the pool into regiments
-  (10% of the missing men per week, only when supplied on friendly ground).
-  Disbanding returns survivors to the pool up to its limit. Casualties are
+  (10% of the missing men per week, only when supplied on friendly ground, and only as far as
+  materiel allows). Disbanding returns survivors to the pool up to its limit. Casualties are
   permanent and reduce population. The pool refills at reserve/40 per month.
 - **Population** grows logistically: 0.18% per month × (1 − pop/cap), where cap =
   terrain capacity × (1 + 0.15 × dev). Occupied provinces lose 0.2% a month.
@@ -139,8 +167,9 @@ while the province is occupied or in revolt.
 | Project | Cost | Time | Effect |
 |---|---|---|---|
 | Develop | 20 × dev × (1 + dev/4) × terrain factor; ×2.5 beyond the terrain cap | 16 wk | +1 dev (terrain cap: plains 10, hills 8, forest 7, steppe 6, marsh 5, mountains 4; up to +3 beyond it) |
-| Roads | 40 × (L+1) × (1 + L/2) | 12 wk | +1 road level (max 3): faster movement, +30% supply capacity, +25% integration speed |
-| Fort | 60 × (L+1) × (1 + L/2) + 10 supplies | 16 wk | +1 fort (max 3): sieges required, +15%/level defence, supply source, 1 crown/level/month upkeep |
+| Railway | 40 × (L+1) × (1 + L/2) + 4 iron × (L+1) | 12 wk | +1 railway level (max 3): faster movement, +30% supply capacity, +25% integration speed |
+| Factory | 80 × (L+1) + 10 iron | 20 wk | +1 factory level (max 1 + dev/2, at most 5; integration ≥ 50): industrial capacity, see Economy |
+| Fort | 60 × (L+1) × (1 + L/2) + 10 food + 5 iron | 16 wk | +1 fort (max 3): sieges required, +15%/level defence, supply source, 1 crown/level/month upkeep |
 | Grant charters | 20 + 6 × dev | 8 wk | +25 integration, −10 unrest (provinces below 90) |
 | Settle | 50 crowns, 500 men, 20 supplies | 16 wk | an unclaimed province bordering ours becomes ours at integration 20 |
 
@@ -150,10 +179,11 @@ stay in the hundreds to low thousands rather than piling up.
 
 ## Movement (`movement.ts`)
 
-Each week an army gains movement points: 1.0, or 1.5 if it is all horse, or 0.8 with guns,
+Each week an army gains movement points: its slowest regiment's speed (infantry and engineers
+1.0, cavalry 1.5, artillery 0.8, armour 1.2),
 × (1 + modifiers). Entering a province costs the terrain's value (plains and steppe 2,
 forest and hills 3, marsh 4, mountains 5), reduced by 12% per road level (the average
-of both ends); a sea strait adds 2 (Hrafnmark's longships: 0). Paths are the cheapest legal
+of both ends); a sea strait adds 2 (Hrafnmark's island ferries: 0). Paths are the cheapest legal
 Dijkstra route, found with a binary heap that breaks ties by province id, so results do not
 depend on the order of the search. Armies may enter their own or their allies' land, unclaimed land, land of
 co-belligerents, and land of realms they are at war with. An army stays *located in
@@ -195,26 +225,41 @@ nations starts or reinforces a battle. The defending side is the one friendly to
 province's controller; otherwise it is the army that has stood there longest. Other armies
 join the side they are friendly with and whose opponent they are at war with. Third parties wait.
 
+**Units** (`UNITS` in config; costs before national modifiers):
+
+| Unit | Role | Needs | Cost | Upkeep | Attack | Shock | Speed | Notes |
+|---|---|---|---|---|---|---|---|---|
+| Infantry | line | — | 15 crowns, 10 materiel | 1.0 | 1.0 | 1.0 | 1.0 | fills the frontage, screens support |
+| Cavalry | line | — | 30, 12 materiel | 1.6 | 1.1 | 1.5 | 1.5 | terrain bonus on open ground, pursuit; cut by enemy machine guns |
+| Artillery | support | — | 30, 30 materiel, 4 iron, 2 nitrates | 2.0 | 1.7 | 1.2 | 0.8 | siege ×4; burns nitrates at war |
+| Engineers | support | Engineering Corps (1885) | 25, 20 materiel, 2 iron | 1.4 | 0.6 | 0.8 | 1.0 | entrench ×2, siege, river crossings |
+| Armour | breakthrough | Tanks (1916) | 50, 80 materiel, 8 iron, 3 rubber, 2 oil | 3.0 | 2.6 | 2.0 | 1.2 | breaks forts and trenches; burns oil |
+
 **One round per week:**
 
-- **Engagement:** up to *frontage* foot and horse regiments (plains 16, steppe 20, hills 12,
-  forest 10, marsh 8, mountains 6) plus up to half as many guns engage. Guns
-  fire at half effect if they outnumber the front regiments. The rest wait in reserve.
-- **Firepower:** Σ men/1000 × unit attack (foot 1.0, horse 1.2, guns 1.7) × technology
-  × supply multiplier. Horse gets the terrain cavalry modifier (+20% plains, +30% steppe,
-  −15% to −50% in rough ground); ≥ 20% horse on open ground flanks for +15%. Everything
-  is scaled by 0.6 + 0.4 × morale ratio.
+- **Engagement:** up to *frontage* line and breakthrough regiments (plains 16, steppe 20,
+  hills 12, forest 10, marsh 8, mountains 6) plus up to half as many support regiments
+  engage. Support regiments fire at half effect if they outnumber the line ("no infantry
+  screen"). The rest wait in reserve.
+- **Firepower:** Σ men/1000 × unit attack × technology × supply multiplier. Cavalry gets the
+  terrain cavalry modifier (+20% plains, +30% steppe, −15% to −50% in rough ground); ≥ 20%
+  cavalry on open ground flanks for +15%. Enemy machine guns (technology) cut cavalry fire by
+  their anti-cavalry value. Armour gets its own terrain modifier (good on plains and steppe,
+  poor in forest, marsh and mountains). **Shortages:** armour without oil fires at 50%,
+  artillery without nitrates at 60%. Everything is scaled by 0.6 + 0.4 × morale ratio.
 - **Casualties inflicted:** firepower × 55 × roll (0.85–1.15, seeded). The
   attacker's fire is reduced by the defence bonus: terrain (forest 15%, marsh 20%, hills 25%,
   mountains 50%) + fort 15% per level if the defenders hold it + entrenchment (10% after 2
-  stationary weeks, 20% after 4) + technology + **river crossing** (20% when every
-  attacker stepped across a river border into the province to open the battle), capped
-  at 70%. Forecasts apply the river bonus when the attackers would cross one.
-- **Morale loss:** 0.15 + (casualties / men) × 8 × the enemy's shock (horse 1.6, guns 1.2, foot 1.0).
+  stationary weeks, 20% after 4; engineers dig twice as fast) + technology + **river
+  crossing** (20% when every attacker stepped across a river border into the province to
+  open the battle; 10% if the attackers bring engineers), capped at 70%. **Breakthrough:**
+  attacking armour strips forts and entrenchment by up to 50% (the full 50% at 30% armour
+  among the attackers' men). Forecasts apply the river bonus when the attackers would cross one.
+- **Morale loss:** 0.15 + (casualties / men) × 8 × the enemy's shock.
 - **Ending:** a side breaks at 25% morale or at 10% of its starting men. If both break,
   the side with the lower morale ratio loses; exact ties go to the defender. After 8 rounds the
   attacker withdraws.
-- **Pursuit and retreat:** the winner's horse pursue for up to 10% of their men in extra
+- **Pursuit and retreat:** the winner's cavalry (10%) and armour (15%) pursue for extra
   casualties (at most 15% of the loser). Losers retreat to an adjacent enterable province with
   no enemies, preferring friendly ground and short supply lines. **With no legal
   retreat they surrender**, and all their men are lost.
@@ -231,11 +276,16 @@ rolls, without touching the gameplay RNG. The result is "Likely victory",
 
 | Situation | Forecast | Why |
 |---|---|---|
-| 6 foot + 2 horse vs the same on plains | **Uncertain**: 1,736 losses each with even rolls; unlucky → defender holds, lucky → attacker wins | Symmetric; both get horse flanking and the plains bonus; exact ties go to the defender |
-| 9 foot attack 5 entrenched foot in fortified mountains | **Likely defeat** (defender holds in all three) — attacker loses 1,425, defender 485 | Mountains +50%, fort +15%, entrenchment +20% (defence capped at 70%); frontage 6 leaves 3 attacking regiments idle |
-| Same 9 vs 5 on open plains | **Likely victory** — attacker loses 657, defender 1,370 | No terrain or fort bonus; the whole army engages |
-| 8 supplied foot attack 6 dug-in foot on plains | **Likely victory** (1,048 vs 1,362) | Numbers beat a 10% entrenchment |
-| Same attack with attackers at 20% supply | **Uncertain** (1,296 vs 1,218; unlucky → defender holds) | Unsupplied −25% firepower |
+| 6 infantry + 2 cavalry vs the same on plains | **Uncertain**: 1,504 losses each with even rolls; unlucky or even → defender holds, lucky → attacker wins | Symmetric; both get cavalry flanking and the plains bonus; exact ties go to the defender |
+| 9 infantry attack 5 entrenched infantry in fortified mountains | **Likely defeat** (defender holds in all three) — attacker loses 1,617, defender 550 | Mountains +50%, fort +15%, entrenchment +20% (defence capped at 70%); frontage 6 leaves 3 attacking regiments idle |
+| Same 9 vs 5 on open plains | **Likely victory** — attacker loses 738, defender 1,565 | No terrain or fort bonus; the whole army engages |
+| 8 supplied infantry attack 6 dug-in infantry on plains | **Likely victory** (1,168 vs 1,542) | Numbers beat a 10% entrenchment |
+| Same attack with attackers at 20% supply | **Uncertain** (1,240 vs 1,152; unlucky → defender holds) | Unsupplied −25% firepower |
+| 2 infantry + 6 cavalry attack 6 infantry on plains | **Likely victory** (656 vs 1,218) | Cavalry flanking and the plains bonus |
+| Same, the defenders have Machine Guns | **Likely victory**, but dearer (936 vs 1,158) | Cavalry fire −35%, defence +8% |
+| 8 infantry attack 6 infantry entrenched behind a level-2 fort | **Uncertain** (1,536 vs 1,002) | Fort +30% and entrenchment +20% |
+| 5 infantry + 3 armour against the same line | **Likely victory** (648 vs 1,176) | Armour (38% of the men) strips half of fort and trench (−25%) and is favoured on plains |
+| Same armour without oil | **Likely victory**, but dearer (920 vs 1,158) | Unfuelled armour fires at 50% |
 
 ## Sieges and occupation (`siege.ts`)
 
@@ -245,7 +295,7 @@ besieges it:
 
 - **No fort:** 50% progress per week.
 - **Fort level L:** 100% takes 10 × L weeks and needs at least 2L regiments.
-- **Modifiers:** +25% per guns regiment (max 6), + siege technology, ×0.5 if unsupplied,
+- **Modifiers:** +25% per artillery regiment (max 6), +50% per engineer regiment (max 2), + siege technology, ×0.5 if unsupplied,
   ×2 when the legal owner, or a friend of it, retakes its own land.
 
 At 100 the controller changes. Captured land whose legal owner the besiegers are not
@@ -292,7 +342,7 @@ province and counts toward war score.
   common enemy (+15), −½ × alarm, the other side's trust, claims.
 - **Treaties:**
   - **Non-aggression pact** — 5 years; cancelling it costs 10 trust and imposes a 12-month cooling-off.
-  - **Trade** — crowns each month for both; cancelled by war.
+  - **Trade** — resource exchange and commerce each month (see Economy); cancelled by war.
   - **Defensive alliance** — calls to arms and military access. Blocked if a party is at war with an ally of the other.
 - **Acceptance** is `score ≥ 0`, where the score is a listed sum: opinion, trust, relative strength,
   shared threats, distance, claims, existing allies and the evaluator's temperament. The
@@ -309,12 +359,16 @@ province and counts toward war score.
 
 ## Research and policy (`progression.ts`, `data/techs.ts`, `data/policies.ts`)
 
-- **Research:** 18 technologies in three branches (Arms, Statecraft, Civics), each with two
-  tier-1, two tier-2 and two tier-3 techs. Costs are 100, 200 and 350 points (×1.35 on
-  Aldmere, whose larger realms research faster, so that the tree lasts a 60-year campaign);
-  prerequisites stay within a branch. Points per month = (0.5 + 0.4 × √Σ(dev × integration factor)) × funding ×
-  (1 + modifiers) × (1 − overextension/2). The full tree takes most of a long campaign, so
-  specialisation matters early.
+- **Research:** 54 technologies in three branches (land warfare, industry, society) across
+  five eras: I Rifle & Rail (1870), II Steel & Breech (1885), III Dreadnought & Engine (1900),
+  IV Total War (1915) and V Mechanised (1925). Naval and air branches arrive in
+  Stage C. Each technology has a **horizon year**. Era costs are 150 / 220 / 320 / 440 / 560
+  points (×1.35 on Aldmere). Researching before the horizon costs 15% more per year early,
+  and nothing can be finished more than 10 years early. Every realm knows the technologies
+  whose horizon is at least five years before the campaign starts (7 on Aldmere, 20 on the
+  Reach). Points per month = (0.5 + 0.4 × √Σ(dev × integration factor)) × funding ×
+  (1 + modifiers) × (1 − overextension/2). Two technologies unlock units: Engineering Corps
+  (engineers) and Tanks (armour).
 - **Policies:** six national priorities, each with a benefit and a drawback: Mercantile Charter,
   Martial Levy, Frontier Settlement, Royal Academy, Fortress Doctrine and Concord Diplomacy
   (which forbids wars without a claim). A change costs 20 + half a month's income (free in the
@@ -324,7 +378,7 @@ province and counts toward war score.
 
 ## Events (`events.ts`, `data/events.ts`)
 
-There are 17 condition-based events, among them harvests, border incidents, frontier
+There are 20 condition-based events, among them factory strikes, mine disasters, oil booms, harvests, border incidents, frontier
 discontent, guild petitions, plague, desertion, veteran officers, foreign goodwill,
 refugees, an inventor, bankers' loans, separatists, road-builders, frontier silver,
 war weariness, a rival close to victory, and alarmed neighbours.
@@ -374,7 +428,7 @@ is, if anything, relatively harder. Region counts scale with the number of regio
 - **Simultaneous winners:** resolved by campaign score (disclosed): 3 × provinces + 0.6 ×
   integrated dev + 3 × technologies + 3 × influence + min(treasury, 2000)/100 +
   per path (20 × timer fraction + 10 × condition progress).
-- **Campaign limit** (the Reach 25/40/60 years, default 40; Aldmere 40/60/80, default 60): the highest score wins.
+- **Campaign limit** (the Reach 25/40/60 years from 1895, default 40; Aldmere 40/60/70 years from 1880, default 60): the highest score wins.
 - **Defeat** is elimination, or another realm winning. Losing the capital is not fatal. After a
   result you may continue playing; the result stays recorded.
 
@@ -440,8 +494,9 @@ default and disclosed in the setup screen and the game menu.
   noise) lives only in the UI. A test forbids `Math.random` and wall-clock time in `src/sim`.
 - **Reproducibility:** the same seed, settings and command sequence reproduce identical states.
   Tests assert this, and that a game saved mid-war continues exactly like the original.
-- **Save format 2** (`src/sim/save.ts`): versioned and checksummed JSON of the complete state,
-  including movement progress, battles, queues, treaties, events and AI commitments.
+- **Save format 3** (`src/sim/save.ts`): versioned and checksummed JSON of the complete state,
+  including movement progress, battles, queues, treaties, events, stockpiles, factories and
+  AI commitments.
 - **Saves keep their map.** The state records the map's fingerprint: its id, content revision and
   a checksum of its gameplay content (`src/maps/format.ts`). A save whose map has changed
   since then loads only if the provinces and realms are the same, with a notice. Otherwise it is
@@ -449,10 +504,19 @@ default and disclosed in the setup screen and the game menu.
   the whole map package. On load, the package is sanitised and validated like an import. It must
   not reuse a built-in id and must match the recorded checksum.
 - **Migrations** (`src/sim/migrate.ts`) convert older formats step by step and say so. Format 1
-  (the first two releases) becomes format 2 by recording the built-in map's fingerprint. The
-  test suite converts a save from the first release (`tests/fixtures/reach-save-main-c29aea6.json`,
-  commit c29aea6), plays it for a year and saves it again. The browser checks import the same
-  file and expect the notice.
+  (the first two releases) becomes format 2 by recording the built-in map's fingerprint
+  (revision 1). Format 2 (the 17th-century rules) becomes format 3 (the industrial age): foot,
+  horse and guns become infantry, cavalry and artillery; researched technologies map to their
+  nearest equivalents and every realm learns the start-year technologies; factories,
+  stockpiles and materiel are added from each province's development; a built-in map moves to
+  its current revision and an embedded map package is upgraded to the current map format; the
+  calendar moves to the map's new start year. The notice says all of this. A save that cannot
+  be converted (for example an embedded map that no longer validates) is refused with the
+  reason, stays listed, and can still be exported from the load screen. The tests convert a
+  save from the first release (`tests/fixtures/reach-save-main-c29aea6.json`) and two format-2
+  saves written by the Stage A build (`tests/fixtures/*-format2-168569b.json`, one with a
+  custom map), play them for a year and save them again. The browser checks import the
+  format-1 and format-2 files and expect the notices.
 - **Loading:** damaged, truncated, foreign, newer or oversized (> 20 MB) files are rejected with a
   message, and the current campaign is kept.
 - **Bug reports** (`src/sim/diagnostics.ts`) replay exactly. A campaign started in the session
@@ -465,7 +529,9 @@ default and disclosed in the setup screen and the game menu.
 ## Balance assumptions and evidence
 
 The numbers above were tuned against AI-only campaigns (`npm run sim`). The latest batches
-are in `reports/ai-campaigns-aldmere.md` and `reports/ai-campaigns.md`. They record seeds,
+are in `reports/stage-b/` (10 seeds per map at normal difficulty, with the system-usage
+section); the 30-campaign batches from before the industrial rules remain in
+`reports/ai-campaigns-aldmere.md` and `reports/ai-campaigns.md`. They record seeds,
 difficulties, winners, war counts, bankruptcies, idle-army share and performance.
 Observations that drove the tuning:
 
@@ -494,3 +560,24 @@ Observations that drove the tuning:
   On Aldmere, Hrafnmark, Vostmark, the Ashmark and Carrow shrink on average. Serennes, Istrel
   and Solmarre rarely go to war. See STATUS.md for the tables. These are small samples and
   diagnostic, not proof of balance.
+- **Stage B, the industrial economy** (`reports/stage-b/`, 10 seeds per map):
+  - The first batches showed coal running out in 17–30% of realm-months and factories
+    growing twentyfold. The AI counted coal it imported at full value and ignored the
+    factories it was already building, so importers overbuilt and then idled when exporters
+    burned their own coal. The AI now counts only its own coal, half its imports and the
+    factories under construction, and a factory without coal keeps 30% of its capacity.
+    Coal shortages fell to 8% (the Reach) and 13% (Aldmere) of realm-months, and every
+    surviving realm runs industry at the end.
+  - Trade is 12% (the Reach) and 11% (Aldmere) of income at year 25, down from about half
+    under the flat trade bonus. A small coal exporter can still draw most of its income
+    from trade (the highest single realm was 64% and 78%).
+  - The average realm finishes 56% (the Reach, 40 years) and 46% (Aldmere, 60 years) of
+    the 54-technology tree; nothing finished more than 4 years before its horizon.
+  - Treasuries at year 40 average 4.7× (the Reach) and 3.2× (Aldmere) monthly income.
+  - Winners spread more than before: the Reach Fenward 3, Aurel 2, Tarsk 2, Serennes,
+    Drevenholt and Morvaine 1 each; Aldmere Morvaine 4, Tarsk 4, Lessia 2. Hrafnmark still
+    shrinks on Aldmere (14 → 6.5 provinces on average); it should gain from fleets in Stage C.
+  - Oil, rubber, nitrates and iron were never short in these batches: before armour (1916)
+    and before fleets and aircraft (Stage C) little burns them. Coal is the binding
+    resource in Stage B.
+

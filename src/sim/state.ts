@@ -98,7 +98,7 @@ export function menOf(a: Army): number {
   return m;
 }
 
-export function countType(a: Army, t: 'foot' | 'horse' | 'guns'): number {
+export function countType(a: Army, t: 'infantry' | 'cavalry' | 'artillery'): number {
   let c = 0;
   for (const r of a.regiments) if (r.type === t) c++;
   return c;

@@ -3,7 +3,9 @@
 // knows how to draw and simulate.
 
 export const TERRAINS = ['plains', 'forest', 'hills', 'mountains', 'marsh', 'steppe'] as const;
-export const RESOURCES = ['grain', 'iron', 'horses', 'goods'] as const;
+export const RESOURCES = ['food', 'coal', 'iron', 'oil', 'rubber', 'nitrates'] as const;
+/** Trait names before the industrial age (map format 1), with their current names. */
+export const LEGACY_TRAITS: Record<string, string> = { gunsCostMul: 'artilleryCostMul', horseCostMul: 'cavalryCostMul', horseAttackAdd: 'cavalryAttackAdd' };
 export const PERSONALITY_IDS = ['expansionist', 'defensive', 'commercial', 'opportunist', 'diplomat'] as const;
 
 export const TINCTURE_NAMES = ['realm', 'or', 'argent', 'sable', 'gules', 'azure', 'vert', 'purpure'] as const;
@@ -26,9 +28,9 @@ export const TRAIT_BOUNDS: Record<string, [number, number]> = {
   siegeMul: [-0.5, 0.5],
   devCostMul: [-0.5, 0.5],
   popGrowthMul: [-0.5, 0.5],
-  gunsCostMul: [-0.5, 0.5],
-  horseCostMul: [-0.5, 0.5],
-  horseAttackAdd: [-0.5, 0.5],
+  artilleryCostMul: [-0.5, 0.5],
+  cavalryCostMul: [-0.5, 0.5],
+  cavalryAttackAdd: [-0.5, 0.5],
   integrationMul: [-0.5, 0.5],
   envoyAdd: [0, 2],
   opinionAdd: [-20, 20],

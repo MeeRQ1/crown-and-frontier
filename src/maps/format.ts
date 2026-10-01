@@ -11,7 +11,12 @@
 import type { NationDef, ProvinceDef, RegionDef } from '../sim/types';
 
 export const MAP_FORMAT = 'crown-frontier-map';
-export const MAP_FORMAT_VERSION = 1;
+/**
+ * 1: first format (17th-century resources: grain, iron, horses, goods).
+ * 2: industrial deposits (food, coal, iron, oil, rubber, nitrates) and factories.
+ * Older packages are upgraded on import (validate.ts).
+ */
+export const MAP_FORMAT_VERSION = 2;
 
 /** Reserved border ids for edges that touch no province. */
 export const SEA = '~sea';

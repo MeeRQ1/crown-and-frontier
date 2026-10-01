@@ -3,7 +3,8 @@
 
 import { TECHS, TECH_LIST } from '../../sim/data/techs';
 import { coalitionAgainst } from '../../sim/diplomacy';
-import { computeLedger, debtStage, grossIncome, poolCap, stockpileCap } from '../../sim/economy';
+import { computeLedger, debtStage, factoryCount, grossIncome, materielCap, poolCap, stockpileCap } from '../../sim/economy';
+import { RESOURCE_INFO, STRATEGIC } from '../../sim/config';
 import { activeProjects, buildSlots } from '../../sim/construction';
 import { overextension } from '../../sim/integration';
 import { researchRate, techAvailable, techCost } from '../../sim/progression';
@@ -38,7 +39,7 @@ export function attention(app: App): AttentionItem[] {
   if (decisions) out.push({ level: 'seal', short: `${decisions} decision${decisions > 1 ? 's' : ''}`, text: `${decisions} decision${decisions > 1 ? 's' : ''} awaiting your answer.`, icon: 'scroll', act: () => app.openDecisions() });
   const stage = debtStage(sim, pid);
   if (stage) out.push({ level: 'bad', short: ['', 'In debt', 'Severe debt', 'Bankruptcy near'][stage], text: ['', 'Treasury in debt: 2% interest every month.', 'Severe debt: morale recovers at half speed and unrest rises.', 'Bankruptcy imminent: armies will be disbanded and projects cancelled.'][stage], icon: 'treasury', act: () => app.openLedger('realm') });
-  if (n.supplies <= 0) out.push({ level: 'bad', short: 'No supplies', text: 'The supply stockpile is empty: armies on supply lines are starving.', icon: 'supplies', act: () => app.openLedger('realm') });
+  if (n.supplies <= 0) out.push({ level: 'bad', short: 'No food', text: 'The food stockpile is empty: armies on supply lines are starving.', icon: 'supplies', act: () => app.openLedger('realm') });
   const coal = coalitionAgainst(sim, pid);
   if (coal) out.push({ level: 'bad', short: 'Coalition', text: `A coalition of ${coal.members.map((m) => sim.world.nationDefs[m].short).join(', ')} stands against you.`, icon: 'alliance', act: () => app.openLedger('diplomacy') });
   for (const w of warsOf(sim, pid)) {
@@ -114,12 +115,12 @@ export function renderHud(app: App): void {
       const sOut = Object.values(l.suppliesOut).reduce((a, b) => a + b, 0);
       resEl.appendChild(
         res({
-          label: 'Supplies',
+          label: 'Food',
           icon: 'supplies',
           value: [fmt(n.supplies), h('span', { class: 'cap' }, `/${fmt(stockpileCap(sim, pid))}`)],
           sub: [h('span', { class: l.netSupplies >= 0 ? 'pos' : 'neg' }, `${signed(l.netSupplies)}/mo`), h('span', { class: 'commit' }, `−${fmt(sOut, 1)} armies`)],
           state: n.supplies <= 0 ? 'alert' : l.netSupplies < 0 && n.supplies < sOut * 3 ? 'caution' : '',
-          tip: () => breakdown('Supplies (wagons)', [...Object.entries(l.suppliesIn).map(([k, v]) => [k, v] as [string, number]), ...Object.entries(l.suppliesOut).map(([k, v]) => [k, -v] as [string, number])], `Produced ${fmt(sIn, 1)}, drawn ${fmt(sOut, 1)} per month. Armies beyond supply range forage instead.`),
+          tip: () => breakdown('Food (provisions)', [...Object.entries(l.suppliesIn).map(([k, v]) => [k, v] as [string, number]), ...Object.entries(l.suppliesOut).map(([k, v]) => [k, -v] as [string, number])], `Produced ${fmt(sIn, 1)}, eaten ${fmt(sOut, 1)} per month. Armies beyond supply range forage instead.`),
           onClick: () => app.openLedger('realm'),
         }),
       );
@@ -139,9 +140,29 @@ export function renderHud(app: App): void {
               null,
               h('b', { class: 't' }, 'Manpower'),
               h('p', null, `Men ready to recruit and reinforce: ${fmt(n.manpower)} of a current limit of ${fmt(cap)}.`),
-              h('p', { class: 'faint' }, n.manpower > cap ? 'The pool is above the limit because occupied or lost land shrank the reserve, or more men are serving: no new men arrive until it falls below.' : `About ${fmt(l.manpowerIn)} men join each month. Regiments in training: ${training}.`),
+              h('p', { class: 'faint' }, `About ${fmt(l.manpowerIn)} men join each month. Regiments in training: ${training}. When occupation or lost integration shrinks the reserve, the pool shrinks with it.`),
             ),
           onClick: () => app.openLedger('military'),
+        }),
+      );
+      const mcap = materielCap(sim, pid);
+      resEl.appendChild(
+        res({
+          label: 'Industry',
+          icon: 'factory',
+          value: [fmt(n.materiel), h('span', { class: 'cap' }, `/${fmt(mcap)}`)],
+          sub: [h('span', { class: 'pos' }, `+${fmt(l.materielIn, 1)}/mo`), n.shortages.length ? h('span', { class: 'neg' }, `short: ${n.shortages.map((r) => RESOURCE_INFO[r].label.toLowerCase()).join(', ')}`) : h('span', { class: 'commit' }, `IC ${fmt(l.industry, 1)}`)],
+          state: n.shortages.length ? 'caution' : '',
+          tip: () =>
+            h(
+              'div',
+              null,
+              h('b', { class: 't' }, 'Materiel and resources'),
+              h('p', null, `Materiel ${fmt(n.materiel)} of ${fmt(mcap)}: equips new regiments and replaces losses. Industrial capacity ${fmt(l.industry, 1)} from ${factoryCount(sim, pid)} factories.`),
+              h('ul', { class: 'reasons' }, STRATEGIC.map((r) => h('li', { class: n.shortages.includes(r) ? 'bad' : '' }, h('span', null, RESOURCE_INFO[r].label), h('span', null, `${fmt(n.stock[r])} (${signed(l.resources[r].produced + l.resources[r].imported - l.resources[r].exported - l.resources[r].used, 1)}/mo)`)))),
+              h('p', { class: 'faint' }, 'Open the Industry ledger (I) for mines, factories and trade.'),
+            ),
+          onClick: () => app.openLedger('industry'),
         }),
       );
       const cur = n.research.current ? TECHS[n.research.current] : null;

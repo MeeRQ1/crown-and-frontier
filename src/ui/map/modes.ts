@@ -57,7 +57,7 @@ export const MODES: ModeDef[] = [
     label: 'Economy',
     icon: 'economy',
     key: 'R',
-    explain: 'Crowns each province yields its owner per month (development, trade goods, integration, unrest and occupation all count). Close up, the development level is written on each province.',
+    explain: 'Crowns each province yields its owner per month (development, population, integration, unrest and occupation all count). Close up, the development level is written on each province.',
     ramp: { stops: ['#efe6cf', '#e3c276', '#c98a3a', '#8e4a22'], from: '0', to: '12+ crowns / month' },
   },
   {

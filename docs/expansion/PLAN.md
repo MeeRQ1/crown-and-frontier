@@ -27,16 +27,16 @@ priorities is in [AUDIT.md](AUDIT.md). The era and content decisions are in
 
 | Stage | Content | Depends on | Status |
 |---|---|---|---|
-| **A · Foundations** | Audit; confirmed bug fixes; baselines and tools; derived indexes; versioned map packages; save format 2 with migration; replayable bug reports; setting decision | — | **this pull request** |
-| **B · Industrial economy and research** | The new era's calendar; six resources; industry and production; trade as resource exchange; the five-era tree with horizons; data-driven land roster (infantry, cavalry, artillery, engineers); save format 3 with conversion from 1640 saves; built-in maps converted; economy AI | A | planned |
-| **C · War on land, at sea and in the air** | Land depth (frontage by terrain, breakthrough, entrenchment lines, rail logistics, armour); map package v2 with sea zones and ports (v1 upgraded automatically); fleets, naval combat, transports and invasions, blockades; airfields and air missions (superiority, ground support, interdiction, bombing, reconnaissance); military AI for all three arms | B | planned |
+| **A · Foundations** | Audit; confirmed bug fixes; baselines and tools; derived indexes; versioned map packages; save format 2 with migration; replayable bug reports; setting decision | — | **done** (this pull request) |
+| **B · Industrial economy and research** | The new era's calendar; six resources; industry and production; trade as resource exchange; the five-era tree with horizons; data-driven land roster (infantry, cavalry, artillery, engineers, armour); save format 3 with conversion from 1640 saves; built-in maps converted; economy AI | A | **done** (this pull request) |
+| **C · War on land, at sea and in the air** | Land depth (frontage by terrain, breakthrough, entrenchment lines, rail logistics, armour); map package v3 with sea zones and ports (v1 and v2 upgraded automatically); fleets, naval combat, transports and invasions, blockades; airfields and air missions (superiority, ground support, interdiction, bombing, reconnaissance); military AI for all three arms | B | planned |
 | **D · Maps** | Map library screen; at least three new fictional maps (small, standard, large); in-browser map editor (provinces, realms, regions, sea zones, routes, validation, export and import); a real-world regional map from Natural Earth (public domain) with attribution; level of detail for large maps | A (format), C (sea zones) | planned |
 | **E · Diplomacy, settlements and national focus** | Peace settlements with several parties and graded demands; guarantees, spheres and influence; trade blocs; national focus trees (generic and per-realm), replacing the six policies; diplomacy and focus AI | B, C | planned |
 | **F · Onboarding, balance and delivery** | Tutorial and onboarding for every new system; UI pass; AI system-usage reports; balance from AI batches on every map; player-style sessions; screenshots; final docs, attribution, test and performance results, known limitations | B–E | planned |
 
 ### Acceptance checks per stage
 
-**A (this pull request)**
+**A (done)**
 - [x] All 11 confirmed bugs fixed, each with a regression test. The tests for bugs 1–5 were
   run against the unfixed simulation and fail there. The browser steps for bug 6 were run
   on a build of 2246696 and show the bug. Bugs 7–11 were confirmed by the evidence in
@@ -53,20 +53,25 @@ priorities is in [AUDIT.md](AUDIT.md). The era and content decisions are in
 - [x] Typecheck, unit tests, build, ZIP and browser checks pass; the fuzzer reports 0
   findings on both maps.
 
-**B**
-- Every built-in map carries the six resources, and the setup screen shows the new start
-  years.
-- Formats 1 and 2 convert to 3 with notices. A save that cannot convert stays listed and
-  exportable (tests with fixtures, plus a browser check).
-- In AI batches (10 seeds per map): trade is at most 30% of average income at year 25;
-  every surviving realm runs industry; the average treasury at year 40 is below 5× monthly
-  income; the average realm finishes at most 70% of the tree in a standard campaign; and no
-  technology finishes more than 10 years before its horizon.
-- Standard-map week average ≤ 10 ms and p99 ≤ 30 ms. Fastest speed stays 36 of 36 weeks
-  in the browser on the built-in maps.
+**B (done)**
+- [x] Every built-in map carries the six resources (map format 2, built-in revision 2), and
+  the setup screen shows the new start years (map cards and campaign lengths).
+- [x] Formats 1 and 2 convert to 3 with notices. A save that cannot convert stays listed and
+  exportable: unit tests with three fixtures (format 1 from c29aea6; format 2 built-in and
+  custom-map saves from 168569b) and browser checks for both notices and for the
+  unconvertible save.
+- [x] AI batches (10 seeds per map, `reports/stage-b/`): trade 12.0% (the Reach) and 11.4%
+  (Aldmere) of income at year 25 (≤ 30%); 86 of 86 and 140 of 140 surviving realms run
+  industry at the end; treasury 4.72× and 3.19× monthly income at year 40 (< 5×); the
+  average realm finishes 56.2% and 46.2% of the tree (≤ 70%); the earliest finish was 2 and
+  4 years before a horizon (≤ 10).
+- [x] Standard-map week 8.48 and 7.17 ms average, p99 21.4 and 16.8 ms (Aldmere, seeds 1–2,
+  30 years; ≤ 10 and ≤ 30 ms; `reports/perf/stageB-aldmere.md`). Fastest speed: 36 of 36
+  weeks in the browser on the Reach, Aldmere and the 900-province map
+  (`reports/perf/web-stageB.md`).
 
 **C**
-- Map packages v1 upgrade to v2 with sea zones (tests). The validator covers sea zones and
+- Map packages v1 and v2 upgrade to v3 with sea zones (tests). The validator covers sea zones and
   ports.
 - Naval invasion, blockade, and air superiority affecting land combat are each covered by
   worked-example tests (like today's combat tests) and a browser flow.
@@ -129,33 +134,33 @@ assigned to a stage and not started. Nothing has been dropped.
 | 2 | Identify bugs, fragile transitions, dominant strategies, AI weaknesses, performance at several map sizes, UI problems, architecture fitness | A | done | AUDIT.md sections |
 | 3 | Confirm issues before fixing them | A | done | AUDIT.md evidence column; bugs 1–5 also by their tests failing on the unfixed code |
 | 4 | Concise plan and requirement ledger with dependencies, acceptance checks, scope decisions | A | done | This file |
-| 5 | A coherent setting supporting land, naval and air warfare | A (decision), B–C | decided | SETTING.md |
+| 5 | A coherent setting supporting land, naval and air warfare | A (decision), B–C | land and economy done (B); naval and air in C | SETTING.md |
 | 6 | Reproducible baselines: load and creation, tick avg/p95/p99/max, AI, pathfinding, supply, diplomacy, frame times, memory; small, standard and large maps | A | done | `reports/perf/`, `npm run bench`, `npm run bench:web` |
 | 7 | Determinism | A, every stage | done | Determinism tests, rule check, fuzzer save/load and repeat checks |
 | 8 | Fix important failures | A, every stage | done for all confirmed | AUDIT.md table |
 | 9 | Diagnostic export | A | done | `src/sim/diagnostics.ts`, `tools/replay.ts`, tests |
-| 10 | Versioned map and content schemas | A (maps v1, saves 2), C (maps v2), B (saves 3) | done for A | `src/maps/`, `src/sim/migrate.ts` |
+| 10 | Versioned map and content schemas | A (maps v1, saves 2), B (maps v2 with deposits, saves 3), C (maps v3 with sea zones) | done for A and B | `src/maps/`, `src/sim/migrate.ts` |
 | 11 | Map library with ≥3 new fictional maps | D | planned | Stage D checks |
 | 12 | In-browser map editor | D | planned | Stage D checks |
 | 13 | Real-world regional map with licensed data | D | planned | Natural Earth (public domain) |
-| 14 | Deeper land warfare | C | planned | Stage C checks |
+| 14 | Deeper land warfare | B (roster: engineers, armour, machine guns, breakthrough), C | started in B | `tests/industry.test.ts`; Stage C checks |
 | 15 | Navy | C | planned | Stage C checks |
 | 16 | Air | C | planned | Stage C checks |
-| 17 | About 5–7 resources | B | planned | Six resources (SETTING.md) |
-| 18 | Industry | B | planned | Stage B checks |
-| 19 | Trade | B | planned | Stage B checks |
+| 17 | About 5–7 resources | B | done | Food, coal, iron, oil, rubber, nitrates; `tests/industry.test.ts` |
+| 18 | Industry | B | done | Factories, materiel, shortages; Stage B checks |
+| 19 | Trade | B (resource exchange), E (trade blocs) | done for B | Stage B checks |
 | 20 | Diplomacy | E | planned | Stage E checks |
 | 21 | Settlements | E | planned | Peace settlements (scope decision) |
-| 22 | Research | B | planned | Five-era tree with horizons |
+| 22 | Research | B (land, industry, society), C (naval, air) | done for B | 54 technologies, five eras, horizons; Stage B checks |
 | 23 | National focus trees | E | planned | Stage E checks |
-| 24 | AI that uses every system | B–E, measured in F | planned | System-usage counts in AI reports |
+| 24 | AI that uses every system | B–E, measured in F | B systems done | System-usage section in every AI report (`tools/usage.ts`) |
 | 25 | UI and onboarding | every stage, F | planned | Stage F checks |
-| 26 | Stages A–F, each runnable with concrete checks | A–F | A done | Acceptance checks above |
+| 26 | Stages A–F, each runnable with concrete checks | A–F | A and B done | Acceptance checks above |
 | 27 | Tests, browser flows, AI campaigns, player-style sessions, screenshots, docs, attribution, test and performance results, known limitations | every stage, F | A done for its scope | PR descriptions, STATUS.md |
 | 28 | Do not merge or publish without instruction | all | followed | Draft pull requests only |
 | 29 | No invented results, untested browser claims or mock interfaces | all | followed | Results come from tools in the repo |
 | 30 | No accounts, backend, paid services or external AI APIs | all | followed | Static build, local storage |
-| 31 | Preserve saves; versioning, migrations, notices; never silently corrupt or discard | A, B | done for A | Format 2 and migration tests |
+| 31 | Preserve saves; versioning, migrations, notices; never silently corrupt or discard | A, B, every later stage | done for A and B | Format 2 and 3 migration tests and fixtures; browser checks |
 | 32 | No real-device claims from a resized desktop browser | all | followed | AUDIT.md wording |
 | 33 | Reject malformed or very large imports; never execute imported scripts | A | done | Validator limits, save limit, tests, text-only rendering |
 | 34 | Reviewable pull requests; no silent scope reduction | all | followed | One PR per stage; this ledger |
@@ -163,15 +168,14 @@ assigned to a stage and not started. Nothing has been dropped.
 | 36 | No speculative rewrites; no optimisation that changes rules | all | followed | Rule check record |
 | 37 | Worker only if profiling justifies it | all | followed | Worker decision in AUDIT.md |
 
-## Next steps (Stage B)
+## Next steps (Stage C)
 
-1. Introduce the era calendar: each map package's `rules.startYear` and campaign lengths
-   move to the SETTING.md table, and dates show the new years.
-2. Make units data-driven: replace `foot | horse | guns` with a roster keyed by role and
-   era; port combat, recruitment, AI and UI. Use the rule check to keep the old roster's
-   numbers identical before any rebalancing.
-3. Save format 3 and the conversion from formats 1 and 2, with fixtures.
-4. Add the resources, production and industry, then trade as resource exchange, each with
-   its AI and ledger.
-5. Build the five-era research tree with horizons, and run the AI batches against the
-   Stage B checks.
+1. Map format 3 with sea zones and ports: zones generated for the built-in maps, formats 1
+   and 2 upgraded automatically, the validator extended.
+2. Fleets (transports, screens, cruisers, capital ships, submarines, carriers) in sea
+   zones; naval combat; transports and invasions; blockades of ports and trade.
+3. Airfields and air wings with ranges; superiority, ground support, interdiction,
+   bombing and reconnaissance, feeding land combat and the economy.
+4. Naval and air technologies (Stage C brings the tree to 60–80); fleet and air AI.
+5. Extend the format 2 → 3 conversion (fleets and air start empty); re-run benchmarks,
+   AI batches with system-usage counts and the combat matrix.

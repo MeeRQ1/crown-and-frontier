@@ -11,6 +11,7 @@ import { ownedProvinces } from '../src/sim/state';
 import { isOver, step } from '../src/sim/tick';
 import type { Difficulty } from '../src/sim/types';
 import { campaignScore, victoryProgress } from '../src/sim/victory';
+import { UsageTracker, usageLines, type UsageReport } from './usage';
 
 interface Args {
   seeds: number[];
@@ -48,6 +49,7 @@ interface RunResult {
   ticks: number;
   winner: string | null;
   path: string | null;
+  startYear: number;
   endYear: number;
   invariantFailures: string[];
   msPerTickAvg: number;
@@ -63,6 +65,7 @@ interface RunResult {
   nations: Record<string, { startProv: number; endProv: number; peakProv: number; alive: boolean; score: number; wars: number; battlesWon: number; battlesLost: number; bankruptcies: number; idleShare: number; techs: number; maxStreak: string }>;
   heapMB: number;
   snapshots: Array<{ year: number; techsAvg: number; treasuryMax: number; best: Record<string, string> }>;
+  usage: UsageReport;
 }
 
 function runOne(seed: number, difficulty: Difficulty, years: number, scenario: string): RunResult {
@@ -81,12 +84,14 @@ function runOne(seed: number, difficulty: Difficulty, years: number, scenario: s
   let ticks = 0;
   let seenNotes = 0;
   const snapshots: RunResult['snapshots'] = [];
+  const usage = new UsageTracker(sim);
   while (!isOver(sim) && ticks < years * 48 + 4) {
     const a = performance.now();
     step(sim);
     const dt = performance.now() - a;
     tMax = Math.max(tMax, dt);
     ticks++;
+    usage.afterStep();
     for (const id in st.wars) if (!warStart.has(id)) warStart.set(id, st.tick);
     for (const [id, t] of warStart) {
       if (!st.wars[id] && t >= 0) {
@@ -159,6 +164,7 @@ function runOne(seed: number, difficulty: Difficulty, years: number, scenario: s
     ticks,
     winner: st.result?.winner ?? null,
     path: st.result?.path ?? null,
+    startYear: sim.world.scenario.startYear,
     endYear: sim.world.scenario.startYear + st.tick / 48,
     invariantFailures,
     msPerTickAvg: total / Math.max(1, ticks),
@@ -174,6 +180,7 @@ function runOne(seed: number, difficulty: Difficulty, years: number, scenario: s
     nations,
     heapMB: process.memoryUsage().heapUsed / 1e6,
     snapshots,
+    usage: usage.finish(),
   };
 }
 
@@ -213,13 +220,14 @@ lines.push('');
 lines.push(`Winners: ${Object.entries(wins).map(([k, v]) => `${k} ${v}`).join(', ')}`);
 lines.push(`Victory paths: ${Object.entries(paths).map(([k, v]) => `${k} ${v}`).join(', ')}`);
 const avg = (f: (r: RunResult) => number) => results.reduce((s, r) => s + f(r), 0) / Math.max(1, results.length);
-lines.push(`Average campaign length: ${avg((r) => r.endYear - 1640).toFixed(1)} years; wars per campaign ${avg((r) => r.wars).toFixed(1)}; average war ${avg((r) => r.warMonthsAvg).toFixed(1)} months; peace treaties ${avg((r) => r.peaces).toFixed(1)}; forced peaces ${avg((r) => r.forcedPeaces).toFixed(1)}; battles ${avg((r) => r.battles).toFixed(0)}.`);
+lines.push(`Average campaign length: ${avg((r) => r.endYear - r.startYear).toFixed(1)} years; wars per campaign ${avg((r) => r.wars).toFixed(1)}; average war ${avg((r) => r.warMonthsAvg).toFixed(1)} months; peace treaties ${avg((r) => r.peaces).toFixed(1)}; forced peaces ${avg((r) => r.forcedPeaces).toFixed(1)}; battles ${avg((r) => r.battles).toFixed(0)}.`);
 lines.push(`Coalitions formed per campaign: ${avg((r) => r.coalitions).toFixed(1)}; coalition wars: ${avg((r) => r.coalitionWars).toFixed(1)}.`);
 lines.push(`Eliminations per campaign: ${avg((r) => r.eliminations.length).toFixed(2)}; bankruptcies per campaign: ${avg((r) => Object.values(r.nations).reduce((s, n) => s + n.bankruptcies, 0)).toFixed(2)}.`);
 lines.push(`Performance: ${avg((r) => r.msPerTickAvg).toFixed(2)} ms/tick average, ${Math.max(...results.map((r) => r.msPerTickMax)).toFixed(0)} ms worst tick, heap ≈ ${Math.max(...results.map((r) => r.heapMB)).toFixed(0)} MB.`);
 const inv = results.filter((r) => r.invariantFailures.length);
 lines.push(`Invariant failures: ${inv.length ? inv.map((r) => `seed ${r.seed}/${r.difficulty}: ${r.invariantFailures[0]}`).join(' | ') : 'none'}`);
 lines.push('');
+lines.push(...usageLines(results.map((r) => r.usage).filter((u): u is UsageReport => !!u)));
 lines.push('| Nation | Wins | Avg start→end provinces | Alive % | Avg wars declared | Battles won/lost | Idle army share | Avg techs |');
 lines.push('|---|---|---|---|---|---|---|---|');
 const nids = Object.keys(results[0]?.nations ?? {});

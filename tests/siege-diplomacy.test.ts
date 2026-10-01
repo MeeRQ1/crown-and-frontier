@@ -13,12 +13,12 @@ describe('sieges and occupation', () => {
     const sim = lineGame();
     declareWar(sim, 'a', 'b', { type: 'conquest', provinces: ['b3'] });
     sim.state.provinces.b1.fort = 1;
-    addArmy(sim, 'a', 'b1', { foot: 1 });
+    addArmy(sim, 'a', 'b1', { infantry: 1 });
     expect(siegeInfo(sim, 'b1')!.weeklyRate).toBe(0);
     expect(siegeInfo(sim, 'b1')!.notes.join(' ')).toMatch(/Needs 2 regiments/);
-    addArmy(sim, 'a', 'b1', { foot: 1 });
+    addArmy(sim, 'a', 'b1', { infantry: 1 });
     expect(siegeInfo(sim, 'b1')!.weeklyRate).toBeCloseTo(10, 6);
-    addArmy(sim, 'a', 'b3', { foot: 1 });
+    addArmy(sim, 'a', 'b3', { infantry: 1 });
     step(sim, { noAI: true });
     step(sim, { noAI: true });
     expect(sim.state.provinces.b3.controller).toBe('a');
@@ -31,7 +31,7 @@ describe('sieges and occupation', () => {
     sim.state.provinces.b1.fort = 1;
     sim.state.provinces.b1.controller = 'a';
     bump(sim); // direct edit: refresh derived lookups
-    addArmy(sim, 'b', 'b1', { foot: 2 });
+    addArmy(sim, 'b', 'b1', { infantry: 2 });
     expect(siegeInfo(sim, 'b1')!.liberation).toBe(true);
     expect(siegeInfo(sim, 'b1')!.weeklyRate).toBeCloseTo(20, 6);
   });
@@ -123,14 +123,14 @@ describe('diplomacy and wars', () => {
 
   it('an army with no legal route home returns under safe conduct', () => {
     const sim = lineGame();
-    const army = addArmy(sim, 'a', 'c1', { foot: 2 });
+    const army = addArmy(sim, 'a', 'c1', { infantry: 2 });
     returnStrandedArmies(sim);
     expect(sim.state.provinces[sim.state.armies[army.id].location].owner).toBe('a');
     expect(sim.state.notifications.some((n) => n.nation === 'a' && /safe conduct/.test(n.text))).toBe(true);
     // an army in a friend's land that can still march home stays put
     const sim2 = lineGame();
     signTreaty(sim2, 'alliance', 'a', 'b');
-    const guest = addArmy(sim2, 'a', 'b1', { foot: 2 });
+    const guest = addArmy(sim2, 'a', 'b1', { infantry: 2 });
     returnStrandedArmies(sim2);
     expect(sim2.state.armies[guest.id].location).toBe('b1');
   });
@@ -152,7 +152,7 @@ describe('diplomacy and wars', () => {
     const sim = lineGame();
     signTreaty(sim, 'trade', 'b', 'c');
     const w = declareWar(sim, 'a', 'b', { type: 'conquest', provinces: ['b3'] });
-    addArmy(sim, 'b', 'b2', { foot: 2 });
+    addArmy(sim, 'b', 'b2', { infantry: 2 });
     for (const p of ['b1', 'b2', 'b3']) transferProvince(sim, p, 'a');
     expect(sim.state.nations.b.alive).toBe(false);
     expect(sim.state.wars[w.id]).toBeUndefined();

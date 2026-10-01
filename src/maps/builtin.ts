@@ -20,7 +20,8 @@ function aldmereScenario(): MapScenarioPart {
     format: MAP_FORMAT,
     version: MAP_FORMAT_VERSION,
     id: 'aldmere',
-    revision: 1,
+    // 2: the industrial age (deposits, factories, start year 1880)
+    revision: 2,
     meta: {
       name: 'Aldmere',
       description: 'Fourteen realms across a continent of passes, rivers and open frontier.',
@@ -32,8 +33,8 @@ function aldmereScenario(): MapScenarioPart {
       origin: 'builtin',
     },
     rules: {
-      startYear: 1640,
-      campaignYears: { options: [40, 60, 80], default: 60 },
+      startYear: 1880,
+      campaignYears: { options: [40, 60, 70], default: 60 },
       // fourteen realms share the land: dominance is a smaller share than on the Reach
       // (thresholds scaled from the Reach's multiple of an average realm; see DESIGN.md)
       victory: { territorialRegions: 6, territorialShare: 0.18, economicShare: 0.18, diplomaticInfluencePerRealm: 0.85 },
@@ -54,7 +55,8 @@ function reachScenario(): MapScenarioPart {
     format: MAP_FORMAT,
     version: MAP_FORMAT_VERSION,
     id: 'reach',
-    revision: 1,
+    // 2: the industrial age (deposits, factories, start year 1895)
+    revision: 2,
     meta: {
       name: 'The Reach',
       description: 'Nine crowns and an unsettled frontier divided by the Greyspine mountains.',
@@ -65,7 +67,7 @@ function reachScenario(): MapScenarioPart {
       mechanics: ['Mountain passes', 'Straits and islands', 'Unclaimed frontier'],
       origin: 'builtin',
     },
-    rules: { startYear: 1640, campaignYears: { options: [25, 40, 60], default: 40 } },
+    rules: { startYear: 1895, campaignYears: { options: [25, 40, 60], default: 40 } },
     regions: REACH_REGIONS,
     nations: REACH_NATIONS,
     provinces: REACH_PROVINCES.map((p) => ({ ...p, neighbors: [...(neighbors[p.id] ?? [])] })),

@@ -4,11 +4,12 @@ import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 import { builtinPackage } from '../src/maps/builtin';
 import { MAP_LIMITS, normalizeMapPackage, parseMapPackage, validateMapPackage } from '../src/maps/validate';
-import type { MapPackage } from '../src/maps/format';
+import { MAP_FORMAT_VERSION, type MapPackage } from '../src/maps/format';
 import { applyCommand, checkCommand } from '../src/sim/commands';
 import { SCHEMA_VERSION } from '../src/sim/config';
 import { diagnosticBundle, replayBundle } from '../src/sim/diagnostics';
 import { createGame } from '../src/sim/game';
+import { LEGACY_TECHS, startingTechs, TECHS } from '../src/sim/data/techs';
 import { FORMAT1_MAPS } from '../src/sim/migrate';
 import { checkInvariants } from '../src/sim/invariants';
 import { fnv1a, readSave, SAVE_LIMIT_BYTES, serialize } from '../src/sim/save';
@@ -16,6 +17,9 @@ import { step } from '../src/sim/tick';
 import { mapFingerprint, registerMapScenario, scenarioIds, unregisterScenario } from '../src/sim/world';
 
 const FIXTURE = readFileSync(new URL('./fixtures/reach-save-main-c29aea6.json', import.meta.url), 'utf8');
+// format 2, written by the Stage A build (168569b): a built-in Aldmere campaign five years in, and a custom-map campaign
+const FORMAT2_ALDMERE = readFileSync(new URL('./fixtures/aldmere-save-format2-168569b.json', import.meta.url), 'utf8');
+const FORMAT2_CUSTOM = readFileSync(new URL('./fixtures/custom-map-save-format2-168569b.json', import.meta.url), 'utf8');
 const ENV = { build: 'test', userAgent: 'vitest' };
 const strip = (s: string) => s.replace(/"savedAt":"[^"]+"/, '');
 
@@ -76,10 +80,16 @@ describe('map packages', () => {
 });
 
 describe('save format', () => {
-  it('a format-1 save is converted with a notice and keeps playing', () => {
+  it('a format-1 save is converted step by step, with notices, and keeps playing', () => {
     const { sim, notices } = readSave(FIXTURE);
-    expect(notices).toHaveLength(1);
+    expect(notices).toHaveLength(2);
     expect(notices[0]).toMatch(/format 1/);
+    expect(notices[1]).toMatch(/industrial age.*Foot became infantry.*continues in 1896/);
+    const regs = Object.values(sim.state.armies).flatMap((a) => a.regiments.map((r) => r.type));
+    expect(regs.length).toBeGreaterThan(0);
+    expect(regs.every((t) => ['infantry', 'cavalry', 'artillery'].includes(t))).toBe(true);
+    expect(sim.state.nations.aur.stock.coal).toBeGreaterThan(0);
+    expect(sim.state.nations.aur.research.done).toContain('breech_rifles');
     expect(sim.state.schema).toBe(SCHEMA_VERSION);
     expect(sim.state.map).toEqual(mapFingerprint('reach'));
     for (let i = 0; i < 48; i++) step(sim);
@@ -89,11 +99,11 @@ describe('save format', () => {
     expect(again.notices).toEqual([]);
   });
 
-  it('format-1 saves are pinned to revision 1 of the built-in maps', () => {
-    // revision 1 is still the current revision of both built-in maps; when a later
-    // stage revises a map, this expectation moves to the conversion tests
-    expect(FORMAT1_MAPS.reach).toEqual(mapFingerprint('reach'));
-    expect(FORMAT1_MAPS.aldmere).toEqual(mapFingerprint('aldmere'));
+  it('format-1 saves are pinned to revision 1 of the built-in maps and converted to the current one', () => {
+    expect(FORMAT1_MAPS.reach.revision).toBe(1);
+    expect(FORMAT1_MAPS.aldmere.revision).toBe(1);
+    expect(mapFingerprint('reach').revision).toBeGreaterThan(1);
+    expect(readSave(FIXTURE).sim.state.map).toEqual(mapFingerprint('reach'));
   });
 
   it('a format-1 save that names an unknown map is refused, not guessed', () => {
@@ -146,6 +156,56 @@ describe('save format', () => {
     const builtinName = JSON.parse(text);
     builtinName.mapPackage.id = 'reach';
     expect(() => readSave(JSON.stringify(builtinName))).toThrow(/built-in map/);
+  });
+
+  it('a format-2 save on a built-in map converts to the industrial age with one notice and keeps playing', () => {
+    const before = JSON.parse(FORMAT2_ALDMERE);
+    expect(before.schema).toBe(2);
+    const { sim, notices } = readSave(FORMAT2_ALDMERE);
+    expect(notices).toHaveLength(1);
+    expect(notices[0]).toMatch(/save format 2.*industrial age.*continues in 1885/);
+    expect(sim.state.schema).toBe(SCHEMA_VERSION);
+    expect(sim.state.map).toEqual(mapFingerprint('aldmere'));
+    const regs = Object.values(sim.state.armies).flatMap((a) => a.regiments.map((r) => r.type));
+    expect(new Set(regs)).toEqual(new Set(['infantry', 'cavalry', 'artillery']));
+    // the same armies, renamed: nothing lost
+    const count = (o: typeof before) => Object.values<{ regiments: unknown[] }>(o.state.armies).reduce((s, a) => s + a.regiments.length, 0);
+    expect(regs.length).toBe(count(before));
+    // researched technologies map onto the new tree; the start-year techs are known to all
+    expect(sim.state.nations.vos.research.done).toContain(LEGACY_TECHS.drill);
+    for (const n of Object.values(sim.state.nations)) {
+      expect(n.research.done).toEqual(expect.arrayContaining(startingTechs(1880)));
+      expect(n.research.done.every((t) => TECHS[t])).toBe(true);
+      if (n.alive) expect(n.materiel).toBeGreaterThan(0);
+    }
+    expect(Object.values(sim.state.provinces).some((p) => p.factories > 0)).toBe(true);
+    for (let i = 0; i < 48; i++) step(sim);
+    expect(checkInvariants(sim)).toEqual([]);
+    expect(readSave(serialize(sim)).notices).toEqual([]);
+  });
+
+  it('a format-2 save carrying a custom map upgrades that map and keeps playing', () => {
+    const before = JSON.parse(FORMAT2_CUSTOM);
+    expect(before.mapPackage.version).toBe(1);
+    const { sim, notices, mapPackage } = readSave(FORMAT2_CUSTOM);
+    expect(notices.join(' ')).toMatch(/industrial age/);
+    expect(mapPackage?.version).toBe(MAP_FORMAT_VERSION);
+    expect(validateMapPackage(mapPackage!).ok).toBe(true);
+    // old trade goods became industrial deposits
+    const vocab = new Set(['food', 'coal', 'iron', 'oil', 'rubber', 'nitrates', null]);
+    expect(mapPackage!.provinces.every((p) => vocab.has(p.resource ?? null))).toBe(true);
+    expect(sim.state.map.id).toBe('reach-copy');
+    for (let i = 0; i < 48; i++) step(sim);
+    expect(checkInvariants(sim)).toEqual([]);
+    const again = readSave(serialize(sim));
+    expect(again.notices).toEqual([]);
+    unregisterScenario('reach-copy');
+  });
+
+  it('a format-2 save whose map cannot be upgraded is refused with the reason', () => {
+    const obj = JSON.parse(FORMAT2_CUSTOM);
+    obj.mapPackage.provinces[0].neighbors.push('nowhere');
+    expect(() => readSave(JSON.stringify(obj))).toThrow(/cannot be converted|cannot be upgraded|nowhere/);
   });
 
   it('an oversized file is refused before it is parsed', () => {

@@ -4,11 +4,11 @@
 // assignment with commitment, staging and merging before attacks (Normal/Hard),
 // forecast checks before engaging, and withdrawal from overwhelming threats.
 
-import { C, UNITS } from '../config';
+import { C, UNITS, UNIT_TYPES } from '../config';
 import { PERSONALITIES } from '../data/personalities';
 import { forecastBattle } from '../combat';
 import { grossIncome } from '../economy';
-import { armyStrength, maxMorale, recruitProblem, unitCost } from '../military';
+import { armyStrength, maxMorale, recruitProblem, unitCost, unitUnlocked } from '../military';
 import { nationMods } from '../modifiers';
 import { findPath } from '../movement';
 import {
@@ -28,7 +28,7 @@ import type { Army, NationId, ProvinceId, UnitType } from '../types';
 import { diffOf, hostileArmiesAt, issue, pathVia, reachFrom, sumStrength, threatAround, type Reach } from './common';
 
 function regimentsByType(sim: Sim, nid: NationId): Record<UnitType, number> {
-  const out: Record<UnitType, number> = { foot: 0, horse: 0, guns: 0 };
+  const out: Record<UnitType, number> = { infantry: 0, cavalry: 0, artillery: 0, engineers: 0, armour: 0 };
   for (const a of armiesOf(sim, nid)) for (const r of a.regiments) out[r.type]++;
   for (const pid of sim.world.provIds) for (const o of sim.state.provinces[pid].recruits) if (o.nation === nid) out[o.unit]++;
   return out;
@@ -72,7 +72,7 @@ function recruit(sim: Sim, nid: NationId): void {
   const n = st.nations[nid];
   const d = diffOf(sim);
   const counts = regimentsByType(sim, nid);
-  let total = counts.foot + counts.horse + counts.guns;
+  let total = UNIT_TYPES.reduce((t, u) => t + counts[u], 0);
   const war = warsOf(sim, nid).length > 0;
   // shrink an army that is too costly for the treasury in peace
   if (!war && total > n.ai.armyTarget + 2 && n.lastMonth.net < 0) {
@@ -82,11 +82,11 @@ function recruit(sim: Sim, nid: NationId): void {
     if (smallest && smallest.regiments.length <= total - n.ai.armyTarget) issue(sim, { type: 'disband', nation: nid, army: smallest.id }, `Disbanded ${smallest.name} to balance the budget`);
     return;
   }
-  const comp = PERSONALITIES[n.ai.personality].composition;
+  const comp = targetComposition(sim, nid);
   const buffer = Math.max(15, grossIncome(n.lastMonth) * (war ? 0.2 : 0.4));
   for (let i = 0; i < d.recruitPerWeek; i++) {
     if (total >= n.ai.armyTarget) return;
-    const want = (['foot', 'horse', 'guns'] as UnitType[])
+    const want = UNIT_TYPES.filter((t) => comp[t] > 0)
       .map((t) => ({ t, deficit: comp[t] * (total + 1) - counts[t] }))
       .sort((a, b) => b.deficit - a.deficit || (a.t < b.t ? -1 : 1));
     let placed = false;
@@ -105,6 +105,28 @@ function recruit(sim: Sim, nid: NationId): void {
     }
     if (!placed) return;
   }
+}
+
+/**
+ * The mix the realm aims for: its personality's composition, with units it has
+ * not unlocked (or cannot fuel or build) folded into infantry, and cavalry
+ * halved once machine guns exist anywhere (era III).
+ */
+export function targetComposition(sim: Sim, nid: NationId): Record<UnitType, number> {
+  const base = PERSONALITIES[sim.state.nations[nid].ai.personality].composition;
+  const out = { ...base };
+  const n = sim.state.nations[nid];
+  const fold = (t: UnitType) => {
+    out.infantry += out[t];
+    out[t] = 0;
+  };
+  if (!unitUnlocked(sim, nid, 'engineers')) fold('engineers');
+  if (!unitUnlocked(sim, nid, 'armour') || n.shortages.includes('oil') || n.shortages.includes('rubber')) fold('armour');
+  if (Object.values(sim.state.nations).some((x) => x.alive && x.research.done.includes('machine_guns'))) {
+    out.infantry += out.cavalry / 2;
+    out.cavalry /= 2;
+  }
+  return out;
 }
 
 // ───────────────────────────── Movement helpers ─────────────────────────────
@@ -184,7 +206,7 @@ function peaceOps(sim: Sim, nid: NationId, armies: Army[]): void {
       .filter((a) => a.regiments.length >= 3 && !a.battle && !a.retreating)
       .sort((a, b) => (sim.world.hop(a.location, pid) ?? 99) - (sim.world.hop(b.location, pid) ?? 99) || (a.id < b.id ? -1 : 1))[0];
     if (!donor) break;
-    const type: UnitType = donor.regiments.some((r) => r.type === 'foot') ? 'foot' : donor.regiments[0].type;
+    const type: UnitType = donor.regiments.some((r) => r.type === 'infantry') ? 'infantry' : donor.regiments[0].type;
     const r = issue(sim, { type: 'split', nation: nid, army: donor.id, counts: { [type]: 1 } });
     if (!r.ok) break;
     const g = st.armies[`a${st.counters.army}`];

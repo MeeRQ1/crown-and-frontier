@@ -46,7 +46,7 @@ function randomCommand(sim: Sim, nid: NationId, r: Rng): Command | null {
   switch (kind) {
     case 0:
     case 1:
-      return { type: 'recruit', nation: nid, province: pick(r, owned) ?? anyProv(), unit: pick(r, ['foot', 'horse', 'guns'] as UnitType[])!, count: 1 + Math.floor(nextFloat(r) * 3) };
+      return { type: 'recruit', nation: nid, province: pick(r, owned) ?? anyProv(), unit: pick(r, ['infantry', 'cavalry', 'artillery'] as UnitType[])!, count: 1 + Math.floor(nextFloat(r) * 3) };
     case 2:
       return { type: 'cancelRecruit', nation: nid, province: pick(r, owned) ?? anyProv() };
     case 3:
@@ -72,7 +72,7 @@ function randomCommand(sim: Sim, nid: NationId, r: Rng): Command | null {
     case 8: {
       const a = pick(r, armies);
       if (!a) return null;
-      return { type: 'split', nation: nid, army: a.id, counts: { foot: Math.floor(nextFloat(r) * 3), horse: Math.floor(nextFloat(r) * 2), guns: Math.floor(nextFloat(r) * 2) } };
+      return { type: 'split', nation: nid, army: a.id, counts: { infantry: Math.floor(nextFloat(r) * 3), cavalry: Math.floor(nextFloat(r) * 2), artillery: Math.floor(nextFloat(r) * 2) } };
     }
     case 9: {
       const a = pick(r, armies);
@@ -160,13 +160,13 @@ function brokenCommand(sim: Sim, nid: NationId, r: Rng): Command {
     case 0:
       return { type: 'move', nation: nid, army: 'a999999', dest: sim.world.provIds[0] };
     case 1:
-      return { type: 'recruit', nation: nid, province: 'nowhere', unit: 'foot' };
+      return { type: 'recruit', nation: nid, province: 'nowhere', unit: 'infantry' };
     case 2:
-      return { type: 'split', nation: nid, army: a?.id ?? 'x', counts: { foot: -1 } };
+      return { type: 'split', nation: nid, army: a?.id ?? 'x', counts: { infantry: -1 } };
     case 3:
       return { type: 'peace', nation: nid, war: 'w9999', with: sim.world.nationIds[0], terms: { mode: 'white', provinces: [], gold: 0 } };
     case 4:
-      return { type: 'recruit', nation: nid, province: sim.world.provIds[0], unit: 'foot', count: 99 };
+      return { type: 'recruit', nation: nid, province: sim.world.provIds[0], unit: 'infantry', count: 99 };
     default:
       return { type: 'build', nation: nid, province: sim.world.provIds[0], project: 'castle' as ProjectKind };
   }
