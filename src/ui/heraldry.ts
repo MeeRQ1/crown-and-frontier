@@ -4,40 +4,8 @@
 
 import type { NationDef } from '../sim/types';
 
-export type Tincture = 'realm' | 'or' | 'argent' | 'sable' | 'gules' | 'azure' | 'vert' | 'purpure';
-export type Ordinary =
-  | 'none'
-  | 'pale'
-  | 'fess'
-  | 'bend'
-  | 'bendSinister'
-  | 'chevron'
-  | 'cross'
-  | 'saltire'
-  | 'chief'
-  | 'bordure'
-  | 'perPale'
-  | 'perFess'
-  | 'quarterly'
-  | 'pile';
-export type Charge =
-  | 'none'
-  | 'sun'
-  | 'star'
-  | 'crescent'
-  | 'tower'
-  | 'ship'
-  | 'book'
-  | 'mountain'
-  | 'tree'
-  | 'hammer'
-  | 'reed'
-  | 'horse'
-  | 'crown'
-  | 'key'
-  | 'wheat'
-  | 'roundel'
-  | 'lozenge';
+export type { Charge, Ordinary, Tincture } from '../maps/vocab';
+import type { Charge, Ordinary, Tincture } from '../maps/vocab';
 
 export interface Arms {
   field: Tincture;

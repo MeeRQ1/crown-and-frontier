@@ -1,6 +1,7 @@
 import { readdirSync, readFileSync, statSync } from 'node:fs';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
+import { SCHEMA_VERSION } from '../src/sim/config';
 import { createGame } from '../src/sim/game';
 import { checkInvariants } from '../src/sim/invariants';
 import { deserialize, SaveError, serialize } from '../src/sim/save';
@@ -14,7 +15,7 @@ describe('scenario', () => {
     expect(validateScenario(w.scenario)).toEqual([]);
     expect(w.provIds.length).toBeGreaterThanOrEqual(80);
     expect(w.nationIds.length).toBeGreaterThanOrEqual(8);
-    for (const p of w.provIds) expect(Object.keys(w.hops[p]).length).toBe(w.provIds.length);
+    for (const p of w.provIds) expect(w.provIds.every((q) => w.hop(p, q) !== undefined)).toBe(true);
     const sim = createGame({ seed: 1, playerNation: null });
     for (const n of w.nationIds) {
       const neighbours = w.nationIds.filter((o) => o !== n && borders(sim, n, o));
@@ -50,7 +51,7 @@ describe('replay and content', () => {
     const sim = createGame({ seed: 5, playerNation: 'vos' });
     applyCommand(sim, { type: 'research', nation: 'vos', tech: 'drill' });
     runTicks(sim, 30);
-    applyCommand(sim, { type: 'recruit', nation: 'vos', province: 'vostburg', unit: 'foot', count: 2 });
+    applyCommand(sim, { type: 'recruit', nation: 'vos', province: 'vostburg', unit: 'infantry', count: 2 });
     applyCommand(sim, { type: 'build', nation: 'vos', province: 'harnfeld', project: 'infra' });
     runTicks(sim, 70);
     const r = replayCommands(sim.state.settings, 'reach', sim.state.playerLog, sim.state.tick);
@@ -83,7 +84,7 @@ describe('persistence', () => {
     expect(() => deserialize(text.slice(0, text.length / 2))).toThrow(SaveError);
     expect(() => deserialize(text.slice(0, text.length / 2))).toThrow(/truncated|corrupted/);
     expect(() => deserialize('{"hello":1}')).toThrow(/not a Crown & Frontier save/);
-    expect(() => deserialize(text.replace('"schema":1', '"schema":99'))).toThrow(/newer version/);
+    expect(() => deserialize(text.replace(`"schema":${SCHEMA_VERSION}`, '"schema":99'))).toThrow(/newer version/);
     expect(() => deserialize(text.replace('"treasury":', '"treasury":1'))).toThrow(/integrity/);
     const obj = JSON.parse(text);
     delete obj.state.provinces.aurelon;
@@ -108,5 +109,25 @@ describe('AI campaigns', () => {
       expect(nations.every((n) => n.research.done.length > 0)).toBe(true);
       expect(sim.state.diagnostics.some((d) => d.layer === 'operational')).toBe(true);
     }
+  });
+
+  // Stage A fix: the yearly note was tested with (tick / 4) % 12 === 0, which only
+  // realms whose staggered turn falls in the first week of a month could ever pass.
+  it('every realm, whatever its turn week, explains a war it declined at most once a year', () => {
+    const all: Array<{ nation: string; tick: number }> = [];
+    for (const seed of [1, 2, 3]) {
+      const sim = createGame({ scenario: 'reach', seed, playerNation: null, campaignYears: 40 });
+      const seen: Array<{ nation: string; tick: number }> = [];
+      for (let t = 0; t < 48 * 10; t++) {
+        step(sim);
+        // the log keeps only the latest entries, so collect each week's as it happens
+        for (const d of sim.state.diagnostics) if (d.tick === sim.state.tick - 1 && d.summary.startsWith('War considered')) seen.push({ nation: d.nation, tick: d.tick });
+      }
+      const perYear = new Set(seen.map((d) => `${d.nation}@${Math.floor(d.tick / 48)}`));
+      expect(perYear.size, `seed ${seed}`).toBe(seen.length);
+      all.push(...seen);
+    }
+    expect(all.length).toBeGreaterThan(0);
+    expect(all.some((d) => d.tick % 4 !== 0)).toBe(true);
   });
 });

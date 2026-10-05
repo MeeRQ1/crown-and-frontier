@@ -1,27 +1,52 @@
 # Crown & Frontier
 
-A single-player grand strategy game for the browser. You rule a young crown on a divided
-continent in 1640. Grow by settlement, investment or conquest, but every province you gain
+A single-player grand strategy game for the browser. You rule a young crown at the dawn of the
+industrial age, on one of six maps or one you make yourself. Grow by
+settlement, investment or conquest, but every province you gain
 beyond your heartland is **raw frontier**: it pays little, raises no troops and supplies no
 armies until you integrate it. Outlast your AI rivals and win by territorial dominance,
 economic prosperity or diplomatic leadership.
 
 ![Crown & Frontier: Aldmere, the standard campaign](docs/screenshots/after-aldmere/laptop-03-map-overview.jpg)
 
-- **Two maps.** *Aldmere*, the standard campaign, has 298 provinces, 14 realms, four mountain
-  ranges with six passes, six rivers and 34 unclaimed frontier provinces. *The Reach*, the
-  quick campaign, has 99 provinces and 9 realms.
+- **Six maps.**
+  - *Aldmere*, the standard campaign: 298 provinces, 14 realms, four mountain ranges with
+    six passes, six rivers, 34 unclaimed frontier provinces and 30 sea zones.
+  - *The Reach*, the quick campaign: 99 provinces and 9 realms.
+  - Three generated maps: *the Sundered Isles* (116 provinces, a naval war among islands),
+    *the Kharan Steppe* (263, a war of movement) and *the Middle Sea* (548 provinces and 16
+    realms around an inland sea).
+  - A real-world map, *The Baltic, 1906*: Sweden, Norway, Denmark, the German Empire and the
+    Russian Empire, built from Natural Earth (public domain).
+- **Map library and editor.** Keep your own maps in the browser. Generate a new map from a
+  seed, size, number of realms, shape and climate, then edit it by hand. Paint realms,
+  regions, terrain and deposits; edit straits, rivers and ports; merge provinces. A
+  validator points at anything to fix. Export and import map files, and play any map.
 - **A living political atlas.** The map shows printed relief, rivers and lettered seas, with
-  realm washes and inked borders. Detail changes with zoom, and seven map modes (political,
-  terrain, supply, economy, frontier, diplomacy, military) each come with a legend.
-- **Systems:** economy, population and manpower, supply lines, battles shaped by terrain,
-  rivers and forts, sieges, research, national policies, diplomacy and coalitions, 17 events,
-  and three victory paths.
+  realm washes and inked borders. Detail changes with zoom, and nine map modes (political,
+  terrain, supply, economy, frontier, diplomacy, military, resources, sea control) each come
+  with a legend.
+- **Systems:** an industrial economy with six resources (food, coal, iron, oil, rubber,
+  nitrates), factories, materiel and trade agreements that exchange real resources;
+  population and manpower; supply lines; an industrial-age roster (infantry, cavalry,
+  artillery, engineers, armour) in battles shaped by terrain, rivers, forts and trenches;
+  sieges; **navies** (transports, torpedo boats, cruisers, battleships, submarines,
+  carriers) that fight for sea zones, close straits, blockade coasts and carry armies to
+  hostile shores; **air wings** (reconnaissance, fighters, ground attack, bombers) flying
+  from airfields for air superiority, ground support, interdiction and bombing; a five-era
+  research tree of 73 technologies in five branches with horizon years; **national focus
+  trees** (a generic tree and a national branch for every realm); diplomacy with coalitions,
+  **guarantees, influence and spheres, loans and trade blocs**; **peace settlements** with
+  several parties and graded demands, shared by each winner's contribution, with
+  counter-offers; 20 events; and three victory paths.
 - **AI rivals:** five temperaments and three difficulty levels, using exactly the same rules
   and commands as you.
-- **Help and saving:** a tutorial, rich tooltips, visible reasons for every unavailable
-  action, battle forecasts, army groups and standing orders, autosave, and save
-  export/import. Works with mouse, keyboard and touch.
+- **Help and saving:** a 15-step tutorial that you complete by doing each thing (the capital,
+  a project, industry and resources, a regiment, a march, supply and the frontier, sea and
+  air, diplomacy, a national focus, how wars end, victory), rich tooltips, visible reasons for
+  every unavailable action, battle forecasts, army groups and standing orders, autosave, and
+  save export/import. The game pauses for wars, events, proposals and a finished technology
+  or focus (each can be turned off). Works with mouse, keyboard and touch.
 - **No installation, account or server:** static HTML5 files; everything runs in your browser.
 
 ## Play
@@ -39,13 +64,16 @@ this if you try.
 
 | Action | Mouse / keyboard | Touch |
 |---|---|---|
-| Select a province or army | Click | Tap |
+| Select a province, army, fleet or sea zone | Click | Tap |
 | Move the selected army | Right-click a province, or **G** / Move then click | Long-press a province, or "March here" in the province card |
+| Sail the selected fleet | Right-click a sea zone or coast, or **G** / Sail then click | "Sail" in the fleet card, then tap |
+| Carry an army by sea | "Ship by sea" in the army card (a fleet with transports off its coast), then click the beach | the same, with taps |
+| Air missions | Select a wing (in its airfield's province card), choose a mission, click the target | the same, with taps |
 | Add a waypoint | **Shift**+right-click | — |
 | Pan / zoom | Drag / mouse wheel, arrow keys, **+ / −** | Drag / pinch |
 | Pause, speed | **Space**, **1–4** | ▶ and speed pips |
-| Ledgers | **B** realm, **M** military, **T** research, **P** policy, **D** diplomacy, **W** wars, **V** victory, **L** chronicle, **H** help | Bottom bar |
-| Map modes | **Shift+1…7**, **O** cycles | Mode bar |
+| Ledgers | **B** realm, **I** industry, **M** military, **T** research, **P** national focus, **D** diplomacy, **W** wars, **V** victory, **L** chronicle, **H** help | Bottom bar |
+| Map modes | **Shift+1…9**, **O** cycles | Mode bar |
 | Navigate | **F** whole map, **C** centre selection, **Home** capital, **N** next army, **Shift+N** next army group, **K** next battle, **J** latest alert | Navigation buttons |
 | Close | **Esc** cancels, closes, then opens the menu | ✕ buttons |
 
@@ -60,8 +88,12 @@ this if you try.
   browsing or managed-device (school) policies may erase them. Export anything you care about.
 - **Damaged files:** truncated, modified or foreign save files are rejected with an explanation, and
   your current campaign is kept.
-- **Each save keeps its map.** Campaigns started on the Reach, including saves from the previous
-  release, load on the Reach. The save format is unchanged (schema 1), so no conversion is needed.
+- **Each save keeps its map.** A save records exactly which map and map revision it was played
+  on. Saves of imported maps carry the map with them.
+- **Older saves are converted, never discarded.** Saves from earlier releases (formats 1 and
+  2, the 17th-century rules) are converted to the industrial age (format 3) when loaded, and
+  the game says what changed. A save that cannot be converted stays in the list with the
+  reason and can still be exported.
 
 ## Develop
 
@@ -79,7 +111,14 @@ npm run sim -- --scenario reach --seeds 1-10 --difficulty all --years 40 --out r
 npm run examples       # worked combat examples from the real combat code
 npm run genworld       # regenerate Aldmere from tools/aldmere.spec.ts (deterministic)
 npm run genmap         # regenerate the Reach's geometry (byte-identical to the checked-in file)
+npm run genmaps        # regenerate the Isles, the Steppe and the Middle Sea from their recipes
+npm run genbaltic      # rebuild The Baltic, 1906 from Natural Earth (downloads and checks the data)
 npm run check          # typecheck + tests + build + package + verify:web
+npm run fuzz -- --scenario aldmere --seeds 1-3 --years 8   # random legal/illegal commands + invariants
+npm run bench -- --scenario aldmere --seeds 1-2 --years 30 # simulation benchmarks (tick percentiles, phases, heap)
+npm run bench:web -- --maps reach,aldmere                   # browser benchmarks on dist/ (after npm run build)
+npm run rulecheck -- --compare <record.json>                # prove a refactor changed no rule
+npm run genstress -- --provinces 900                        # generated large map package for scaling tests
 ```
 
 `verify:web` needs Chromium for Playwright. Run `npx playwright install chromium` once, unless your
@@ -92,24 +131,35 @@ src/sim/        headless simulation — no DOM; runs in tests and CLI tools
   types.ts      state and command types        config.ts   every tunable number
   commands.ts   the single validation boundary for player AND AI actions
   tick.ts       fixed weekly tick order        game.ts     new-game setup
+  index.ts      derived lookups (armies by province, provinces by owner, relations)
   economy, construction, integration, military, movement, supply, combat, siege,
-  war, diplomacy, progression, events, victory, invariants, save
-  ai/           strategic, operational/execution layers and difficulty profiles
-  data/         technologies, policies, personalities, events
-src/data/       both maps: realms and regions (aldmere.ts, reach.ts), generated province data
-                (aldmere.provinces.json, reach.adjacency.json) and geometry (*.map.json, loaded on demand)
+  naval (fleets, sea control, landings), air (airfields, wings, missions),
+  war, settlement (peace settlements), diplomacy, influence (spheres, guarantees,
+  loans, trade blocs), progression, focus (national focus), events, victory, invariants,
+  save, migrate (save formats), diagnostics + replay (bug reports)
+src/maps/       map package format (v3: sea zones and ports), validator (imports are
+                sanitised and size-limited), sea-zone generation, built-in maps as packages,
+                conversion to the simulation and renderer, editing operations (edit.ts)
+  gen/          world generator, procedural maps, names, shared Voronoi core
+  ai/           strategic, operational/execution layers, navy and air, difficulty profiles
+  data/         technologies, focus trees, personalities, events
+src/data/       built-in map data: Aldmere and the Reach (realms and regions in aldmere.ts and
+                reach.ts, generated province data and geometry), and maps/ (generated maps and
+                the Baltic); geometry is loaded on demand
 src/ui/         map renderer (map/), design system (style.css), HUD, inspector, ledgers,
-                dialogs, screens, tutorial, storage, audio
-tools/          map generators (mapgen/core.ts shared), AI campaign runner, realm tracer,
-                ZIP packager, web verifier, combat examples
+                dialogs, screens, map library (library.ts, maplib.ts), map editor (editor/),
+                tutorial, storage, audio
+tools/          map generators (genworld, genmap, genmaps, genbaltic), AI campaign runner, realm tracer,
+                ZIP packager, web verifier, combat examples, benchmarks, fuzzer, rule check
 tests/          Vitest suites
 e2e/            scripted browser playthrough (development helper)
-reports/        generated evidence: AI campaign statistics, web verification
+reports/        generated evidence: AI campaign statistics, web verification, perf/ benchmarks
 ```
 
-**Reporting bugs:** Chronicle ledger (**L**) → *Export bug report*. The file contains the seed, settings,
-your command log, recent notifications and AI diagnostics. Given the same seed and commands, the
-simulation replays deterministically.
+**Reporting bugs:** Chronicle ledger (**L**) → *Export bug report*. The file contains the settings,
+the starting point (a fresh game, or the save the campaign was loaded from), your commands since
+then, recent notifications and AI diagnostics. `npx tsx tools/replay.ts <file>` replays it and checks
+that the final state matches.
 
 ## Documentation
 
@@ -117,24 +167,51 @@ simulation replays deterministically.
 - [DEPLOYMENT.md](DEPLOYMENT.md): GitHub Pages, other hosts, the ZIP, embedding, and browser compatibility.
 - [STATUS.md](STATUS.md): the requirement ledger, acceptance checks, known limitations and next steps.
 - [docs/REDESIGN.md](docs/REDESIGN.md): the interface and world redesign: diagnosis, direction and what was built.
-- [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md): the three bundled OFL fonts (licences ship in
-  `licenses/`) and the development tools. No other third-party code or assets ship in the game.
+- [docs/expansion/](docs/expansion/): the strategic depth expansion, with the Stage A audit
+  ([AUDIT.md](docs/expansion/AUDIT.md)), the plan and requirement ledger
+  ([PLAN.md](docs/expansion/PLAN.md)), the setting decision ([SETTING.md](docs/expansion/SETTING.md))
+  and the recorded player-style session ([SESSIONS.md](docs/expansion/SESSIONS.md)).
+- [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md): the three bundled OFL fonts and the geometry
+  libraries of the map generator (d3-delaunay, delaunator, robust-predicates), whose licences ship
+  in `licenses/`; Natural Earth (public domain) for the real-world map; and the development tools.
 
 ## Known limitations
 
-- **Balance:** tuned against AI-only campaigns on both maps (see STATUS.md). The richest
-  heartland wins most often: Lessia on Aldmere (13 of 30) and Aurel on the Reach (15 of 30).
-  Some small or exposed realms shrink on average. No external players have tested either
-  map yet.
+- **Balance:** tuned against AI-only campaigns, 16 per map (`reports/stage-e/`,
+  `reports/stage-f/`). Half or fewer end on score at the limit on every map, but wins
+  concentrate on some: Astia and Gorathia share the Kharan Steppe, Ostmark wins 9 of 16 on
+  the Sundered Isles, and the richest heartlands still lead on Aldmere and the Reach.
+  Diplomatic Leadership is the most common win on the Reach, the Middle Sea and the Baltic.
+  Hrafnmark and some other small or exposed realms shrink on average. No external players
+  have tested the game; the one recorded session is the author's
+  (`docs/expansion/SESSIONS.md`).
+- **AI wars across the water:** you can fabricate a claim on a coast within one sea zone of
+  your ports, but AI realms plan wars only against realms they border by land or strait, so
+  island AIs seldom start wars.
+- **Crowns pile up** in a small realm late in a campaign: construction slots, slipways and
+  manpower limit spending, and there is no late-game sink yet.
 - **Fog of war:** not implemented. All information is public to everyone, AI included.
 - **Browsers verified:** only headless Chromium 141, on desktop and emulated phone viewports. Firefox,
   Safari, real Chromebooks and real touch devices are untested.
-- **Out of scope:** naval warfare, multiplayer, espionage, dynasties and production chains.
-- **Save format:** schema 1. This version only added optional fields; a future format change
-  will need a migration.
+- **Not in the game:** multiplayer, espionage and dynasties are out of scope. The tutorial
+  introduces settlements and influence in a sentence each; the Help ledger explains them.
+- **Map editor:** it cannot split a province, draw coastline by hand or reshape sea zones;
+  generate a new map for a different coast. Maps made in the editor are kept only in this
+  browser until exported.
+- **The Baltic, 1906:** some borders of 1906 are approximated from present-day divisions
+  (see `tools/baltic.data.ts`), and present-day populations stand in for those of 1906. The
+  empires start far larger than the kingdoms. In 16 AI campaigns Russia won 6 on score and
+  Sweden and Denmark 10 by diplomacy; Norway and Denmark rarely fight.
+- **Navy and air are abstracted:** fleets fight in sea zones and wings fly missions over a
+  province and its neighbours; there are no individual ships' positions, convoys or air
+  routes. Troops at sea cannot be redirected until they land.
+- **Save format:** 4. Format-1, format-2 and format-3 saves are converted on load, each with
+  a notice; a format-3 campaign keeps each realm's national policy as the matching
+  completed focus. Format-3 saves written before Stage C load with empty navies and air arms.
 
 ## Licence
 
 This repository does not yet include a source licence. The owner decides the licence and whether the
-repository is public. All game content (names, map, rules and text) is original. See
-THIRD_PARTY_NOTICES.md for the development tools.
+repository is public. All game content (names, maps, rules and text) is original, except the
+geography and place names of The Baltic, 1906, which come from Natural Earth (public domain). See
+THIRD_PARTY_NOTICES.md for the bundled fonts and libraries, the map data and the development tools.

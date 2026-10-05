@@ -1,10 +1,12 @@
 // State invariants checked by tests, AI campaigns and after loading a save.
 // Returns a list of violations (empty = consistent).
 
-import { C, UNITS } from './config';
+import { C, SHIPS, UNITS } from './config';
 import { devMax } from './construction';
 import { maxMorale } from './military';
+import { checkIndexes } from './index';
 import { atWar, hasTreaty, type Sim } from './state';
+import { getFocus } from './focus';
 
 function scanFinite(v: unknown, path: string, out: string[]): void {
   if (out.length > 20) return;
@@ -51,6 +53,12 @@ export function checkInvariants(sim: Sim): string[] {
     }
     if (a.morale < 0 || a.morale > maxMorale(sim, a.nation) + 1e-6) out.push(`${id}: morale ${a.morale}`);
     if (a.battle && !st.battles[a.battle]) out.push(`${id}: in missing battle ${a.battle}`);
+    if (a.embarked) {
+      const f = st.fleets[a.embarked];
+      if (!f) out.push(`${id}: aboard missing fleet ${a.embarked}`);
+      else if (!f.cargo.includes(id)) out.push(`${id}: aboard ${f.id} but not in its cargo`);
+      if (a.battle) out.push(`${id}: in battle while at sea`);
+    }
     let from = a.location;
     for (const step of a.path) {
       if (!sim.world.prov[from]?.neighbors.includes(step)) {
@@ -59,6 +67,37 @@ export function checkInvariants(sim: Sim): string[] {
       }
       from = step;
     }
+  }
+  for (const fid in st.fleets) {
+    const f = st.fleets[fid];
+    if (f.id !== fid) out.push(`fleet key mismatch ${fid}`);
+    if (!st.nations[f.nation]?.alive) out.push(`${fid}: fleet of dead realm`);
+    if (!sim.world.zones[f.zone]) out.push(`${fid}: bad zone ${f.zone}`);
+    if (!f.ships.length) out.push(`${fid}: fleet without ships`);
+    for (const s of f.ships) if (!(s.hp > 0 && s.hp <= 100) || !SHIPS[s.type]) out.push(`${fid}: ship ${s.id} hp ${s.hp}`);
+    let from = f.zone;
+    for (const z of f.path) {
+      if (!sim.world.zones[from]?.neighbors.includes(z)) {
+        out.push(`${fid}: route not contiguous at ${from}->${z}`);
+        break;
+      }
+      from = z;
+    }
+    let regs = 0;
+    for (const aid of f.cargo) {
+      const a = st.armies[aid];
+      if (!a || a.embarked !== fid) out.push(`${fid}: cargo ${aid} not aboard`);
+      else regs += a.regiments.length;
+    }
+    let cap = 0;
+    for (const s of f.ships) cap += SHIPS[s.type].capacity;
+    if (regs > cap) out.push(`${fid}: carries ${regs} regiments with room for ${cap}`);
+  }
+  for (const wid in st.wings) {
+    const w = st.wings[wid];
+    if (!st.nations[w.nation]?.alive) out.push(`${wid}: wing of dead realm`);
+    if (!sim.world.prov[w.base]) out.push(`${wid}: bad base`);
+    if (!(w.strength > 0 && w.strength <= 100)) out.push(`${wid}: strength ${w.strength}`);
   }
   for (const bid in st.battles) {
     const b = st.battles[bid];
@@ -77,6 +116,7 @@ export function checkInvariants(sim: Sim): string[] {
       if (hasTreaty(sim, 'nap', a, d)) out.push(`${wid}: pact partners ${a}/${d} at war`);
     }
   }
+  out.push(...checkIndexes(sim));
   const seen = new Set<string>();
   for (const t of st.treaties) {
     const k = `${t.type}|${[t.a, t.b].sort().join('|')}`;
@@ -84,6 +124,40 @@ export function checkInvariants(sim: Sim): string[] {
     seen.add(k);
     if (!st.nations[t.a]?.alive || !st.nations[t.b]?.alive) out.push(`treaty with dead realm ${k}`);
     if (t.a === t.b) out.push(`self treaty ${k}`);
+  }
+  // diplomacy and focus
+  for (const g of st.guarantees) {
+    if (!st.nations[g.by]?.alive || !st.nations[g.of]?.alive) out.push(`guarantee ${g.by}->${g.of} with a dead realm`);
+    if (g.by === g.of) out.push(`self guarantee ${g.by}`);
+    if (atWar(sim, g.by, g.of)) out.push(`guarantee ${g.by}->${g.of} between realms at war`);
+  }
+  for (const l of st.loans) {
+    if (!(l.remaining > 0) || !(l.monthly > 0)) out.push(`loan ${l.id}: remaining ${l.remaining}, instalment ${l.monthly}`);
+    if (!st.nations[l.from] || !st.nations[l.to]) out.push(`loan ${l.id}: unknown realm`);
+  }
+  const inBloc = new Set<string>();
+  for (const b of st.blocs) {
+    if (b.members.length < 2) out.push(`bloc ${b.id} with ${b.members.length} member(s)`);
+    if (!b.members.includes(b.leader)) out.push(`bloc ${b.id}: leader not a member`);
+    for (const m of b.members) {
+      if (inBloc.has(m)) out.push(`${m}: in two trade blocs`);
+      inBloc.add(m);
+      if (!st.nations[m]?.alive) out.push(`bloc ${b.id}: dead member ${m}`);
+    }
+  }
+  for (const h in st.influence) for (const t in st.influence[h]) {
+    const v = st.influence[h][t];
+    if (!(v >= 0 && v <= 100)) out.push(`influence ${h}->${t}: ${v}`);
+  }
+  for (const nid of sim.world.nationIds) {
+    const n = st.nations[nid];
+    const fs = n.focus;
+    if (!fs || !Array.isArray(fs.done) || new Set(fs.done).size !== fs.done.length) out.push(`${nid}: bad focus state`);
+    else {
+      if (fs.current && !getFocus(sim, nid, fs.current)) out.push(`${nid}: unknown current focus ${fs.current}`);
+      for (const f of fs.done) if (!getFocus(sim, nid, f)) out.push(`${nid}: unknown completed focus ${f}`);
+      if (fs.progress < 0) out.push(`${nid}: negative focus progress`);
+    }
   }
   for (const nid of sim.world.nationIds) {
     const n = st.nations[nid];

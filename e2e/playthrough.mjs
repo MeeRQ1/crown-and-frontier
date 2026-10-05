@@ -44,7 +44,7 @@ else errors.push('no affordable project in Leyfield');
 p = await provinceScreen('aurelon');
 await page.mouse.click(p.x, p.y);
 await page.waitForTimeout(200);
-await page.locator('.context button:not(.disabled)', { hasText: 'Raise Foot' }).first().click();
+await page.locator('.context button:not(.disabled)', { hasText: 'Raise Infantry' }).first().click();
 await page.waitForTimeout(300);
 await shot('02-after-orders');
 

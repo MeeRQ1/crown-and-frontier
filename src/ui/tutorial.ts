@@ -3,7 +3,7 @@
 // rules for the current state before they are suggested.
 
 import { activeProjects, buildProblem, PROJECT_LABELS } from '../sim/construction';
-import { recruitProblem } from '../sim/military';
+import { recruitProblem, unitCost } from '../sim/military';
 import { armiesOf, ownedProvinces, provName } from '../sim/state';
 import type { ProjectKind } from '../sim/types';
 import type { App } from './app';
@@ -14,6 +14,14 @@ interface Step {
   text: (app: App) => (string | Node)[];
   done?: (app: App) => boolean;
   show?: (app: App) => void;
+}
+
+function recruitText(c: ReturnType<typeof unitCost>): string {
+  const parts = [`${c.crowns} crowns`];
+  if (c.materiel) parts.push(`${c.materiel} materiel`);
+  for (const [r, v] of Object.entries(c.resources)) if (v) parts.push(`${v} ${r}`);
+  parts.push(`${c.manpower.toLocaleString('en-GB')} men from the manpower pool`);
+  return parts.join(', ');
 }
 
 function suggestProject(app: App): { pid: string; kind: ProjectKind } | { reason: string } {
@@ -31,6 +39,14 @@ function suggestProject(app: App): { pid: string; kind: ProjectKind } | { reason
   }
   return { reason };
 }
+
+/** What the suggested project is for, in the tutorial's words. */
+const PROJECT_WHY: Partial<Record<ProjectKind, string>> = {
+  dev: 'Development raises income for good',
+  infra: 'Railways speed armies and supplies and help new land integrate',
+  charter: 'Charters integrate frontier land faster',
+  fort: 'Forts slow invaders and shelter your armies',
+};
 
 const STEPS: Step[] = [
   {
@@ -54,7 +70,7 @@ const STEPS: Step[] = [
     text: (app) => {
       const s = suggestProject(app);
       if ('reason' in s) return [`Projects use construction slots and crowns. Right now: ${s.reason} Skip this step for now.`];
-      return [`Start a project: ${PROJECT_LABELS[s.kind]} in ${provName(app.sim!, s.pid)}. Development raises income for good, but every crown spent here is not spent on soldiers.`];
+      return [`Start a project: ${PROJECT_LABELS[s.kind]} in ${provName(app.sim!, s.pid)}. ${PROJECT_WHY[s.kind] ?? 'Projects pay off for years'}, but every crown spent here is not spent on soldiers.`];
     },
     done: (app) => activeProjects(app.sim!, app.player!).length > 0,
     show: (app) => {
@@ -63,14 +79,20 @@ const STEPS: Step[] = [
     },
   },
   {
+    title: 'Industry and resources',
+    text: () => ['Open Industry (I). Factories turn coal, iron, oil, rubber and nitrates into materiel for regiments, ships and aircraft, and a shortage slows them. The Resources overlay (Shift+8) shows where each deposit lies; hatched ones are deposits you are short of.'],
+    done: (app) => app.ui.ledgerTab === 'industry' || app.mode === 'resources',
+    show: (app) => app.openLedger('industry'),
+  },
+  {
     title: 'Raise a regiment',
     text: (app) => {
       const sim = app.sim!;
       const cap = sim.state.nations[app.player!].capital!;
-      const prob = recruitProblem(sim, app.player!, cap, 'foot');
+      const prob = recruitProblem(sim, app.player!, cap, 'infantry');
       return prob
         ? [`Recruiting in ${provName(sim, cap)} is not possible right now: ${prob} You can skip this step.`]
-        : [`In ${provName(sim, cap)}, press “Raise Foot”: 20 crowns, 5 supplies and 1,000 men from the manpower pool. Regiments cost upkeep every month.`];
+        : [`In ${provName(sim, cap)}, press “Raise Infantry”: ${recruitText(unitCost(sim, app.player!, 'infantry'))}. Regiments cost upkeep every month, and replacing their losses later uses materiel from your factories.`];
     },
     done: (app) => app.sim!.world.provIds.some((p) => app.sim!.state.provinces[p].recruits.some((r) => r.nation === app.player)),
     show: (app) => app.selectProvince(app.sim!.state.nations[app.player!].capital!, true),
@@ -97,10 +119,37 @@ const STEPS: Step[] = [
     show: (app) => app.setMode('frontier'),
   },
   {
+    title: 'Ships and aircraft',
+    text: (app) => {
+      const sim = app.sim!;
+      const coastal = ownedProvinces(sim, app.player!).some((p) => sim.world.provZones[p]);
+      return [
+        coastal
+          ? 'Open the Sea control overlay (Shift+9): each sea zone takes the colour of the realm with the strongest warships there. Fleets blockade enemy ports, guard your trade and carry armies across the water.'
+          : 'Your realm has no coast, so its wars are fought on land. The Sea control overlay (Shift+9) still shows who commands each sea zone.',
+        ' From the third era, air wings scout, bomb and defend. Military (M) lists armies, fleets and wings.',
+      ];
+    },
+    done: (app) => app.mode === 'sea',
+    show: (app) => app.setMode('sea'),
+  },
+  {
     title: 'Neighbours',
-    text: () => ['Open Diplomacy (D). Every proposal shows whether the other realm would accept and why, before you send it. Rapid conquest alarms neighbours into coalitions.'],
+    text: () => ['Open Diplomacy (D). Every proposal shows whether the other realm would accept and why, before you send it. Envoys, trade, loans and guarantees build influence; enough of it draws a smaller realm into your sphere. Rapid conquest alarms neighbours into coalitions.'],
     done: (app) => app.ui.ledgerTab === 'diplomacy',
     show: (app) => app.openLedger('diplomacy'),
+  },
+  {
+    title: 'A national focus',
+    text: () => ['Open Focus (P) and start a focus. Each takes months, then grants a lasting effect and a reward. Your realm’s national branch holds its own claims and ambitions, and some focuses rule out others.'],
+    done: (app) => !!app.sim!.state.nations[app.player!].focus.current,
+    show: (app) => app.openLedger('focus'),
+  },
+  {
+    title: 'How wars end',
+    text: () => ['Open Wars (W). A war ends in a settlement: the side that is winning lists demands — provinces, crowns, reparations, disarmament, a sphere — paid for with war score and shared out by what each ally contributed. The other side accepts, or you see the counter-offer it would take.'],
+    done: (app) => app.ui.ledgerTab === 'wars',
+    show: (app) => app.openLedger('wars'),
   },
   {
     title: 'Three ways to win',
@@ -115,7 +164,7 @@ const STEPS: Step[] = [
   },
   {
     title: 'You are ready',
-    text: () => ['Choose research (T) and a national policy (P) that fit your plan. The Help ledger (H) explains every rule. Good luck.'],
+    text: () => ['Choose research (T) that fits your plan. The Help ledger (H) explains every rule. Good luck.'],
   },
 ];
 

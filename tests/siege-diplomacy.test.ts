@@ -3,7 +3,7 @@ import { applyCommand, checkCommand } from '../src/sim/commands';
 import { evaluateTreaty, monthlyDiplomacy, opinionParts, signTreaty } from '../src/sim/diplomacy';
 import { checkInvariants } from '../src/sim/invariants';
 import { siegeInfo } from '../src/sim/siege';
-import { atWar, hasTreaty, months, truceUntil } from '../src/sim/state';
+import { atWar, bump, hasTreaty, months, truceUntil } from '../src/sim/state';
 import { runTicks, step } from '../src/sim/tick';
 import { applyPeace, declareWar, evaluatePeace, joinWar, returnStrandedArmies, transferProvince } from '../src/sim/war';
 import { addArmy, lineGame } from './helpers';
@@ -13,12 +13,12 @@ describe('sieges and occupation', () => {
     const sim = lineGame();
     declareWar(sim, 'a', 'b', { type: 'conquest', provinces: ['b3'] });
     sim.state.provinces.b1.fort = 1;
-    addArmy(sim, 'a', 'b1', { foot: 1 });
+    addArmy(sim, 'a', 'b1', { infantry: 1 });
     expect(siegeInfo(sim, 'b1')!.weeklyRate).toBe(0);
     expect(siegeInfo(sim, 'b1')!.notes.join(' ')).toMatch(/Needs 2 regiments/);
-    addArmy(sim, 'a', 'b1', { foot: 1 });
+    addArmy(sim, 'a', 'b1', { infantry: 1 });
     expect(siegeInfo(sim, 'b1')!.weeklyRate).toBeCloseTo(10, 6);
-    addArmy(sim, 'a', 'b3', { foot: 1 });
+    addArmy(sim, 'a', 'b3', { infantry: 1 });
     step(sim, { noAI: true });
     step(sim, { noAI: true });
     expect(sim.state.provinces.b3.controller).toBe('a');
@@ -30,7 +30,8 @@ describe('sieges and occupation', () => {
     declareWar(sim, 'a', 'b', { type: 'conquest', provinces: ['b3'] });
     sim.state.provinces.b1.fort = 1;
     sim.state.provinces.b1.controller = 'a';
-    addArmy(sim, 'b', 'b1', { foot: 2 });
+    bump(sim); // direct edit: refresh derived lookups
+    addArmy(sim, 'b', 'b1', { infantry: 2 });
     expect(siegeInfo(sim, 'b1')!.liberation).toBe(true);
     expect(siegeInfo(sim, 'b1')!.weeklyRate).toBeCloseTo(20, 6);
   });
@@ -79,6 +80,33 @@ describe('diplomacy and wars', () => {
     expect(checkCommand(sim, { type: 'declareWar', nation: 'a', target: 'c', goal: { type: 'conquest', provinces: ['c2'] } })).toMatch(/Truce/);
   });
 
+  // Stage A fix: offers about a war outlived its end (or a separate peace) until they expired.
+  it('a peace removes offers and calls to arms that no longer apply', () => {
+    const sim = lineGame();
+    const w = declareWar(sim, 'a', 'b', { type: 'conquest', provinces: ['b3'] });
+    joinWar(sim, w, 'c', 'defender');
+    const offer = (from: string, to: string) => ({ id: `pr-${from}${to}`, kind: 'peace' as const, from, to, tick: 0, expires: 100, war: w.id, terms: { mode: 'white' as const, provinces: [], gold: 0 } });
+    sim.state.proposals.push(offer('c', 'a'), offer('b', 'a'));
+    sim.state.proposals.push({ id: 'pr-call', kind: 'callToArms', from: 'b', to: 'c', tick: 0, expires: 100, war: w.id });
+    // c leaves by a separate peace: its own offer goes, b's stays
+    applyPeace(sim, w.id, 'a', 'c', { mode: 'white', provinces: [], gold: 0 });
+    expect(sim.state.proposals.map((p) => p.id).sort()).toEqual(['pr-ba', 'pr-call']);
+    // the war ends: nothing about it remains
+    applyPeace(sim, w.id, 'b', 'a', { mode: 'white', provinces: [], gold: 0 });
+    expect(sim.state.wars[w.id]).toBeUndefined();
+    expect(sim.state.proposals).toEqual([]);
+  });
+
+  it('a player alarmed by a neighbour is told once a year that a coalition is possible', () => {
+    const sim = lineGame({ playerNation: 'a' });
+    // the player (a) and one AI realm (b) are alarmed about c: a coalition is possible
+    sim.state.alarm.b = { ...(sim.state.alarm.b ?? {}), c: 80 };
+    sim.state.alarm.a = { ...(sim.state.alarm.a ?? {}), c: 80 };
+    runTicks(sim, 48 * 2, { noAI: true });
+    const notes = sim.state.notifications.filter((n) => n.nation === 'a' && n.kind === 'coalition' && /join a coalition/.test(n.text));
+    expect(notes.length).toBe(2);
+  });
+
   it('a secondary defender is not held to the war goal, but allies left fighting resent a separate peace', () => {
     const sim = lineGame();
     signTreaty(sim, 'alliance', 'b', 'c');
@@ -95,14 +123,14 @@ describe('diplomacy and wars', () => {
 
   it('an army with no legal route home returns under safe conduct', () => {
     const sim = lineGame();
-    const army = addArmy(sim, 'a', 'c1', { foot: 2 });
+    const army = addArmy(sim, 'a', 'c1', { infantry: 2 });
     returnStrandedArmies(sim);
     expect(sim.state.provinces[sim.state.armies[army.id].location].owner).toBe('a');
     expect(sim.state.notifications.some((n) => n.nation === 'a' && /safe conduct/.test(n.text))).toBe(true);
     // an army in a friend's land that can still march home stays put
     const sim2 = lineGame();
     signTreaty(sim2, 'alliance', 'a', 'b');
-    const guest = addArmy(sim2, 'a', 'b1', { foot: 2 });
+    const guest = addArmy(sim2, 'a', 'b1', { infantry: 2 });
     returnStrandedArmies(sim2);
     expect(sim2.state.armies[guest.id].location).toBe('b1');
   });
@@ -111,6 +139,7 @@ describe('diplomacy and wars', () => {
     const sim = lineGame();
     const w = declareWar(sim, 'a', 'b', { type: 'conquest', provinces: ['b3'] });
     sim.state.provinces.b3.controller = 'a';
+    bump(sim); // direct edit: refresh derived lookups
     applyPeace(sim, w.id, 'a', 'b', { mode: 'demand', provinces: ['b3'], gold: 0 });
     expect(sim.state.provinces.b3.owner).toBe('a');
     expect(sim.state.provinces.b3.integration).toBe(10);
@@ -123,7 +152,7 @@ describe('diplomacy and wars', () => {
     const sim = lineGame();
     signTreaty(sim, 'trade', 'b', 'c');
     const w = declareWar(sim, 'a', 'b', { type: 'conquest', provinces: ['b3'] });
-    addArmy(sim, 'b', 'b2', { foot: 2 });
+    addArmy(sim, 'b', 'b2', { infantry: 2 });
     for (const p of ['b1', 'b2', 'b3']) transferProvince(sim, p, 'a');
     expect(sim.state.nations.b.alive).toBe(false);
     expect(sim.state.wars[w.id]).toBeUndefined();

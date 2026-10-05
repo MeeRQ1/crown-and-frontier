@@ -31,6 +31,11 @@ export class CostHeap {
     v[i] = id;
   }
 
+  /** Cost of the entry pop() would return next. */
+  peekCost(): number {
+    return this.c[0];
+  }
+
   /** Removes and returns the id with the smallest (cost, id). */
   pop(): string {
     const c = this.c;

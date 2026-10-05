@@ -2,6 +2,9 @@
 // checkCommand() never mutates state; applyCommand() validates first and
 // leaves state untouched when it fails (returning a player-readable reason).
 
+import { buildWingProblem, cancelWing, inRange, missionProblem, MISSION_LABELS, rebaseProblem, startWing } from './air';
+import { C, SHIPS, WINGS } from './config';
+import { nextMemoEpoch } from './index';
 import { buildProblem, cancelProblem, cancelProject, startProject } from './construction';
 import {
   cancelTreaty,
@@ -25,13 +28,52 @@ import {
 import { choiceProblem, resolveEvent } from './events';
 import { cancelRecruits, disbandProblem, doDisband, doMerge, doSplit, mergeProblem, orderRecruit, recruitProblem, splitProblem } from './military';
 import { enterProblem, findPath, stationProblem } from './movement';
-import { policyProblem, researchProblem, setPolicy } from './progression';
+import {
+  buildShipProblem,
+  cancelShip,
+  disbandFleetProblem,
+  fleetOrderProblem,
+  mergeFleets,
+  mergeFleetsProblem,
+  moveFleet,
+  moveFleetProblem,
+  removeFleet,
+  shipArmies,
+  shipArmiesProblem,
+  splitFleet,
+  splitFleetProblem,
+  startShip,
+} from './naval';
+import { focusProblem, startFocus } from './focus';
+import {
+  addToBloc,
+  endGuarantee,
+  evaluateBloc,
+  foundBloc,
+  foundBlocProblem,
+  giveGuarantee,
+  guaranteeProblem,
+  inviteProblem,
+  joinProblem,
+  leaveBloc,
+  loanProblem,
+  makeLoan,
+  offerLoan,
+} from './influence';
+import { applySettlement, counterOffer, evaluateSettlement, settlementProblem } from './settlement';
+import { researchProblem } from './progression';
+import { serialize } from './save';
 import { nationName, notify, type Sim } from './state';
 import type { Command, CommandResult } from './types';
 import { answerCallToArms, applyPeace, declareWar, declareWarProblem, evaluatePeace, goalOptions, peaceProblem } from './war';
 
+function atSeaProblem(sim: Sim, fleet: string): string {
+  return `The army is at sea aboard ${sim.state.fleets[fleet]?.name ?? 'a fleet'}; it takes orders again once it lands.`;
+}
+
 export function checkCommand(sim: Sim, cmd: Command): string | null {
   const st = sim.state;
+  if (cmd.type === 'continueCampaign') return st.result && !st.continueAfterResult ? null : 'The campaign has not ended.';
   const n = st.nations[cmd.nation];
   if (!n) return 'Unknown realm.';
   if (!n.alive) return 'Your realm has fallen.';
@@ -47,6 +89,7 @@ export function checkCommand(sim: Sim, cmd: Command): string | null {
     case 'move': {
       const a = st.armies[cmd.army];
       if (!a || a.nation !== cmd.nation) return 'Not your army.';
+      if (a.embarked) return atSeaProblem(sim, a.embarked);
       if (!st.provinces[cmd.dest]) return 'Unknown province.';
       if (a.battle) return 'The army is engaged in battle and cannot manoeuvre.';
       if (a.retreating) return 'The army is retreating and cannot take orders until it arrives.';
@@ -67,6 +110,7 @@ export function checkCommand(sim: Sim, cmd: Command): string | null {
       const a = st.armies[cmd.army];
       if (!a || a.nation !== cmd.nation) return 'Not your army.';
       if (!cmd.order) return null;
+      if (a.embarked) return atSeaProblem(sim, a.embarked);
       if (cmd.order.kind !== 'station') return 'Unknown order.';
       const sp = stationProblem(sim, cmd.nation, cmd.order.province);
       if (sp) return sp;
@@ -80,11 +124,45 @@ export function checkCommand(sim: Sim, cmd: Command): string | null {
       return null;
     }
     case 'split':
+      if (st.armies[cmd.army]?.embarked) return atSeaProblem(sim, st.armies[cmd.army].embarked!);
       return splitProblem(sim, cmd.nation, cmd.army, cmd.counts);
-    case 'merge':
+    case 'merge': {
+      const sea = cmd.armies.map((id) => st.armies[id]?.embarked).find((x) => x);
+      if (sea) return atSeaProblem(sim, sea);
       return mergeProblem(sim, cmd.nation, cmd.armies);
+    }
     case 'disband':
+      if (st.armies[cmd.army]?.embarked) return atSeaProblem(sim, st.armies[cmd.army].embarked!);
       return disbandProblem(sim, cmd.nation, cmd.army);
+    case 'buildShip':
+      return buildShipProblem(sim, cmd.nation, cmd.province, cmd.ship);
+    case 'cancelShip':
+      return st.provinces[cmd.province]?.dock.some((o) => o.nation === cmd.nation) ? null : 'No ships of ours on the slipways here.';
+    case 'moveFleet':
+      return moveFleetProblem(sim, cmd.nation, cmd.fleet, cmd.zone);
+    case 'stopFleet':
+      return fleetOrderProblem(sim, cmd.nation, cmd.fleet);
+    case 'mergeFleets':
+      return mergeFleetsProblem(sim, cmd.nation, cmd.fleets);
+    case 'splitFleet':
+      return splitFleetProblem(sim, cmd.nation, cmd.fleet, cmd.ships);
+    case 'disbandFleet':
+      return disbandFleetProblem(sim, cmd.nation, cmd.fleet);
+    case 'shipArmies':
+      return shipArmiesProblem(sim, cmd.nation, cmd.armies, cmd.fleet, cmd.dest);
+    case 'buildWing':
+      return buildWingProblem(sim, cmd.nation, cmd.province, cmd.wing);
+    case 'cancelWing':
+      return st.provinces[cmd.province]?.hangar.some((o) => o.nation === cmd.nation) ? null : 'No air wings of ours in training here.';
+    case 'airMission':
+      if (!(cmd.mission in MISSION_LABELS)) return 'Unknown mission.';
+      return missionProblem(sim, cmd.nation, cmd.wing, cmd.mission, cmd.target);
+    case 'rebaseWing':
+      return rebaseProblem(sim, cmd.nation, cmd.wing, cmd.base);
+    case 'disbandWing': {
+      const w = st.wings[cmd.wing];
+      return w && w.nation === cmd.nation ? null : 'Not our air wing.';
+    }
     case 'build':
       return buildProblem(sim, cmd.nation, cmd.province, cmd.project);
     case 'cancelBuild':
@@ -93,8 +171,8 @@ export function checkCommand(sim: Sim, cmd: Command): string | null {
       return researchProblem(sim, cmd.nation, cmd.tech);
     case 'funding':
       return [0, 1, 2, 3].includes(cmd.level) ? null : 'Invalid funding level.';
-    case 'policy':
-      return policyProblem(sim, cmd.nation, cmd.policy);
+    case 'focus':
+      return focusProblem(sim, cmd.nation, cmd.focus);
     case 'envoy':
       return envoyProblem(sim, cmd.nation, cmd.target);
     case 'recallEnvoy':
@@ -109,11 +187,32 @@ export function checkCommand(sim: Sim, cmd: Command): string | null {
       return declareWarProblem(sim, cmd.nation, cmd.target, cmd.goal);
     case 'peace':
       return peaceProblem(sim, cmd.nation, cmd.war, cmd.with, cmd.terms);
+    case 'settle':
+      return settlementProblem(sim, cmd.nation, cmd.war, cmd.demands);
     case 'respond': {
       const p = st.proposals.find((x) => x.id === cmd.proposal);
       if (!p || p.to !== cmd.nation) return 'That proposal is no longer open.';
+      if (cmd.drop !== undefined) {
+        if (p.kind !== 'settlement' || !cmd.accept) return 'Only a settlement can be answered with a counter-offer.';
+        if (!Array.isArray(cmd.drop) || cmd.drop.some((i) => !Number.isInteger(i) || i < 0 || i >= (p.demands?.length ?? 0))) return 'Invalid counter-offer.';
+        if (new Set(cmd.drop).size >= (p.demands?.length ?? 0)) return 'A counter-offer must keep at least one demand (or decline and fight on).';
+      }
       return null;
     }
+    case 'guarantee':
+      return guaranteeProblem(sim, cmd.nation, cmd.target);
+    case 'revokeGuarantee':
+      return st.guarantees.some((g) => g.by === cmd.nation && g.of === cmd.target) ? null : 'We do not guarantee them.';
+    case 'loan':
+      return loanProblem(sim, cmd.nation, cmd.target, cmd.amount);
+    case 'foundBloc':
+      return foundBlocProblem(sim, cmd.nation, cmd.target);
+    case 'inviteBloc':
+      return inviteProblem(sim, cmd.nation, cmd.target);
+    case 'joinBloc':
+      return joinProblem(sim, cmd.nation, cmd.bloc);
+    case 'leaveBloc':
+      return st.blocs.some((b) => b.members.includes(cmd.nation)) ? null : 'We are not in a trade bloc.';
     case 'eventChoice': {
       const pe = n.pendingEvents.find((e) => e.id === cmd.instance);
       if (!pe) return 'That event has already been resolved.';
@@ -138,13 +237,21 @@ export function checkCommand(sim: Sim, cmd: Command): string | null {
 export function applyCommand(sim: Sim, cmd: Command): CommandResult {
   const problem = checkCommand(sim, cmd);
   if (problem) return { ok: false, reason: problem };
+  const player = cmd.type === 'continueCampaign' || sim.state.nations[cmd.nation].isPlayer;
+  const r = execute(sim, cmd);
+  // derived values shown to the player (air cover, sea control…) are recomputed after
+  // each player order; replays apply the same commands, so they see the same thing
+  if (player && r.ok) nextMemoEpoch();
+  return r;
+}
+
+function execute(sim: Sim, cmd: Command): CommandResult {
   const st = sim.state;
-  const n = st.nations[cmd.nation];
-  if (n.isPlayer) {
-    st.playerLog.push({ tick: st.tick, cmd: JSON.parse(JSON.stringify(cmd)) });
-    if (st.playerLog.length > 2000) st.playerLog.splice(0, st.playerLog.length - 2000);
-  }
+  if (cmd.type === 'continueCampaign' || st.nations[cmd.nation].isPlayer) logCommand(sim, cmd);
   switch (cmd.type) {
+    case 'continueCampaign':
+      st.continueAfterResult = true;
+      return { ok: true };
     case 'recruit': {
       const count = cmd.count ?? 1;
       let done = 0;
@@ -153,7 +260,7 @@ export function applyCommand(sim: Sim, cmd: Command): CommandResult {
         orderRecruit(sim, cmd.nation, cmd.province, cmd.unit);
         done++;
       }
-      return { ok: true, message: `${done} regiment(s) in training.` };
+      return { ok: true, message: `${done} regiment${done === 1 ? '' : 's'} in training.` };
     }
     case 'cancelRecruit':
       cancelRecruits(sim, cmd.province, cmd.nation);
@@ -212,17 +319,70 @@ export function applyCommand(sim: Sim, cmd: Command): CommandResult {
     case 'build':
       startProject(sim, cmd.nation, cmd.province, cmd.project);
       return { ok: true };
+    case 'buildShip':
+      startShip(sim, cmd.nation, cmd.province, cmd.ship);
+      return { ok: true, message: `${SHIPS[cmd.ship].label} laid down.` };
+    case 'cancelShip':
+      cancelShip(sim, cmd.nation, cmd.province);
+      return { ok: true, message: 'Ship cancelled; materiel and resources returned (crowns are lost).' };
+    case 'moveFleet':
+      moveFleet(sim, cmd.fleet, cmd.zone);
+      return { ok: true };
+    case 'stopFleet': {
+      const f = st.fleets[cmd.fleet];
+      f.path = [];
+      f.progress = 0;
+      return { ok: true };
+    }
+    case 'mergeFleets': {
+      const f = mergeFleets(sim, cmd.fleets);
+      return { ok: true, message: `Merged into ${f.name}.` };
+    }
+    case 'splitFleet': {
+      const f = splitFleet(sim, cmd.fleet, cmd.ships);
+      return { ok: true, message: `${f.name} formed.` };
+    }
+    case 'disbandFleet':
+      removeFleet(sim, st.fleets[cmd.fleet], false);
+      return { ok: true, message: 'Fleet paid off.' };
+    case 'shipArmies':
+      shipArmies(sim, cmd.nation, cmd.armies, cmd.fleet, cmd.dest);
+      return { ok: true, message: `Troops embarked for ${sim.world.prov[cmd.dest].name}.` };
+    case 'buildWing':
+      startWing(sim, cmd.nation, cmd.province, cmd.wing);
+      return { ok: true, message: `${WINGS[cmd.wing].label} in training.` };
+    case 'cancelWing':
+      cancelWing(sim, cmd.nation, cmd.province);
+      return { ok: true, message: 'Training cancelled; materiel and resources returned (crowns are lost).' };
+    case 'airMission': {
+      const w = st.wings[cmd.wing];
+      w.mission = cmd.mission;
+      w.target = cmd.mission === 'idle' ? null : cmd.target;
+      return { ok: true };
+    }
+    case 'rebaseWing': {
+      const w = st.wings[cmd.wing];
+      w.base = cmd.base;
+      if (w.target && !inRange(sim, w, w.target)) {
+        w.mission = 'idle';
+        w.target = null;
+      }
+      return { ok: true };
+    }
+    case 'disbandWing':
+      delete st.wings[cmd.wing];
+      return { ok: true, message: 'Air wing disbanded.' };
     case 'cancelBuild':
       cancelProject(sim, cmd.province);
       return { ok: true, message: 'Project cancelled; half the cost refunded.' };
     case 'research':
-      n.research.current = cmd.tech;
+      st.nations[cmd.nation].research.current = cmd.tech;
       return { ok: true };
     case 'funding':
-      n.research.funding = cmd.level;
+      st.nations[cmd.nation].research.funding = cmd.level;
       return { ok: true };
-    case 'policy':
-      setPolicy(sim, cmd.nation, cmd.policy);
+    case 'focus':
+      startFocus(sim, cmd.nation, cmd.focus);
       return { ok: true };
     case 'envoy':
       startEnvoy(sim, cmd.nation, cmd.target);
@@ -257,6 +417,70 @@ export function applyCommand(sim: Sim, cmd: Command): CommandResult {
       applyPeace(sim, cmd.war, cmd.nation, cmd.with, cmd.terms);
       return { ok: true, message: `${nationName(sim, cmd.with)} accepts the peace.` };
     }
+    case 'settle': {
+      const w = st.wars[cmd.war];
+      const other = cmd.nation === w.attackerLead ? w.defenderLead : w.attackerLead;
+      if (st.nations[other].isPlayer) {
+        addProposal(sim, { kind: 'settlement', from: cmd.nation, to: other, war: cmd.war, demands: cmd.demands });
+        notify(sim, other, 'urgent', 'proposal', `${nationName(sim, cmd.nation)} proposes a peace settlement.`);
+        return { ok: true, message: 'Settlement proposed.' };
+      }
+      const ev = evaluateSettlement(sim, cmd.war, other, cmd.demands);
+      if (!ev.accept) {
+        const top = [...ev.reasons].sort((x, y) => x.value - y.value).slice(0, 3).map((r) => `${r.label} (${r.value > 0 ? '+' : ''}${r.value})`);
+        const counter = counterOffer(sim, cmd.war, other, cmd.demands);
+        const tail = counter ? ` They would accept ${counter.length} of the ${cmd.demands.length} demands.` : ' They will fight on.';
+        return { ok: false, reason: `${nationName(sim, other)} refuses (score ${Math.round(ev.score)}): ${top.join('; ')}.${tail}` };
+      }
+      applySettlement(sim, cmd.war, cmd.nation, other, cmd.demands);
+      return { ok: true, message: `${nationName(sim, other)} accepts the settlement.` };
+    }
+    case 'guarantee':
+      giveGuarantee(sim, cmd.nation, cmd.target);
+      return { ok: true, message: `We guarantee the independence of ${nationName(sim, cmd.target)}.` };
+    case 'revokeGuarantee':
+      endGuarantee(sim, cmd.nation, cmd.target, true);
+      return { ok: true };
+    case 'loan':
+      return offerLoan(sim, cmd.nation, cmd.target, cmd.amount);
+    case 'foundBloc': {
+      if (st.nations[cmd.target].isPlayer) {
+        addProposal(sim, { kind: 'blocInvite', from: cmd.nation, to: cmd.target, bloc: 'new' });
+        notify(sim, cmd.target, 'normal', 'proposal', `${nationName(sim, cmd.nation)} proposes that we found a trade bloc together.`);
+        return { ok: true, message: 'Proposal sent.' };
+      }
+      const ev = evaluateBloc(sim, cmd.nation, cmd.target, cmd.target);
+      if (!ev.accept) return { ok: false, reason: `${nationName(sim, cmd.target)} declines (score ${Math.round(ev.score)}).` };
+      const b = foundBloc(sim, cmd.nation, cmd.target);
+      return { ok: true, message: `The ${b.name} is founded.` };
+    }
+    case 'inviteBloc': {
+      const b = st.blocs.find((x) => x.members.includes(cmd.nation))!;
+      if (st.nations[cmd.target].isPlayer) {
+        addProposal(sim, { kind: 'blocInvite', from: cmd.nation, to: cmd.target, bloc: b.id });
+        notify(sim, cmd.target, 'normal', 'proposal', `${nationName(sim, cmd.nation)} invites us to join the ${b.name}.`);
+        return { ok: true, message: 'Invitation sent.' };
+      }
+      const ev = evaluateBloc(sim, cmd.nation, cmd.target, cmd.target);
+      if (!ev.accept) return { ok: false, reason: `${nationName(sim, cmd.target)} declines (score ${Math.round(ev.score)}).` };
+      addToBloc(sim, b.id, cmd.target);
+      return { ok: true, message: `${nationName(sim, cmd.target)} joins the ${b.name}.` };
+    }
+    case 'joinBloc': {
+      const b = st.blocs.find((x) => x.id === cmd.bloc)!;
+      if (st.nations[b.leader].isPlayer) {
+        addProposal(sim, { kind: 'blocJoin', from: cmd.nation, to: b.leader, bloc: b.id });
+        notify(sim, b.leader, 'normal', 'proposal', `${nationName(sim, cmd.nation)} asks to join the ${b.name}.`);
+        return { ok: true, message: 'Request sent.' };
+      }
+      const ev = evaluateBloc(sim, b.leader, cmd.nation, b.leader);
+      if (!ev.accept) return { ok: false, reason: `${nationName(sim, b.leader)} turns down our request (score ${Math.round(ev.score)}).` };
+      addToBloc(sim, b.id, cmd.nation);
+      return { ok: true, message: `We join the ${b.name}.` };
+    }
+    case 'leaveBloc':
+      leaveBloc(sim, cmd.nation);
+      return { ok: true };
     case 'respond': {
       const p = st.proposals.find((x) => x.id === cmd.proposal)!;
       st.proposals = st.proposals.filter((x) => x.id !== p.id);
@@ -266,7 +490,43 @@ export function applyCommand(sim: Sim, cmd: Command): CommandResult {
       }
       if (!cmd.accept) {
         addMemory(sim, p.from, cmd.nation, 'rebuffed', -5, 1);
-        return { ok: true, message: 'Proposal declined.' };
+        return { ok: true, message: p.kind === 'settlement' ? 'Settlement refused: the war goes on.' : 'Proposal declined.' };
+      }
+      if (p.kind === 'settlement') {
+        const w = st.wars[p.war!];
+        if (!w) return { ok: false, reason: 'That war is over.' };
+        const drop = new Set(cmd.drop ?? []);
+        const demands = (p.demands ?? []).filter((_, i) => !drop.has(i));
+        const prob = settlementProblem(sim, p.from, p.war!, demands);
+        if (prob) return { ok: false, reason: `The settlement is no longer valid: ${prob}` };
+        if (drop.size) {
+          // a counter-offer: the proposer judges the reduced terms
+          if (!st.nations[p.from].isPlayer) {
+            const ev = evaluateSettlement(sim, p.war!, p.from, demands);
+            if (!ev.accept) return { ok: true, message: `${nationName(sim, p.from)} rejects our counter-offer (score ${Math.round(ev.score)}): the war goes on.` };
+          }
+        }
+        applySettlement(sim, p.war!, p.from, cmd.nation, demands);
+        return { ok: true, message: drop.size ? 'Counter-offer accepted: peace concluded.' : 'Settlement accepted: peace concluded.' };
+      }
+      if (p.kind === 'loan') {
+        const prob = loanProblem(sim, p.from, cmd.nation, p.amount ?? 0);
+        if (prob && !prob.startsWith('Our offer')) return { ok: false, reason: `The offer is no longer valid: ${prob}` };
+        makeLoan(sim, p.from, cmd.nation, p.amount ?? 0);
+        return { ok: true, message: 'Loan accepted.' };
+      }
+      if (p.kind === 'blocInvite' && p.bloc === 'new') {
+        const prob = foundBlocProblem(sim, p.from, cmd.nation);
+        if (prob && !prob.startsWith('Our proposal')) return { ok: false, reason: `The offer is no longer valid: ${prob}` };
+        const b = foundBloc(sim, p.from, cmd.nation);
+        return { ok: true, message: `The ${b.name} is founded.` };
+      }
+      if (p.kind === 'blocInvite' || p.kind === 'blocJoin') {
+        const joiner = p.kind === 'blocInvite' ? cmd.nation : p.from;
+        const prob = joinProblem(sim, joiner, p.bloc!);
+        if (prob && !prob.startsWith('Our request')) return { ok: false, reason: `The offer is no longer valid: ${prob}` };
+        addToBloc(sim, p.bloc!, joiner);
+        return { ok: true, message: 'Welcome to the trade bloc.' };
       }
       if (p.kind === 'peace') {
         const prob = peaceProblem(sim, p.from, p.war!, cmd.nation, p.terms!);
@@ -274,6 +534,7 @@ export function applyCommand(sim: Sim, cmd: Command): CommandResult {
         applyPeace(sim, p.war!, p.from, cmd.nation, p.terms!);
         return { ok: true, message: 'Peace concluded.' };
       }
+      if (p.kind !== 'nap' && p.kind !== 'trade' && p.kind !== 'alliance') return { ok: false, reason: 'Unknown proposal.' };
       const prob = treatyProblem(sim, p.from, cmd.nation, p.kind);
       if (prob) return { ok: false, reason: `The offer is no longer valid: ${prob}` };
       signTreaty(sim, p.kind, p.from, cmd.nation);
@@ -295,6 +556,20 @@ export function applyCommand(sim: Sim, cmd: Command): CommandResult {
       return { ok: true, message: `${w.name} begins.` };
     }
   }
+}
+
+/**
+ * Player commands are logged so a bug report can replay the campaign. A full log
+ * rolls over: the state before this command becomes the replay checkpoint (it
+ * already contains every earlier command's effect) and the log starts afresh.
+ */
+function logCommand(sim: Sim, cmd: Command): void {
+  const st = sim.state;
+  if (st.playerLog.length >= C.playerLogMax) {
+    sim.origin = { save: serialize(sim), tick: st.tick, logLength: 0 };
+    st.playerLog = [];
+  }
+  st.playerLog.push({ tick: st.tick, cmd: JSON.parse(JSON.stringify(cmd)) });
 }
 
 /** Proposal expiry: unanswered calls to arms are honoured, everything else lapses. */

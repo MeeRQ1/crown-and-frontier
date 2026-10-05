@@ -1,38 +1,45 @@
+import { bump } from '../src/sim/state';
 import { describe, expect, it } from 'vitest';
+import { UNITS } from '../src/sim/config';
 import { applyCommand, checkCommand } from '../src/sim/commands';
 import { computeLedger, debtStage, menServing, monthlyEconomy, poolCap, reserveCap } from '../src/sim/economy';
 import { armySupplyInfo } from '../src/sim/supply';
 import { runTicks } from '../src/sim/tick';
 import { declareWar } from '../src/sim/war';
+import { setController } from '../src/sim/siege';
 import { addArmy, lineGame, totalMen } from './helpers';
 
 describe('economy', () => {
   it('each regiment reduces net income by its upkeep', () => {
     const sim = lineGame();
     const before = computeLedger(sim, 'a').net;
-    addArmy(sim, 'a', 'a1', { foot: 3, horse: 1 });
+    addArmy(sim, 'a', 'a1', { infantry: 3, cavalry: 1 });
     const after = computeLedger(sim, 'a').net;
-    expect(before - after).toBeCloseTo(3 * 1.0 + 2.0, 5);
+    expect(before - after).toBeCloseTo(3 * UNITS.infantry.upkeep + UNITS.cavalry.upkeep, 5);
   });
 
   it('recruitment is refused with a readable reason when unaffordable', () => {
     const sim = lineGame();
     const n = sim.state.nations.a;
     n.treasury = 5;
-    expect(checkCommand(sim, { type: 'recruit', nation: 'a', province: 'a1', unit: 'foot' })).toMatch(/crowns/);
+    expect(checkCommand(sim, { type: 'recruit', nation: 'a', province: 'a1', unit: 'infantry' })).toMatch(/crowns/);
     n.treasury = 500;
     n.manpower = 200;
-    expect(checkCommand(sim, { type: 'recruit', nation: 'a', province: 'a1', unit: 'foot' })).toMatch(/manpower/);
+    expect(checkCommand(sim, { type: 'recruit', nation: 'a', province: 'a1', unit: 'infantry' })).toMatch(/manpower/);
     n.manpower = 5000;
-    n.supplies = 0;
-    expect(checkCommand(sim, { type: 'recruit', nation: 'a', province: 'a1', unit: 'guns' })).toMatch(/supplies/);
+    n.materiel = 0;
+    expect(checkCommand(sim, { type: 'recruit', nation: 'a', province: 'a1', unit: 'artillery' })).toMatch(/materiel/);
+    n.materiel = 500;
+    n.stock.iron = 0;
+    expect(checkCommand(sim, { type: 'recruit', nation: 'a', province: 'a1', unit: 'artillery' })).toMatch(/iron/);
+    expect(checkCommand(sim, { type: 'recruit', nation: 'a', province: 'a1', unit: 'armour' })).toMatch(/Tanks/);
   });
 
   it('a failed command leaves state untouched', () => {
     const sim = lineGame();
     sim.state.nations.a.treasury = 5;
     const before = JSON.stringify(sim.state);
-    const r = applyCommand(sim, { type: 'recruit', nation: 'a', province: 'a1', unit: 'horse' });
+    const r = applyCommand(sim, { type: 'recruit', nation: 'a', province: 'a1', unit: 'cavalry' });
     expect(r.ok).toBe(false);
     expect(JSON.stringify(sim.state)).toBe(before);
   });
@@ -44,7 +51,7 @@ describe('economy', () => {
     n.manpower = 3000;
     const pool0 = n.manpower;
     const serving0 = menServing(sim, 'a');
-    expect(applyCommand(sim, { type: 'recruit', nation: 'a', province: 'a1', unit: 'foot', count: 2 }).ok).toBe(true);
+    expect(applyCommand(sim, { type: 'recruit', nation: 'a', province: 'a1', unit: 'infantry', count: 2 }).ok).toBe(true);
     expect(n.manpower).toBe(pool0 - 2000);
     expect(menServing(sim, 'a')).toBe(serving0 + 2000);
     expect(poolCap(sim, 'a')).toBeCloseTo(reserveCap(sim, 'a') - menServing(sim, 'a'), 6);
@@ -55,10 +62,27 @@ describe('economy', () => {
 
   it('the manpower pool never exceeds the reserve minus men serving', () => {
     const sim = lineGame();
-    addArmy(sim, 'a', 'a1', { foot: 4 });
+    addArmy(sim, 'a', 'a1', { infantry: 4 });
     sim.state.nations.a.manpower = 0;
     runTicks(sim, 48 * 6, { noAI: true });
     expect(sim.state.nations.a.manpower).toBeLessThanOrEqual(poolCap(sim, 'a') + 1);
+  });
+
+  // Stage A fix: the monthly settlement used to keep a pool that was already above
+  // the cap, so a shrinking reserve (occupation, lost integration) never shrank it.
+  it('a shrinking reserve shrinks a full manpower pool', () => {
+    const sim = lineGame();
+    const a = sim.state.nations.a;
+    a.manpower = poolCap(sim, 'a');
+    // occupation: the occupied province stops adding to the reserve at once
+    declareWar(sim, 'b', 'a', { type: 'conquest', provinces: ['a3'] });
+    setController(sim, 'a3', 'b');
+    expect(a.manpower).toBeLessThanOrEqual(poolCap(sim, 'a') + 1e-6);
+    // lost integration: the next monthly settlement trims the pool
+    for (const pid of ['a1', 'a2']) sim.state.provinces[pid].integration = 30;
+    expect(a.manpower).toBeGreaterThan(poolCap(sim, 'a'));
+    monthlyEconomy(sim);
+    expect(a.manpower).toBeLessThanOrEqual(poolCap(sim, 'a') + 1e-6);
   });
 
   it('debt is telegraphed in stages before bankruptcy', () => {
@@ -85,6 +109,7 @@ describe('economy', () => {
     const before = computeLedger(sim, 'b').income['Provincial taxes'];
     declareWar(sim, 'a', 'b', { type: 'conquest', provinces: ['b3'] });
     sim.state.provinces.b3.controller = 'a';
+    bump(sim); // direct edit: refresh derived lookups
     const after = computeLedger(sim, 'b').income['Provincial taxes'];
     expect(after).toBeLessThan(before);
     expect(computeLedger(sim, 'a').income['War contributions']).toBeGreaterThan(0);
@@ -92,7 +117,7 @@ describe('economy', () => {
 
   it('an empty supply stockpile cuts supply lines and says why', () => {
     const sim = lineGame();
-    const army = addArmy(sim, 'a', 'a2', { foot: 2 });
+    const army = addArmy(sim, 'a', 'a2', { infantry: 2 });
     expect(armySupplyInfo(sim, army).connected).toBe(true);
     sim.state.nations.a.supplies = 0;
     sim.state.rev++;

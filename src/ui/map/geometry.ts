@@ -2,27 +2,12 @@
 // plus derived indexes (paths, bounding boxes, a spatial grid for picking and
 // culling, label anchors and deterministic terrain-art placements).
 
-export interface MapGeometry {
-  id: string;
-  bounds: { minX: number; minY: number; maxX: number; maxY: number };
-  provinces: Record<string, { poly: number[]; cx: number; cy: number; area: number }>;
-  /** province–province and province–water/waste border polylines (shared, so borders match exactly) */
-  edges: Array<{ a: string; b: string; pts: number[]; river?: number }>;
-  /** impassable cells: 'peak' (mountain range) or 'lake' */
-  waste: Array<{ kind: string; poly: number[] }>;
-  straits: Array<[string, string]>;
-  /** named geography for lettering */
-  labels?: MapLabel[];
-}
+import type { DrawnMap, MapLabelDef } from '../../maps/format';
+import { decodeGrid } from '../../maps/seazones';
 
-export interface MapLabel {
-  kind: 'sea' | 'lake' | 'range' | 'region' | 'river';
-  name: string;
-  x: number;
-  y: number;
-  size?: number; // world units
-  angle?: number; // radians
-}
+/** A drawable map (province outlines, shared borders, wastes, straits, labels). */
+export type MapGeometry = DrawnMap;
+export type MapLabel = MapLabelDef;
 
 export type BBox = [number, number, number, number];
 
@@ -195,6 +180,8 @@ export class GeoIndex {
   readonly edgesOf = new Map<string, EdgeGeo[]>();
   readonly peaks: Array<{ poly: number[]; path: Path2D; bbox: BBox }> = [];
   readonly lakes: Array<{ poly: number[]; path: Path2D; bbox: BBox }> = [];
+  /** land beyond the frame of a regional map (impassable, drawn muted) */
+  readonly beyond: Array<{ poly: number[]; path: Path2D; bbox: BBox }> = [];
   readonly straits: Array<[string, string]>;
   readonly labels: MapLabel[];
   /** outline of all land (provinces and mountain cells) against sea and lakes */
@@ -208,6 +195,13 @@ export class GeoIndex {
   private glyphCache = new Map<string, Glyph[]>();
   /** typical province radius in world units (for zoom tiers) */
   readonly provScale: number;
+  /** sea zones: ids by ordinal, label anchors, borders between zones, and the zone grid */
+  readonly zoneIds: string[] = [];
+  readonly zoneNames = new Map<string, string>();
+  readonly zoneAnchors = new Map<string, { x: number; y: number }>();
+  readonly zoneBorders = new Path2D();
+  private seaGrid: { x0: number; y0: number; cell: number; w: number; h: number; cells: Int32Array } | null = null;
+  private zonePathCache = new Map<string, Path2D>();
 
   constructor(g: MapGeometry) {
     this.id = g.id;
@@ -235,6 +229,7 @@ export class GeoIndex {
     for (const w of g.waste) {
       const item = { poly: w.poly, path: pathFrom(w.poly), bbox: bboxOf(w.poly) };
       if (w.kind === 'lake') this.lakes.push(item);
+      else if (w.kind === 'edge') this.beyond.push(item);
       else {
         this.peaks.push(item);
         this.landPath.addPath(item.path);
@@ -272,6 +267,79 @@ export class GeoIndex {
       (this.edgesOf.get(e.b) ?? this.edgesOf.set(e.b, []).get(e.b)!).push(eg);
       if (eg.river > 0) this.riverEdges.push(eg);
     }
+    // sea zones
+    for (const z of g.seaZones ?? []) {
+      this.zoneIds.push(z.id);
+      this.zoneNames.set(z.id, z.name);
+    }
+    const seas = g.seas;
+    if (seas) {
+      const cells = decodeGrid(seas.grid.rle, seas.grid.w * seas.grid.h, this.zoneIds.length);
+      if (cells) this.seaGrid = { ...seas.grid, cells };
+      for (const [id, a] of Object.entries(seas.anchors)) this.zoneAnchors.set(id, { x: a.cx, y: a.cy });
+      for (const b of seas.borders) this.zoneBorders.addPath(pathFrom(b.pts, false));
+    }
+    // a zone without a drawn anchor sits off the middle of its coasts
+    for (const z of g.seaZones ?? []) {
+      if (this.zoneAnchors.has(z.id) || !z.coasts.length) continue;
+      let x = 0;
+      let y = 0;
+      for (const c of z.coasts) {
+        const p = this.provs.get(c);
+        if (p) (x += p.cx), (y += p.cy);
+      }
+      this.zoneAnchors.set(z.id, { x: x / z.coasts.length, y: y / z.coasts.length });
+    }
+  }
+
+  /** Sea zone under a world point (null on land or off the map). */
+  zoneAt(x: number, y: number): string | null {
+    const g = this.seaGrid;
+    if (!g) return null;
+    const i = Math.floor((x - g.x0) / g.cell);
+    const j = Math.floor((y - g.y0) / g.cell);
+    if (i < 0 || j < 0 || i >= g.w || j >= g.h) return null;
+    const v = g.cells[j * g.w + i];
+    return v ? (this.zoneIds[v - 1] ?? null) : null;
+  }
+
+  private seaClipPath: Path2D | null = null;
+  /** Everything that is not land (for clipping sea-zone tints, even-odd rule). */
+  seaClip(): Path2D {
+    if (this.seaClipPath) return this.seaClipPath;
+    const b = this.bounds;
+    const p = new Path2D();
+    p.rect(b.minX - 1e4, b.minY - 1e4, b.maxX - b.minX + 2e4, b.maxY - b.minY + 2e4);
+    for (const pr of this.provList) p.addPath(pr.path);
+    for (const pk of this.peaks) p.addPath(pk.path);
+    for (const b of this.beyond) p.addPath(b.path);
+    this.seaClipPath = p;
+    return p;
+  }
+
+  /** The water of one zone (cell runs; land drawn over it hides the coast cells). */
+  zonePath(id: string): Path2D | null {
+    const hit = this.zonePathCache.get(id);
+    if (hit) return hit;
+    const g = this.seaGrid;
+    const ord = this.zoneIds.indexOf(id) + 1;
+    if (!g || !ord) return null;
+    const p = new Path2D();
+    for (let j = 0; j < g.h; j++) {
+      let i = 0;
+      while (i < g.w) {
+        if (g.cells[j * g.w + i] !== ord) {
+          i++;
+          continue;
+        }
+        let k = i;
+        while (k < g.w && g.cells[j * g.w + k] === ord) k++;
+        p.rect(g.x0 + i * g.cell, g.y0 + j * g.cell, (k - i) * g.cell + 0.5, g.cell + 0.5);
+        i = k;
+      }
+    }
+    this.zonePathCache.set(id, p);
+    return p;
   }
 
   /** Province under a world point. */

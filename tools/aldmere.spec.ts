@@ -3,67 +3,13 @@
 // straits. Coordinates are in "design units" and are scaled by SCALE when the
 // map is generated (so the drawn province size matches the Reach).
 
-import type { Resource, Terrain } from '../src/sim/types';
 import type { Pt } from './mapgen/core';
 
 export const SCALE = 0.84;
 export const BOUNDS = { minX: -220, minY: -170, maxX: 5060, maxY: 3160 };
 
-export interface Anchor {
-  x: number;
-  y: number;
-  owner: string | null;
-}
-export interface RegionSpec {
-  id: string;
-  culture: string;
-  anchors: Anchor[];
-  /** provinces in the region, including fixed ones (capitals, passes) */
-  count: number;
-  biome: Partial<Record<Terrain, number>>;
-  /** typical development */
-  wealth: number;
-  /** integration range for owned provinces (loosely held peripheries) */
-  integ?: [number, number];
-  /** [claimant, how many border provinces it claims] */
-  claims?: Array<[string, number]>;
-  /** growth weight: below 1 the region spreads further */
-  weight?: number;
-}
-export interface FixedProv {
-  id: string;
-  name: string;
-  x: number;
-  y: number;
-  region: string;
-  owner: string | null;
-  terrain: Terrain;
-  resource: Resource;
-  dev: number;
-  pop: number;
-  infra?: number;
-  fort?: number;
-  integ?: number;
-  claims?: string[];
-  pass?: boolean;
-}
-export interface IslandSpec {
-  name: string;
-  poly: Pt[];
-  region: string;
-  owner: string | null;
-  count: number;
-}
-export interface RangeSpec {
-  name: string;
-  pts: Pt[];
-  /** land within this distance of the ridge is mountain wall */
-  half: number;
-}
-export interface RiverSpec {
-  name: string;
-  pts: Pt[];
-}
+export type { Anchor, FixedProv, IslandSpec, RangeSpec, RegionSpec, RiverSpec } from '../src/maps/gen/world';
+import type { FixedProv, IslandSpec, LakeSpec, RangeSpec, RegionSpec, RiverSpec } from '../src/maps/gen/world';
 
 // prettier-ignore
 export const MAINLAND: Pt[] = [
@@ -110,7 +56,7 @@ export const ISLANDS: IslandSpec[] = [
 ];
 
 /** Lakes: impassable water inside the land. */
-export const LAKES: Array<{ name: string; cx: number; cy: number; rx: number; ry: number; rot: number }> = [
+export const LAKES: LakeSpec[] = [
   { name: 'Mirrormere', cx: 1905, cy: 1300, rx: 130, ry: 72, rot: -0.2 },
   { name: 'Tarnmere', cx: 2250, cy: 660, rx: 78, ry: 48, rot: 0.3 },
   { name: 'Lake Oren', cx: 3900, cy: 2200, rx: 100, ry: 62, rot: 0.1 },

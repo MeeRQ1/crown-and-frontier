@@ -2,8 +2,10 @@
 // legend and explanation shown with it. Every value comes from the live
 // simulation, using only information the game already shows the player.
 
-import { TERRAIN } from '../../sim/config';
+import { RESOURCE_INFO, TERRAIN } from '../../sim/config';
+import { provinceBlockaded } from '../../sim/naval';
 import { coalitionAgainst, opinion } from '../../sim/diplomacy';
+import { sameBloc, sphereOf } from '../../sim/influence';
 import { provinceCrowns } from '../../sim/economy';
 import { armyStrength } from '../../sim/military';
 import { atWar, enemiesOf, hasTreaty, isFriendly, type Sim } from '../../sim/state';
@@ -11,7 +13,7 @@ import { isSupplySource, supplyDistances, supplyRange } from '../../sim/supply';
 import type { NationId, ProvinceId } from '../../sim/types';
 import type { IconName } from '../icons';
 
-export type MapMode = 'political' | 'terrain' | 'supply' | 'economy' | 'frontier' | 'diplomacy' | 'military';
+export type MapMode = 'political' | 'terrain' | 'supply' | 'economy' | 'frontier' | 'diplomacy' | 'military' | 'resources' | 'sea';
 
 export interface LegendItem {
   color: string;
@@ -57,7 +59,7 @@ export const MODES: ModeDef[] = [
     label: 'Economy',
     icon: 'economy',
     key: 'R',
-    explain: 'Crowns each province yields its owner per month (development, trade goods, integration, unrest and occupation all count). Close up, the development level is written on each province.',
+    explain: 'Crowns each province yields its owner per month (development, population, integration, unrest and occupation all count). Close up, the development level is written on each province.',
     ramp: { stops: ['#efe6cf', '#e3c276', '#c98a3a', '#8e4a22'], from: '0', to: '12+ crowns / month' },
   },
   {
@@ -73,7 +75,7 @@ export const MODES: ModeDef[] = [
     label: 'Diplomacy',
     icon: 'relations',
     key: 'Y',
-    explain: 'Relations with your realm (or with the realm you select): alliances, pacts, trade, wars and the opinion each realm holds of you.',
+    explain: 'Relations with your realm (or with the realm you select): alliances, spheres of influence, guarantees, pacts, trade blocs and agreements, wars and the opinion each realm holds of you.',
   },
   {
     id: 'military',
@@ -83,7 +85,31 @@ export const MODES: ModeDef[] = [
     explain: 'Active fronts and threats. Your provinces are shaded by the hostile strength that could reach them within two marches; enemy land at war is hatched. Front-line borders are outlined.',
     ramp: { stops: ['#efe6cf', '#e8bf72', '#d0703f', '#9d2f22'], from: 'safe', to: 'heavily threatened' },
   },
+  {
+    id: 'resources',
+    label: 'Resources',
+    icon: 'mine',
+    key: 'I',
+    explain: 'Deposits: each province holds at most one, and yields it to its owner every month (more with development and technology). Hatched: a resource your realm is short of, so taking or trading for that land matters.',
+  },
+  {
+    id: 'sea',
+    label: 'Sea control',
+    icon: 'anchor',
+    key: 'O',
+    explain: 'Who commands each sea zone: the realm with the strongest warships there (submarines count half). Coasts are shaded by port level; a hatched coast is blockaded and loses a quarter of its crowns and its sea trade.',
+  },
 ];
+
+/** Colours of the deposits in the Resources mode. */
+export const RESOURCE_COLORS: Record<string, string> = {
+  food: '#a9c25a',
+  coal: '#3f3d3a',
+  iron: '#a4532f',
+  oil: '#6d3f6a',
+  rubber: '#2f7046',
+  nitrates: '#e3cf6d',
+};
 
 export const MODE_MAP: Record<MapMode, ModeDef> = Object.fromEntries(MODES.map((m) => [m.id, m])) as Record<MapMode, ModeDef>;
 
@@ -135,13 +161,12 @@ export function buildContext(sim: Sim, mode: MapMode, viewer: NationId | null): 
     const hostile = enemiesOf(sim, viewer);
     const threat: Record<ProvinceId, number> = {};
     let max = 0;
-    const hops = sim.world.hops;
     const hostileArmies = Object.values(st.armies).filter((a) => hostile.includes(a.nation));
     for (const pid of sim.world.provIds) {
       if (st.provinces[pid].owner !== viewer) continue;
       let t = 0;
       for (const a of hostileArmies) {
-        const d = hops[pid][a.location];
+        const d = sim.world.hop(pid, a.location);
         if (d !== undefined && d <= 2) t += armyStrength(sim, a) * (d === 0 ? 1.2 : d === 1 ? 1 : 0.6);
       }
       threat[pid] = t;
@@ -201,12 +226,28 @@ export function fillFor(mode: MapMode, c: ModeContext, pid: ProvinceId, focus: N
       if (o === me) return { color: '#cfaa62', alpha: 0.72, hatch: occ };
       if (atWar(sim, me, o)) return { color: '#b8402e', alpha: 0.7, hatch: '#5e1a12' };
       if (hasTreaty(sim, 'alliance', me, o)) return { color: '#3d6cb0', alpha: 0.7 };
+      if (sphereOf(sim, o) === me) return { color: '#8a6fc0', alpha: 0.7 };
+      if (sphereOf(sim, me) === o) return { color: '#5e4a8f', alpha: 0.7 };
       if (coalitionAgainst(sim, me)?.members.includes(o)) return { color: '#8a3a52', alpha: 0.65 };
+      if (sim.state.guarantees.some((g) => g.by === me && g.of === o)) return { color: '#6a8fc8', alpha: 0.65 };
       if (hasTreaty(sim, 'nap', me, o)) return { color: '#5da39c', alpha: 0.65 };
+      if (sim.state.blocs.length && sameBloc(sim, me, o)) return { color: '#c9b46a', alpha: 0.65 };
       if (hasTreaty(sim, 'trade', me, o)) return { color: '#9cc3a5', alpha: 0.65 };
       const op = opinion(sim, o, me);
       const t = (op + 100) / 200;
       return { color: rampColor(['#b86a4b', '#e2cfb0', '#6f9f6c'], t), alpha: 0.6 };
+    }
+    case 'resources': {
+      const r = def.resource;
+      if (!r) return p.owner ? { color: '#cfc4ab', alpha: 0.18 } : NONE;
+      const short = !!c.viewer && r !== 'food' && !!st.nations[c.viewer]?.shortages.includes(r);
+      return { color: RESOURCE_COLORS[r], alpha: p.owner ? 0.82 : 0.5, hatch: short ? '#8f2a1c' : occ };
+    }
+    case 'sea': {
+      if (!p.owner) return NONE;
+      if (!sim.world.provZones[pid]) return { color: '#cfc4ab', alpha: 0.15 };
+      const color = p.port >= 3 ? '#1f4f7a' : p.port === 2 ? '#3f7fb8' : p.port === 1 ? '#8ab6d6' : '#d7d0bd';
+      return { color, alpha: 0.72, hatch: provinceBlockaded(sim, pid) ? '#8f2a1c' : null };
     }
     case 'military': {
       const me = c.viewer;
@@ -251,7 +292,11 @@ export function legendFor(mode: MapMode): LegendItem[] {
       return [
         { color: '#cfaa62', label: 'This realm' },
         { color: '#3d6cb0', label: 'Ally' },
+        { color: '#8a6fc0', label: 'In its sphere of influence' },
+        { color: '#5e4a8f', label: 'Its patron (it is in their sphere)' },
+        { color: '#6a8fc8', label: 'Independence guaranteed by it' },
         { color: '#5da39c', label: 'Non-aggression pact' },
+        { color: '#c9b46a', label: 'Same trade bloc' },
         { color: '#9cc3a5', label: 'Trade agreement' },
         { color: '#b8402e', label: 'At war', hatch: true },
         { color: '#8a3a52', label: 'In a coalition against it' },
@@ -262,6 +307,20 @@ export function legendFor(mode: MapMode): LegendItem[] {
       return [
         { color: '#9d4a3c', label: 'Enemy land (at war)', hatch: true },
         { color: '#7fa3c7', label: 'Allied or co-belligerent' },
+      ];
+    case 'resources':
+      return [
+        ...(['coal', 'iron', 'oil', 'rubber', 'nitrates', 'food'] as const).map((r) => ({ color: RESOURCE_COLORS[r], label: RESOURCE_INFO[r].label })),
+        { color: '#8f2a1c', label: 'Hatched: your realm is short of it', hatch: true },
+      ];
+    case 'sea':
+      return [
+        { color: '#5d79a8', label: 'Sea zone: the realm with the strongest warships there' },
+        { color: '#8ab6d6', label: 'Port level 1' },
+        { color: '#3f7fb8', label: 'Port level 2' },
+        { color: '#1f4f7a', label: 'Port level 3' },
+        { color: '#d7d0bd', label: 'Coast without a port' },
+        { color: '#8f2a1c', label: 'Hatched: blockaded coast', hatch: true },
       ];
     default:
       return [];

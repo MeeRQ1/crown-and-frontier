@@ -2,60 +2,60 @@
 
 Map: aldmere. Runs: 30 (seeds 1–10, difficulties easy, normal, hard, 60-year limit). Node v22.22.2.
 
-Winners: les 13, tar 7, vos 1, dre 2, mor 1, aur 5, sol 1
-Victory paths: economic 6, score 17, territorial 6, diplomatic 1
-Average campaign length: 55.6 years; wars per campaign 45.4; average war 13.5 months; peace treaties 81.4; forced peaces 0.0; battles 325.
-Coalitions formed per campaign: 12.6; coalition wars: 16.2.
-Eliminations per campaign: 0.07; bankruptcies per campaign: 0.00.
-Performance: 19.56 ms/tick average, 263 ms worst tick, heap ≈ 87 MB.
+Winners: les 15, aur 7, tar 5, fen 1, mor 1, sol 1
+Victory paths: economic 9, score 14, territorial 5, diplomatic 2
+Average campaign length: 54.8 years; wars per campaign 48.0; average war 12.6 months; peace treaties 82.0; forced peaces 0.0; battles 315.
+Coalitions formed per campaign: 13.5; coalition wars: 13.6.
+Eliminations per campaign: 0.00; bankruptcies per campaign: 0.00.
+Performance: 6.42 ms/tick average, 52 ms worst tick, heap ≈ 59 MB.
 Invariant failures: none
 
 | Nation | Wins | Avg start→end provinces | Alive % | Avg wars declared | Battles won/lost | Idle army share | Avg techs |
 |---|---|---|---|---|---|---|---|
-| aur | 5 | 25→39.6 | 100% | 8.6 | 26.1/16.5 | 27% | 17.9 |
-| vos | 1 | 20→15.3 | 93% | 1.8 | 19.5/30.4 | 24% | 17.7 |
-| ser | 0 | 20→20.8 | 100% | 0.1 | 3.2/3.5 | 58% | 17.8 |
-| cal | 0 | 16→14.6 | 100% | 0.5 | 11.8/16.7 | 20% | 17.9 |
-| ist | 0 | 17→17.4 | 100% | 0.2 | 2.4/2.7 | 44% | 17.9 |
-| dre | 2 | 21→25.0 | 100% | 8.5 | 55.0/34.0 | 12% | 17.5 |
-| mor | 1 | 25→30.7 | 100% | 9.3 | 61.8/56.1 | 19% | 17.7 |
-| fen | 0 | 12→15.8 | 100% | 0.1 | 15.8/25.3 | 19% | 17.8 |
-| tar | 7 | 30→31.7 | 100% | 6.7 | 51.0/41.5 | 22% | 17.6 |
-| car | 0 | 13→11.9 | 100% | 0.1 | 9.3/13.4 | 24% | 17.7 |
-| hra | 0 | 14→9.3 | 100% | 0.5 | 11.2/21.4 | 33% | 17.2 |
-| sol | 1 | 12→12.0 | 100% | 0.0 | 4.7/6.0 | 59% | 17.8 |
-| les | 13 | 24→41.9 | 100% | 8.2 | 38.3/28.3 | 17% | 17.9 |
-| ash | 0 | 15→11.8 | 100% | 0.7 | 15.2/27.5 | 19% | 17.7 |
+| aur | 7 | 25→38.7 | 100% | 8.6 | 26.6/17.7 | 20% | 18.0 |
+| vos | 0 | 20→15.6 | 100% | 1.6 | 14.5/28.0 | 31% | 17.8 |
+| ser | 0 | 20→20.4 | 100% | 0.3 | 2.2/1.7 | 60% | 18.0 |
+| cal | 0 | 16→14.6 | 100% | 0.6 | 10.3/19.4 | 21% | 18.0 |
+| ist | 0 | 17→17.5 | 100% | 0.2 | 2.8/2.7 | 40% | 17.9 |
+| dre | 0 | 21→23.6 | 100% | 8.8 | 45.8/32.9 | 16% | 17.6 |
+| mor | 1 | 25→33.0 | 100% | 11.2 | 64.9/60.8 | 18% | 17.7 |
+| fen | 1 | 12→13.8 | 100% | 0.1 | 15.5/25.4 | 12% | 17.7 |
+| tar | 5 | 30→29.9 | 100% | 6.5 | 56.3/42.3 | 19% | 17.9 |
+| car | 0 | 13→13.3 | 100% | 0.4 | 10.4/9.1 | 29% | 17.8 |
+| hra | 0 | 14→9.0 | 100% | 0.6 | 11.9/19.9 | 32% | 17.5 |
+| sol | 1 | 12→11.9 | 100% | 0.0 | 3.3/5.5 | 64% | 17.9 |
+| les | 15 | 24→44.1 | 100% | 8.4 | 39.0/27.2 | 14% | 18.0 |
+| ash | 0 | 15→12.5 | 100% | 0.8 | 11.5/21.5 | 15% | 17.7 |
 
 | Seed | Difficulty | Result | Year | Wars | Battles | Eliminated |
 |---|---|---|---|---|---|---|
-| 1 | easy | les (economic) | 1697.5 | 38 | 250 | — |
-| 2 | easy | tar (score) | 1700.1 | 43 | 305 | — |
-| 3 | easy | les (economic) | 1700.1 | 51 | 479 | — |
-| 4 | easy | tar (score) | 1700.1 | 34 | 233 | — |
-| 5 | easy | les (score) | 1700.1 | 54 | 427 | — |
-| 6 | easy | tar (territorial) | 1685.2 | 41 | 258 | — |
-| 7 | easy | les (economic) | 1689.8 | 52 | 376 | — |
-| 8 | easy | vos (score) | 1700.1 | 60 | 410 | — |
-| 9 | easy | les (economic) | 1679.7 | 50 | 212 | — |
-| 10 | easy | les (score) | 1700.1 | 58 | 405 | — |
-| 1 | normal | les (territorial) | 1696.6 | 40 | 359 | — |
-| 2 | normal | les (territorial) | 1682.0 | 27 | 133 | — |
-| 3 | normal | dre (score) | 1700.1 | 52 | 469 | — |
-| 4 | normal | les (score) | 1700.1 | 52 | 364 | — |
-| 5 | normal | mor (score) | 1700.1 | 47 | 420 | — |
-| 6 | normal | les (economic) | 1696.1 | 39 | 304 | — |
-| 7 | normal | dre (score) | 1700.1 | 53 | 354 | vos |
-| 8 | normal | aur (territorial) | 1691.6 | 49 | 376 | — |
-| 9 | normal | tar (score) | 1700.1 | 44 | 286 | — |
-| 10 | normal | les (economic) | 1694.7 | 46 | 272 | — |
-| 1 | hard | les (score) | 1700.1 | 46 | 420 | — |
-| 2 | hard | tar (score) | 1700.1 | 25 | 193 | — |
-| 3 | hard | aur (territorial) | 1698.5 | 40 | 297 | — |
-| 4 | hard | tar (score) | 1700.1 | 47 | 413 | — |
-| 5 | hard | sol (diplomatic) | 1668.2 | 21 | 108 | — |
-| 6 | hard | aur (score) | 1700.1 | 60 | 334 | vos |
-| 7 | hard | tar (score) | 1700.1 | 55 | 384 | — |
-| 8 | hard | les (score) | 1700.1 | 55 | 401 | — |
-| 9 | hard | aur (territorial) | 1688.1 | 24 | 154 | — |
-| 10 | hard | aur (score) | 1700.1 | 58 | 364 | — |
+| 1 | easy | les (economic) | 1684.6 | 44 | 313 | — |
+| 2 | easy | aur (score) | 1700.1 | 55 | 304 | — |
+| 3 | easy | tar (score) | 1700.1 | 53 | 414 | — |
+| 4 | easy | aur (score) | 1700.1 | 45 | 324 | — |
+| 5 | easy | les (score) | 1700.1 | 37 | 218 | — |
+| 6 | easy | les (economic) | 1692.0 | 58 | 322 | — |
+| 7 | easy | les (territorial) | 1692.3 | 50 | 338 | — |
+| 8 | easy | les (economic) | 1690.7 | 42 | 285 | — |
+| 9 | easy | aur (score) | 1700.1 | 40 | 359 | — |
+| 10 | easy | les (score) | 1700.1 | 66 | 411 | — |
+| 1 | normal | fen (diplomatic) | 1689.8 | 46 | 265 | — |
+| 2 | normal | les (economic) | 1697.9 | 58 | 363 | — |
+| 3 | normal | tar (territorial) | 1673.3 | 33 | 183 | — |
+| 4 | normal | les (economic) | 1679.1 | 43 | 285 | — |
+| 5 | normal | tar (territorial) | 1691.2 | 42 | 273 | — |
+| 6 | normal | les (score) | 1700.1 | 51 | 387 | — |
+| 7 | normal | les (economic) | 1691.1 | 47 | 299 | — |
+| 8 | normal | les (score) | 1700.1 | 66 | 428 | — |
+| 9 | normal | tar (territorial) | 1689.1 | 33 | 235 | — |
+| 10 | normal | mor (score) | 1700.1 | 43 | 202 | — |
+| 1 | hard | les (economic) | 1694.5 | 48 | 274 | — |
+| 2 | hard | les (economic) | 1693.0 | 34 | 219 | — |
+| 3 | hard | sol (diplomatic) | 1697.9 | 59 | 269 | — |
+| 4 | hard | tar (economic) | 1687.8 | 34 | 259 | — |
+| 5 | hard | aur (score) | 1700.1 | 51 | 356 | — |
+| 6 | hard | aur (score) | 1700.1 | 53 | 380 | — |
+| 7 | hard | les (score) | 1700.1 | 40 | 272 | — |
+| 8 | hard | aur (score) | 1700.1 | 51 | 426 | — |
+| 9 | hard | aur (score) | 1700.1 | 61 | 430 | — |
+| 10 | hard | les (territorial) | 1699.7 | 58 | 356 | — |

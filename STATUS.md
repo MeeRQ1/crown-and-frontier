@@ -1,16 +1,326 @@
 # Status
 
-Last updated at the redesign checkpoint: the living-atlas interface and the expanded standard
-world (save schema 1, version 0.2.0). The previous release is `main` at c29aea6.
+Last updated at **Stage F of the strategic depth expansion** (save format 4, map format 3).
+Stages A–F are done in this branch, with the known limitations listed below; nothing in
+the brief has been dropped ([docs/expansion/PLAN.md](docs/expansion/PLAN.md), requirement
+ledger). The branch is a draft pull request and has not been merged or published. The
+rest of this file below the expansion section describes the redesign release (0.2.0) and
+is kept for its evidence. Where a stage changed a fact, it is corrected in place.
+
+## Expansion progress
+
+| Stage | Status |
+|---|---|
+| A · Foundations | **Done in this branch** (draft pull request, not merged) |
+| B · Industrial economy and research | **Done in this branch** (same draft pull request) |
+| C · War on land, at sea and in the air | **Done in this branch** (same draft pull request) |
+| D · Maps, editor, real-world map | **Done in this branch** (same draft pull request) |
+| E · Diplomacy, settlements, national focus | **Done in this branch** (same draft pull request) |
+| F · Onboarding, balance, delivery | **Done in this branch** (same draft pull request) |
+
+**Stage F delivered:**
+- **Tutorial** of 15 steps, each completed by doing it, now covering industry and resources,
+  ships and aircraft, national focus and how wars end; the diplomacy step introduces
+  influence and spheres. With a ledger open the tutorial sits beside it.
+- **Map modes:** Resources (deposits, hatched where the realm is short) and Sea control (the
+  realm with the strongest warships in each zone, ports by level, blockaded coasts); nine
+  modes on Shift+1…9.
+- **Pausing:** a new setting, on by default, pauses when research or a national focus
+  finishes; the Focus rail is marked while no focus is under way.
+- **A player-style session** in the browser (the Sundered Isles as Dunach, 1885–1899,
+  `docs/expansion/SESSIONS.md`) found 13 issues; 12 are fixed: map clicks swallowed beside
+  the legend and above the minimap, the tutorial covering ledgers, the Diplomacy map left on,
+  a decision card over the mode bar, no pause for a finished focus, sea zones that read as
+  land, sloppy plurals, island realms unable to start any war (claims can now be fabricated
+  on a coast within one sea zone of one of our ports), a war hint that named allies who could
+  not join, the legend under the zoom buttons, the tutorial's project wording, and island
+  realms described as having "0 neighbouring realms". The crown surplus of a small realm is
+  a known limitation.
+- **Balance:** the Sundered Isles, the Middle Sea and the Kharan Steppe are revision 2 with
+  victory thresholds set from 16-seed AI batches (DESIGN.md, *Maps*); saves from revision 1
+  load with a notice (checked with a save from the earlier build).
+
+**Stage F measurements:**
+- 184 Vitest tests pass (one more than Stage E: claims across the water).
+- 61 of 61 browser checks pass in headless Chromium 141 (eight new: the tutorial's new steps
+  completed by doing them, the Focus badge and the tutorial beside a ledger, the Resources
+  and Sea control modes, the map mode restored when switching ledgers, a finished focus
+  pausing the game, map clicks reaching the map beside the legend and minimap, the legend
+  clear of the zoom buttons with two panels open, and no page errors). Two of them fail on
+  the layout before the fix.
+- AI batches, 16 seeds per map at the default length: the three revised maps in
+  `reports/stage-f/`; Aldmere, the Reach and the Baltic in `reports/stage-e/` (their rules
+  did not change in Stage F). No invariant failures in any of the 96 campaigns. Campaigns
+  ending on score: Aldmere 7, the Reach 6, the Sundered Isles 2 (was 9), the Kharan Steppe
+  2, the Middle Sea 8 (was 9), the Baltic 6 — half or fewer on every map, and fewer than
+  after Stage A on both baseline maps. Different winners per map: Aldmere 5, the Reach 6,
+  the Middle Sea 6, the Isles 3 (Ostmark 9 of 16), the Baltic 3, the Steppe 2 (Astia and
+  Gorathia 8 each).
+- Performance: the simulation rules for Aldmere, the Reach and the Baltic are unchanged
+  since the Stage E benchmarks (`reports/perf/stageE-*`: median p99 week 24.7 ms on
+  Aldmere, under the 25 ms worker trigger; 36 of 36 weeks at fastest speed on the large
+  maps), so the worker decision stands: the simulation stays on the main thread.
+- Screenshots: `docs/screenshots/stage-f/` (tutorial, the new map modes, the decision dock,
+  pause settings, and the session).
+
+**Stage E delivered:**
+- **National focus trees replace the six policies.** Every realm has a generic tree of 37
+  focuses in five branches (industry, army, sea and air, diplomacy, state) and a national
+  branch of 5–7 made from its map: a heritage fitting its temperament, one or two exclusive
+  claims on neighbouring regions, developing its home region, its main deposit, a navy league
+  or a railway network, and an ambition that follows its victory path. Aldmere, the Reach
+  and the Baltic have hand-written names; other maps, including editor maps, get names from
+  their realms and regions. Focus ledger (P).
+- **Peace settlements with several parties.** A war leader ends a war for everyone with a
+  list of graded demands (provinces, crowns, reparations, disarmament, renouncing claims,
+  entering a sphere), each from a loser to a winner. Contribution (battles, casualties,
+  ships sunk, enemy land held) sets each winner's fair share; slighted allies resent the
+  leader. A refused settlement names the counter-offer the other side would accept; a
+  player offered one can strike demands and send it back. A side that holds a war score of
+  90 for a year dictates a settlement. Peace conference in the Wars ledger.
+- **Influence, spheres, guarantees, loans and trade blocs.** Influence grows from envoys,
+  trade, loans, guarantees and alliances; a larger realm with enough of it holds a smaller
+  one in its sphere (opinion, no hostile alliances or coalitions, defended when attacked,
+  counted toward Diplomatic Leadership). Guarantees of independence call the guarantor to
+  arms. Loans are repaid over two years with interest and buy influence. Trade blocs give
+  members cheaper purchases, more commerce and shared blockade losses. All in the Diplomacy
+  ledger and the Diplomacy map mode.
+- **Save format 4:** a format-3 save converts with a notice; each realm's policy becomes the
+  matching completed focus (fixture from the Stage D build).
+- **AI:** chooses focuses by temperament and situation; dictates settlements by
+  contribution and takes the counter-offer it can get; guarantees threatened neighbours,
+  lends from large treasuries, founds, joins and grows trade blocs, and builds influence over
+  smaller realms with envoys; keeps the peace while it holds a peaceful victory; once a year
+  pursues the victory it is closest to among its temperament's path and the territorial and
+  economic paths; on the diplomatic path sends envoys first to partners whose opinion sits
+  near the bar; as a diplomatic or commercial winner demands a sphere over a smaller loser.
+- **Rule changes for victory** (to reduce endings on score): diplomatic influence counts each
+  partner once for its strongest bond (an alliance or our sphere 2, our guarantee 1) plus a
+  trade agreement; a month in which a condition fails pauses its timer before it decays,
+  and a realm within a tenth of the main measure, every other condition met, stays paused;
+  allies and sphere members are not wary of a diplomatic front-runner (cap −20); economic
+  shares are 80% of each map's stated share.
+- **Fixes along the way:** two drafts of the peace conference (two wars led at once) no
+  longer reset each other; ticking a box in a decision card redraws it at once.
+
+**Stage E measurements** (details in PLAN.md "E (done)"):
+- 183 Vitest tests pass (24 more than Stage D: settlements, influence, guarantees, loans,
+  blocs, focus, the format-3 → 4 conversion with a fixture from the Stage D build, and the
+  paused victory timer).
+- 53 of 53 browser checks pass in headless Chromium 141; eight are new (focus, guarantee,
+  loan, trade bloc, peace conference, a settlement struck down to a counter-offer, the
+  Diplomacy map's legend, no page errors).
+- AI batches at each map's default length, 16 seeds per map (`reports/stage-e/`): no
+  invariant failures. Campaigns ending on score at the limit: Aldmere 7 of 16 (Stage A
+  baseline 14 of 30), the Reach 6 of 16 (baseline 21 of 30), the Kharan Steppe 2, the
+  Baltic 6, **the Sundered Isles 9 and the Middle Sea 9** — half or fewer on four maps of
+  six; the two others are Stage F balance work (below).
+- System use per campaign (AI only, all maps): 4–19 peace settlements, 14–31% of them shared
+  among several winners; every demand kind is used, but spheres (0–9 per 16 campaigns) and
+  disarmament (0–12) are rare. 2–9 guarantees and 1–12 loans per campaign. Every realm on
+  every map completed national focuses; 72–100% took a claim and 84–100% their ambition.
+- Simulation benchmarks, run one at a time on a 4-core Xeon @ 2.1 GHz (`reports/perf/stageE-*.md`;
+  a slower machine than Stage D's), p99 week: Aldmere 31.2, 24.7 and 20.7 ms (seeds 1–3; the
+  Stage D code on the same machine 26.1, 22.3 and 22.2), the Kharan Steppe 18.2, 19.3 and
+  17.5, the Baltic 20.0, 12.3 and 18.0, the Middle Sea (large) 52.7 and 52.3. In the browser
+  the Middle Sea and the 900-province map keep 36 of 36 weeks at fastest speed
+  (`reports/perf/web-stageE.md`).
+- **Worker decision:** the median p99 of three runs is 24.7 ms on Aldmere (trigger: above
+  25 ms), 18.2 on the Steppe and 18.0 on the Baltic, and the browser keeps every week on
+  the large maps, so the simulation stays on the main thread. Aldmere's median is 11% above
+  the Stage D code's on this machine, and one run reached 31.2 ms: Stage F measures again
+  at the end.
+- Fuzzer: 0 findings on the Reach and the Sundered Isles (seeds 1–3, 10 years), with focus,
+  guarantee and loan commands among the accepted ones.
+- Screenshots: `docs/screenshots/stage-e/`.
+
+**Stage D delivered:**
+- **Six built-in maps.** New: the Sundered Isles (116 provinces, 8 realms), the Kharan
+  Steppe (263, 11) and the Middle Sea (548, 16), made by the procedural generator from
+  fixed recipes; and **The Baltic, 1906** (233 provinces, 5 realms), built from Natural
+  Earth (public domain) by a reproducible script with pinned checksums. Its attribution is
+  shown in the game and in THIRD_PARTY_NOTICES.md.
+- **Generators:** a shared world generator (Aldmere goes through it byte-identical) and a
+  procedural generator. It takes a seed, size, realms, shape, climate, mountains, rivers,
+  lakes and frontier; makes realm and place names from nine fictional cultures; gives
+  balanced starting sizes and a deposit mix like Aldmere's, with coal for every realm; and
+  scales victory thresholds. For real coastlines it adds shore seeds (the drawn coast
+  follows the data), land beyond the frame (`~edge`: impassable, never sea, drawn muted)
+  and naming by location.
+- **Map library** (main menu): every map with a preview, size, difficulty, realms, sea
+  zones, start year, style, mechanics and attribution. Play, edit or edit a copy, export,
+  import (validated; a clashing id is renamed with a notice), delete. The player's maps
+  are kept in the browser apart from saves.
+- **Map editor:**
+  - New map from the generator, in a Web Worker (6.1 s for 520 provinces in the browser).
+  - Painting realms, regions, terrain and deposits; a province inspector; straits, rivers
+    and ports; merging provinces; realm, region and map settings; regenerating sea zones.
+  - Validation after every edit, with a Show link for each finding.
+  - Undo and redo, a kept draft, save to library, export, open file, and play.
+- **Level of detail:** at far zoom the realm layers come from a cached image while the
+  camera pans.
+- **Fixes:**
+  - Confirmation dialogs on the menu screens never appeared (deleting a save from the Load
+    screen after quitting asked nothing and did nothing). The app now has one dialog layer
+    above every screen.
+  - Transports sunk with troops aboard could leave a fleet carrying more regiments than it
+    had room for (found by the first Isles AI batch). Each fix has a regression check.
+
+**Stage D measurements** (details in PLAN.md "D (done)"):
+- 159 Vitest tests pass (16 more than Stage C: editor operations, generated and real
+  maps, round-trips, the transport fix).
+- 45 of 45 browser checks pass in headless Chromium 141. Ten are new: the library and
+  editor flows (create, edit, findings and undo, save and export, delete and re-import, a
+  refused file, markup kept as text, play, edit a copy, no errors), plus the save-deletion
+  confirmation.
+- AI batches, 40 years (`reports/stage-d/`): no invariant failures on the Isles, the
+  Steppe or the Middle Sea (3 seeds each) or the Baltic (4 seeds). Industry and air are
+  used by every realm. Navy on the Middle Sea: 29 of 31 realms at war with a coastal enemy
+  used their fleets.
+- Far zoom on the 900-province stress map: 103.7 → 33.0 ms a frame on average with level of
+  detail (`reports/perf/web-stageD.md`).
+- Simulation benchmarks, run one at a time (`reports/perf/stageD-*.md`), p99 week: Aldmere
+  24.1 and 18.3 ms (seeds 1–2), the Steppe 17.1, the Baltic 19.9, the Middle Sea (large)
+  31.0 and 31.7. In the browser the Middle Sea and the 900-province map keep 36 of 36
+  weeks at fastest speed.
+- **Worker trigger:** Aldmere's rules did not change in Stage D (its rule checksums match
+  Stage C), yet the same seed's p99 measured 22.0 ms (Stage C code), 24.1 and 26.2 ms
+  (Stage D code) on this machine. The 25 ms trigger was therefore crossed in one of three
+  runs, by run-to-run spread. The simulation stays on the main thread for now: the browser
+  keeps every week, and the slowest weeks are the first AI planning weeks of a campaign. The
+  decision is due again after Stage E, which adds focus and settlement planning to the AI:
+  three runs per standard map, and the worker comes in Stage F if their median p99 is above
+  25 ms or the browser drops a week.
+- Screenshots: `docs/screenshots/stage-d/`.
+
+**Stage C delivered:**
+- **Sea zones and map format 3.** Zones are generated from each map's coastline
+  (`src/maps/seazones.ts`; Aldmere 30 zones, the Reach 13) and stored in the package with
+  ports. Format 1 and 2 packages get them on import. The validator checks zones, coasts,
+  adjacency, strait control and ports.
+- **Navy** (`src/sim/naval.ts`): ports and slipways; transports, torpedo boats,
+  cruisers, battleships, submarines and carriers; fleets sailing between zones; three-round
+  battles; straits closed by sea control; blockades of crowns and sea trade; armies carried by
+  sea and landing under fire; fuel, repair and wear.
+- **Air** (`src/sim/air.ts`): airfields; reconnaissance, fighter, ground-attack and bomber
+  wings; superiority, ground support, interdiction, bombing and reconnaissance missions
+  affecting battles, supply, movement and industry.
+- **Research:** 19 naval and air technologies (73 in all).
+- **AI** (`src/sim/ai/navy.ts`): fleets by temperament and coastline, peacetime
+  stations, sorties, blockades and planned invasions; wings by mix; missions over battles,
+  objectives and the border.
+- **Interface:** fleets and missions on the map, fleet, sea-zone and wing cards, ports and
+  airfields in province cards, "Ship by sea" and mission targeting, the Military ledger's
+  Navy and air section, Help.
+- **Saves:** format 3 extended; saves from before fleets get ports, home squadrons and a
+  notice.
+- **Fixes:** troops at sea no longer fight in the port they left (found by the fuzzer); a
+  broke AI stands down its smallest army when bankruptcy is about four months away; a
+  realm with no industry ranks its first factory highly.
+
+**Stage C measurements** (details in PLAN.md "C (done)"):
+- 143 Vitest tests pass (35 more than Stage B: naval 17, air 8, worked sea and air examples
+  7, the combat matrix 2, save and map upgrades 1).
+- 35 of 35 browser checks pass in headless Chromium 141 (new: a blockade, ground support
+  under enemy and then friendly air superiority, and a landing, all through the interface;
+  Esc now closes an open ledger before it clears the map selection).
+- Benchmarks (`reports/perf/stageC-*.md`, `web-stageC.md`): Aldmere 8.0 and 7.7 ms a week
+  on average (p99 21.3 and 19.1 ms), the Reach 2.8–3.4 ms; 36 of 36 weeks at fastest speed
+  in the browser on all three maps. The worker decision is unchanged.
+- AI batches, 10 seeds per map (`reports/stage-c/`): no invariant failures. Air: every
+  realm past era III built wings and flew missions (85/85, 97/97). Navy: every coastal realm
+  built ships (77/77, 129/129); 74 of 74 and 127 of 128 that fought a coastal enemy used
+  their fleets (the exception: Vostmark's single cruiser stayed in port against Hrafnmark's
+  stronger fleet).
+- Combat matrix (`reports/stage-c/combat-matrix.md`): no army composition wins every
+  pairing on every terrain at either technology level, and no fleet wins every pairing.
+- Fuzzer, now issuing naval and air orders too: 0 findings on the Reach (seeds 1–7, 10
+  years), Aldmere (seeds 1–2, 8 years), and with the whole tree from the start (`--tech
+  all`: the Reach seeds 1–3, Aldmere seeds 1–2). An earlier run found troops at sea fighting
+  in the port they left; that is fixed with a regression test.
+- Screenshots: `docs/screenshots/stage-c/`.
+
+**Stage B delivered:**
+- **The industrial age:** Aldmere starts in 1880 (40/60/70 years), the Reach in 1895
+  (25/40/60). Era texts, events (factory strikes, mine disasters, oil booms), nation traits
+  and the tutorial were rewritten for the era.
+- **Six resources:** food plus coal, iron, oil, rubber and nitrates from province deposits,
+  with stockpiles, shortages and their effects. Map format 2 carries the deposits and
+  factories; the built-in maps are at revision 2.
+- **Industry:** factories (a construction project), coal, materiel, and surplus sold as
+  manufactured goods. Units cost materiel and resources; replacements cost materiel.
+- **Trade** exchanges real resource surpluses at fixed prices, plus a little commerce. It
+  replaces the flat income bonus.
+- **Research:** a 54-technology tree in five eras for land, industry and society, with
+  horizon years (15% dearer per year early, at most 10 years early).
+- **Land roster:** infantry, cavalry, artillery, engineers and armour, data-driven. Machine
+  guns cut cavalry; armour breaks through forts and trenches; engineers dig in faster,
+  besiege faster and bridge rivers; armour without oil and artillery without nitrates fight
+  weaker.
+- **AI** for every Stage B system: factories gated on its own coal, resource-aware
+  research, unit mix, trade treaties by value. AI reports now include a system-usage
+  section (`tools/usage.ts`).
+- **Save format 3:** formats 1 and 2 convert with a notice; a save that cannot convert
+  stays listed with its reason and can be exported from the load screen.
+- **Interface:** an Industry & Trade ledger (I), research by era, resource and factory rows
+  on province cards, recruit costs, start years on the setup screen.
+
+**Stage B measurements** (details in PLAN.md "B (done)"):
+- 108 Vitest tests pass (20 more than Stage A, among them 14 for industry, resources, trade and the roster, and 3 for format-2 conversion).
+- 31 of 31 browser checks pass (new: format-2 conversion notice; an unconvertible save
+  listed, refused with a reason and exported).
+- AI batches, 10 seeds per map (`reports/stage-b/`): every Stage B check passes, no
+  invariant failures.
+- Benchmarks (`reports/perf/stageB-*.md`, `web-stageB.md`): Aldmere 8.5 and 7.2 ms a week
+  on average (p99 21.4 and 16.8 ms), the Reach 2.3–3.6 ms; 36 of 36 weeks at fastest speed
+  in the browser on all three maps. The worker decision is unchanged.
+- Fuzzer: 0 findings on the Reach (seeds 1–7, 10 years) and Aldmere (seeds 1–2, 8 years).
+- Screenshots: `docs/screenshots/stage-b/` (setup with start years, Industry ledger,
+  research by era, province card, format-2 conversion notice).
+
+**Checkpoint for continuing:**
+- **Working state:** all of these pass at the end of Stage F.
+  ```bash
+  npm ci && npm run typecheck && npm test && npm run build && npm run package && npm run verify:web
+  npm run fuzz -- --scenario reach --seeds 1-3 --years 10 && npm run fuzz -- --scenario isles --seeds 1-3 --years 10
+  npm run genmaps && npm run genbaltic && git status   # regenerated maps are unchanged
+  ```
+- **Unresolved failures:** none known.
+- **Known limitations** (measured; none of them blocks a requirement):
+  - **Wins concentrate on some maps:** on the Kharan Steppe Astia and Gorathia win 8 of 16
+    each; on the Sundered Isles Ostmark wins 9 of 16; on the Baltic only Russia (on score),
+    Sweden and Denmark win. Aldmere, the Reach and the Middle Sea have five or six
+    different winners in 16 campaigns. The richest heartlands still lead on the two
+    original maps (Morvaine 6 of 16 on Aldmere, Aurel 6 of 16 on the Reach).
+  - **Diplomatic Leadership** is the most common win on the Reach (8 of 16), the Middle Sea
+    (7) and the Baltic (10), and the Middle Sea still ends on score in half its campaigns.
+  - **AI war planning** considers only realms it borders by land or strait; the overseas
+    claims added in Stage F are used by the player only, so island AIs rarely start wars.
+  - **Crown surplus:** a small realm can pile up thousands of crowns (three construction
+    slots, slipways per port level and its manpower pool cap spending); there is no
+    late-game sink for crowns.
+  - Every realm joins a trade bloc (80–94% of realm-months); sphere and disarmament demands
+    are rare, and guarantees are seldom called on (0–11 times in 16 campaigns per map).
+  - Oil, rubber, nitrates and iron are still never short in AI batches; coal is the
+    binding resource. Armour stays rare (Tanks arrives in 1916, late in most campaigns).
+  - Hrafnmark still shrinks on Aldmere; Norway and Denmark rarely fight on the Baltic;
+    some 1906 borders are approximations (`tools/baltic.data.ts`).
+  - The map editor cannot split provinces, draw coastline or reshape sea zones.
+  - **Verification limits:** headless Chromium only; no Firefox, Safari, real touch device or
+    Chromebook; the player-style session is the author's own (no external players).
+- **Requirement status:** PLAN.md's ledger lists every requirement with its stage and
+  status. Nothing has been dropped.
+- **Next steps:** listed below ("Next steps"): an external playtest, balance of the
+  concentrated maps, cross-browser and device checks, and hosting when you decide.
 
 ## Evidence, kept separate
 
 | Kind | What was done | Where |
 |---|---|---|
-| Automated tests | 66 Vitest tests. The 53 from the previous release still pass, plus new ones: Aldmere's validity, connectivity and homelands; fortified passes; river borders and the river combat rule; Hrafnmark's straits; five AI years on Aldmere; army groups, station orders and waypoints; front detection for multi-front wars; and a real save from the previous release that loads on the Reach, plays a year and re-saves | `tests/`, `npm test` |
-| AI-only campaigns | 30 campaigns on each map (seeds 1–10 × easy/normal/hard): Aldmere 60 years, the Reach 40 years | `reports/ai-campaigns-aldmere.md`, `reports/ai-campaigns.md`, `npm run sim` |
-| Browser verification | 27 automated checks, all passing, in headless Chromium 141. Covered: site root and project sub-path (both starting Aldmere), unpacked ZIP, choosing the Reach and a realm in setup, map-mode and navigation keys, iframe (resize, wheel isolation), hidden tab, audio gating, keyboard, slot save/load, export/import, damaged import, blocked storage, five laptop sizes and UI scaling, phone touch, and a performance probe | `reports/web-verification.md`, `npm run verify:web` |
-| Screenshots | Before (previous release) and after, from the same scripted tour (Calder, seed 7, 30 weeks), at 1366×768 and 390×844: the Reach (matching pairs) and Aldmere | `docs/screenshots/`, `e2e/capture.mjs` |
+| Automated tests | **Stage C: 143 Vitest tests** (naval, air, worked sea and air examples, the combat matrix, map upgrades). **Stage B: 108 Vitest tests** (resources, industry, trade, roster, format-2 conversion). **Stage A: 88 Vitest tests** (22 new: the regression tests, save format and migration, map packages, bug-report replays). At the redesign: 66 Vitest tests. The 53 from the previous release still pass, plus new ones: Aldmere's validity, connectivity and homelands; fortified passes; river borders and the river combat rule; Hrafnmark's straits; five AI years on Aldmere; army groups, station orders and waypoints; front detection for multi-front wars; and a real save from the previous release that loads on the Reach, plays a year and re-saves | `tests/`, `npm test` |
+| AI-only campaigns | **Stage C:** 10 campaigns per map at normal difficulty, with navy and air usage (`reports/stage-c/`). **Stage B:** 10 campaigns per map at normal difficulty with system usage (`reports/stage-b/`). Before: 30 campaigns on each map (seeds 1–10 × easy/normal/hard): Aldmere 60 years, the Reach 40 years | `reports/ai-campaigns-aldmere.md`, `reports/ai-campaigns.md`, `npm run sim` |
+| Browser verification | **Stage C: 35 automated checks, all passing** (blockade, air superiority, landing). **Stage B: 31 automated checks, all passing** (format-2 conversion; unconvertible save kept and exportable). **Stage A: 29 automated checks, all passing** (new: map mode restored after Diplomacy; a format-1 save converted on import with a notice). At the redesign: 27 automated checks, all passing, in headless Chromium 141. Covered: site root and project sub-path (both starting Aldmere), unpacked ZIP, choosing the Reach and a realm in setup, map-mode and navigation keys, iframe (resize, wheel isolation), hidden tab, audio gating, keyboard, slot save/load, export/import, damaged import, blocked storage, five laptop sizes and UI scaling, phone touch, and a performance probe | `reports/web-verification.md`, `npm run verify:web` |
+| Screenshots | **Stage A:** the conversion notice for a format-1 save (`docs/screenshots/stage-a/format1-save-converted.png`). At the redesign: before (previous release) and after, from the same scripted tour (Calder, seed 7, 30 weeks), at 1366×768 and 390×844: the Reach (matching pairs) and Aldmere | `docs/screenshots/`, `e2e/capture.mjs` |
 | Flows I exercised by script, with screenshots reviewed | Menu → setup (both maps, several realms) → campaign; every ledger at laptop and phone size; army groups and orders; attention list and decisions mid-war; settings, how to play, load; menu, setup and ledgers at phone size | `.scratch` scripts during development; `e2e/capture.mjs` |
 | External player feedback | **None.** No one but me has played the redesign. | — |
 
@@ -95,7 +405,18 @@ that is noted below.
 ## Balance on the two maps
 
 Both batches are AI-only (every realm run by the AI), seeds 1–10 at each of easy, normal and
-hard. The full tables are in `reports/ai-campaigns-aldmere.md` and `reports/ai-campaigns.md`.
+hard. The table below is from the redesign release (0.2.0).
+
+**Re-run after Stage A's rule fixes** (same seeds and settings; full tables in
+`reports/ai-campaigns-aldmere.md` and `reports/ai-campaigns.md`, no invariant failures):
+- **Aldmere:** Lessia 15, Aurel 7, Tarsk 5, Fenward 1, Morvaine 1, Solmarre 1. 16 of 30
+  were won by a victory path (economic 9, territorial 5, diplomatic 2) and 14 on score at the
+  limit. 48 wars and 315 battles per campaign; no eliminations.
+- **The Reach:** Aurel 15, Tarsk 11, Serennes 2, Fenward 1, Drevenholt 1. 9 of 30 were won by
+  a path (territorial 6, economic 2, diplomatic 1) and 21 on score. 29 wars and 101 battles
+  per campaign.
+- The skew towards the richest heartland is unchanged. Stage A fixed bugs and did not
+  re-balance; balance work is planned for Stages B–F (docs/expansion/PLAN.md).
 
 | | Aldmere (60 years) | The Reach (40 years) | The Reach, previous release |
 |---|---|---|---|
@@ -149,11 +470,11 @@ Three other skews remain:
   Ashmark (15 → 11.8) and Carrow (13 → 11.9) lose ground on average.
 - **Passive realms:** Serennes, Istrel and Solmarre declare almost no wars.
 - **Victory thresholds:** I did not lower them to force more path victories; 17 of 30 Aldmere
-  campaigns still end on score at the limit.
+  campaigns still ended on score at the limit in 0.2.0 (14 of 30 after Stage A).
 
 ## Known issues and limitations
 
-- **Balance:** Lessia wins 13 of 30 AI-only campaigns on Aldmere and Aurel 15 of 30 on the Reach: the
+- **Balance:** Lessia wins 15 of 30 AI-only campaigns on Aldmere and Aurel 15 of 30 on the Reach (after Stage A; 13 and 15 in 0.2.0): the
   richest heartland wins most often on both maps. Hrafnmark, Vostmark, the Ashmark and Carrow
   shrink on average. The investigation and the rejected fixes are under *Balance on the two
   maps*. These are AI-only samples, not proof of balance, and **no one
@@ -163,8 +484,9 @@ Three other skews remain:
   rarely take part in the continent's wars unless attacked.
 - **Late-game money:** AI treasuries pile up (tens of thousands of crowns by year 60 on
   Aldmere) once development caps and the tech tree run out. Crowns have no late-game sink.
-- **Slow weeks:** a rare simulation week takes 40–70 ms on Aldmere, which can drop a frame at
-  the fastest speed.
+- **Slow weeks:** after Stage A, a simulation week on Aldmere averages about 6 ms with a p99
+  of 16 ms, and the slowest week in 30 years was 42 ms (it was 40–77 ms before). See
+  `reports/perf/`.
 - **Browsers:** only Chromium was verified. There was no Firefox or Safari run, and no real
   Chromebook or touch device.
 - **Army glide:** armies move along their route by progress between weeks. There is no
@@ -173,13 +495,14 @@ Three other skews remain:
 
 ## Next steps
 
-1. **External playtest** on both maps (3–5 players): readability of the atlas at each zoom,
-   whether the setup screen explains starts well enough, and pacing on Aldmere.
-2. **Balance:** the wealthy central starts on Aldmere (Lessia, Aurel); small defensive realms
-   (Carrow, Hrafnmark); a late-game sink for crowns.
+1. **External playtest** (3–5 players) on Aldmere and one of the new maps: readability of
+   the atlas at each zoom, whether the tutorial and setup screen explain enough, pacing.
+2. **Balance:** the Steppe's two dominant realms and Ostmark on the Isles; the wealthy
+   heartlands on Aldmere and the Reach; diplomatic wins on the Reach, the Middle Sea and the
+   Baltic; a late-game sink for crowns; AI war planning across the water.
 3. **Cross-browser and devices:** Firefox and WebKit runs of `verify:web`; a real Chromebook
    and a tablet.
-4. **Hosting:** enable GitHub Pages and verify the live URL.
+4. **Hosting:** only when you decide: enable GitHub Pages and verify the live URL.
 
 ## Continuation checkpoint
 

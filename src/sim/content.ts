@@ -1,10 +1,10 @@
-// Startup validation of data-driven content (technologies, policies,
+// Startup validation of data-driven content (technologies, focus trees,
 // personalities, events). Returns problems; createGame() refuses to start
 // with invalid content so broken data never reaches a campaign.
 
 import { EVENTS } from './data/events';
 import { PERSONALITIES } from './data/personalities';
-import { POLICIES, POLICY_LIST } from './data/policies';
+import { FOCUS_BRANCHES, GENERIC_FOCUSES, type FocusDef } from './data/focus';
 import { TECH_LIST, TECHS } from './data/techs';
 import { MOD_LABELS } from './modifiers';
 import type { ScenarioDef } from './types';
@@ -34,11 +34,11 @@ export function validateContent(s: ScenarioDef): string[] {
     done.add(id);
   };
   for (const t of TECH_LIST) visit(t.id);
-  for (const p of POLICY_LIST) for (const k of Object.keys(p.effects)) if (!(k in MOD_LABELS)) errs.push(`policy ${p.id} has unknown effect ${k}`);
+  errs.push(...validateFocuses(GENERIC_FOCUSES));
   for (const [id, p] of Object.entries(PERSONALITIES)) {
-    for (const pol of p.policies) if (!POLICIES[pol]) errs.push(`personality ${id} prefers unknown policy ${pol}`);
-    const c = p.composition;
-    if (Math.abs(c.foot + c.horse + c.guns - 1) > 1e-6) errs.push(`personality ${id} composition does not sum to 1`);
+    for (const b of Object.keys(FOCUS_BRANCHES)) if (!(p.focus[b as keyof typeof p.focus] > 0)) errs.push(`personality ${id} has no weight for focus branch ${b}`);
+    const sum = Object.values(p.composition).reduce((a, b) => a + b, 0);
+    if (Math.abs(sum - 1) > 1e-6) errs.push(`personality ${id} composition does not sum to 1`);
   }
   const evIds = new Set<string>();
   for (const e of EVENTS) {
@@ -48,5 +48,43 @@ export function validateContent(s: ScenarioDef): string[] {
     if (!e.choices.some((c) => !c.problem)) errs.push(`event ${e.id} has no always-available choice`);
   }
   for (const n of s.nations) if (!PERSONALITIES[n.personality]) errs.push(`nation ${n.id} has unknown personality ${n.personality}`);
+  return errs;
+}
+
+/**
+ * Checks a focus tree: unique ids, known prerequisites and exclusions (which
+ * must be mutual), known effects, positive durations and no prerequisite cycles.
+ */
+export function validateFocuses(list: FocusDef[]): string[] {
+  const errs: string[] = [];
+  const by = new Map<string, FocusDef>();
+  for (const d of list) {
+    if (by.has(d.id)) errs.push(`duplicate focus ${d.id}`);
+    by.set(d.id, d);
+  }
+  for (const d of list) {
+    for (const r of [...d.requires, ...(d.requiresAny ?? [])]) if (!by.has(r)) errs.push(`focus ${d.id} requires unknown ${r}`);
+    for (const x of d.excludes ?? []) {
+      if (!by.has(x)) errs.push(`focus ${d.id} excludes unknown ${x}`);
+      else if (!by.get(x)!.excludes?.includes(d.id)) errs.push(`focus ${d.id} excludes ${x}, but not the other way round`);
+    }
+    for (const k of Object.keys(d.effects)) if (!(k in MOD_LABELS)) errs.push(`focus ${d.id} has unknown effect ${k}`);
+    if (!(d.months > 0)) errs.push(`focus ${d.id} has no duration`);
+  }
+  const visiting = new Set<string>();
+  const done = new Set<string>();
+  const visit = (id: string): void => {
+    if (done.has(id)) return;
+    if (visiting.has(id)) {
+      errs.push(`focus prerequisite cycle at ${id}`);
+      return;
+    }
+    visiting.add(id);
+    const d = by.get(id);
+    for (const r of [...(d?.requires ?? []), ...(d?.requiresAny ?? [])]) visit(r);
+    visiting.delete(id);
+    done.add(id);
+  };
+  for (const d of list) visit(d.id);
   return errs;
 }

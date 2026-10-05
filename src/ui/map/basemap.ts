@@ -19,6 +19,7 @@ export const PALETTE = {
   ink: '#352f27',
   coastInk: '#2a3a40',
   peakBase: '#b9aa8a',
+  beyond: '#76807d',
   terrainTint: {
     plains: '#ede4c8',
     steppe: '#e9dcae',
@@ -244,6 +245,14 @@ export class BaseMap {
       g.globalAlpha = 1;
     }
 
+    // land beyond the frame of a regional map: muted, without detail
+    const beyond = geo.beyond.filter((b) => inRect(b.bbox));
+    if (beyond.length) {
+      const bp = new Path2D();
+      for (const b of beyond) bp.addPath(b.path);
+      g.fillStyle = PALETTE.beyond;
+      g.fill(bp);
+    }
     // land
     g.fillStyle = PALETTE.paper;
     g.fill(land);

@@ -6,6 +6,7 @@ import { setRestoringFocus } from './panels/common';
 export type Child = Node | string | number | null | undefined | false | Child[];
 type Attrs = Record<string, unknown> & { class?: string; style?: string };
 
+/** Creates an element. Text children become text nodes: map and save text is never parsed as HTML. */
 export function h<K extends keyof HTMLElementTagNameMap>(tag: K, attrs: Attrs | null = null, ...children: Child[]): HTMLElementTagNameMap[K] {
   const el = document.createElement(tag);
   if (attrs) {
@@ -15,7 +16,6 @@ export function h<K extends keyof HTMLElementTagNameMap>(tag: K, attrs: Attrs | 
         el.addEventListener(k.slice(2).toLowerCase(), v as EventListener);
       } else if (k === 'class') el.className = String(v);
       else if (k === 'style') el.setAttribute('style', String(v));
-      else if (k === 'html') el.innerHTML = String(v);
       else if (v === true) el.setAttribute(k, '');
       else el.setAttribute(k, String(v));
     }

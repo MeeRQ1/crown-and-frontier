@@ -2,31 +2,36 @@
 // what is selected, a fact grid gives the essentials, primary actions come
 // next, and details follow. Unavailable actions always say why.
 
-import { C, TERRAIN, UNITS } from '../../sim/config';
+import { C, RESOURCE_INFO, TERRAIN, UNITS, UNIT_TYPES } from '../../sim/config';
 import { checkCommand } from '../../sim/commands';
 import { forecastBattle } from '../../sim/combat';
-import { activeProjects, buildProblem, buildSlots, devCap, devMax, PROJECT_LABELS, projectCost } from '../../sim/construction';
-import { fabricateProblem } from '../../sim/diplomacy';
-import { integrationFactor, provinceCrowns, provinceSupplies } from '../../sim/economy';
+import { activeProjects, buildProblem, buildSlots, devCap, devMax, factoryMax, PROJECT_LABELS, projectCost, type ProjectCost } from '../../sim/construction';
+import { fabricateCost, fabricateMonths, fabricateProblem } from '../../sim/diplomacy';
+import { integrationFactor, provinceCrowns, provinceDeposit, provinceSupplies } from '../../sim/economy';
 import { integrationRate, unrestTarget } from '../../sim/integration';
 import { maxMorale, mergeProblem, recruitProblem, splitProblem, unitCost } from '../../sim/military';
 import { etaWeeks, isRiver } from '../../sim/movement';
 import { siegeInfo } from '../../sim/siege';
 import { armiesAt, atWar, menOf, nationName, provName } from '../../sim/state';
 import { armySupplyInfo, provinceSupplyCapacity } from '../../sim/supply';
-import type { Army, ProjectKind, ProvinceId, UnitType } from '../../sim/types';
+import type { Army, ProjectKind, ProvinceId, StrategicResource, UnitType } from '../../sim/types';
 import type { App } from '../app';
 import { action, bar, button, h, rebuild, row, setChildren } from '../dom';
 import { fmt, men, plural, signed, weeks } from '../format';
 import { icon, type IconName } from '../icons';
 import { section, shield, tip } from './common';
 import { confirmDialog } from './dialogs';
+import { airfieldSection, fleetCard, portSection, wingCard, zoneCard } from './sea';
+import { transportFor } from '../../sim/naval';
 
 export function renderInspector(app: App): void {
   const sim = app.sim!;
   const el = app.inspectorEl;
   const army = app.selectedArmy ? sim.state.armies[app.selectedArmy] : undefined;
-  const open = !!army || !!app.selectedProvince;
+  const fleet = app.selectedFleet ? sim.state.fleets[app.selectedFleet] : undefined;
+  const wing = app.selectedWing ? sim.state.wings[app.selectedWing] : undefined;
+  const zone = app.selectedZone && sim.world.zones[app.selectedZone] ? app.selectedZone : null;
+  const open = !!army || !!app.selectedProvince || !!fleet || !!wing || !!zone;
   el.classList.toggle('closed', !open);
   el.setAttribute('aria-hidden', open ? 'false' : 'true');
   if (!open) {
@@ -34,12 +39,12 @@ export function renderInspector(app: App): void {
     return;
   }
   rebuild(el, () => {
-    const card = army ? armyCard(app, army) : provinceCard(app, app.selectedProvince!);
+    const card = fleet ? fleetCard(app, fleet) : wing ? wingCard(app, wing) : zone ? zoneCard(app, zone) : army ? armyCard(app, army) : provinceCard(app, app.selectedProvince!);
     setChildren(el, ...card);
   });
 }
 
-function head(app: App, nid: string | null, title: string, sub: (Node | string)[], tags: HTMLElement[] = []): HTMLElement {
+export function head(app: App, nid: string | null, title: string, sub: (Node | string)[], tags: HTMLElement[] = []): HTMLElement {
   const close = h('button', { class: 'btn quiet small icon close', type: 'button', 'aria-label': 'Close (Esc)', 'data-fk': 'ins-close' }, icon('close'));
   close.addEventListener('click', () => app.clearSelection());
   const grab = h('button', { class: 'grab', type: 'button', 'aria-label': app.ui.inspectorPeek ? 'Expand details' : 'Collapse details' });
@@ -55,13 +60,13 @@ function head(app: App, nid: string | null, title: string, sub: (Node | string)[
   );
 }
 
-function tile(label: string, big: Node | string, sub?: Node | string | null, tipText?: string): HTMLElement {
+export function tile(label: string, big: Node | string, sub?: Node | string | null, tipText?: string): HTMLElement {
   const t = h('div', { class: 'stat-tile' }, h('div', { class: 'eyebrow' }, label), h('div', { class: 'big' }, big), sub ? h('div', { class: 'sub' }, sub) : null);
   if (tipText) tip(t, tipText);
   return t;
 }
 
-function quick(ic: IconName, label: string, onClick: () => void, problem: string | null, detail: string, cls = ''): HTMLElement {
+export function quick(ic: IconName, label: string, onClick: () => void, problem: string | null, detail: string, cls = ''): HTMLElement {
   const b = button(label, onClick, { cls: `small ${cls}`, icon: ic, disabled: problem });
   tip(b, () => h('div', null, h('b', { class: 't' }, label), h('p', null, detail), problem ? h('p', { class: 'bad' }, problem) : null));
   return b;
@@ -91,18 +96,18 @@ function provinceCard(app: App, pid: ProvinceId): HTMLElement[] {
   // primary actions
   const prim: HTMLElement[] = [];
   if (me && p.owner === me && !p.project) {
-    for (const k of ['dev', 'infra', 'fort', 'charter'] as ProjectKind[]) {
+    for (const k of ['dev', 'infra', 'factory', 'fort', 'charter'] as ProjectKind[]) {
       if (k === 'charter' && p.integration >= 90) continue;
       const cost = projectCost(sim, me, pid, k);
       const prob = buildProblem(sim, me, pid, k);
-      const ic: Record<string, IconName> = { dev: 'build', infra: 'road', fort: 'fort', charter: 'charter' };
-      prim.push(quick(ic[k], PROJECT_LABELS[k], () => app.do({ type: 'build', province: pid, project: k }), prob, `${cost.crowns} crowns${cost.supplies ? `, ${cost.supplies} supplies` : ''} · ${weeks(cost.weeks)}.`, k === 'dev' && !prob ? 'primary' : ''));
+      const ic: Record<string, IconName> = { dev: 'build', infra: 'road', factory: 'factory', fort: 'fort', charter: 'charter' };
+      prim.push(quick(ic[k], PROJECT_LABELS[k], () => app.do({ type: 'build', province: pid, project: k }), prob, `${costText(cost)} · ${weeks(cost.weeks)}.`, k === 'dev' && !prob ? 'primary' : ''));
     }
   }
   if (me && !p.owner && !p.project) {
     const cost = projectCost(sim, me, pid, 'settle');
     const prob = buildProblem(sim, me, pid, 'settle');
-    prim.push(quick('settle', 'Settle', () => app.do({ type: 'build', province: pid, project: 'settle' }), prob, `${cost.crowns} crowns, ${cost.supplies} supplies, ${cost.manpower} men · ${weeks(cost.weeks)}. Claims this land as new frontier.`, prob ? '' : 'primary'));
+    prim.push(quick('settle', 'Settle', () => app.do({ type: 'build', province: pid, project: 'settle' }), prob, `${costText(cost)} · ${weeks(cost.weeks)}. Claims this land as new frontier.`, prob ? '' : 'primary'));
   }
   if (me && p.owner && p.owner !== me) {
     const owner = p.owner;
@@ -123,8 +128,8 @@ function provinceCard(app: App, pid: ProvinceId): HTMLElement[] {
       h(
         'div',
         { class: 'stat-grid', style: 'margin-top:10px' },
-        tile('Development', `${p.dev}`, `limit ${devCap(sim, pid)} · max ${devMax(sim, pid)}`, 'Development raises crowns, supplies and research. Beyond the terrain limit it costs 2.5× more.'),
-        tile('Crowns / mo', fmt(provinceCrowns(sim, pid), 1), `supplies ${fmt(provinceSupplies(sim, pid), 1)}`, 'What this province yields its owner each month, after integration, unrest and occupation.'),
+        tile('Development', `${p.dev}`, `limit ${devCap(sim, pid)} · max ${devMax(sim, pid)}`, 'Development raises crowns, food, research and the factories a province can hold. Beyond the terrain limit it costs 2.5× more.'),
+        tile('Crowns / mo', fmt(provinceCrowns(sim, pid), 1), `food ${fmt(provinceSupplies(sim, pid), 1)}`, 'What this province yields its owner each month, after integration, unrest and occupation.'),
         tile('Integration', `${Math.floor(p.integration)}`, `${signed(ir.rate, 1)}/mo`, 'Frontier integration (0–100): output, recruitment, development and supply all depend on it.'),
         tile('Unrest', `${Math.round(p.unrest)}`, `→ ${Math.round(unrestTarget(sim, pid).target)}`, 'Unrest drifts toward its target. At 60+ in raw frontier the province may revolt.'),
       ),
@@ -136,7 +141,15 @@ function provinceCard(app: App, pid: ProvinceId): HTMLElement[] {
     section(
       'Ground',
       row('Terrain', `${terr.label}: march cost ${terr.move}, defenders +${Math.round(terr.defense * 100)}%, frontage ${terr.frontage}`),
-      row('Roads · fort', `${p.infra}/${C.construction.infraMax} · ${p.fort}/${C.construction.fortMax}`),
+      row('Railway · fort', `${p.infra}/${C.construction.infraMax} · ${p.fort}/${C.construction.fortMax}`),
+      (() => {
+        const res = sim.world.prov[pid].resource;
+        if (!res) return row('Deposit', h('span', { class: 'faint' }, 'none'));
+        const d = provinceDeposit(sim, pid);
+        const out = res === 'food' ? `+${C.economy.foodBonus} food/mo` : d ? `${fmt(d.amount, 1)}/mo` : '';
+        return row('Deposit', h('span', { title: RESOURCE_INFO[res].use }, `${RESOURCE_INFO[res].label}${p.owner ? ` · ${out}` : ''}`));
+      })(),
+      p.owner ? row('Factories', h('span', { title: `Factories make materiel for regiments and sell the surplus as manufactured goods. Each burns ${C.industry.coalPerFactory} coal a month.` }, `${p.factories}/${factoryMax(sim, pid)}`)) : null,
       row('Population', `${fmt(p.pop, 1)}k`),
       me ? row('Supply capacity', plural(Math.floor(provinceSupplyCapacity(sim, me, pid)), 'regiment')) : null,
       (() => {
@@ -189,13 +202,16 @@ function provinceCard(app: App, pid: ProvinceId): HTMLElement[] {
       items.push(bar(p.project.progress, p.project.total, 'info', 'Project progress'));
       if (p.project.nation === me) items.push(button('Cancel project (50% refund)', () => app.do({ type: 'cancelBuild', province: pid }), { cls: 'small' }));
     } else {
-      const kinds: ProjectKind[] = p.owner === me ? ['dev', 'infra', 'fort', 'charter'] : ['settle'];
+      const kinds: ProjectKind[] = p.owner === me ? ['dev', 'infra', 'factory', 'fort', 'charter', ...(sim.world.provZones[pid] ? (['port'] as ProjectKind[]) : []), ...(sim.state.nations[me].research.done.includes('aviation') ? (['airfield'] as ProjectKind[]) : [])] : ['settle'];
       const what: Record<ProjectKind, string> = {
-        dev: '+1 development: more crowns, supplies and research',
-        infra: '+1 roads: faster marches, more supply, faster integration',
+        dev: '+1 development: more crowns, food and research, and room for factories',
+        infra: '+1 railway: faster marches, more supply, faster integration',
+        factory: `+1 factory: industrial capacity (materiel, then goods); burns ${C.industry.coalPerFactory} coal a month`,
         fort: '+1 fort: must be besieged, defence bonus, supply source',
         charter: `+${C.construction.charterGain} integration, −10 unrest`,
         settle: 'Claim this land as a new frontier province',
+        port: '+1 port: a slipway for shipbuilding, faster repairs for fleets off this coast',
+        airfield: `+1 airfield: base for ${C.air.wingsPerAirfield} air wings`,
       };
       items.push(
         h(
@@ -203,7 +219,7 @@ function provinceCard(app: App, pid: ProvinceId): HTMLElement[] {
           { class: 'actions' },
           kinds.map((k) => {
             const cost = projectCost(sim, me, pid, k);
-            return action(PROJECT_LABELS[k], `${cost.crowns} crowns${cost.supplies ? `, ${cost.supplies} supplies` : ''}${cost.manpower ? `, ${cost.manpower} men` : ''} · ${weeks(cost.weeks)}. ${what[k]}.`, () => app.do({ type: 'build', province: pid, project: k }), buildProblem(sim, me, pid, k));
+            return action(PROJECT_LABELS[k], `${costText(cost)} · ${weeks(cost.weeks)}. ${what[k]}.`, () => app.do({ type: 'build', province: pid, project: k }), buildProblem(sim, me, pid, k));
           }),
         ),
       );
@@ -213,11 +229,17 @@ function provinceCard(app: App, pid: ProvinceId): HTMLElement[] {
   }
   // recruitment
   if (me && p.owner === me) {
-    const units: UnitType[] = ['foot', 'horse', 'guns'];
-    const acts = units.map((u) => {
+    const acts = UNIT_TYPES.map((u) => {
       const c = unitCost(sim, me, u);
       const prob = recruitProblem(sim, me, pid, u);
-      const b = action(`Raise ${UNITS[u].label}`, `${c.crowns} crowns, ${c.supplies} supplies, 1,000 men · ${c.weeks} weeks · upkeep ${UNITS[u].upkeep}/mo. ${UNITS[u].role}${c.notes.length ? ` (${c.notes.join(', ')})` : ''}`, () => app.do({ type: 'recruit', province: pid, unit: u }), prob);
+      const res = Object.entries(c.resources).map(([r, v]) => `${v} ${RESOURCE_INFO[r as StrategicResource].label.toLowerCase()}`);
+      const burn = Object.entries(UNITS[u].burn).map(([r, v]) => `${v} ${RESOURCE_INFO[r as StrategicResource].label.toLowerCase()}${r === 'nitrates' ? ' in war' : ''}`);
+      const b = action(
+        `Raise ${UNITS[u].label}`,
+        `${c.crowns} crowns, ${c.materiel} materiel${res.length ? `, ${res.join(', ')}` : ''}, 1,000 men · ${c.weeks} weeks · upkeep ${UNITS[u].upkeep}/mo${burn.length ? ` + ${burn.join(', ')}` : ''}. ${UNITS[u].description}`,
+        () => app.do({ type: 'recruit', province: pid, unit: u }),
+        prob,
+      );
       if (!prob) b.appendChild(button('Raise three', () => app.do({ type: 'recruit', province: pid, unit: u, count: 3 }), { cls: 'small quiet', title: 'Queue three regiments (as many as can be afforded)', fk: `x3-${u}` }));
       return b;
     });
@@ -232,16 +254,30 @@ function provinceCard(app: App, pid: ProvinceId): HTMLElement[] {
   }
   const here = armiesAt(sim, pid);
   if (here.length) body.appendChild(section('Armies here', ...here.map((a) => armyRow(app, a))));
+  // the navy and the air arm
+  const port = portSection(app, pid);
+  if (port) body.appendChild(port);
+  const air = airfieldSection(app, pid);
+  if (air) body.appendChild(air);
   if (me && p.owner && p.owner !== me) {
     body.appendChild(
       section(
         'Claims',
-        action('Fabricate claim', `${C.diplomacy.fabricateCost} crowns, 12 months. A claim gives a war goal without the trust cost of conquest.`, () => app.do({ type: 'fabricate', province: pid }), fabricateProblem(sim, me, pid)),
+        action('Fabricate claim', `${fabricateCost(sim, me)} crowns, ${fabricateMonths(sim, me)} months. A claim gives a war goal without the trust cost of conquest.`, () => app.do({ type: 'fabricate', province: pid }), fabricateProblem(sim, me, pid)),
       ),
     );
   }
   out.push(body);
   return out;
+}
+
+/** Crowns, food, iron and men a project costs, in words. */
+function costText(c: ProjectCost): string {
+  const parts = [`${c.crowns} crowns`];
+  if (c.supplies) parts.push(`${c.supplies} food`);
+  if (c.iron) parts.push(`${c.iron} iron`);
+  if (c.manpower) parts.push(`${c.manpower} men`);
+  return parts.join(', ');
 }
 
 function armyRow(app: App, a: Army): HTMLElement {
@@ -257,6 +293,10 @@ function armyRow(app: App, a: Army): HTMLElement {
 export function armyStatus(app: App, a: Army): string {
   const sim = app.sim!;
   const st = sim.state;
+  if (a.embarked) {
+    const f = st.fleets[a.embarked];
+    return f?.landing ? `At sea aboard ${f.name}, bound for ${provName(sim, f.landing)}` : `At sea aboard ${f?.name ?? 'a fleet'}`;
+  }
   if (a.battle) return `In battle at ${provName(sim, a.location)}`;
   if (a.retreating) return `Retreating to ${provName(sim, a.path[0])}`;
   if (a.path.length) return `Marching to ${provName(sim, a.path[a.path.length - 1])} · ${weeks(etaWeeks(sim, a, a.path, a.progress))}`;
@@ -277,12 +317,25 @@ function armyCard(app: App, a: Army): HTMLElement[] {
   out.push(head(app, a.nation, a.name, [`${sim.world.nationDefs[a.nation].short} · ${armyStatus(app, a)}`], tags));
 
   if (mine) {
-    const moveProb = a.battle ? 'The army is engaged in battle.' : a.retreating ? 'Retreating armies cannot take orders.' : null;
+    const moveProb = a.embarked ? 'The army is at sea; it takes orders again once it lands.' : a.battle ? 'The army is engaged in battle.' : a.retreating ? 'Retreating armies cannot take orders.' : null;
     const prim: HTMLElement[] = [];
     prim.push(quick('move', app.moveMode ? 'Choose destination…' : 'Move', () => app.startMoveMode(), moveProb, 'Then click a province on the map (or right-click it directly). Hold Shift to add a waypoint after the current route.', 'primary'));
     if (a.path.length && !a.retreating) prim.push(quick('stop', 'Halt', () => app.do({ type: 'stop', army: a.id }), null, 'Stop at the current province.'));
+    if (sim.world.provZones[a.location] && !a.embarked) {
+      const regs = a.regiments.length;
+      const f = transportFor(sim, a.nation, a.location, regs);
+      prim.push(
+        quick(
+          'ship',
+          app.targeting?.kind === 'ship' ? 'Choose a beach…' : 'Ship by sea',
+          () => app.startShipTarget([a.id]),
+          moveProb ?? (f ? null : `No fleet with room for ${regs} regiments lies off this coast (transports carry 2 each).`),
+          'A fleet with transports in a sea zone on this coast carries the army to another coast (yours, a friend’s, unclaimed, or an enemy’s). Troops landing under fire fight at a disadvantage that week.',
+        ),
+      );
+    }
     const others = armiesAt(sim, a.location).filter((x) => x.nation === a.nation && x.id !== a.id);
-    if (others.length) {
+    if (others.length && !a.embarked) {
       const ids = [a.id, ...others.map((o) => o.id)];
       prim.push(quick('merge', `Merge ${ids.length}`, () => app.do({ type: 'merge', armies: ids }), mergeProblem(sim, a.nation, ids), 'Combine every army of ours in this province into this one.'));
     }
@@ -296,7 +349,7 @@ function armyCard(app: App, a: Army): HTMLElement[] {
     h(
       'div',
       { class: 'stat-grid', style: 'margin-top:10px' },
-      tile('Regiments', `${a.regiments.length}`, `${byType('foot').length} foot · ${byType('horse').length} horse · ${byType('guns').length} guns`),
+      tile('Regiments', `${a.regiments.length}`, UNIT_TYPES.filter((t) => byType(t).length).map((t) => `${byType(t).length} ${UNITS[t].plural.toLowerCase()}`).join(' · ')),
       tile('Men', men(menOf(a)), `of ${men(a.regiments.length * C.regimentSize)}`),
       tile('Morale', a.morale.toFixed(1), h('span', null, bar(a.morale, mm, a.morale / mm > 0.5 ? 'good' : a.morale / mm > 0.25 ? 'warn' : 'bad', 'Morale')), `Morale out of ${mm.toFixed(1)}. Armies break when it runs out.`),
       tile('Supply', `${Math.round(sup.level * 100)}%`, sup.connected ? `line ${sup.distance.toFixed(1)}/${sup.range}` : 'cut: foraging', 'Supply level here: capacity versus the regiments drawing on it, and whether a supply line reaches.'),
@@ -368,9 +421,7 @@ function armyCard(app: App, a: Army): HTMLElement[] {
     body.appendChild(
       section(
         'Detach regiments',
-        stepper('foot'),
-        stepper('horse'),
-        stepper('guns'),
+        ...UNIT_TYPES.filter((t) => byType(t).length).map(stepper),
         action('Form new army', 'Detached regiments keep their morale.', () => {
           const r = app.do({ type: 'split', army: a.id, counts: { ...counts } });
           if (r.ok) app.ui.split = {};
