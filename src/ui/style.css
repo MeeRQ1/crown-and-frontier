@@ -961,6 +961,8 @@ details.section[open] > summary::before { content: '▾'; }
 .ed-new-card h2 { margin: 0; }
 .ed-new-card .rv { color: var(--paper-300); font-weight: 600; }
 .ed-new-card input[type='text'], .ed-new-card select { width: 100%; }
+.ed-new-card .row.seed { flex-wrap: nowrap; }
+.ed-new-card .row.seed input { flex: 1; min-width: 0; }
 .settings-section { margin-top: var(--s7); }
 .settings-section:first-child { margin-top: 0; }
 .howto { margin-top: var(--s7); }
@@ -973,6 +975,7 @@ kbd { font-family: var(--sans); font-size: var(--fs-xs); font-weight: 700; paddi
 table.data tr.me td { background: var(--brass-soft); }
 
 /* ── Small screens and touch ─────────────────────────────────────────────── */
+.modal-layer.app-layer { position: fixed; z-index: 95; }
 @media (max-width: 760px) {
   .lib-card { grid-template-columns: 1fr; }
   .ed-body { grid-template-columns: 1fr; grid-template-rows: auto minmax(280px, 1fr) minmax(200px, 40%); }

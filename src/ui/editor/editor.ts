@@ -904,7 +904,7 @@ export function renderEditor(app: App, initial: MapPackage | null): HTMLElement 
               }, { cls: 'small', fk: 'ed-continue' }),
             )
           : null,
-        h('div', { class: 'ed-grid2' }, field('Name', nameIn), h('div', { class: 'field' }, h('label', null, 'Seed'), h('div', { class: 'row' }, seedIn, dice))),
+        h('div', { class: 'ed-grid2' }, field('Name', nameIn), h('div', { class: 'field' }, h('label', null, 'Seed'), h('div', { class: 'row seed' }, seedIn, dice))),
         h('div', { class: 'ed-grid2' }, field('Shape of the land', shapeSel), field('Climate', climateSel)),
         h('div', { class: 'ed-grid2' }, provinces.el, realms.el, mountains.el, rivers.el, lakes.el, frontier.el, year.el),
         status,
@@ -925,16 +925,17 @@ export function renderEditor(app: App, initial: MapPackage | null): HTMLElement 
     selectedZone = null;
     paintRealm = pkg.nations[0]?.id ?? null;
     paintRegion = pkg.regions[0]?.id ?? '';
-    view.setMap(pkg);
-    view.resize();
-    view.camera.fit(false);
     check = validateMapPackage(pkg);
+    // the panels first: they set the stage's final size, which the map is fitted to
     drawTools();
     drawLayers();
     drawTabs();
     drawPanel();
     drawHeader();
     drawHint();
+    view.setMap(pkg);
+    view.resize();
+    view.camera.fit(false);
   };
 
   const el = h(
@@ -964,6 +965,25 @@ export function renderEditor(app: App, initial: MapPackage | null): HTMLElement 
     window.removeEventListener('keyup', onKey);
     clearTimeout(validateTimer);
   });
+  // debugging handle, like window.cnf for the game (inspect only; the browser checks use it)
+  (window as unknown as { cnfEditor?: unknown }).cnfEditor = {
+    get pkg() {
+      return pkg;
+    },
+    get check() {
+      return check;
+    },
+    /** page coordinates of a province's label point */
+    screenOf(id: string) {
+      const p = view.geo?.provs.get(id);
+      if (!p) return null;
+      const s = view.camera.toScreen(p.lx, p.ly);
+      const r = canvas.getBoundingClientRect();
+      return { x: r.left + s.x, y: r.top + s.y };
+    },
+  };
+  drawTools();
+  drawLayers();
   if (pkg) requestAnimationFrame(() => open(pkg, libraryId));
   else void showNewForm();
   return el;

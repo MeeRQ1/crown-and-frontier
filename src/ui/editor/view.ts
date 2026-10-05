@@ -36,6 +36,8 @@ export class EditorView {
   /** provinces or zones named by a validator finding */
   flagged = new Set<string>();
   private geometryRef: unknown = null;
+  /** where each coastal province's port is drawn: the middle of its longest sea shore */
+  private portSpots = new Map<string, { x: number; y: number }>();
   private dpr = 1;
   private dirty = true;
   private raf = 0;
@@ -52,6 +54,7 @@ export class EditorView {
       const sameBounds = this.geo && JSON.stringify(this.geo.bounds) === JSON.stringify(pkg.geometry.bounds);
       this.geo = new GeoIndex(drawnFromPackage(pkg));
       this.geometryRef = pkg.geometry;
+      this.portSpots.clear();
       if (!sameBounds || !this.camera) {
         this.camera = new Camera(this.geo.bounds, this.geo.provScale);
         this.resize();
@@ -107,6 +110,26 @@ export class EditorView {
     const z = this.geo.zoneAnchors.get(id);
     if (z) this.camera.centerOn(z.x, z.y, Math.max(this.camera.zoom, this.camera.zoomForProvincePx(60)));
     this.invalidate();
+  }
+
+  private portSpot(id: string): { x: number; y: number } | null {
+    const hit = this.portSpots.get(id);
+    if (hit) return hit;
+    let best: number[] | null = null;
+    let bestLen = 0;
+    for (const e of this.geo.edgesOf.get(id) ?? []) {
+      if (!e.coast || e.b !== '~sea') continue;
+      let len = 0;
+      for (let i = 2; i < e.pts.length; i += 2) len += Math.hypot(e.pts[i] - e.pts[i - 2], e.pts[i + 1] - e.pts[i - 1]);
+      if (len > bestLen) (bestLen = len), (best = e.pts);
+    }
+    if (!best) return null;
+    const p = this.geo.provs.get(id)!;
+    const k = Math.floor(best.length / 4) * 2;
+    // a little inside the shore, towards the province's centre
+    const spot = { x: best[k] + (p.lx - best[k]) * 0.18, y: best[k + 1] + (p.ly - best[k + 1]) * 0.18 };
+    this.portSpots.set(id, spot);
+    return spot;
   }
 
   private fillOf(id: string): string {
@@ -235,13 +258,15 @@ export class EditorView {
       if (!def) continue;
       const s = cam.toScreen(p.lx, p.ly);
       if (caps.has(p.id)) star(ctx, s.x, s.y - (showNames ? 10 : 0), 6);
-      if (def.port) {
+      const spot = def.port ? this.portSpot(p.id) : null;
+      if (spot) {
+        const q = cam.toScreen(spot.x, spot.y);
         ctx.fillStyle = '#1d3f57';
         ctx.beginPath();
-        ctx.arc(s.x + 9, s.y + 7, 3.6, 0, Math.PI * 2);
+        ctx.arc(q.x, q.y, 4.2, 0, Math.PI * 2);
         ctx.fill();
         ctx.strokeStyle = '#e8f1f5';
-        ctx.lineWidth = 1.2;
+        ctx.lineWidth = 1.4;
         ctx.stroke();
       }
       if (this.layer === 'deposits' && def.resource) {

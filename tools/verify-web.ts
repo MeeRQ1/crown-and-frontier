@@ -9,6 +9,8 @@ import { createServer, type Server } from 'node:http';
 import { extname, join, normalize } from 'node:path';
 import { inflateRawSync } from 'node:zlib';
 import { chromium, type Browser, type Page } from 'playwright';
+import { mapChecksum, type MapPackage } from '../src/maps/format';
+import { parseMapPackage } from '../src/maps/validate';
 import { seaAirSave } from './sea-air-save';
 
 const DIST = 'dist';
@@ -343,6 +345,175 @@ async function seaAirFlow(browser: Browser, base: string): Promise<void> {
   await page.close();
 }
 
+/**
+ * The map library and editor: generate a new map, edit it, see a finding and
+ * undo it, save and export it, delete and re-import it, refuse a broken file,
+ * play it, and edit a copy of a built-in map.
+ */
+async function mapEditorFlow(browser: Browser, base: string): Promise<void> {
+  const page = await browser.newPage({ viewport: { width: 1366, height: 800 } });
+  const problems = await watch(page);
+  const ed = <T>(fn: string) => page.evaluate(`(() => { const e = window.cnfEditor; return ${fn}; })()`) as Promise<T>;
+  // a province whose label point is well inside the editor's map, not under its overlays
+  const spot = (filter: string) =>
+    page.evaluate(`(() => {
+      const e = window.cnfEditor;
+      const r = document.querySelector('.ed-canvas').getBoundingClientRect();
+      const caps = new Set(e.pkg.nations.map((n) => n.capital));
+      for (const p of e.pkg.provinces) {
+        if (!(${filter})) continue;
+        const s = e.screenOf(p.id);
+        if (s && s.x > r.left + 90 && s.x < r.right - 90 && s.y > r.top + 90 && s.y < r.bottom - 90) return { id: p.id, x: s.x, y: s.y };
+      }
+      return null;
+    })()`) as Promise<{ id: string; x: number; y: number } | null>;
+  await page.goto(base);
+  await page.waitForSelector('.screen .menu-list button', { timeout: 15000 });
+  await page.getByRole('button', { name: /Map library/ }).click();
+  await page.waitForSelector('.lib-card');
+  await page.waitForTimeout(1200);
+  const lib = await page.evaluate(() => {
+    const cards = [...document.querySelectorAll('.lib-card')];
+    const c = cards[0]?.querySelector('canvas') as HTMLCanvasElement | null;
+    const d = c ? c.getContext('2d')!.getImageData(0, 0, c.width, c.height).data : null;
+    const seen = new Set<number>();
+    if (d) for (let i = 0; i < d.length; i += 4 * 211) seen.add((d[i] << 16) | (d[i + 1] << 8) | d[i + 2]);
+    return { cards: cards.map((x) => x.getAttribute('data-map')), colours: seen.size };
+  });
+  record('Map library lists every built-in map with a drawn preview', ['aldmere', 'reach', 'isles', 'steppe', 'midsea'].every((id) => lib.cards.includes(id)) && lib.colours > 12, `${lib.cards.join(', ')}; preview colours ${lib.colours}`);
+
+  // ── create
+  await page.locator('[data-fk="new-map"]').click();
+  await page.waitForSelector('.ed-new-card');
+  await page.locator('[data-f=gen-name]').fill('Verify Land');
+  await page.locator('[data-f=gen-seed]').fill('7');
+  await page.locator('[data-f=gen-provinces]').fill('60');
+  await page.locator('[data-f=gen-realms]').fill('4');
+  const t0 = Date.now();
+  await page.locator('[data-fk=ed-generate]').click();
+  await page.waitForSelector('.ed-new.hidden', { state: 'attached', timeout: 60000 });
+  const genMs = Date.now() - t0;
+  await page.waitForTimeout(400);
+  const made = await ed<{ id: string; n: number; realms: number; ok: boolean }>('({ id: e.pkg.id, n: e.pkg.provinces.length, realms: e.pkg.nations.length, ok: e.check.ok })');
+  record('Map editor: New map generates a playable map (in a worker)', made.ok && made.realms === 4 && made.n >= 40, `${made.id}: ${made.n} provinces, ${made.realms} realms in ${(genMs / 1000).toFixed(1)} s`);
+
+  // ── edit: select and rename, paint terrain, undo
+  const p = await spot('p.owner && !caps.has(p.id)');
+  let edited = false;
+  let detail = 'no province in view';
+  if (p) {
+    await page.mouse.click(p.x, p.y);
+    await page.waitForSelector(`[data-province="${p.id}"]`);
+    await page.locator('[data-f=name]').fill('Verifyholm');
+    await page.locator('[data-f=name]').press('Tab');
+    const renamed = await ed<string>(`e.pkg.provinces.find((x) => x.id === '${p.id}').name`);
+    const before = await ed<string>(`e.pkg.provinces.find((x) => x.id === '${p.id}').terrain`);
+    const target = before === 'marsh' ? 'hills' : 'marsh';
+    await page.locator('[data-tool=terrain]').click();
+    await page.locator(`.ed-choice[data-choice="${target}"]`).click();
+    await page.mouse.click(p.x, p.y);
+    const painted = await ed<string>(`e.pkg.provinces.find((x) => x.id === '${p.id}').terrain`);
+    await page.keyboard.press('Control+z');
+    const undone = await ed<string>(`e.pkg.provinces.find((x) => x.id === '${p.id}').terrain`);
+    edited = renamed === 'Verifyholm' && painted === target && undone === before;
+    detail = `renamed ${p.id} to ${renamed}; terrain ${before} → ${painted} → undo → ${undone}`;
+  }
+  record('Map editor: select and rename a province, paint terrain, undo', edited, detail);
+
+  // ── a realm with no land: reported with what to fix, and undo repairs it
+  let finding = false;
+  detail = 'no province in view';
+  if (p) {
+    await page.locator('[data-tab=realms]').click();
+    await page.locator('[data-f=new-realm]').fill('Testmark');
+    await page.locator('[data-fk=ed-place-capital]').click();
+    await page.mouse.click(p.x, p.y);
+    const nid = await ed<string | null>("e.pkg.nations.find((n) => n.name === 'Testmark')?.id ?? null");
+    const other = await ed<string>(`e.pkg.nations.find((n) => n.name !== 'Testmark').id`);
+    await page.locator(`.ed-choice[data-choice="${other}"]`).click();
+    await page.mouse.click(p.x, p.y);
+    await page.waitForTimeout(500);
+    const bad = await page.locator('.ed-status.bad').count();
+    await page.locator('.ed-status').click();
+    const issue = (await page.locator('.ed-issue.bad .grow').first().textContent()) ?? '';
+    const show = await page.locator('.ed-issue.bad button').count();
+    await page.keyboard.press('Control+z');
+    await page.waitForTimeout(500);
+    const after = await ed<number>('e.check.errors.length');
+    finding = !!nid && bad === 1 && /Testmark/.test(issue) && show > 0 && after === 0;
+    detail = `finding: "${issue.trim()}"; errors after undo ${after}`;
+  }
+  record('Map editor: a realm left without land is reported with a way to find it, and undo repairs it', finding, detail);
+
+  // ── save and export
+  await page.locator('[data-fk=ed-save]').click();
+  await page.waitForTimeout(400);
+  const saved = await page.evaluate((id) => (window as any).cnf.maps.has(id), made.id);
+  const [download] = await Promise.all([page.waitForEvent('download'), page.locator('[data-fk=ed-export]').click()]);
+  const file = join('reports', 'tmp', `${made.id}.map.json`);
+  mkdirSync(join('reports', 'tmp'), { recursive: true });
+  await download.saveAs(file);
+  const exported = parseMapPackage(readFileSync(file, 'utf8'));
+  const live = JSON.parse(await ed<string>('JSON.stringify(e.pkg)')) as MapPackage;
+  const same = !!exported.pkg && mapChecksum(exported.pkg) === mapChecksum(live);
+  record('Map editor: saves to the library and exports a file that passes the validator', saved && exported.check.ok && same, `library ${saved ? 'has' : 'lacks'} ${made.id}; file ${exported.check.ok ? 'valid' : exported.check.errors[0]?.message}; checksum ${same ? 'matches' : 'differs'}`);
+
+  // ── library: delete, import again, refuse broken files, play
+  await page.locator('[data-fk=ed-back]').click();
+  await page.waitForSelector(`.lib-card[data-map="${made.id}"]`);
+  await page.locator(`[data-fk="delete-${made.id}"]`).click();
+  await page.locator('.modal-layer:not(.hidden) button', { hasText: 'Delete' }).click();
+  await page.waitForTimeout(300);
+  const gone = (await page.locator(`.lib-card[data-map="${made.id}"]`).count()) === 0;
+  const importFile = async (path: string) => {
+    const [chooser] = await Promise.all([page.waitForEvent('filechooser'), page.locator('[data-fk=import-map]').click()]);
+    await chooser.setFiles(path);
+    await page.waitForTimeout(600);
+  };
+  await importFile(file);
+  const back = (await page.locator(`.lib-card[data-map="${made.id}"]`).count()) === 1;
+  const broken = join('reports', 'tmp', 'broken.map.json');
+  writeFileSync(broken, '{"format":"crown-frontier-map","version":3,"id":"broken","provinces":[');
+  await importFile(broken);
+  const refusal = (await page.locator('.modal-layer:not(.hidden)').textContent()) ?? '';
+  await page.locator('.modal-layer:not(.hidden) footer button').first().click();
+  // a map whose texts carry markup and an unknown "script" field: imported as plain data
+  const hostile = { ...live, id: 'markup-map', onload: 'alert(1)', meta: { ...live.meta, name: '<img src=x onerror="window.__pwned=1">Markup Map' } };
+  const hostileFile = join('reports', 'tmp', 'markup.map.json');
+  writeFileSync(hostileFile, JSON.stringify(hostile));
+  await importFile(hostileFile);
+  const inert = await page.evaluate(() => ({ imgs: document.querySelectorAll('.lib-card img').length, pwned: (window as any).__pwned === 1, title: document.querySelector('.lib-card[data-map="markup-map"] .lib-t')?.textContent ?? '' }));
+  record(
+    'Map library: delete and re-import a map; a broken file is refused with a reason; map text is never run',
+    gone && back && /cannot be imported/.test(refusal) && /not readable JSON/.test(refusal) && inert.imgs === 0 && !inert.pwned && inert.title.startsWith('<img'),
+    `deleted ${gone}, re-imported ${back}; refusal "${refusal.replace(/\s+/g, ' ').slice(0, 90)}…"; markup shown as text: ${inert.title.slice(0, 30)}`,
+  );
+  await page.locator(`[data-fk="play-${made.id}"]`).click();
+  await page.waitForSelector(`.map-card.selected[data-map="${made.id}"]`);
+  await page.locator('button:visible', { hasText: 'Begin campaign' }).first().click();
+  await page.waitForSelector('canvas.map');
+  await page.waitForTimeout(500);
+  const playing = await page.evaluate(() => (window as any).cnf.sim.state.scenarioId);
+  record('Map library: a map made in the editor starts a campaign', playing === made.id && (await canvasDrawn(page)), `campaign on ${playing}`);
+  await page.close();
+
+  // ── edit a copy of a built-in map
+  const page2 = await browser.newPage({ viewport: { width: 1366, height: 800 } });
+  const problems2 = await watch(page2);
+  await page2.goto(base);
+  await page2.getByRole('button', { name: /Map library/ }).click();
+  await page2.locator('[data-fk="copy-reach"]').click();
+  await page2.waitForSelector('.ed-canvas');
+  await page2.waitForTimeout(800);
+  const copy = (await page2.evaluate('(() => ({ id: window.cnfEditor.pkg.id, n: window.cnfEditor.pkg.provinces.length, ok: window.cnfEditor.check.ok }))()')) as { id: string; n: number; ok: boolean };
+  await page2.locator('[data-fk=ed-save]').click();
+  await page2.waitForTimeout(400);
+  const kept = await page2.evaluate((id) => (window as any).cnf.maps.has(id), copy.id);
+  record('Map library: edit a copy of a built-in map and save it', copy.id === 'reach-copy' && copy.n === 99 && copy.ok && kept, `${copy.id}, ${copy.n} provinces, ${kept ? 'saved' : 'not saved'}`);
+  record('Map library and editor without errors', problems.length === 0 && problems2.length === 0, [...problems, ...problems2].slice(0, 3).join('; '));
+  await page2.close();
+}
+
 async function main(): Promise<void> {
   if (!existsSync(join(DIST, 'index.html'))) throw new Error('dist/ missing: run npm run build');
   const zipFiles = existsSync(ZIP) ? unzip(ZIP) : null;
@@ -356,10 +527,15 @@ async function main(): Promise<void> {
       await seaAirFlow(browser, `${origin}/`);
       return;
     }
+    if (process.env.ONLY === 'maps') {
+      await mapEditorFlow(browser, `${origin}/`);
+      return;
+    }
     await flow(browser, `${origin}/`, 'Site root');
     await flow(browser, `${origin}${SUB}`, 'Project subpath');
     await mapChoice(browser, `${origin}/`);
     await seaAirFlow(browser, `${origin}/`);
+    await mapEditorFlow(browser, `${origin}/`);
     if (zipFiles) {
       record('Release ZIP has index.html at its root', zipFiles.has('index.html'), `${zipFiles.size} files`);
       await flow(browser, `${origin}/zip/`, 'Unpacked release ZIP');
@@ -443,6 +619,12 @@ async function main(): Promise<void> {
       await page.getByRole('button', { name: 'Save and quit to menu' }).click();
       await page.waitForSelector('.screen .menu-list button');
       await page.getByRole('button', { name: /Load or import/ }).click();
+      // after quitting, deleting a save still asks first (the dialog used to stay with the closed campaign)
+      await page.locator('.save-card', { hasText: 'Slot 1' }).getByRole('button', { name: 'Delete this save' }).click();
+      const asked = await page.locator('.modal:visible h2', { hasText: 'Delete this save?' }).count();
+      await page.locator('.modal:visible').getByRole('button', { name: 'Cancel' }).click();
+      const kept = await page.locator('.save-card', { hasText: 'Slot 1' }).count();
+      record('On the menu screens, deleting a save asks first; Cancel keeps it', asked === 1 && kept === 1, `confirmation shown ${asked}, slot kept ${kept}`);
       await page.locator('.save-card', { hasText: 'Slot 1' }).getByRole('button', { name: 'Load' }).click();
       await page.waitForSelector('canvas.map');
       const loaded = await page.evaluate(() => (window as any).cnf.sim.state.tick);

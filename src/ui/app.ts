@@ -136,7 +136,8 @@ export class App {
   toastsEl!: HTMLElement;
   dockEl!: HTMLElement;
   attentionEl!: HTMLElement;
-  dialogLayer!: HTMLElement;
+  /** one dialog layer for the whole app, above the game and every screen */
+  readonly dialogLayer: HTMLElement = h('div', { class: 'modal-layer app-layer hidden' });
   bannerEl!: HTMLElement;
   tipEl!: HTMLElement;
   tutorialEl!: HTMLElement;
@@ -146,6 +147,8 @@ export class App {
 
   constructor(root: HTMLElement) {
     this.root = root;
+    // dialogs work on the menu screens too, not only during a campaign
+    root.appendChild(this.dialogLayer);
     this.settings = loadSettings();
     this.mode = (MODES.some((m) => m.id === this.settings.mapMode) ? this.settings.mapMode : 'political') as MapMode;
     this.applySettings();
@@ -302,6 +305,9 @@ export class App {
     this.minimap = null;
     this.sim = null;
     this.tutorial = null;
+    // a dialog about the campaign that is closing goes with it
+    this.dialogLayer.classList.add('hidden');
+    setChildren(this.dialogLayer);
     hideTip();
   }
 
@@ -326,7 +332,6 @@ export class App {
     this.bannerEl = h('div', { class: 'banner hidden', role: 'status' });
     this.tipEl = h('div', { class: 'hover-tip hidden' });
     this.tutorialEl = h('div', { class: 'tutorial hidden', role: 'dialog', 'aria-label': 'Tutorial' });
-    this.dialogLayer = h('div', { class: 'modal-layer hidden' });
     this.stageEl = h(
       'main',
       { class: 'stage' },
@@ -342,7 +347,6 @@ export class App {
       this.bannerEl,
       this.tipEl,
       this.tutorialEl,
-      this.dialogLayer,
     );
     this.gameEl = h('div', { style: 'display:contents' }, this.hudEl, this.stageEl);
     this.root.appendChild(this.gameEl);
