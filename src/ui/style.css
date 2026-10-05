@@ -296,6 +296,17 @@ table.data tr.selected td { background: var(--brass-soft); }
 .card.current { border-color: var(--brass); box-shadow: inset 0 0 0 1px rgba(207, 170, 98, 0.25); }
 .card.done { border-color: rgba(116, 192, 122, 0.45); }
 .card.locked { opacity: 0.62; }
+.demand-list { list-style: none; padding: 0; margin: 6px 0; }
+.demand-list li { display: flex; align-items: center; gap: 6px; padding: 3px 0; border-bottom: 1px solid var(--line); font-size: var(--fs-sm); }
+.demand-list li label { display: flex; gap: 6px; align-items: baseline; cursor: pointer; }
+table.mini { width: 100%; border-collapse: collapse; font-size: var(--fs-sm); margin: 6px 0; }
+table.mini th, table.mini td { text-align: left; padding: 2px 6px 2px 0; border-bottom: 1px solid var(--line); }
+table.mini td.bad { color: var(--bad); }
+.focus-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; align-items: start; }
+.focus-card { margin: 0; }
+.focus-card.excluded { opacity: 0.45; }
+.focus-card.locked { opacity: 0.7; }
+@media (max-width: 720px) { .focus-grid { display: block; } .focus-grid > div { margin-bottom: 8px; } }
 .card h4 { margin-bottom: 4px; }
 .cols { display: grid; grid-template-columns: repeat(auto-fit, minmax(calc(250px * var(--scale)), 1fr)); gap: var(--s5); }
 .shield { display: inline-block; width: 1.5em; height: 1.75em; flex: none; vertical-align: middle; filter: drop-shadow(0 1px 1px rgba(0, 0, 0, 0.45)); }

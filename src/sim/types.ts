@@ -7,7 +7,7 @@ export type ProvinceId = string;
 export type ArmyId = string;
 export type WarId = string;
 export type TechId = string;
-export type PolicyId = string;
+export type FocusId = string;
 export type EventId = string;
 export type ZoneId = string;
 export type FleetId = string;
@@ -367,6 +367,8 @@ export interface WarGoal {
 
 export interface War {
   id: WarId;
+  /** contribution to the war by each participant (battles won, enemy land held): shares the spoils */
+  contrib?: Record<NationId, number>;
   name: string;
   attackerLead: NationId;
   defenderLead: NationId;
@@ -428,7 +430,82 @@ export interface PeaceTerms {
   mode: 'demand' | 'concede' | 'white';
 }
 
-export type ProposalKind = 'nap' | 'trade' | 'alliance' | 'peace' | 'callToArms';
+export type ProposalKind = 'nap' | 'trade' | 'alliance' | 'peace' | 'callToArms' | 'settlement' | 'loan' | 'blocInvite' | 'blocJoin';
+
+/**
+ * One demand of a peace settlement: what a realm on the losing side gives to a
+ * realm on the winning side.
+ *   cede         a province
+ *   gold         crowns, paid at once
+ *   reparations  a share of the giver's income (amount 0.1–0.3) for five years
+ *   disarm       the giver's army is limited for five years (half its regiments, at least 3)
+ *   renounce     the giver drops its claims on the receiver and may not attack it for ten years
+ *   sphere       the receiver gains a strong influence over the giver
+ */
+export type DemandKind = 'cede' | 'gold' | 'reparations' | 'disarm' | 'renounce' | 'sphere';
+
+export interface Demand {
+  kind: DemandKind;
+  /** the giver (losing side) */
+  from: NationId;
+  /** the receiver (winning side) */
+  to: NationId;
+  province?: ProvinceId;
+  amount?: number;
+}
+
+/** A realm's guarantee of another's independence: it joins the defence when they are attacked. */
+export interface Guarantee {
+  by: NationId;
+  of: NationId;
+  since: number;
+}
+
+/** Crowns lent by one realm to another, repaid monthly with interest. */
+export interface Loan {
+  id: string;
+  from: NationId;
+  to: NationId;
+  /** crowns still owed */
+  remaining: number;
+  /** the monthly instalment */
+  monthly: number;
+  since: number;
+}
+
+/** A customs union: members trade at lower cost and share the losses of blockades. */
+export interface TradeBloc {
+  id: string;
+  name: string;
+  leader: NationId;
+  members: NationId[];
+  since: number;
+}
+
+/** Reparations imposed by a peace settlement. */
+export interface Reparation {
+  from: NationId;
+  to: NationId;
+  /** share of the payer's gross income */
+  share: number;
+  until: number;
+}
+
+/** An army limit imposed by a peace settlement. */
+export interface Disarmament {
+  nation: NationId;
+  by: NationId;
+  /** most regiments (in armies and in training) */
+  cap: number;
+  until: number;
+}
+
+export interface FocusState {
+  current: FocusId | null;
+  /** months of work on the current focus */
+  progress: number;
+  done: FocusId[];
+}
 
 export interface Proposal {
   id: string;
@@ -439,6 +516,12 @@ export interface Proposal {
   expires: number;
   war?: WarId;
   terms?: PeaceTerms;
+  /** a peace settlement's demands */
+  demands?: Demand[];
+  /** a loan's crowns */
+  amount?: number;
+  /** a trade bloc's id */
+  bloc?: string;
 }
 
 export interface Modifier {
@@ -484,7 +567,6 @@ export interface AIState {
   lastWarEnd: number;
   nextStrategic: number;
   nextOperational: number;
-  lastPolicyEval: number;
   /** remembers per-front objective commitments: armyId -> objective province */
   objectives: Record<ArmyId, { target: ProvinceId; since: number; kind: string; value: number }>;
   /** desired regiment count set by the strategic layer */
@@ -522,6 +604,25 @@ export interface NationStats {
   wingsBuilt: number;
   airMissionWeeks: number;
   bombingWeeks: number;
+  /** diplomacy and focus (system-usage counts) */
+  focusesDone: number;
+  /** settlements dictated as the winning war leader */
+  settlementsImposed: number;
+  /** demands this realm received in settlements */
+  demandsWon: number;
+  guaranteesGiven: number;
+  /** wars joined to defend a realm we guarantee */
+  guaranteeCalls: number;
+  loansGiven: number;
+  loanCrowns: number;
+  /** months as a member of a trade bloc */
+  blocMonths: number;
+  /** months leading a sphere of influence with at least one member */
+  sphereMonths: number;
+  /** settlements dictated in which more than one realm received demands */
+  settlementsShared: number;
+  /** demands received, by kind */
+  demands: Partial<Record<DemandKind, number>>;
 }
 
 export interface NationState {
@@ -546,8 +647,8 @@ export interface NationState {
     done: TechId[];
     funding: 0 | 1 | 2 | 3;
   };
-  policy: PolicyId;
-  policySince: number;
+  /** national focus */
+  focus: FocusState;
   warExhaustion: number;
   trust: number; // 0..100 reputation for honouring agreements
   debtMonths: number;
@@ -557,6 +658,8 @@ export interface NationState {
   nextEventTick: number;
   pendingEvents: PendingEvent[];
   victoryStreak: Record<VictoryPath, number>;
+  /** consecutive months each victory condition has failed (a timer pauses the first month, then decays) */
+  victoryMissed?: Record<VictoryPath, number>;
   lastMonth: MonthlyLedger;
   ai: AIState;
   stats: NationStats;
@@ -663,10 +766,17 @@ export interface GameState {
   envoys: Envoy[];
   fabrications: ClaimFabrication[];
   coalitions: Coalition[];
+  /** influence[a][b] = a's influence over b (0..100) */
+  influence: Record<NationId, Record<NationId, number>>;
+  guarantees: Guarantee[];
+  loans: Loan[];
+  blocs: TradeBloc[];
+  reparations: Reparation[];
+  disarmaments: Disarmament[];
   proposals: Proposal[];
   reports: BattleReport[];
   notifications: Notification[];
-  counters: { army: number; battle: number; war: number; treaty: number; note: number; proposal: number; event: number; regiment: number; coalition: number; fleet: number; ship: number; wing: number };
+  counters: { army: number; battle: number; war: number; treaty: number; note: number; proposal: number; event: number; regiment: number; coalition: number; fleet: number; ship: number; wing: number; loan: number; bloc: number };
   result: GameResult | null;
   continueAfterResult: boolean;
   diagnostics: AIDiagnostic[];
@@ -704,7 +814,7 @@ export type Command =
   | { type: 'cancelBuild'; nation: NationId; province: ProvinceId }
   | { type: 'research'; nation: NationId; tech: TechId }
   | { type: 'funding'; nation: NationId; level: 0 | 1 | 2 | 3 }
-  | { type: 'policy'; nation: NationId; policy: PolicyId }
+  | { type: 'focus'; nation: NationId; focus: FocusId }
   | { type: 'envoy'; nation: NationId; target: NationId }
   | { type: 'recallEnvoy'; nation: NationId; target: NationId }
   | { type: 'propose'; nation: NationId; target: NationId; treaty: TreatyType }
@@ -712,7 +822,18 @@ export type Command =
   | { type: 'fabricate'; nation: NationId; province: ProvinceId }
   | { type: 'declareWar'; nation: NationId; target: NationId; goal: WarGoal }
   | { type: 'peace'; nation: NationId; war: WarId; with: NationId; terms: PeaceTerms }
-  | { type: 'respond'; nation: NationId; proposal: string; accept: boolean }
+  /** a war leader proposes a full peace settlement to the opposing leader */
+  | { type: 'settle'; nation: NationId; war: WarId; demands: Demand[] }
+  /** answer a proposal; for a settlement, `drop` lists demands (by index) to strike out as a counter-offer */
+  | { type: 'respond'; nation: NationId; proposal: string; accept: boolean; drop?: number[] }
+  | { type: 'guarantee'; nation: NationId; target: NationId }
+  | { type: 'revokeGuarantee'; nation: NationId; target: NationId }
+  | { type: 'loan'; nation: NationId; target: NationId; amount: number }
+  /** found a trade bloc with a trade partner (who must agree) */
+  | { type: 'foundBloc'; nation: NationId; target: NationId }
+  | { type: 'inviteBloc'; nation: NationId; target: NationId }
+  | { type: 'joinBloc'; nation: NationId; bloc: string }
+  | { type: 'leaveBloc'; nation: NationId }
   | { type: 'eventChoice'; nation: NationId; instance: string; choice: number }
   | { type: 'joinCoalition'; nation: NationId; target: NationId }
   | { type: 'leaveCoalition'; nation: NationId; target: NationId }

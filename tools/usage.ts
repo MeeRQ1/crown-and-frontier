@@ -5,6 +5,10 @@
 import { UNIT_TYPES } from '../src/sim/config';
 import { TECH_LIST, TECHS } from '../src/sim/data/techs';
 import { dateOf, enemiesOf, type Sim } from '../src/sim/state';
+import { getFocus } from '../src/sim/focus';
+import { sphereOf } from '../src/sim/influence';
+import { victoryProgress } from '../src/sim/victory';
+import type { VictoryPath } from '../src/sim/types';
 import type { StrategicResource, UnitType } from '../src/sim/types';
 
 const STRATEGIC: StrategicResource[] = ['coal', 'iron', 'oil', 'rubber', 'nitrates'];
@@ -52,6 +56,42 @@ export interface UsageReport {
   airIdle?: string[];
   /** totals over all realms */
   forces?: { shipsBuilt: number; navalBattles: number; landings: number; blockadeWeeks: number; seaWeeks: number; wingsBuilt: number; airMissionWeeks: number; bombingWeeks: number };
+  /** Stage E: diplomacy and focus */
+  diplomacy?: {
+    settlements: number;
+    settlementsShared: number;
+    demands: Record<string, number>;
+    guaranteesGiven: number;
+    guaranteeCalls: number;
+    loansGiven: number;
+    loanCrowns: number;
+    blocRealmMonths: number;
+    sphereRealmMonths: number;
+    /** realms that ever gave a guarantee, lent, belonged to a bloc or led a sphere */
+    guarantors: number;
+    lenders: number;
+    blocMembers: number;
+    sphereLeaders: number;
+    realms: number;
+  };
+  focus?: {
+    /** focuses completed per surviving realm, and the share of them national */
+    perRealm: number;
+    nationalShare: number;
+    /** surviving realms that completed their national ambition, a claim focus, any national focus */
+    ambitions: number;
+    claims: number;
+    anyNational: number;
+    aliveEnd: number;
+    /** the branches of each surviving realm's first three generic focuses */
+    leaning: Record<string, number>;
+    /** doctrine choices made (exclusive pairs) */
+    doctrines: Record<string, number>;
+  };
+  /** realm-months in another realm's sphere (at month ends) */
+  inSphereMonths?: number;
+  /** the closest any realm came to each victory path: peak condition progress (0–1) and peak timer share */
+  victoryPeaks?: Record<VictoryPath, { progress: number; timer: number; who: string }>;
 }
 
 export class UsageTracker {
@@ -121,6 +161,24 @@ export class UsageTracker {
       this.done.set(n.id, n.research.done.length);
     }
     for (const a of Object.values(st.armies)) for (const g of a.regiments) this.r.regimentMonths[g.type]++;
+    let inSphere = 0;
+    for (const n of this.living()) if (sphereOf(this.sim, n.id)) inSphere++;
+    this.r.inSphereMonths = (this.r.inSphereMonths ?? 0) + inSphere;
+    // once a year: how close each realm is to each victory path
+    if (st.tick % 48 === 0) {
+      const peaks = (this.r.victoryPeaks ??= { territorial: { progress: 0, timer: 0, who: '' }, economic: { progress: 0, timer: 0, who: '' }, diplomatic: { progress: 0, timer: 0, who: '' } });
+      for (const n of this.living()) {
+        const vp = victoryProgress(this.sim, n.id);
+        for (const k of ['territorial', 'economic', 'diplomatic'] as VictoryPath[]) {
+          const p = peaks[k];
+          if (vp[k].progress > p.progress) {
+            p.progress = vp[k].progress;
+            p.who = n.id;
+          }
+          p.timer = Math.max(p.timer, vp[k].streak / vp[k].required);
+        }
+      }
+    }
     if (st.tick === 25 * 48) {
       let trade = 0;
       let income = 0;
@@ -173,6 +231,54 @@ export class UsageTracker {
       for (const k of Object.keys(f) as Array<keyof typeof f>) f[k] += st[k] ?? 0;
     }
     this.r.forces = f;
+    // Stage E
+    const all = sim.world.nationIds.map((nid) => sim.state.nations[nid]);
+    const demands: Record<string, number> = {};
+    for (const n of all) for (const [k, v] of Object.entries(n.stats.demands ?? {})) demands[k] = (demands[k] ?? 0) + (v ?? 0);
+    const sum = (k: 'settlementsImposed' | 'settlementsShared' | 'guaranteesGiven' | 'guaranteeCalls' | 'loansGiven' | 'loanCrowns' | 'blocMonths' | 'sphereMonths') => all.reduce((s, n) => s + (n.stats[k] ?? 0), 0);
+    this.r.diplomacy = {
+      settlements: sum('settlementsImposed'),
+      settlementsShared: sum('settlementsShared'),
+      demands,
+      guaranteesGiven: sum('guaranteesGiven'),
+      guaranteeCalls: sum('guaranteeCalls'),
+      loansGiven: sum('loansGiven'),
+      loanCrowns: sum('loanCrowns'),
+      blocRealmMonths: sum('blocMonths'),
+      sphereRealmMonths: sum('sphereMonths'),
+      guarantors: all.filter((n) => n.stats.guaranteesGiven > 0).length,
+      lenders: all.filter((n) => n.stats.loansGiven > 0).length,
+      blocMembers: all.filter((n) => n.stats.blocMonths > 0).length,
+      sphereLeaders: all.filter((n) => n.stats.sphereMonths > 0).length,
+      realms: all.length,
+    };
+    let done = 0;
+    let national = 0;
+    const leaning: Record<string, number> = {};
+    const doctrines: Record<string, number> = {};
+    const pairs = ['army_levy', 'army_prof', 'army_fortress', 'army_offensive', 'dip_concord', 'dip_real', 'ind_war', 'ind_consumer', 'sea_battle', 'sea_raid'];
+    for (const n of alive) {
+      let generic = 0;
+      for (const id of n.focus.done) {
+        const d = getFocus(sim, n.id, id);
+        if (!d) continue;
+        done++;
+        if (d.branch === 'national') national++;
+        // the branches of each realm's first three generic focuses: what it put first
+        else if (generic++ < 3) leaning[d.branch] = (leaning[d.branch] ?? 0) + 1;
+        if (pairs.includes(id)) doctrines[id] = (doctrines[id] ?? 0) + 1;
+      }
+    }
+    this.r.focus = {
+      perRealm: done / Math.max(1, alive.length),
+      nationalShare: done ? national / done : 0,
+      ambitions: alive.filter((n) => n.focus.done.includes('nat_ambition')).length,
+      claims: alive.filter((n) => n.focus.done.some((x) => x.startsWith('nat_claim_'))).length,
+      anyNational: alive.filter((n) => n.focus.done.some((x) => x.startsWith('nat_'))).length,
+      aliveEnd: alive.length,
+      leaning,
+      doctrines,
+    };
     return this.r;
   }
 }
@@ -209,8 +315,50 @@ export function usageLines(runs: UsageReport[]): string[] {
           `- Totals per run: ${forceTotals(runs)}.`,
         ]
       : []),
+    ...diplomacyLines(runs),
+    ...peakLines(runs),
     '',
   ];
+}
+
+/** How close realms came to each victory path (for campaigns that ended on score). */
+function peakLines(runs: UsageReport[]): string[] {
+  const r = runs.filter((u) => u.victoryPeaks);
+  if (!r.length) return [];
+  const fmt = (k: VictoryPath) => r.map((u) => `${Math.round(u.victoryPeaks![k].progress * 100)}%${u.victoryPeaks![k].timer > 0 ? `/${Math.round(u.victoryPeaks![k].timer * 100)}%` : ''} ${u.victoryPeaks![k].who}`).join(', ');
+  return [`- Closest approach to each victory (best condition progress / best timer share, by run): territorial ${fmt('territorial')}; economic ${fmt('economic')}; diplomatic ${fmt('diplomatic')}.`];
+}
+
+/** Stage E: peace settlements, guarantees, loans, blocs, spheres and focus. */
+function diplomacyLines(runs: UsageReport[]): string[] {
+  const d = runs.map((u) => u.diplomacy).filter((x): x is NonNullable<UsageReport['diplomacy']> => !!x);
+  const f = runs.map((u) => u.focus).filter((x): x is NonNullable<UsageReport['focus']> => !!x);
+  if (!d.length) return [];
+  const per = (k: keyof (typeof d)[number]) => (d.reduce((s, x) => s + (x[k] as number), 0) / d.length).toFixed(1);
+  const tot = (k: keyof (typeof d)[number]) => d.reduce((s, x) => s + (x[k] as number), 0);
+  const demands: Record<string, number> = {};
+  for (const x of d) for (const [k, v] of Object.entries(x.demands)) demands[k] = (demands[k] ?? 0) + v;
+  const dl = Object.entries(demands).sort((a, b) => b[1] - a[1]).map(([k, v]) => `${k} ${v}`).join(', ') || 'none';
+  const realms = tot('realms');
+  const realmMonths = runs.reduce((s, u) => s + u.realmMonths, 0);
+  const lines = [
+    `- Peace settlements per run: ${per('settlements')} (${tot('settlementsShared')} of ${tot('settlements')} shared among several winners); demands won: ${dl}.`,
+    `- Guarantees given per run ${per('guaranteesGiven')} (${tot('guarantors')} of ${realms} realms gave one), honoured by joining a war ${tot('guaranteeCalls')} times; loans per run ${per('loansGiven')} (${tot('lenders')} lenders, ${Math.round(tot('loanCrowns') / d.length)} crowns lent per run).`,
+    `- Trade blocs: ${tot('blocMembers')} of ${realms} realms were members (${(tot('blocRealmMonths') / Math.max(1, realmMonths) * 100).toFixed(1)}% of realm-months); spheres: ${tot('sphereLeaders')} realms led one, and realms spent ${(runs.reduce((s, u) => s + (u.inSphereMonths ?? 0), 0) / Math.max(1, realmMonths) * 100).toFixed(1)}% of realm-months in another's sphere.`,
+  ];
+  if (f.length) {
+    const alive = f.reduce((s, x) => s + x.aliveEnd, 0);
+    const lean: Record<string, number> = {};
+    const doc: Record<string, number> = {};
+    for (const x of f) {
+      for (const [k, v] of Object.entries(x.leaning)) lean[k] = (lean[k] ?? 0) + v;
+      for (const [k, v] of Object.entries(x.doctrines)) doc[k] = (doc[k] ?? 0) + v;
+    }
+    lines.push(
+      `- National focus: ${(f.reduce((s, x) => s + x.perRealm * x.aliveEnd, 0) / Math.max(1, alive)).toFixed(1)} focuses completed per surviving realm (${(f.reduce((s, x) => s + x.nationalShare * x.perRealm * x.aliveEnd, 0) / Math.max(1, f.reduce((s, x) => s + x.perRealm * x.aliveEnd, 0)) * 100).toFixed(0)}% national); ${f.reduce((s, x) => s + x.anyNational, 0)} of ${alive} completed national focuses, ${f.reduce((s, x) => s + x.claims, 0)} a claim, ${f.reduce((s, x) => s + x.ambitions, 0)} their ambition. First generic focuses by branch: ${Object.entries(lean).sort((a, b) => b[1] - a[1]).map(([k, v]) => `${k} ${v}`).join(', ')}. Doctrines: ${Object.entries(doc).sort((a, b) => b[1] - a[1]).map(([k, v]) => `${k} ${v}`).join(', ')}.`,
+    );
+  }
+  return lines;
 }
 
 function countList(lists: string[][]): string {

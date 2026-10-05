@@ -10,7 +10,7 @@ import { readSave, SaveError, serialize } from '../sim/save';
 import { atWar, dateOf, months, ownedProvinces, provName, type Sim } from '../sim/state';
 import { isOver, step } from '../sim/tick';
 import { fleetEta, fleetsIn, fleetSummary, pathToCoast, transportFor, zonePath } from '../sim/naval';
-import type { AirMission, Army, Command, CommandResult, NationId, ProvinceId } from '../sim/types';
+import type { AirMission, Army, Command, CommandResult, Demand, DemandKind, NationId, ProvinceId } from '../sim/types';
 import { Sound } from './audio';
 import { h, setChildren } from './dom';
 import { fontsReady } from './fonts';
@@ -41,6 +41,10 @@ export const SPEEDS = [0, 0.5, 1, 2.5, 6]; // ticks (weeks) per second; index 2 
 
 export interface UIState {
   peace: { war: string; with: string; mode: 'demand' | 'concede' | 'white'; provinces: string[]; gold: number } | null;
+  /** peace conferences being drafted (a settlement for every party), by war */
+  settle: Record<string, { demands: Demand[]; offer: boolean; kind: DemandKind; from: string; to: string; province: string; amount: number }>;
+  /** demands struck out of a settlement we were offered (a counter-offer) */
+  counter: { proposal: string; drop: number[] } | null;
   split: Record<string, number>;
   ledgerTab: LedgerTab | null;
   diploTarget: NationId | null;
@@ -61,7 +65,7 @@ const RAIL: Array<{ tab: LedgerTab; label: string; icon: Parameters<typeof icon>
   { tab: 'industry', label: 'Industry', icon: 'factory', key: 'I' },
   { tab: 'military', label: 'Military', icon: 'military', key: 'M' },
   { tab: 'research', label: 'Research', icon: 'research', key: 'T' },
-  { tab: 'policy', label: 'Policy', icon: 'policy', key: 'P', desk: true },
+  { tab: 'focus', label: 'Focus', icon: 'policy', key: 'P', desk: true },
   { tab: 'diplomacy', label: 'Diplomacy', icon: 'diplomacy', key: 'D' },
   { tab: 'wars', label: 'Wars', icon: 'wars', key: 'W' },
   { tab: 'victory', label: 'Victory', icon: 'victory', key: 'V', desk: true },
@@ -186,7 +190,7 @@ export class App {
   }
 
   private freshUI(): UIState {
-    return { peace: null, split: {}, ledgerTab: null, diploTarget: null, logFilter: 'all', inspectorPeek: false, presentationOpen: false, dockOpen: false, dockItem: null, attentionOpen: false, groupOrders: false, legendOpen: this.settings?.showLegend ?? true };
+    return { peace: null, settle: {}, counter: null, split: {}, ledgerTab: null, diploTarget: null, logFilter: 'all', inspectorPeek: false, presentationOpen: false, dockOpen: false, dockItem: null, attentionOpen: false, groupOrders: false, legendOpen: this.settings?.showLegend ?? true };
   }
 
   get player(): NationId | null {
@@ -1458,7 +1462,7 @@ export class App {
       e.preventDefault();
       return;
     }
-    const ledgers: Record<string, LedgerTab> = { b: 'realm', i: 'industry', m: 'military', t: 'research', p: 'policy', d: 'diplomacy', w: 'wars', v: 'victory', l: 'log', h: 'help' };
+    const ledgers: Record<string, LedgerTab> = { b: 'realm', i: 'industry', m: 'military', t: 'research', p: 'focus', d: 'diplomacy', w: 'wars', v: 'victory', l: 'log', h: 'help' };
     const lk = k.toLowerCase();
     if (k === ' ') {
       this.togglePause();

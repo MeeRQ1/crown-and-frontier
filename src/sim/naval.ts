@@ -25,9 +25,10 @@
 
 import { C, SHIPS, SHIP_TYPES } from './config';
 import { memoize, touchArmies } from './index';
+import { armyCap } from './influence';
 import { nationMods } from './modifiers';
 import { range } from './rng';
-import { atWar, borders, isFriendly, notify, provName, type Sim } from './state';
+import { addContribution, atWar, borders, isFriendly, notify, provName, type Sim } from './state';
 import type { Army, BattleReport, Fleet, FleetId, NationId, ProvinceId, Ship, ShipType, StrategicResource, ZoneId } from './types';
 import { edgeKey } from './world';
 
@@ -279,6 +280,7 @@ export function buildShipProblem(sim: Sim, nid: NationId, pid: ProvinceId, type:
   if (p.port < 1) return 'This province has no port. Build one first.';
   if (!shipUnlocked(sim, nid, type)) return `${SHIPS[type].plural} need the technology ${SHIPS[type].requires!.replace(/_/g, ' ')}.`;
   if (p.dock.length >= p.port) return `The shipyard is busy (${p.dock.length} of ${p.port} slipways in use).`;
+  if ((type === 'capital' || type === 'carrier') && armyCap(sim, nid) !== null) return 'Disarmed by treaty: no battleships or carriers until the limit expires.';
   const c = shipCost(sim, nid, type);
   if (n.treasury < c.crowns) return `Needs ${c.crowns} crowns (treasury ${Math.floor(n.treasury)}).`;
   if (n.materiel < c.materiel) return `Needs ${c.materiel} materiel (stockpile ${Math.floor(n.materiel)}).`;
@@ -721,6 +723,15 @@ function navalBattle(sim: Sim, zone: ZoneId, A: Fleet[], B: Fleet[]): void {
   }
   for (const f of [...A, ...B]) if (!f.ships.length) removeFleet(sim, f);
   touchFleets(sim);
+  // contribution to the wars between the two sides: holding the sea, and ships sunk
+  for (const wid of Object.keys(st.wars).sort()) {
+    const w = st.wars[wid];
+    const aAtt = nationsA.some((n) => w.attackers.includes(n)) && nationsB.some((n) => w.defenders.includes(n));
+    const aDef = nationsA.some((n) => w.defenders.includes(n)) && nationsB.some((n) => w.attackers.includes(n));
+    if (!aAtt && !aDef) continue;
+    for (const n of nationsA) addContribution(w, n, (winner === 'A' ? 1 : 0) + lossB / Math.max(1, nationsA.length));
+    for (const n of nationsB) addContribution(w, n, (winner === 'B' ? 1 : 0) + lossA / Math.max(1, nationsB.length));
+  }
   st.counters.battle++;
   const report: BattleReport = {
     id: `nb${st.counters.battle}`,

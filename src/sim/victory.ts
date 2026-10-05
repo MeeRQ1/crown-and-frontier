@@ -6,17 +6,21 @@
 //   integration >= 75, not in revolt) >= 25% of the world's development, with
 //   dev-weighted unrest <= 25, a non-negative treasury, no bankruptcy and no
 //   province under enemy occupation — held for 60 months.
-// Diplomatic leadership: influence from established treaties (at least 36 months
-//   old, partner's opinion of us >= 40): alliance 2, trade agreement 1. Needs
+// Diplomatic leadership: influence from established ties with partners whose
+//   opinion of us is >= 35. Each partner counts once for its strongest bond —
+//   an alliance (36 months old) or being in our sphere 2, our guarantee (a year
+//   old) 1 — plus 1 for a trade agreement (36 months old). Needs
 //   1.25 influence per other surviving realm (min 6), trust >= 65 and no
 //   offensive war — held for 60 months. New treaties do not count, so treaty
 //   cycling is useless; rivals may cancel trade with a realm close to winning.
-// Each month a condition fails, its timer loses 6 months (not a full reset).
+// A month in which a condition fails pauses its timer; from the second failing
+// month in a row, the timer loses 6 months a month (not a full reset).
 // Several winners in one month: highest campaign score wins.
 // Campaign limit: highest campaign score (formula in campaignScore()).
 
 import { C } from './config';
 import { opinion, worldDev } from './diplomacy';
+import { sphereMembers } from './influence';
 import { ownedProvinces, aliveNations, months, notify, nationName, endTick, dateOf, type Sim, warsOf } from './state';
 import type { NationId, VictoryPath } from './types';
 
@@ -80,17 +84,28 @@ export function establishedPartners(sim: Sim, nid: NationId): NationId[] {
   return Object.keys(influenceByPartner(sim, nid)).sort();
 }
 
-/** Influence per partner from established treaties (alliance 2, trade 1). */
+/**
+ * Influence per partner: its strongest bond (an established alliance or our
+ * sphere 2, our guarantee 1) plus an established trade agreement (1).
+ */
 export function influenceByPartner(sim: Sim, nid: NationId): Record<NationId, number> {
   const st = sim.state;
-  const out: Record<NationId, number> = {};
+  const bond: Record<NationId, number> = {};
+  const trade: Record<NationId, number> = {};
+  const ok = (other: NationId) => opinion(sim, other, nid) >= C.victory.diplomaticOpinion;
+  const old = (since: number, m: number) => st.tick - since >= months(m);
   for (const t of st.treaties) {
-    if (t.type === 'nap') continue;
-    if (t.a !== nid && t.b !== nid) continue;
-    if (st.tick - t.since < months(C.victory.diplomaticTreatyAge)) continue;
+    if (t.type === 'nap' || (t.a !== nid && t.b !== nid) || !old(t.since, C.victory.diplomaticTreatyAge)) continue;
     const other = t.a === nid ? t.b : t.a;
-    if (opinion(sim, other, nid) < C.victory.diplomaticOpinion) continue;
-    out[other] = (out[other] ?? 0) + (t.type === 'alliance' ? 2 : 1);
+    if (t.type === 'alliance') bond[other] = 2;
+    else trade[other] = 1;
+  }
+  for (const m of sphereMembers(sim, nid)) bond[m] = Math.max(bond[m] ?? 0, C.influence.victory);
+  for (const g of st.guarantees) if (g.by === nid && old(g.since, 12)) bond[g.of] = Math.max(bond[g.of] ?? 0, 1);
+  const out: Record<NationId, number> = {};
+  for (const o of new Set([...Object.keys(bond), ...Object.keys(trade)])) {
+    if (!st.nations[o]?.alive || !ok(o)) continue;
+    out[o] = (bond[o] ?? 0) + (trade[o] ?? 0);
   }
   return out;
 }
@@ -159,7 +174,7 @@ export function victoryProgress(sim: Sim, nid: NationId): VictoryProgress {
     streak: n.victoryStreak.diplomatic,
     required: C.victory.diplomaticMonths,
     lines: [
-      `Influence: ${infl}/${need} (alliance 2, trade 1; treaties ≥ ${C.victory.diplomaticTreatyAge / 12} years old with partners at opinion ≥ ${C.victory.diplomaticOpinion})`,
+      `Influence: ${infl}/${need} (per partner at opinion ≥ ${C.victory.diplomaticOpinion}: alliance after ${C.victory.diplomaticTreatyAge / 12} years or our sphere 2, our guarantee 1; plus trade after ${C.victory.diplomaticTreatyAge / 12} years 1)`,
       `Trust ${Math.round(n.trust)} (need ${C.victory.diplomaticTrust})${offensive ? ' · fighting an offensive war' : ''}`,
     ],
   };
@@ -188,10 +203,16 @@ export function monthlyVictory(sim: Sim): void {
   for (const nid of aliveNations(sim)) {
     const n = st.nations[nid];
     const vp = victoryProgress(sim, nid);
+    const missed = (n.victoryMissed ??= { territorial: 0, economic: 0, diplomatic: 0 });
     for (const k of ['territorial', 'economic', 'diplomatic'] as VictoryPath[]) {
       const before = n.victoryStreak[k];
-      if (vp[k].met) n.victoryStreak[k] = Math.min(VICTORY_MONTHS[k], before + 1);
-      else n.victoryStreak[k] = Math.max(0, before - C.victory.streakDecay);
+      if (vp[k].met) {
+        n.victoryStreak[k] = Math.min(VICTORY_MONTHS[k], before + 1);
+        missed[k] = 0;
+      } else {
+        missed[k]++;
+        if (missed[k] >= 2) n.victoryStreak[k] = Math.max(0, before - C.victory.streakDecay);
+      }
       if (vp[k].met && before === 0) {
         notify(sim, null, nid === playerId(sim) ? 'normal' : 'urgent', 'victory', `${nationName(sim, nid)} now meets the conditions for ${VICTORY_LABELS[k]}. They win if they hold them for ${VICTORY_MONTHS[k]} months.`);
       }

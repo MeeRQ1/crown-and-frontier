@@ -44,7 +44,24 @@ import {
   splitFleetProblem,
   startShip,
 } from './naval';
-import { policyProblem, researchProblem, setPolicy } from './progression';
+import { focusProblem, startFocus } from './focus';
+import {
+  addToBloc,
+  endGuarantee,
+  evaluateBloc,
+  foundBloc,
+  foundBlocProblem,
+  giveGuarantee,
+  guaranteeProblem,
+  inviteProblem,
+  joinProblem,
+  leaveBloc,
+  loanProblem,
+  makeLoan,
+  offerLoan,
+} from './influence';
+import { applySettlement, counterOffer, evaluateSettlement, settlementProblem } from './settlement';
+import { researchProblem } from './progression';
 import { serialize } from './save';
 import { nationName, notify, type Sim } from './state';
 import type { Command, CommandResult } from './types';
@@ -154,8 +171,8 @@ export function checkCommand(sim: Sim, cmd: Command): string | null {
       return researchProblem(sim, cmd.nation, cmd.tech);
     case 'funding':
       return [0, 1, 2, 3].includes(cmd.level) ? null : 'Invalid funding level.';
-    case 'policy':
-      return policyProblem(sim, cmd.nation, cmd.policy);
+    case 'focus':
+      return focusProblem(sim, cmd.nation, cmd.focus);
     case 'envoy':
       return envoyProblem(sim, cmd.nation, cmd.target);
     case 'recallEnvoy':
@@ -170,11 +187,32 @@ export function checkCommand(sim: Sim, cmd: Command): string | null {
       return declareWarProblem(sim, cmd.nation, cmd.target, cmd.goal);
     case 'peace':
       return peaceProblem(sim, cmd.nation, cmd.war, cmd.with, cmd.terms);
+    case 'settle':
+      return settlementProblem(sim, cmd.nation, cmd.war, cmd.demands);
     case 'respond': {
       const p = st.proposals.find((x) => x.id === cmd.proposal);
       if (!p || p.to !== cmd.nation) return 'That proposal is no longer open.';
+      if (cmd.drop !== undefined) {
+        if (p.kind !== 'settlement' || !cmd.accept) return 'Only a settlement can be answered with a counter-offer.';
+        if (!Array.isArray(cmd.drop) || cmd.drop.some((i) => !Number.isInteger(i) || i < 0 || i >= (p.demands?.length ?? 0))) return 'Invalid counter-offer.';
+        if (new Set(cmd.drop).size >= (p.demands?.length ?? 0)) return 'A counter-offer must keep at least one demand (or decline and fight on).';
+      }
       return null;
     }
+    case 'guarantee':
+      return guaranteeProblem(sim, cmd.nation, cmd.target);
+    case 'revokeGuarantee':
+      return st.guarantees.some((g) => g.by === cmd.nation && g.of === cmd.target) ? null : 'We do not guarantee them.';
+    case 'loan':
+      return loanProblem(sim, cmd.nation, cmd.target, cmd.amount);
+    case 'foundBloc':
+      return foundBlocProblem(sim, cmd.nation, cmd.target);
+    case 'inviteBloc':
+      return inviteProblem(sim, cmd.nation, cmd.target);
+    case 'joinBloc':
+      return joinProblem(sim, cmd.nation, cmd.bloc);
+    case 'leaveBloc':
+      return st.blocs.some((b) => b.members.includes(cmd.nation)) ? null : 'We are not in a trade bloc.';
     case 'eventChoice': {
       const pe = n.pendingEvents.find((e) => e.id === cmd.instance);
       if (!pe) return 'That event has already been resolved.';
@@ -343,8 +381,8 @@ function execute(sim: Sim, cmd: Command): CommandResult {
     case 'funding':
       st.nations[cmd.nation].research.funding = cmd.level;
       return { ok: true };
-    case 'policy':
-      setPolicy(sim, cmd.nation, cmd.policy);
+    case 'focus':
+      startFocus(sim, cmd.nation, cmd.focus);
       return { ok: true };
     case 'envoy':
       startEnvoy(sim, cmd.nation, cmd.target);
@@ -379,6 +417,70 @@ function execute(sim: Sim, cmd: Command): CommandResult {
       applyPeace(sim, cmd.war, cmd.nation, cmd.with, cmd.terms);
       return { ok: true, message: `${nationName(sim, cmd.with)} accepts the peace.` };
     }
+    case 'settle': {
+      const w = st.wars[cmd.war];
+      const other = cmd.nation === w.attackerLead ? w.defenderLead : w.attackerLead;
+      if (st.nations[other].isPlayer) {
+        addProposal(sim, { kind: 'settlement', from: cmd.nation, to: other, war: cmd.war, demands: cmd.demands });
+        notify(sim, other, 'urgent', 'proposal', `${nationName(sim, cmd.nation)} proposes a peace settlement.`);
+        return { ok: true, message: 'Settlement proposed.' };
+      }
+      const ev = evaluateSettlement(sim, cmd.war, other, cmd.demands);
+      if (!ev.accept) {
+        const top = [...ev.reasons].sort((x, y) => x.value - y.value).slice(0, 3).map((r) => `${r.label} (${r.value > 0 ? '+' : ''}${r.value})`);
+        const counter = counterOffer(sim, cmd.war, other, cmd.demands);
+        const tail = counter ? ` They would accept ${counter.length} of the ${cmd.demands.length} demands.` : ' They will fight on.';
+        return { ok: false, reason: `${nationName(sim, other)} refuses (score ${Math.round(ev.score)}): ${top.join('; ')}.${tail}` };
+      }
+      applySettlement(sim, cmd.war, cmd.nation, other, cmd.demands);
+      return { ok: true, message: `${nationName(sim, other)} accepts the settlement.` };
+    }
+    case 'guarantee':
+      giveGuarantee(sim, cmd.nation, cmd.target);
+      return { ok: true, message: `We guarantee the independence of ${nationName(sim, cmd.target)}.` };
+    case 'revokeGuarantee':
+      endGuarantee(sim, cmd.nation, cmd.target, true);
+      return { ok: true };
+    case 'loan':
+      return offerLoan(sim, cmd.nation, cmd.target, cmd.amount);
+    case 'foundBloc': {
+      if (st.nations[cmd.target].isPlayer) {
+        addProposal(sim, { kind: 'blocInvite', from: cmd.nation, to: cmd.target, bloc: 'new' });
+        notify(sim, cmd.target, 'normal', 'proposal', `${nationName(sim, cmd.nation)} proposes that we found a trade bloc together.`);
+        return { ok: true, message: 'Proposal sent.' };
+      }
+      const ev = evaluateBloc(sim, cmd.nation, cmd.target, cmd.target);
+      if (!ev.accept) return { ok: false, reason: `${nationName(sim, cmd.target)} declines (score ${Math.round(ev.score)}).` };
+      const b = foundBloc(sim, cmd.nation, cmd.target);
+      return { ok: true, message: `The ${b.name} is founded.` };
+    }
+    case 'inviteBloc': {
+      const b = st.blocs.find((x) => x.members.includes(cmd.nation))!;
+      if (st.nations[cmd.target].isPlayer) {
+        addProposal(sim, { kind: 'blocInvite', from: cmd.nation, to: cmd.target, bloc: b.id });
+        notify(sim, cmd.target, 'normal', 'proposal', `${nationName(sim, cmd.nation)} invites us to join the ${b.name}.`);
+        return { ok: true, message: 'Invitation sent.' };
+      }
+      const ev = evaluateBloc(sim, cmd.nation, cmd.target, cmd.target);
+      if (!ev.accept) return { ok: false, reason: `${nationName(sim, cmd.target)} declines (score ${Math.round(ev.score)}).` };
+      addToBloc(sim, b.id, cmd.target);
+      return { ok: true, message: `${nationName(sim, cmd.target)} joins the ${b.name}.` };
+    }
+    case 'joinBloc': {
+      const b = st.blocs.find((x) => x.id === cmd.bloc)!;
+      if (st.nations[b.leader].isPlayer) {
+        addProposal(sim, { kind: 'blocJoin', from: cmd.nation, to: b.leader, bloc: b.id });
+        notify(sim, b.leader, 'normal', 'proposal', `${nationName(sim, cmd.nation)} asks to join the ${b.name}.`);
+        return { ok: true, message: 'Request sent.' };
+      }
+      const ev = evaluateBloc(sim, b.leader, cmd.nation, b.leader);
+      if (!ev.accept) return { ok: false, reason: `${nationName(sim, b.leader)} turns down our request (score ${Math.round(ev.score)}).` };
+      addToBloc(sim, b.id, cmd.nation);
+      return { ok: true, message: `We join the ${b.name}.` };
+    }
+    case 'leaveBloc':
+      leaveBloc(sim, cmd.nation);
+      return { ok: true };
     case 'respond': {
       const p = st.proposals.find((x) => x.id === cmd.proposal)!;
       st.proposals = st.proposals.filter((x) => x.id !== p.id);
@@ -388,7 +490,43 @@ function execute(sim: Sim, cmd: Command): CommandResult {
       }
       if (!cmd.accept) {
         addMemory(sim, p.from, cmd.nation, 'rebuffed', -5, 1);
-        return { ok: true, message: 'Proposal declined.' };
+        return { ok: true, message: p.kind === 'settlement' ? 'Settlement refused: the war goes on.' : 'Proposal declined.' };
+      }
+      if (p.kind === 'settlement') {
+        const w = st.wars[p.war!];
+        if (!w) return { ok: false, reason: 'That war is over.' };
+        const drop = new Set(cmd.drop ?? []);
+        const demands = (p.demands ?? []).filter((_, i) => !drop.has(i));
+        const prob = settlementProblem(sim, p.from, p.war!, demands);
+        if (prob) return { ok: false, reason: `The settlement is no longer valid: ${prob}` };
+        if (drop.size) {
+          // a counter-offer: the proposer judges the reduced terms
+          if (!st.nations[p.from].isPlayer) {
+            const ev = evaluateSettlement(sim, p.war!, p.from, demands);
+            if (!ev.accept) return { ok: true, message: `${nationName(sim, p.from)} rejects our counter-offer (score ${Math.round(ev.score)}): the war goes on.` };
+          }
+        }
+        applySettlement(sim, p.war!, p.from, cmd.nation, demands);
+        return { ok: true, message: drop.size ? 'Counter-offer accepted: peace concluded.' : 'Settlement accepted: peace concluded.' };
+      }
+      if (p.kind === 'loan') {
+        const prob = loanProblem(sim, p.from, cmd.nation, p.amount ?? 0);
+        if (prob && !prob.startsWith('Our offer')) return { ok: false, reason: `The offer is no longer valid: ${prob}` };
+        makeLoan(sim, p.from, cmd.nation, p.amount ?? 0);
+        return { ok: true, message: 'Loan accepted.' };
+      }
+      if (p.kind === 'blocInvite' && p.bloc === 'new') {
+        const prob = foundBlocProblem(sim, p.from, cmd.nation);
+        if (prob && !prob.startsWith('Our proposal')) return { ok: false, reason: `The offer is no longer valid: ${prob}` };
+        const b = foundBloc(sim, p.from, cmd.nation);
+        return { ok: true, message: `The ${b.name} is founded.` };
+      }
+      if (p.kind === 'blocInvite' || p.kind === 'blocJoin') {
+        const joiner = p.kind === 'blocInvite' ? cmd.nation : p.from;
+        const prob = joinProblem(sim, joiner, p.bloc!);
+        if (prob && !prob.startsWith('Our request')) return { ok: false, reason: `The offer is no longer valid: ${prob}` };
+        addToBloc(sim, p.bloc!, joiner);
+        return { ok: true, message: 'Welcome to the trade bloc.' };
       }
       if (p.kind === 'peace') {
         const prob = peaceProblem(sim, p.from, p.war!, cmd.nation, p.terms!);
@@ -396,6 +534,7 @@ function execute(sim: Sim, cmd: Command): CommandResult {
         applyPeace(sim, p.war!, p.from, cmd.nation, p.terms!);
         return { ok: true, message: 'Peace concluded.' };
       }
+      if (p.kind !== 'nap' && p.kind !== 'trade' && p.kind !== 'alliance') return { ok: false, reason: 'Unknown proposal.' };
       const prob = treatyProblem(sim, p.from, cmd.nation, p.kind);
       if (prob) return { ok: false, reason: `The offer is no longer valid: ${prob}` };
       signTreaty(sim, p.kind, p.from, cmd.nation);

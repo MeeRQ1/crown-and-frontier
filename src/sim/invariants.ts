@@ -6,6 +6,7 @@ import { devMax } from './construction';
 import { maxMorale } from './military';
 import { checkIndexes } from './index';
 import { atWar, hasTreaty, type Sim } from './state';
+import { getFocus } from './focus';
 
 function scanFinite(v: unknown, path: string, out: string[]): void {
   if (out.length > 20) return;
@@ -123,6 +124,40 @@ export function checkInvariants(sim: Sim): string[] {
     seen.add(k);
     if (!st.nations[t.a]?.alive || !st.nations[t.b]?.alive) out.push(`treaty with dead realm ${k}`);
     if (t.a === t.b) out.push(`self treaty ${k}`);
+  }
+  // diplomacy and focus
+  for (const g of st.guarantees) {
+    if (!st.nations[g.by]?.alive || !st.nations[g.of]?.alive) out.push(`guarantee ${g.by}->${g.of} with a dead realm`);
+    if (g.by === g.of) out.push(`self guarantee ${g.by}`);
+    if (atWar(sim, g.by, g.of)) out.push(`guarantee ${g.by}->${g.of} between realms at war`);
+  }
+  for (const l of st.loans) {
+    if (!(l.remaining > 0) || !(l.monthly > 0)) out.push(`loan ${l.id}: remaining ${l.remaining}, instalment ${l.monthly}`);
+    if (!st.nations[l.from] || !st.nations[l.to]) out.push(`loan ${l.id}: unknown realm`);
+  }
+  const inBloc = new Set<string>();
+  for (const b of st.blocs) {
+    if (b.members.length < 2) out.push(`bloc ${b.id} with ${b.members.length} member(s)`);
+    if (!b.members.includes(b.leader)) out.push(`bloc ${b.id}: leader not a member`);
+    for (const m of b.members) {
+      if (inBloc.has(m)) out.push(`${m}: in two trade blocs`);
+      inBloc.add(m);
+      if (!st.nations[m]?.alive) out.push(`bloc ${b.id}: dead member ${m}`);
+    }
+  }
+  for (const h in st.influence) for (const t in st.influence[h]) {
+    const v = st.influence[h][t];
+    if (!(v >= 0 && v <= 100)) out.push(`influence ${h}->${t}: ${v}`);
+  }
+  for (const nid of sim.world.nationIds) {
+    const n = st.nations[nid];
+    const fs = n.focus;
+    if (!fs || !Array.isArray(fs.done) || new Set(fs.done).size !== fs.done.length) out.push(`${nid}: bad focus state`);
+    else {
+      if (fs.current && !getFocus(sim, nid, fs.current)) out.push(`${nid}: unknown current focus ${fs.current}`);
+      for (const f of fs.done) if (!getFocus(sim, nid, f)) out.push(`${nid}: unknown completed focus ${f}`);
+      if (fs.progress < 0) out.push(`${nid}: negative focus progress`);
+    }
   }
   for (const nid of sim.world.nationIds) {
     const n = st.nations[nid];

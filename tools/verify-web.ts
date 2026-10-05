@@ -12,6 +12,7 @@ import { chromium, type Browser, type Page } from 'playwright';
 import { mapChecksum, type MapPackage } from '../src/maps/format';
 import { parseMapPackage } from '../src/maps/validate';
 import { seaAirSave } from './sea-air-save';
+import { diploSave } from './diplo-save';
 
 const DIST = 'dist';
 const ZIP = 'release/crown-and-frontier-web.zip';
@@ -514,6 +515,117 @@ async function mapEditorFlow(browser: Browser, base: string): Promise<void> {
   await page2.close();
 }
 
+/**
+ * Stage E through the interface: choosing a national focus, a guarantee, a
+ * loan, founding a trade bloc, a peace conference for two winners, a
+ * counter-offer to a settlement, and spheres and blocs in the Diplomacy map mode.
+ */
+async function diplomacyFlow(browser: Browser, base: string): Promise<void> {
+  const { text, ids } = diploSave();
+  const path = join('reports', 'tmp', 'diplomacy.json');
+  mkdirSync(join('reports', 'tmp'), { recursive: true });
+  writeFileSync(path, text);
+  const page = await browser.newPage({ viewport: { width: 1366, height: 800 } });
+  const problems = await watch(page);
+  await page.goto(base);
+  await startCampaign(page);
+  await page.getByRole('button', { name: 'Game menu' }).click();
+  const [chooser] = await Promise.all([page.waitForEvent('filechooser'), page.getByRole('button', { name: 'Import file' }).click()]);
+  await chooser.setFiles(path);
+  await page.waitForFunction(() => (window as any).cnf.player === 'aur', null, { timeout: 10000 });
+  await page.evaluate(() => {
+    const app = (window as any).cnf;
+    app.setSpeed(0);
+    app.ui.dockOpen = false;
+    document.querySelectorAll<HTMLButtonElement>('.modal-layer:not(.hidden) footer button').forEach((b) => b.click());
+    app.refresh();
+  });
+  const state = <T>(fn: string) => page.evaluate(`(() => { const st = window.cnf.sim.state; return ${fn}; })()`) as Promise<T>;
+
+  // ── national focus: P opens the tree; choose a national focus
+  await page.keyboard.press('p');
+  await page.waitForTimeout(200);
+  const title = (await page.locator('.drawer:not(.closed) h2').textContent()) ?? '';
+  const branches = await page.locator('[data-branch]').count();
+  const first = page.locator('[data-branch="national"] .focus-card.available button').first();
+  const name = (await page.locator('[data-branch="national"] .focus-card.available h4').first().textContent()) ?? '';
+  await first.click();
+  await page.waitForTimeout(200);
+  const current = await state<string | null>('st.nations.aur.focus.current');
+  const shown = (await page.locator('.drawer .body p').first().textContent()) ?? '';
+  record('Focus: P opens the focus tree; choosing a national focus makes it the realm’s focus', /National Focus/.test(title) && branches >= 5 && !!current && current.startsWith('nat_') && shown.includes('National focus'), `${branches} branches; chose "${name.split(' ')[0]}…" → ${current}`);
+
+  // ── a guarantee, a loan, a trade bloc (Diplomacy ledger)
+  await page.evaluate((o) => (window as any).cnf.openDiplomacy(o), ids.protege);
+  await page.waitForTimeout(150);
+  await page.locator('[data-fk="Guarantee their independence"]').click();
+  await page.waitForTimeout(150);
+  const guaranteed = await state<boolean>(`st.guarantees.some((g) => g.by === 'aur' && g.of === '${ids.protege}')`);
+  const influenceRow = await page.locator('.diplo-detail').getByText('Our influence over them').count();
+  record('Diplomacy: guaranteeing a realm’s independence, with influence shown', guaranteed && influenceRow > 0, `guarantee ${guaranteed ? 'given' : 'missing'}`);
+  await page.evaluate((o) => (window as any).cnf.openDiplomacy(o), ids.borrower);
+  await page.waitForTimeout(150);
+  const t0 = await state<number>(`st.nations.${ids.borrower}.treasury`);
+  await page.locator('[data-fk="Lend 100 crowns"]').click();
+  await page.waitForTimeout(150);
+  const loan = await state<{ remaining: number } | null>(`st.loans.find((l) => l.from === 'aur' && l.to === '${ids.borrower}') ?? null`);
+  const t1 = await state<number>(`st.nations.${ids.borrower}.treasury`);
+  record('Diplomacy: a loan to a realm in debt is accepted and repaid with interest', !!loan && Math.abs(loan.remaining - 120) < 1e-6 && t1 - t0 === 100, `loan ${loan ? `${loan.remaining} owed` : 'refused'}; their treasury ${t0} → ${t1}`);
+  await page.evaluate((o) => (window as any).cnf.openDiplomacy(o), ids.partner);
+  await page.waitForTimeout(150);
+  await page.locator('[data-fk="Found a trade bloc with them"]').click();
+  await page.waitForTimeout(150);
+  const bloc = await state<string[] | null>(`st.blocs[0]?.members ?? null`);
+  const standing = await page.locator('[data-sk="diplo-standing"]').textContent();
+  record('Diplomacy: founding a trade bloc with a trade partner', JSON.stringify(bloc) === JSON.stringify(['aur', ids.partner].sort()) && /Customs Union/.test(standing ?? ''), `members ${JSON.stringify(bloc)}`);
+
+  // ── the peace conference: the AI's suggested terms for both winners, accepted
+  await page.evaluate(() => (window as any).cnf.openLedger('wars'));
+  await page.waitForTimeout(200);
+  const conf = page.locator('[data-sk="peace-conference"]').first();
+  await conf.locator('[data-fk="settle-suggest"]').click();
+  await page.waitForTimeout(200);
+  const demands = await page.locator('[data-sk="peace-conference"]').first().locator('.demand-list li').count();
+  const answer = (await page.locator('[data-sk="peace-conference"]').first().getByText(/Would (accept|refuse)/).first().textContent()) ?? '';
+  const allyBefore = await state<number>(`st.nations.${ids.ally}.stats.demandsWon`);
+  await page.locator('[data-sk="peace-conference"]').first().locator('[data-fk="Propose settlement"]').click();
+  await page.waitForTimeout(200);
+  const over = await state<boolean>(`!st.wars['${ids.winWar}']`);
+  const allyAfter = await state<number>(`st.nations.${ids.ally}.stats.demandsWon`);
+  record('Peace conference: suggested terms share the spoils with an ally, and the settlement ends the war', demands > 1 && /Would accept/.test(answer) && over && allyAfter > allyBefore, `${demands} demands; ${answer.trim()}; war ${over ? 'over' : 'goes on'}; ally received ${allyAfter - allyBefore}`);
+
+  // ── a settlement offered to us: strike a demand and send a counter-offer
+  await page.evaluate(() => {
+    const app = (window as any).cnf;
+    app.closeLedger();
+    app.ui.dockOpen = true;
+    app.refresh();
+  });
+  await page.waitForTimeout(200);
+  const card = page.locator('.decision-card');
+  const cardTitle = (await card.locator('h3').textContent()) ?? '';
+  const boxes = await card.locator('.demand-list input[type=checkbox]').count();
+  await card.locator('[data-fk="demand-1"]').uncheck();
+  await page.waitForTimeout(150);
+  const verdict = (await page.locator('.decision-card').getByText(/would (accept|reject) this counter-offer/).textContent()) ?? '';
+  const button = (await page.locator('.decision-card [data-fk="accept"]').textContent()) ?? '';
+  await page.locator('.decision-card [data-fk="accept"]').click();
+  await page.waitForTimeout(200);
+  const pending = await state<number>(`st.proposals.filter((p) => p.kind === 'settlement').length`);
+  const war2 = await state<boolean>(`!!st.wars['${ids.loseWar}']`);
+  const elmsgate = await state<string>(`st.provinces.elmsgate.owner`);
+  const consistent = war2 ? elmsgate === 'aur' : elmsgate === ids.attacker;
+  record('Settlement offered to us: striking a demand sends a counter-offer, which the other side judges', /Peace settlement/.test(cardTitle) && boxes === 2 && /counter-offer/.test(verdict) && /counter-offer/i.test(button) && pending === 0 && consistent, `${verdict.trim()}; war ${war2 ? 'goes on' : 'settled'}; Elmsgate held by ${elmsgate}`);
+
+  // ── the Diplomacy map mode shows blocs, spheres and guarantees
+  await page.evaluate(() => (window as any).cnf.setMode('diplomacy'));
+  await page.waitForTimeout(300);
+  const legend = (await page.locator('.legend:not(.hidden)').first().textContent()) ?? '';
+  record('Diplomacy map mode: the legend covers spheres, guarantees and trade blocs', /sphere/.test(legend) && /guaranteed/i.test(legend) && /trade bloc/.test(legend), legend.slice(0, 80));
+  record('Diplomacy and focus flows run without page errors', problems.length === 0, problems.slice(0, 3).join('; '));
+  await page.close();
+}
+
 async function main(): Promise<void> {
   if (!existsSync(join(DIST, 'index.html'))) throw new Error('dist/ missing: run npm run build');
   const zipFiles = existsSync(ZIP) ? unzip(ZIP) : null;
@@ -531,11 +643,16 @@ async function main(): Promise<void> {
       await mapEditorFlow(browser, `${origin}/`);
       return;
     }
+    if (process.env.ONLY === 'diplomacy') {
+      await diplomacyFlow(browser, `${origin}/`);
+      return;
+    }
     await flow(browser, `${origin}/`, 'Site root');
     await flow(browser, `${origin}${SUB}`, 'Project subpath');
     await mapChoice(browser, `${origin}/`);
     await seaAirFlow(browser, `${origin}/`);
     await mapEditorFlow(browser, `${origin}/`);
+    await diplomacyFlow(browser, `${origin}/`);
     if (zipFiles) {
       record('Release ZIP has index.html at its root', zipFiles.has('index.html'), `${zipFiles.size} files`);
       await flow(browser, `${origin}/zip/`, 'Unpacked release ZIP');

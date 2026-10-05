@@ -10,6 +10,7 @@ import { C, RESOURCE_INFO, UNITS, UNIT_TYPES } from './config';
 import { TECHS } from './data/techs';
 import { poolCap, removePopulation } from './economy';
 import { touchArmies } from './index';
+import { armyCap } from './influence';
 import { nationMods, type Mods } from './modifiers';
 import { armiesAt, armiesOf, atWar, bump, enemiesOf, isFriendly, notify, provName, type Sim } from './state';
 import { supplyAt, supplyStatus } from './supply';
@@ -77,6 +78,8 @@ export function recruitProblem(sim: Sim, nid: NationId, pid: ProvinceId, unit: U
   if (p.revoltUntil > sim.state.tick) return 'The province is in revolt.';
   if (p.integration < C.integration.recruitMin) return `Frontier province: integration ${Math.floor(p.integration)}/${C.integration.recruitMin} needed to raise troops.`;
   if (hostileArmyIn(sim, nid, pid)) return 'Enemy troops are in the province.';
+  const cap = armyCap(sim, nid);
+  if (cap !== null && regimentsOf(sim, nid) >= cap) return `Disarmed by treaty: at most ${cap} regiments until the limit expires.`;
   const cost = unitCost(sim, nid, unit);
   if (n.treasury < cost.crowns) return `Needs ${cost.crowns} crowns (treasury ${Math.floor(n.treasury)}).`;
   if (n.materiel < cost.materiel) return `Needs ${cost.materiel} materiel (stockpile ${Math.floor(n.materiel)}): build factories or wait for industry.`;
@@ -85,6 +88,14 @@ export function recruitProblem(sim: Sim, nid: NationId, pid: ProvinceId, unit: U
   }
   if (n.manpower < cost.manpower) return `Needs ${cost.manpower.toLocaleString()} men in the manpower pool (pool ${Math.floor(n.manpower).toLocaleString()}).`;
   return null;
+}
+
+/** Regiments in a realm's armies and in training. */
+export function regimentsOf(sim: Sim, nid: NationId): number {
+  let r = 0;
+  for (const a of armiesOf(sim, nid)) r += a.regiments.length;
+  for (const pid of sim.world.provIds) for (const o of sim.state.provinces[pid].recruits) if (o.nation === nid) r++;
+  return r;
 }
 
 export function orderRecruit(sim: Sim, nid: NationId, pid: ProvinceId, unit: UnitType): void {

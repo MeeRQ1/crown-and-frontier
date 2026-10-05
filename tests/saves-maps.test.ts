@@ -20,6 +20,8 @@ const FIXTURE = readFileSync(new URL('./fixtures/reach-save-main-c29aea6.json', 
 // format 2, written by the Stage A build (168569b): a built-in Aldmere campaign five years in, and a custom-map campaign
 const FORMAT2_ALDMERE = readFileSync(new URL('./fixtures/aldmere-save-format2-168569b.json', import.meta.url), 'utf8');
 const FORMAT2_CUSTOM = readFileSync(new URL('./fixtures/custom-map-save-format2-168569b.json', import.meta.url), 'utf8');
+// format 3, written by the Stage D build (9e67015): Aldmere, the Serene League played, a war under way, every realm with a policy
+const FORMAT3_ALDMERE = readFileSync(new URL('./fixtures/aldmere-save-format3-9e67015.json', import.meta.url), 'utf8');
 const ENV = { build: 'test', userAgent: 'vitest' };
 const strip = (s: string) => s.replace(/"savedAt":"[^"]+"/, '');
 
@@ -82,9 +84,10 @@ describe('map packages', () => {
 describe('save format', () => {
   it('a format-1 save is converted step by step, with notices, and keeps playing', () => {
     const { sim, notices } = readSave(FIXTURE);
-    expect(notices).toHaveLength(2);
+    expect(notices).toHaveLength(3);
     expect(notices[0]).toMatch(/format 1/);
     expect(notices[1]).toMatch(/industrial age.*Foot became infantry.*continues in 1896/);
+    expect(notices[2]).toMatch(/focus/);
     const regs = Object.values(sim.state.armies).flatMap((a) => a.regiments.map((r) => r.type));
     expect(regs.length).toBeGreaterThan(0);
     expect(regs.every((t) => ['infantry', 'cavalry', 'artillery'].includes(t))).toBe(true);
@@ -162,8 +165,9 @@ describe('save format', () => {
     const before = JSON.parse(FORMAT2_ALDMERE);
     expect(before.schema).toBe(2);
     const { sim, notices } = readSave(FORMAT2_ALDMERE);
-    expect(notices).toHaveLength(1);
+    expect(notices).toHaveLength(2);
     expect(notices[0]).toMatch(/save format 2.*industrial age.*continues in 1885/);
+    expect(notices[1]).toMatch(/save format 3.*focus/);
     expect(sim.state.schema).toBe(SCHEMA_VERSION);
     expect(sim.state.map).toEqual(mapFingerprint('aldmere'));
     const regs = Object.values(sim.state.armies).flatMap((a) => a.regiments.map((r) => r.type));
@@ -186,6 +190,39 @@ describe('save format', () => {
     expect(sim.state.wings).toEqual({});
     for (let i = 0; i < 48; i++) step(sim);
     expect(checkInvariants(sim)).toEqual([]);
+    expect(readSave(serialize(sim)).notices).toEqual([]);
+  });
+
+  it('a format-3 save converts its policies into focuses, keeps its war and keeps playing', () => {
+    const before = JSON.parse(FORMAT3_ALDMERE);
+    expect(before.schema).toBe(3);
+    const { sim, notices } = readSave(FORMAT3_ALDMERE);
+    expect(notices).toHaveLength(1);
+    expect(notices[0]).toMatch(/save format 3.*focus.*\(yours included\)/);
+    expect(sim.state.schema).toBe(SCHEMA_VERSION);
+    // every policy became its focus (with the focus it requires)
+    const policyOf = (id: string) => before.state.nations[id].policy as string;
+    expect(policyOf('ser')).toBe('academy');
+    expect(sim.state.nations.ser.focus.done).toEqual(['state_academy']);
+    for (const id of Object.keys(before.state.nations)) {
+      const done = sim.state.nations[id].focus.done;
+      const want: Record<string, string> = { commerce: 'dip_charter', levy: 'army_levy', frontier: 'state_frontier', academy: 'state_academy', fortress: 'army_fortress', concord: 'dip_concord' };
+      expect(done).toContain(want[policyOf(id)]);
+      expect('policy' in sim.state.nations[id]).toBe(false);
+    }
+    // the war goes on, with no contribution yet; the new diplomacy starts empty
+    const wars = Object.values(sim.state.wars);
+    expect(wars.length).toBe(Object.keys(before.state.wars).length);
+    expect(wars.length).toBeGreaterThan(0);
+    for (const w of wars) expect(w.contrib).toEqual({});
+    expect(sim.state.guarantees).toEqual([]);
+    expect(sim.state.loans).toEqual([]);
+    expect(sim.state.blocs).toEqual([]);
+    expect(checkInvariants(sim)).toEqual([]);
+    for (let i = 0; i < 96; i++) step(sim);
+    expect(checkInvariants(sim)).toEqual([]);
+    // the AI picked focuses
+    expect(Object.values(sim.state.nations).filter((n) => n.alive && !n.isPlayer && (n.focus.current || n.focus.done.length > 1)).length).toBeGreaterThan(5);
     expect(readSave(serialize(sim)).notices).toEqual([]);
   });
 

@@ -7,13 +7,16 @@
 //   1  first release (v0.1, v0.2)
 //   2  the state records its map fingerprint; saves of custom maps embed the map
 //   3  the industrial age: new unit roster, resources, industry, research eras
+//   4  national focus replaces the six policies; peace settlements, guarantees,
+//      influence, loans and trade blocs
 
 import { checkMapObject } from '../maps/validate';
 import { mapChecksum, type MapPackage } from '../maps/format';
 import { C, SCHEMA_VERSION, STRATEGIC } from './config';
 import { LEGACY_TECHS, startingTechs } from './data/techs';
+import { POLICY_TO_FOCUS } from './data/focus';
 import { emptyFlows } from './economy';
-import { defaultFactories, emptyForceStats } from './game';
+import { defaultFactories, emptyDiplomacyStats, emptyForceStats } from './game';
 import type { MapFingerprint } from './types';
 import { getWorld, isBuiltinMap, mapFingerprint, mapScenarioPart, scenarioIds } from './world';
 
@@ -117,6 +120,39 @@ const STEPS: Record<number, Step> = {
         `Foot became infantry, horse cavalry and guns artillery; researched technologies were mapped to their nearest equivalents in the new tree; ` +
         `factories, resource stockpiles and materiel were added; every coastal realm received ports and a home squadron (fleets and air forces are new); ` +
         `and the calendar now begins in ${startYear}, so the campaign continues in ${year}.`,
+    );
+  },
+  // 3 → 4: national focus replaces policies; the new diplomacy starts empty
+  3: (save, notices) => {
+    const st = save.state as Record<string, any>;
+    const kept: string[] = [];
+    for (const n of Object.values<any>(st.nations ?? {})) {
+      const policy = typeof n.policy === 'string' ? n.policy : '';
+      const done = POLICY_TO_FOCUS[policy] ?? [];
+      n.focus = { current: null, progress: 0, done: [...done] };
+      if (n.isPlayer && done.length) kept.push(policy);
+      delete n.policy;
+      delete n.policySince;
+      if (n.ai) delete n.ai.lastPolicyEval;
+      n.stats = { ...emptyDiplomacyStats(), ...n.stats, demands: {} };
+      n.victoryMissed = { territorial: 0, economic: 0, diplomatic: 0 };
+    }
+    st.influence = {};
+    st.guarantees = [];
+    st.loans = [];
+    st.blocs = [];
+    st.reparations = [];
+    st.disarmaments = [];
+    st.counters = { ...st.counters, loan: 0, bloc: 0 };
+    for (const w of Object.values<any>(st.wars ?? {})) w.contrib = w.contrib ?? {};
+    // policy changes in the command log cannot be replayed any more
+    if (Array.isArray(st.playerLog)) st.playerLog = st.playerLog.filter((e: any) => e?.cmd?.type !== 'policy');
+    st.schema = 4;
+    save.schema = 4;
+    notices.push(
+      `This campaign was saved before national focus trees (save format 3) and was converted to format 4. ` +
+        `National policies are replaced by focus trees: every realm keeps its policy as the matching completed focus${kept.length ? ' (yours included)' : ''}, and now chooses a national focus. ` +
+        `Peace settlements with several parties, guarantees, influence and spheres, loans and trade blocs are new; wars under way share their spoils from now on.`,
     );
   },
 };

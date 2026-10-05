@@ -13,7 +13,8 @@
 import { applyCommand, checkCommand } from '../src/sim/commands';
 import { poolCap } from '../src/sim/economy';
 import { TECH_LIST } from '../src/sim/data/techs';
-import { POLICY_LIST } from '../src/sim/data/policies';
+import { focusTree } from '../src/sim/focus';
+import { buildSettlement } from '../src/sim/settlement';
 import { createGame } from '../src/sim/game';
 import { checkInvariants } from '../src/sim/invariants';
 import { goalOptions } from '../src/sim/war';
@@ -24,7 +25,7 @@ import { isOver, step } from '../src/sim/tick';
 import { wingsOf } from '../src/sim/air';
 import { SHIP_TYPES, UNIT_TYPES, WING_TYPES } from '../src/sim/config';
 import { fleetsOf } from '../src/sim/naval';
-import type { AirMission, Command, NationId, ProjectKind, ShipType, TreatyType } from '../src/sim/types';
+import type { AirMission, Command, Demand, DemandKind, NationId, ProjectKind, ShipType, TreatyType } from '../src/sim/types';
 
 const AIR_MISSIONS: AirMission[] = ['idle', 'superiority', 'support', 'interdiction', 'bombing', 'recon'];
 
@@ -51,7 +52,7 @@ function randomCommand(sim: Sim, nid: NationId, r: Rng): Command | null {
   const anyProv = () => pick(r, sim.world.provIds)!;
   const fleets = [...fleetsOf(sim, nid)];
   const wings = wingsOf(sim, nid);
-  const kind = Math.floor(nextFloat(r) * 36);
+  const kind = Math.floor(nextFloat(r) * 41);
   switch (kind) {
     case 0:
     case 1:
@@ -111,7 +112,7 @@ function randomCommand(sim: Sim, nid: NationId, r: Rng): Command | null {
         ? { type: 'research', nation: nid, tech: pick(r, TECH_LIST)!.id }
         : { type: 'funding', nation: nid, level: Math.floor(nextFloat(r) * 4) as 0 | 1 | 2 | 3 };
     case 15:
-      return { type: 'policy', nation: nid, policy: pick(r, POLICY_LIST)!.id };
+      return { type: 'focus', nation: nid, focus: pick(r, focusTree(sim, nid))!.id };
     case 16: {
       const t = pick(r, others)!;
       return nextFloat(r) < 0.7 ? { type: 'envoy', nation: nid, target: t } : { type: 'recallEnvoy', nation: nid, target: t };
@@ -146,7 +147,10 @@ function randomCommand(sim: Sim, nid: NationId, r: Rng): Command | null {
     }
     case 21: {
       const p = pick(r, st.proposals.filter((x) => x.to === nid));
-      return p ? { type: 'respond', nation: nid, proposal: p.id, accept: nextFloat(r) < 0.5 } : null;
+      if (!p) return null;
+      // a counter-offer to a settlement: strike out some demands (sometimes an invalid set)
+      if (p.kind === 'settlement' && nextFloat(r) < 0.4) return { type: 'respond', nation: nid, proposal: p.id, accept: true, drop: (p.demands ?? []).map((_, i) => i).filter(() => nextFloat(r) < 0.4) };
+      return { type: 'respond', nation: nid, proposal: p.id, accept: nextFloat(r) < 0.5 };
     }
     case 22: {
       const pe = pick(r, st.nations[nid].pendingEvents);
@@ -205,6 +209,41 @@ function randomCommand(sim: Sim, nid: NationId, r: Rng): Command | null {
       const near = [w.base, ...sim.world.prov[w.base].neighbors.flatMap((q) => [q, ...sim.world.prov[q].neighbors])];
       return { type: 'airMission', nation: nid, wing: w.id, mission: pick(r, AIR_MISSIONS)!, target: nextFloat(r) < 0.1 ? null : (nextFloat(r) < 0.85 ? pick(r, near) : anyProv()) ?? null };
     }
+    // ── diplomacy: settlements, guarantees, loans, trade blocs
+    case 36: {
+      const w = pick(r, warsOf(sim, nid));
+      if (!w) return null;
+      if (nextFloat(r) < 0.5) {
+        const d = buildSettlement(sim, w.id, nid);
+        return d.length ? { type: 'settle', nation: nid, war: w.id, demands: d } : null;
+      }
+      const mine = w.attackers.includes(nid) ? w.attackers : w.defenders;
+      const theirs = mine === w.attackers ? w.defenders : w.attackers;
+      const flip = nextFloat(r) < 0.3;
+      const demands: Demand[] = [];
+      for (let i = 0; i < 1 + Math.floor(nextFloat(r) * 4); i++) {
+        const to = pick(r, flip ? theirs : mine)!;
+        const from = pick(r, flip ? mine : theirs)!;
+        const k = pick(r, ['cede', 'gold', 'reparations', 'disarm', 'renounce', 'sphere'] as DemandKind[])!;
+        demands.push({ kind: k, from, to, province: k === 'cede' ? (pick(r, ownedProvinces(sim, from)) ?? anyProv()) : undefined, amount: k === 'gold' ? Math.floor(nextFloat(r) * 400) : k === 'reparations' ? pick(r, [0.1, 0.2, 0.3, 0.5])! : undefined });
+      }
+      return { type: 'settle', nation: nid, war: w.id, demands };
+    }
+    case 37: {
+      const t = pick(r, others)!;
+      return nextFloat(r) < 0.7 ? { type: 'guarantee', nation: nid, target: t } : { type: 'revokeGuarantee', nation: nid, target: t };
+    }
+    case 38:
+      return { type: 'loan', nation: nid, target: pick(r, others)!, amount: pick(r, [10, 50, 100, 250, 1e6])! };
+    case 39: {
+      const k = Math.floor(nextFloat(r) * 4);
+      if (k === 0) return { type: 'foundBloc', nation: nid, target: pick(r, others)! };
+      if (k === 1) return { type: 'inviteBloc', nation: nid, target: pick(r, others)! };
+      if (k === 2) return { type: 'joinBloc', nation: nid, bloc: pick(r, st.blocs)?.id ?? 'b0' };
+      return { type: 'leaveBloc', nation: nid };
+    }
+    case 40:
+      return { type: 'focus', nation: nid, focus: pick(r, focusTree(sim, nid))!.id };
     case 35: {
       const w = pick(r, wings);
       if (!w) return null;

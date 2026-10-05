@@ -549,7 +549,7 @@ export function renderHowTo(app: App): HTMLElement {
             ['Shift Right-click', 'Add a waypoint after the current route'],
             ['Space', 'Pause or resume'],
             ['1 2 3 4', 'Game speed'],
-            ['B M T P D W V L H', 'Realm, Military, Research, Policy, Diplomacy, Wars, Victory, Chronicle, Help'],
+            ['B M T P D W V L H', 'Realm, Military, Research, Focus, Diplomacy, Wars, Victory, Chronicle, Help'],
             ['Shift+1…7 O', 'Map modes; O cycles through them'],
             ['F C Home', 'Whole map, centre on selection, capital'],
             ['N K J', 'Next army, next battle, jump to the latest alert'],

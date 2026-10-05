@@ -479,7 +479,7 @@ export const C = {
     tradeOpinion: 10,
     commonEnemy: 15,
     alarmOpinion: 0.5,
-    rivalBidCap: 25, // most opinion a diplomatic front-runner loses to rivals' wariness
+    rivalBidCap: 20, // most opinion a diplomatic front-runner loses to rivals' wariness
     alarmDecay: 0.6,
     alarmCoalition: 45,
     alarmLeave: 25,
@@ -490,6 +490,62 @@ export const C = {
     fabricateMonths: 12,
     fabricateCost: 40,
     proposalWeeks: 4,
+  },
+
+  /** influence and spheres (src/sim/influence.ts) */
+  influence: {
+    envoy: 1.5, // a month for an envoy at their court, times the size factor (0.5–2)
+    trade: 0.5, // a month for the larger economy of a trade agreement
+    loan: 1, // a month while a loan is outstanding
+    loanGrant: 5, // on lending: 5 per month of the borrower's income lent
+    loanGrantCap: 20,
+    guarantee: 0.75,
+    alliance: 0.3, // for the stronger partner
+    blocLeader: 0.5,
+    decay: 0.5, // a month, always
+    warDecay: 3, // a month while at war with them
+    sphere: 40, // influence that draws a smaller realm into one's sphere
+    sphereRatio: 1.25, // ...and this many times any rival's influence there
+    sphereOpinion: 15,
+    settlement: 40, // from a settlement's sphere demand
+    victory: 2, // diplomatic influence (victory) per sphere member
+  },
+
+  guarantee: {
+    base: 1, // guarantees a realm may give (plus modifiers)
+    opinion: 15,
+    trustLoss: 10, // for refusing to defend a realm we guarantee
+    revokeOpinion: -15,
+  },
+
+  loan: {
+    min: 50,
+    months: 24,
+    interest: 0.2,
+    opinion: 10,
+  },
+
+  bloc: {
+    cost: 50,
+    maxMembers: 6,
+    buyDiscount: 0.2, // members buy from members this much cheaper
+    commerceBonus: 0.5, // commerce from a trade agreement inside the bloc
+    opinion: 5,
+  },
+
+  settlement: {
+    reparationsMonths: 60,
+    disarmMonths: 60,
+    renounceMonths: 120,
+    disarmShare: 0.5,
+    disarmMin: 3,
+    disarmCost: 12,
+    renounceCost: 5,
+    sphereCost: 15,
+    reparationsCost: 80, // war-score points per share of income (10% → 8)
+    claimDiscount: 0.8, // a province we hold a claim on costs this much
+    allyWeight: 0.6, // a leader weighs demands on its allies at this share
+    resent: 0.5, // a winner given less than half its fair share resents its leader
   },
 
   war: {
@@ -551,6 +607,8 @@ export const C = {
 /**
  * Save format. 1: first release. 2: records the map fingerprint (id, revision,
  * checksum) and embeds custom maps. 3: the industrial age (units, resources,
- * industry, research eras). Older saves are migrated (src/sim/migrate.ts).
+ * industry, research eras). 4: national focus replaces policies; peace settlements,
+ * guarantees, influence, loans and trade blocs. Older saves are migrated
+ * (src/sim/migrate.ts).
  */
-export const SCHEMA_VERSION = 3;
+export const SCHEMA_VERSION = 4;

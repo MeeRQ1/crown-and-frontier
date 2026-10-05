@@ -550,14 +550,24 @@ East Water; c is an island realm.
 
 - **War goals:**
   - **Claim** — provinces we hold claims on. No trust cost.
-  - **Conquest** — up to two bordering provinces. Costs 8 trust and alarms the target's neighbours. Forbidden under Concord Diplomacy.
+  - **Conquest** — up to two bordering provinces. Costs 8 trust and alarms the target's neighbours. Forbidden while the Concord of Nations focus is held.
   - **Coalition** — declared by a coalition member; all members join.
   Claims come from history, events, peace (the previous owner keeps one) or 12-month fabrication.
 - **Blocked by:** truces (5 years after peace), non-aggression pacts, and alliances.
-- **Calls to arms:** the target's defensive allies are called. AI allies join unless exhausted or
-  already in two wars. A human player gets a 4-week decision that defaults to honouring the call.
-  Declining breaks the alliance and costs 15 trust. Anyone allied to both sides, or in a pact with
+- **Calls to arms:** the target's defensive allies, the realms that guarantee its independence and
+  the realm whose sphere it is in are called. AI realms join unless exhausted or already in two
+  wars. A human player gets a 4-week decision that defaults to honouring the call. Declining
+  breaks an alliance and costs 15 trust, ends a guarantee and costs 10 trust, or (a patron) costs
+  20 influence over the realm and its good opinion. Anyone allied to both sides, or in a pact with
   the attacker, sits out. The attacker's allies are **not** called: alliances are defensive only.
+- **Going to war ends ties** between the two realms: their trade agreement, loans and
+  reparations between them (repudiated), a guarantee between them (breaking it costs the
+  guarantor 10 trust), a trade bloc they share (the attacker leaves it), and half of the
+  influence each holds over the other.
+- **Contribution:** each participant's contribution to a war grows with every battle it wins (1 +
+  enemy losses / 1,000, shared among the winners; losers gain half the casualties they inflict),
+  every naval battle (1 for holding the sea, 1 per ship sunk) and every month it holds enemy land
+  (a tenth of the land's weight). It sets the shares of a peace settlement.
 - **War score** (attacker's view, −100…100) = the share of the defenders' weighted land
   the attackers occupy (dev + 1, capital ×2) − the reverse + battle score (±30) + goal
   score (±25: +1/month while the attackers hold every goal province, −1/month
@@ -570,8 +580,39 @@ East Water; c is an island realm.
   Every term of this evaluation is listed in the peace builder before sending.
   A separate peace with the opposing war leader removes one participant. Any peace removes
   the pending peace offers and calls to arms that no longer apply.
+- **Peace settlements** (`settlement.ts`): a war leader can end the war for every participant
+  at once. A settlement is a list of demands, each from a realm on the losing side to a realm on
+  the winning side:
+
+  | Demand | Effect | Cost (war-score points) |
+  |---|---|---|
+  | Cede a province | as above | 100 × weight / giver's total weight (min 5; × 1.5 unoccupied; × 0.8 if the receiver claims it) |
+  | Pay crowns | at once | 1 per 20 crowns |
+  | Reparations | 10–30% of the giver's gross income each month, for 5 years | 8 per 10% |
+  | Disarm | the giver may have at most half its regiments (min 3), and no battleships or carriers, for 5 years | 12 |
+  | Renounce claims | the giver drops its claims on the receiver's land and may not attack it for 10 years | 5 |
+  | Enter our sphere | the receiver gains 40 influence over the giver; every rival's is halved (receiver must be larger) | 15 |
+
+  The opposing leader accepts when its score is ≥ 0: minus the demands on it, minus 60% of the
+  demands on its allies, plus the war score against it, 0.4 × its exhaustion, +20 with no army
+  left, +10 after five years; minus stubbornness, pride (−5), and −5 each for being disarmed
+  or drawn into a sphere; it must accept at exhaustion 100. A settlement *offered* by the
+  losers is judged like concessions. When it refuses, the **counter-offer** is the settlement
+  with its most expensive demands struck out until the rest would be accepted (none, if less
+  than 40% of the value is left). A player offered a settlement can strike demands and send
+  the rest back; the AI accepts the counter-offer when it judges the reduced terms enough.
+- **Graded by contribution:** each winner's share is its contribution + 1 (the leader's × 1.25)
+  over the side's total. The AI leader's budget is 0.9 × its war score + 0.3 × the losing
+  leader's exhaustion − 3; each winner's part of it (the leader first in line for war-goal
+  provinces) is filled in order with: occupied land next to it or claimed by it (at most 2 per
+  ally, 3 for the leader, 3–4 in all, never a capital it does not claim), renunciation of the
+  loser's claims on it, disarmament of a dangerous neighbour, a sphere for a diplomatic realm
+  larger than the loser, reparations (10–20%), then crowns. An ally given less than half its
+  fair share resents the leader (−8 or more opinion); a winner whose claim was handed to another
+  resents the receiver (−10); the losing leader resents the settlement (up to −30).
 - **Unresolvable wars cannot happen:** a white peace is forced after 8 years, or after 3 years
-  with the score within ±10. A side holding ≥ 90 for 12 months imposes its war goal.
+  with the score within ±10. A side holding ≥ 90 for 12 months dictates a settlement (the AI's
+  terms for its side), with no answer needed.
 - **Territorial transfer:** the ceded province goes to the receiver at integration 10 (25 with a claim)
   with unrest ≥ 30, and its former owner keeps a claim. A lost capital relocates to the best
   remaining province (unrest +10, 50 crowns). A realm with no provinces is **eliminated**:
@@ -598,9 +639,42 @@ East Water; c is an island realm.
   join. Members defend each other against the target and can declare a joint coalition war
   when their combined strength is ≥ 1.3× the target's.
 - **Trust** (0–100) starts at 50 and recovers slowly to 75. It falls when treaties are broken,
-  conquest wars declared, or allies abandoned.
+  conquest wars declared, or allies or guaranteed realms abandoned.
 
-## Research and policy (`progression.ts`, `data/techs.ts`, `data/policies.ts`)
+### Influence, spheres, guarantees, loans and trade blocs (`influence.ts`)
+
+- **Influence** (0–100) is what one realm holds over another. Each month it gains: an envoy at
+  their court 1.5 × the size factor (our development / theirs, 0.5–2); a trade agreement 0.5 for
+  the larger economy; an outstanding loan 1; our guarantee 0.75; an alliance 0.3 for the
+  stronger partner; leading their trade bloc 0.5 — all × (1 + influence modifiers). It loses 0.5
+  a month always and 3 a month while the two are at war; going to war halves it.
+- **Sphere:** a realm is in the sphere of the larger realm that holds ≥ 40 influence over it and
+  ≥ 1.25 × any rival's (never while they are at war). A sphere member's opinion of its patron
+  is +15; it will not ally against its patron (−40 to such alliances) or join a coalition against
+  it; its patron is called to arms when it is attacked. Each member counts 2 toward the
+  patron's Diplomatic Leadership.
+- **Guarantee of independence:** unilateral. The guarantor is called to arms when the
+  guaranteed realm is attacked. A realm may give one guarantee (plus focuses: Guarantor of the
+  Balance, a diplomatic ambition); it cannot guarantee a realm more than 1.2× stronger, an ally
+  or a realm it is at war with. The guaranteed realm thinks better of it (+15). Revoking
+  costs −15 opinion.
+- **Loans:** at least 50 crowns and at most half the lender's treasury, repaid over 24 months
+  with 20% interest through the monthly ledger (the instalment is an expense for the borrower
+  and income for the lender; nothing is paid while they are at war). The lender gains 5
+  influence per month of the borrower's income lent (at most 20) at once, and 1 a month while
+  it is repaid; the borrower +10 opinion. An AI borrower accepts by a listed score: debt +25, a
+  low treasury +15, at war +10, opinion × 0.3, fear of the lender −20, interest −2 per month of
+  income, an already strong influence −10.
+- **Trade blocs:** a customs union founded with a trade partner (50 crowns) and led by its
+  founder, up to 6 members, joined by invitation or request. Inside the bloc purchases cost
+  20% less and commerce between members earns 50% more; the crowns blockades take from any
+  member are shared by all members in proportion to their taxes ("Bloc solidarity" in the
+  ledger). Members think better of each other (+5). An AI realm judges membership by a listed
+  score: −30 (its own tariffs), −2 per member, opinion × 0.4, +15 if it trades with the leader,
+  +5 per other member it trades with, its trade with the leader (the leader's view), fear −20,
+  +15 in the leader's sphere, +10 commercial.
+
+## Research and national focus (`progression.ts`, `focus.ts`, `data/techs.ts`, `data/focus.ts`)
 
 - **Research:** 73 technologies in five branches (land warfare 19, industry 18, society 17,
   naval 12, air 7) across five eras: I Rifle & Rail (1870), II Steel & Breech (1885),
@@ -613,12 +687,34 @@ East Water; c is an island realm.
   (engineers), Tanks (armour), Torpedo Boats, Submarines and Naval Aviation (ships), and
   Aviation, Fighters, Ground Attack and Strategic Bombing (air wings). Transports, cruisers
   and battleships need none.
-- **Policies:** six national priorities, each with a benefit and a drawback: Mercantile Charter,
-  Martial Levy, Frontier Settlement, Royal Academy, Fortress Doctrine and Concord Diplomacy
-  (which forbids wars without a claim). A change costs 20 + half a month's income (free in the
-  first month) and locks the policy for 24 months.
-- **Stacking:** all modifiers from traits, technologies, policy and timed events add together
-  (`modifiers.ts`) and apply identically to AI realms and the player.
+- **National focus** replaces the six policies of earlier versions. A realm works on one focus at
+  a time, one month of work a month; a finished focus is permanent. A focus may require others
+  (all of, or any of), exclude others (both ways), wait for a year, or need a coast. Switching
+  loses the work done on the current focus.
+  - **The generic tree** (37 focuses in five branches): *Industry* (National Railways, Mining
+    Concessions, Heavy Industry, Chemical Works, Steel Programme, Motor Industry, and Consumer
+    Goods *or* War Economy); *Army* (General Staff, then Martial Levy *or* Professional Army
+    and Fortress Doctrine *or* Spirit of the Offensive, Artillery Parks, Mobile Warfare,
+    General Mobilisation); *Sea and air* (Naval Programme, Battle Fleet *or* Cruiser Warfare,
+    Marine Corps, Air Corps, Strategic Air Doctrine, Naval Aviation); *Diplomacy* (Diplomatic
+    Service, Mercantile Charter, Concord of Nations *or* Realpolitik, Overseas Banking,
+    Guarantor of the Balance, Sphere of Influence); *State* (Royal Academy, Frontier
+    Settlement, Technical Universities, Civil Service, Social Insurance, National Press,
+    Planning Bureau). Durations are 9–14 months; effects are the size of a technology's.
+    Rewards: factories, railways, development, stockpiles, crowns, a port, an airfield, trust.
+  - **The national branch** (5–7 focuses) is made for each realm from its map when the campaign
+    starts: a *heritage* fitting its temperament; one or two mutually exclusive *claims* on the
+    neighbouring regions held mostly by others (claims on every province of the region held by
+    another realm when completed); *develop* its home region (+1 development in four
+    provinces); its most common *resource* (+30% output and a stockpile); a *navy league*
+    (coastal) or a *railway network*; and an *ambition* that follows its victory path
+    (Greater … with claims on its four richest foreign border provinces; … Prosperity; or a
+    Concert with guarantees and influence). The realms of Aldmere, the Reach and the Baltic
+    have hand-written names; every other map, including maps from the editor, gets names made
+    from its realms and regions.
+  - **Concord of Nations** allows wars only over claims while it is held.
+- **Stacking:** all modifiers from traits, technologies, completed focuses and timed events add
+  together (`modifiers.ts`) and apply identically to AI realms and the player.
 
 ## Events (`events.ts`, `data/events.ts`)
 
@@ -636,7 +732,8 @@ war weariness, a rival close to victory, and alarmed neighbours.
 ## Victory, defeat and the campaign limit (`victory.ts`)
 
 All three paths are evaluated monthly for every realm and shown in the Victory ledger.
-Each month the conditions fail, a timer loses 6 months.
+A month in which a path's conditions fail pauses its timer; from the second failing month in
+a row it loses 6 months a month.
 
 1. **Territorial Dominance:** own and control ≥ 75% of the provinces in *R* regions and
    ≥ *T* of all provinces, held for 24 months.
@@ -644,10 +741,11 @@ Each month the conditions fail, a timer loses 6 months.
    integration ≥ 75) ≥ *E* of the world's development, with dev-weighted unrest ≤ 25, no debt, no
    bankruptcy and none of your land occupied, held for 60 months. A windfall cannot
    do it; rivals can break it by occupying one province.
-3. **Diplomatic Leadership:** influence from treaties at least 3 years old whose
-   partner's opinion of you is ≥ 35 (alliance 2, trade 1), at *D* per other surviving realm
-   (minimum 6), with trust ≥ 65 and no offensive war, held for 60 months. New
-   treaties do not count, so cycling treaties is pointless.
+3. **Diplomatic Leadership:** influence over partners whose opinion of you is ≥ 35, each
+   counted once for its strongest bond — an alliance at least 3 years old or being in your
+   sphere 2, your guarantee (a year old) 1 — plus 1 for a trade agreement at least 3 years
+   old; at *D* per other surviving realm (minimum 6), with trust ≥ 65 and no offensive war,
+   held for 60 months. New treaties do not count, so cycling treaties is pointless.
 
 | Threshold | The Reach (9 realms) | Aldmere (14 realms) |
 |---|---|---|
@@ -663,8 +761,9 @@ is, if anything, relatively harder. Region counts scale with the number of regio
 
 - **Rival reactions:** AI realms react to a rival past 35% of a timer. Against a territorial or
   economic leader they raise their alarm (which feeds coalitions), arm, and lower their war
-  threshold against it. Against a diplomatic leader they grow wary instead (up to −25 opinion,
-  shown as its own line in the opinion breakdown) and, past halfway, may cancel trade with it.
+  threshold against it. Against a diplomatic leader they grow wary instead (up to −20 opinion,
+  shown as its own line in the opinion breakdown; its allies and the realms in its sphere do
+  not) and, past halfway, may cancel trade with it.
   Coalition notices name the cause: expansion or a bid for victory.
 - **Separate peace:** a secondary participant can leave a war with the opposing leader. The war
   goal penalty applies only to the war's actual target, and allies left fighting lose 15 opinion
@@ -684,7 +783,7 @@ not implemented, and this is stated in the Help ledger.
 
 | Layer | When | Decides |
 |---|---|---|
-| Strategic (`strategic.ts`) | monthly, staggered | goal and victory path; army size target from income, reserve and supply (a larger share when threatened or at war); research by branch weights and situation; policy (re-evaluated yearly, switching only if clearly better); construction by value per crown; envoys and treaties (mutual acceptance required); coalition wars; peace (demands up to its advantage, white peace or concessions when losing or tired); war (see below) |
+| Strategic (`strategic.ts`) | monthly, staggered | goal and victory path; army size target from income, reserve and supply (a larger share when threatened or at war); research by branch weights and situation; national focus (when none is under way: the temperament's branch weight × how well the focus's tags fit — war, threat, coast, shortages, frontier load, victory path — preferring the national branch and earlier rows); construction by value per crown; envoys and treaties (mutual acceptance required; envoys also toward smaller realms it could draw into its sphere); guarantees (once a year, of a smaller neighbour threatened by a realm it fears), loans (once a year, from a treasury above 4× income, to a realm in debt or one it wants in its sphere) and trade blocs (join a bloc whose leader it trades with, or found one with its best trade partner; leaders invite partners); coalition wars; peace (as war leader, a settlement for its side by contribution, or the counter-offer it would get; an ally on the winning side leaves the spoils to the settlement; white peace or concessions when losing or tired); war (see below; never while holding the conditions of a diplomatic or economic victory) |
 | Operational (`operational.ts`) | weekly (every 2 weeks on Easy) | peace: garrisons for restless frontier, gathering and merging at a rally point; war: objectives (defend, liberate, attack), strength-based assignment of armies, staging and merging before attacks, forecast checks, withdrawal from superior enemies, recovery of battered armies |
 | Execution | inside both | recruitment toward the target composition at safe sites; issuing and re-issuing orders; recovering from rejected orders |
 
@@ -757,12 +856,13 @@ default and disclosed in the setup screen and the game menu.
   noise) lives only in the UI. A test forbids `Math.random` and wall-clock time in `src/sim`.
 - **Reproducibility:** the same seed, settings and command sequence reproduce identical states.
   Tests assert this, and that a game saved mid-war continues exactly like the original.
-- **Save format 3** (`src/sim/save.ts`): versioned and checksummed JSON of the complete state,
+- **Save format 4** (`src/sim/save.ts`): versioned and checksummed JSON of the complete state,
   including movement progress, battles, queues, treaties, events, stockpiles, factories,
-  fleets (with troops aboard), ports, slipways, air wings, airfields and AI commitments.
-  Stage C extended format 3 instead of starting format 4: a format-3 save written before
-  fleets existed loads with empty navies and air arms, starting ports from the map, and a
-  notice; earlier formats convert as before and gain the same.
+  fleets (with troops aboard), ports, slipways, air wings, airfields, national focus,
+  influence, guarantees, loans, trade blocs, reparations, army limits, war contributions and
+  AI commitments. (Stage C extended format 3 rather than starting a new one: a format-3 save
+  written before fleets existed loads with empty navies and air arms, starting ports from the
+  map, and a notice.)
 - **Saves keep their map.** The state records the map's fingerprint: its id, content revision and
   a checksum of its gameplay content (`src/maps/format.ts`). A save whose map has changed
   since then loads only if the provinces and realms are the same, with a notice. Otherwise it is
@@ -776,12 +876,18 @@ default and disclosed in the setup screen and the game menu.
   nearest equivalents and every realm learns the start-year technologies; factories,
   stockpiles and materiel are added from each province's development; a built-in map moves to
   its current revision and an embedded map package is upgraded to the current map format; the
-  calendar moves to the map's new start year. The notice says all of this. A save that cannot
+  calendar moves to the map's new start year. Format 3 becomes format 4 (Stage E): each realm's
+  national policy becomes the matching completed focus (with the focus it requires: Mercantile
+  Charter, Martial Levy, Frontier Settlement, Royal Academy, Fortress Doctrine, Concord of
+  Nations), every realm then chooses a focus, wars under way start recording contribution, the
+  new diplomacy starts empty, and policy changes are dropped from the command log (they can no
+  longer be replayed). The notice says all of this. A save that cannot
   be converted (for example an embedded map that no longer validates) is refused with the
   reason, stays listed, and can still be exported from the load screen. The tests convert a
   save from the first release (`tests/fixtures/reach-save-main-c29aea6.json`) and two format-2
   saves written by the Stage A build (`tests/fixtures/*-format2-168569b.json`, one with a
-  custom map), play them for a year and save them again. The browser checks import the
+  custom map) and a format-3 save written by the Stage D build with a war under way
+  (`tests/fixtures/aldmere-save-format3-9e67015.json`), play them on and save them again. The browser checks import the
   format-1 and format-2 files and expect the notices.
 - **Loading:** damaged, truncated, foreign, newer or oversized (> 20 MB) files are rejected with a
   message, and the current campaign is kept.

@@ -3,7 +3,6 @@
 import { C, SCHEMA_VERSION, STRATEGIC } from './config';
 import { startingTechs } from './data/techs';
 import { PERSONALITIES } from './data/personalities';
-import { POLICY_COOLDOWN_MONTHS } from './data/policies';
 import { computeLedger, emptyFlows, materielCap, menServing, reserveCap, resourceCap, stockpileCap, totalDev } from './economy';
 import { createArmy, newRegiment } from './military';
 import { startingFleets } from './naval';
@@ -11,7 +10,9 @@ import { seedState } from './rng';
 import { months, ownedProvinces, type Sim } from './state';
 import type { Difficulty, GameState, MonthlyLedger, NationId, NationState, Regiment, Settings, UnitType } from './types';
 import { getWorld, mapFingerprint, validateScenario } from './world';
-import { validateContent } from './content';
+import { validateContent, validateFocuses } from './content';
+import { GENERIC_FOCUSES } from './data/focus';
+import { nationalFocuses } from './focus';
 
 export interface NewGameOptions {
   scenario?: string;
@@ -35,6 +36,7 @@ export function defaultFactories(dev: number, capital: boolean): number {
 export function createGame(opts: NewGameOptions = {}): Sim {
   const world = getWorld(opts.scenario ?? 'reach');
   const errs = [...validateScenario(world.scenario), ...validateContent(world.scenario)];
+  for (const nid of world.nationIds) errs.push(...validateFocuses([...nationalFocuses(world, nid), ...GENERIC_FOCUSES]).map((e) => `${nid}: ${e}`));
   if (errs.length) throw new Error(`Invalid scenario: ${errs.join('; ')}`);
   const seed = (opts.seed ?? 1) >>> 0;
   const settings: Settings = {
@@ -68,10 +70,16 @@ export function createGame(opts: NewGameOptions = {}): Sim {
     envoys: [],
     fabrications: [],
     coalitions: [],
+    influence: {},
+    guarantees: [],
+    loans: [],
+    blocs: [],
+    reparations: [],
+    disarmaments: [],
     proposals: [],
     reports: [],
     notifications: [],
-    counters: { army: 0, battle: 0, war: 0, treaty: 0, note: 0, proposal: 0, event: 0, regiment: 0, coalition: 0, fleet: 0, ship: 0, wing: 0 },
+    counters: { army: 0, battle: 0, war: 0, treaty: 0, note: 0, proposal: 0, event: 0, regiment: 0, coalition: 0, fleet: 0, ship: 0, wing: 0, loan: 0, bloc: 0 },
     result: null,
     continueAfterResult: false,
     diagnostics: [],
@@ -119,8 +127,7 @@ export function createGame(opts: NewGameOptions = {}): Sim {
       materiel: 0,
       shortages: [],
       research: { current: null, progress: 0, done: [...known], funding: 1 },
-      policy: pers.policies[0],
-      policySince: -months(POLICY_COOLDOWN_MONTHS),
+      focus: { current: null, progress: 0, done: [] },
       warExhaustion: 0,
       trust: C.diplomacy.trustStart,
       debtMonths: 0,
@@ -130,6 +137,7 @@ export function createGame(opts: NewGameOptions = {}): Sim {
       nextEventTick: months(C.events.firstMonths) + (i % 4) * 4,
       pendingEvents: [],
       victoryStreak: { territorial: 0, economic: 0, diplomatic: 0 },
+      victoryMissed: { territorial: 0, economic: 0, diplomatic: 0 },
       lastMonth: emptyLedger(),
       ai: {
         personality: def.personality,
@@ -138,7 +146,6 @@ export function createGame(opts: NewGameOptions = {}): Sim {
         lastWarEnd: -1000,
         nextStrategic: i % 4,
         nextOperational: 0,
-        lastPolicyEval: 0,
         objectives: {},
         armyTarget: 0,
         rally: null,
@@ -159,6 +166,7 @@ export function createGame(opts: NewGameOptions = {}): Sim {
         idleArmyWeeks: 0,
         armyWeeks: 0,
         ...emptyForceStats(),
+        ...emptyDiplomacyStats(),
       },
       armyCounter: 0,
     };
@@ -201,6 +209,11 @@ export function createGame(opts: NewGameOptions = {}): Sim {
   startingFleets(sim);
   for (const nid of world.nationIds) st.nations[nid].lastMonth = computeLedger(sim, nid);
   return sim;
+}
+
+/** Diplomacy and focus counters of a realm's statistics (all zero). */
+export function emptyDiplomacyStats() {
+  return { focusesDone: 0, settlementsImposed: 0, demandsWon: 0, guaranteesGiven: 0, guaranteeCalls: 0, loansGiven: 0, loanCrowns: 0, blocMonths: 0, sphereMonths: 0, settlementsShared: 0, demands: {} };
 }
 
 /** Navy and air counters of a realm's statistics (all zero). */

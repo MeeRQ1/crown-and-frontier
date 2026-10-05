@@ -32,7 +32,10 @@ import { pruneBattles } from './combat';
 import { touchArmies } from './index';
 import { nationMods } from './modifiers';
 import { canEnter, findPath } from './movement';
+import { addInfluence, endGuarantee, guarantorsOf, leaveBloc, repudiate, sameBloc, sphereOf } from './influence';
+import { applySettlement, buildSettlement } from './settlement';
 import {
+  addContribution,
   aliveNations,
   alliesOf,
   armiesOf,
@@ -101,7 +104,7 @@ export function declareWarProblem(sim: Sim, attacker: NationId, target: NationId
   if (goal.type === 'claim') {
     if (goal.provinces.some((pid) => !st.provinces[pid].claims.includes(attacker))) return 'We hold no claim on every goal province.';
   } else if (goal.type === 'conquest') {
-    if (claimsOnlyPolicy(sim, attacker)) return 'Concord Diplomacy forbids wars without a claim.';
+    if (claimsOnlyPolicy(sim, attacker)) return 'The Concord of Nations focus allows wars only over claims.';
     const ok = conquestTargets(sim, attacker, target);
     if (goal.provinces.length > 2 || goal.provinces.some((pid) => !ok.includes(pid))) return 'Conquest goals must be up to two provinces bordering our land.';
   } else if (goal.type === 'coalition') {
@@ -148,8 +151,9 @@ export function declareWar(sim: Sim, attacker: NationId, target: NationId, goal:
       if (near) addAlarm(sim, nid, attacker, 8);
     }
   }
-  // trade between the belligerents ends
+  // trade between the belligerents ends, with their loans, guarantees and customs union
   removeTreaty(sim, 'trade', attacker, target);
+  breakTies(sim, attacker, target);
   notify(sim, null, 'normal', 'war', `${nationName(sim, attacker)} declares war on ${nationName(sim, target)} (${w.name}).`);
   notify(sim, target, 'urgent', 'war', `${nationName(sim, attacker)} has declared war on us! War goal: ${goal.provinces.map((p) => provName(sim, p)).join(', ')}.`);
   notify(sim, attacker, 'normal', 'war', `We declared war on ${nationName(sim, target)}.`);
@@ -181,10 +185,35 @@ export function canJoin(sim: Sim, nid: NationId, w: War, side: 'attacker' | 'def
   return true;
 }
 
+/**
+ * Two realms going to war: loans and reparations between them are repudiated,
+ * a guarantee between them ends (breaking it costs the guarantor trust), the
+ * attacker leaves a trade bloc they share, and influence over each other halves.
+ */
+export function breakTies(sim: Sim, a: NationId, b: NationId): void {
+  const st = sim.state;
+  repudiate(sim, a, b);
+  for (const g of st.guarantees.filter((g) => (g.by === a && g.of === b) || (g.by === b && g.of === a))) {
+    endGuarantee(sim, g.by, g.of, true);
+    st.nations[g.by].trust = Math.max(0, st.nations[g.by].trust - C.guarantee.trustLoss);
+  }
+  if (sameBloc(sim, a, b)) leaveBloc(sim, a, `went to war with ${nationName(sim, b)}`);
+  for (const [h, t] of [
+    [a, b],
+    [b, a],
+  ]) {
+    const v = st.influence[h]?.[t];
+    if (v) st.influence[h][t] = v / 2;
+  }
+}
+
 export function joinWar(sim: Sim, w: War, nid: NationId, side: 'attacker' | 'defender'): void {
   (side === 'attacker' ? w.attackers : w.defenders).push(nid);
   const opp = side === 'attacker' ? w.defenders : w.attackers;
-  for (const o of opp) removeTreaty(sim, 'trade', nid, o);
+  for (const o of opp) {
+    removeTreaty(sim, 'trade', nid, o);
+    breakTies(sim, nid, o);
+  }
   notify(sim, null, 'low', 'war', `${nationName(sim, nid)} joins the ${w.name} on the ${side === 'attacker' ? 'attacking' : 'defending'} side.`);
   notify(sim, nid, 'urgent', 'war', `We have entered the ${w.name}.`);
   bump(sim);
@@ -196,9 +225,16 @@ function callDefenders(sim: Sim, w: War, target: NationId): void {
   const coal = coalitionAgainst(sim, w.attackerLead);
   if (coal?.members.includes(target)) for (const m of coal.members) if (m !== target) called.add(m);
   for (const a of alliesOf(sim, target)) called.add(a);
+  // guarantors of the target, and the realm whose sphere it is in
+  const guarantors = new Set(guarantorsOf(sim, target));
+  const patron = sphereOf(sim, target);
+  for (const g of guarantors) called.add(g);
+  if (patron) called.add(patron);
   for (const nid of [...called].sort()) {
     if (nid === w.attackerLead) continue;
     const isAlly = hasTreaty(sim, 'alliance', nid, target);
+    const isGuarantor = !isAlly && guarantors.has(nid);
+    const isPatron = !isAlly && !isGuarantor && nid === patron;
     if (!canJoin(sim, nid, w, 'defender')) {
       if (isAlly) {
         notify(sim, target, 'normal', 'war', `${nationName(sim, nid)} cannot answer our call: conflicting commitments with the enemy.`);
@@ -208,19 +244,26 @@ function callDefenders(sim: Sim, w: War, target: NationId): void {
       continue;
     }
     const n = st.nations[nid];
-    if (n.isPlayer && isAlly) {
+    if (n.isPlayer && (isAlly || isGuarantor || isPatron)) {
       st.counters.proposal++;
       st.proposals.push({ id: `pr${st.counters.proposal}`, kind: 'callToArms', from: target, to: nid, tick: st.tick, expires: st.tick + C.diplomacy.proposalWeeks, war: w.id });
-      notify(sim, nid, 'urgent', 'callToArms', `Our ally ${nationName(sim, target)} was attacked by ${nationName(sim, w.attackerLead)} and calls us to arms. We join automatically in 4 weeks unless we decline (declining breaks the alliance and costs trust).`);
+      const who = isAlly ? `Our ally ${nationName(sim, target)}` : isGuarantor ? `${nationName(sim, target)}, whose independence we guarantee,` : `${nationName(sim, target)}, a realm in our sphere,`;
+      const cost = isAlly ? 'declining breaks the alliance and costs trust' : isGuarantor ? 'declining ends the guarantee and costs trust' : 'declining costs us influence over them';
+      notify(sim, nid, 'urgent', 'callToArms', `${who} was attacked by ${nationName(sim, w.attackerLead)} and calls us to arms. We join automatically in 4 weeks unless we decline (${cost}).`);
+      continue;
+    }
+    if ((isGuarantor || isPatron) && !aiHonours(sim, nid, w)) {
+      refuseProtection(sim, nid, target, isGuarantor);
       continue;
     }
     if (!isAlly || aiHonours(sim, nid, w)) {
       joinWar(sim, w, nid, 'defender');
-      if (isAlly) {
+      if (isAlly || isGuarantor) {
         n.trust = Math.min(100, n.trust + 3);
         addMemory(sim, target, nid, 'honored', 20, 0.3);
         addMemory(sim, nid, w.attackerLead, 'allyAttacked', -20, 0.5);
       }
+      if (isGuarantor) n.stats.guaranteeCalls++;
     } else dishonour(sim, nid, target);
   }
 }
@@ -244,15 +287,35 @@ export function dishonour(sim: Sim, nid: NationId, ally: NationId): void {
   notify(sim, nid, 'normal', 'war', `We declined ${nationName(sim, ally)}'s call to arms; the alliance is broken and our trust suffers.`);
 }
 
+/** A guarantor (or a patron) that will not defend a realm it protects. */
+export function refuseProtection(sim: Sim, nid: NationId, protege: NationId, guarantor: boolean): void {
+  const st = sim.state;
+  if (guarantor) {
+    endGuarantee(sim, nid, protege, true);
+    st.nations[nid].trust = Math.max(0, st.nations[nid].trust - C.guarantee.trustLoss);
+    notify(sim, protege, 'urgent', 'war', `${nationName(sim, nid)} will not honour its guarantee of our independence.`);
+  } else {
+    addInfluence(sim, nid, protege, -20);
+    addMemory(sim, protege, nid, 'dishonored', -20, 0.3);
+    notify(sim, protege, 'normal', 'war', `${nationName(sim, nid)} leaves us to fight alone.`);
+  }
+}
+
 export function answerCallToArms(sim: Sim, nid: NationId, warId: string, from: NationId, accept: boolean): void {
   const w = sim.state.wars[warId];
   if (!w) return;
+  const ally = hasTreaty(sim, 'alliance', nid, from);
+  const guarantor = !ally && sim.state.guarantees.some((g) => g.by === nid && g.of === from);
   if (accept && canJoin(sim, nid, w, 'defender')) {
     joinWar(sim, w, nid, 'defender');
-    sim.state.nations[nid].trust = Math.min(100, sim.state.nations[nid].trust + 3);
+    if (ally || guarantor) sim.state.nations[nid].trust = Math.min(100, sim.state.nations[nid].trust + 3);
+    if (guarantor) sim.state.nations[nid].stats.guaranteeCalls++;
     addMemory(sim, from, nid, 'honored', 20, 0.3);
     addMemory(sim, nid, w.attackerLead, 'allyAttacked', -20, 0.5);
-  } else if (!accept) dishonour(sim, nid, from);
+  } else if (!accept) {
+    if (ally) dishonour(sim, nid, from);
+    else refuseProtection(sim, nid, from, guarantor);
+  }
 }
 
 // ───────────────────────────── War score ────────────────────────────────────
@@ -355,7 +418,7 @@ export function peaceProblem(sim: Sim, nid: NationId, warId: string, other: Nati
   return null;
 }
 
-function hasArmies(sim: Sim, nid: NationId): boolean {
+export function hasArmies(sim: Sim, nid: NationId): boolean {
   return armiesOf(sim, nid).length > 0;
 }
 
@@ -403,7 +466,7 @@ export function evaluatePeace(sim: Sim, warId: string, proposer: NationId, targe
 }
 
 /** Returns occupied provinces between two groups to their owners. */
-function restoreControl(sim: Sim, groupA: NationId[], groupB: NationId[]): void {
+export function restoreControl(sim: Sim, groupA: NationId[], groupB: NationId[]): void {
   const st = sim.state;
   let changed = false;
   for (const pid of sim.world.provIds) {
@@ -497,7 +560,7 @@ export function applyPeace(sim: Sim, warId: string, proposer: NationId, target: 
 export function dropStaleProposals(sim: Sim): void {
   const st = sim.state;
   st.proposals = st.proposals.filter((p) => {
-    if (p.kind !== 'peace' && p.kind !== 'callToArms') return true;
+    if (p.kind !== 'peace' && p.kind !== 'callToArms' && p.kind !== 'settlement') return true;
     const w = st.wars[p.war!];
     if (!w) return false;
     if (p.kind === 'callToArms') return sideOf(w, p.from) !== null;
@@ -706,6 +769,14 @@ export function monthlyWars(sim: Sim): void {
       return !!c && w.attackers.includes(c);
     }).length;
     const age = (st.tick - w.startTick) / 4;
+    // contribution: enemy land held this month (by weight, a tenth of a point per unit)
+    for (const pid of sim.world.provIds) {
+      const p = st.provinces[pid];
+      if (!p.owner || !p.controller || p.owner === p.controller) continue;
+      const ownerSide = sideOf(w, p.owner);
+      const ctrlSide = sideOf(w, p.controller);
+      if (ownerSide && ctrlSide && ownerSide !== ctrlSide) addContribution(w, p.controller, provWeight(sim, pid) / 10);
+    }
     if (held === w.goal.provinces.length && held > 0) w.goalScore = Math.min(C.war.goalScoreCap, w.goalScore + 1);
     else if (held === 0 && age >= C.war.goalTickMonths) w.goalScore = Math.max(-C.war.goalScoreCap, w.goalScore - 1);
     w.score = computeWarScore(sim, w).total;
@@ -722,16 +793,13 @@ export function monthlyWars(sim: Sim): void {
       continue;
     }
     if (w.dominantMonths >= 12) {
-      // the dominant side imposes its terms
-      if (w.score > 0) {
-        const terms: PeaceTerms = { mode: 'demand', provinces: w.goal.provinces.filter((p) => st.provinces[p].owner === w.defenderLead), gold: 0 };
-        notify(sim, null, 'normal', 'peace', `${nationName(sim, w.defenderLead)} capitulates after a year of total defeat.`);
-        applyPeace(sim, id, w.attackerLead, w.defenderLead, terms);
-      } else {
-        const gold = Math.floor(Math.max(0, st.nations[w.attackerLead].treasury) * 0.5);
-        notify(sim, null, 'normal', 'peace', `${nationName(sim, w.attackerLead)} capitulates after a year of total defeat.`);
-        applyPeace(sim, id, w.defenderLead, w.attackerLead, { mode: 'demand', provinces: [], gold });
-      }
+      // the dominant side dictates a settlement for itself and its allies
+      const winner = w.score > 0 ? w.attackerLead : w.defenderLead;
+      const loser = w.score > 0 ? w.defenderLead : w.attackerLead;
+      const demands = buildSettlement(sim, id, winner);
+      notify(sim, null, 'normal', 'peace', `${nationName(sim, loser)} capitulates after a year of total defeat.`);
+      if (demands.length) applySettlement(sim, id, winner, loser, demands);
+      else applyPeace(sim, id, winner, loser, { mode: 'white', provinces: [], gold: 0 });
       continue;
     }
   }

@@ -123,7 +123,7 @@ const STEPS: Step[] = [
   },
   {
     title: 'You are ready',
-    text: () => ['Choose research (T) and a national policy (P) that fit your plan. The Help ledger (H) explains every rule. Good luck.'],
+    text: () => ['Choose research (T) and a national focus (P) that fit your plan. The Help ledger (H) explains every rule. Good luck.'],
   },
 ];
 

@@ -6,7 +6,8 @@
 
 import { C } from './config';
 import { PERSONALITIES } from './data/personalities';
-import { POLICIES } from './data/policies';
+import { claimsOnlyFocus } from './focus';
+import { sameBloc, sphereOf } from './influence';
 import { tradeValue } from './economy';
 import { nationStrength } from './military';
 import { nationMods } from './modifiers';
@@ -46,6 +47,10 @@ export const MEMORY_LABELS: Record<string, string> = {
   liberated: 'Liberated our land',
   rivalBid: 'Wary of their bid for diplomatic leadership',
   separatePeace: 'Made a separate peace and left us fighting',
+  guarantee: 'Guarantees our independence',
+  loan: 'Lent us money',
+  spoils: 'Took more than their share of the spoils',
+  settlement: 'Dictated a harsh peace to us',
 };
 
 export const TREATY_LABELS: Record<TreatyType, string> = {
@@ -108,6 +113,8 @@ function opinionSum(sim: Sim, a: NationId, b: NationId, parts?: OpinionPart[]): 
   if (claimsOn(sim, b, a).length) add(() => 'They claim our land', -5);
   if (atWar(sim, a, b)) add(() => 'At war', -40);
   if (sim.state.coalitions.some((c) => c.target === b && c.members.includes(a))) add(() => 'Coalition against them', -20);
+  if (sphereOf(sim, a) === b) add(() => 'We are in their sphere of influence', C.influence.sphereOpinion);
+  if (sim.state.blocs.length && sameBloc(sim, a, b)) add(() => 'Members of the same trade bloc', C.bloc.opinion);
   return v;
 }
 
@@ -247,6 +254,9 @@ export function evaluateTreaty(sim: Sim, from: NationId, to: NationId, type: Tre
     if (claimsOn(sim, to, from).length) add('We claim their land', -25);
     const allies = alliesOf(sim, to).length;
     if (allies >= 2) add('We already have enough allies', -30);
+    const patron = sphereOf(sim, to);
+    if (patron && patron !== from && (atWar(sim, patron, from) || (st.alarm[patron]?.[from] ?? 0) >= 30)) add(`Our patron ${nationName(sim, patron)} is hostile to them`, -40);
+    if (patron === from) add('They are our patron', 20);
     add(`${pers.label} outlook`, (pers.treaty.alliance - 1) * 25);
   }
   const score = reasons.reduce((s, r) => s + r.value, 0);
@@ -348,14 +358,23 @@ export function fabricateProblem(sim: Sim, nid: NationId, pid: ProvinceId): stri
   if (st.fabrications.filter((f) => f.nation === nid).length >= 1) return 'Only one claim can be fabricated at a time.';
   const adjacent = sim.world.prov[pid].neighbors.some((nb) => st.provinces[nb].owner === nid);
   if (!adjacent) return 'Claims can only be fabricated on provinces bordering our own.';
-  if (st.nations[nid].treasury < C.diplomacy.fabricateCost) return `Needs ${C.diplomacy.fabricateCost} crowns.`;
+  if (st.nations[nid].treasury < fabricateCost(sim, nid)) return `Needs ${fabricateCost(sim, nid)} crowns.`;
   return null;
+}
+
+/** Crowns and months it takes to fabricate a claim (Realpolitik makes it cheaper and quicker). */
+export function fabricateCost(sim: Sim, nid: NationId): number {
+  return Math.round(C.diplomacy.fabricateCost * Math.max(0.2, 1 + nationMods(sim, nid).claimCost));
+}
+
+export function fabricateMonths(sim: Sim, nid: NationId): number {
+  return Math.round(C.diplomacy.fabricateMonths * Math.max(0.5, 1 + nationMods(sim, nid).claimCost / 2));
 }
 
 export function startFabrication(sim: Sim, nid: NationId, pid: ProvinceId): void {
   const st = sim.state;
-  st.nations[nid].treasury -= C.diplomacy.fabricateCost;
-  st.fabrications.push({ nation: nid, province: pid, until: st.tick + months(C.diplomacy.fabricateMonths) });
+  st.nations[nid].treasury -= fabricateCost(sim, nid);
+  st.fabrications.push({ nation: nid, province: pid, until: st.tick + months(fabricateMonths(sim, nid)) });
   const owner = st.provinces[pid].owner!;
   addMemory(sim, owner, nid, 'fabricate', -15, 0.4);
   st.nations[nid].trust = Math.max(0, st.nations[nid].trust - 2);
@@ -456,8 +475,9 @@ export function leaveCoalition(sim: Sim, nid: NationId, target: NationId): void 
 function updateCoalitions(sim: Sim): void {
   const st = sim.state;
   for (const target of aliveNations(sim)) {
+    // allies and the realms in its sphere do not join a coalition against it
     const alarmed = aliveNations(sim).filter(
-      (n) => n !== target && (st.alarm[n]?.[target] ?? 0) >= C.diplomacy.alarmCoalition && !hasTreaty(sim, 'alliance', n, target),
+      (n) => n !== target && (st.alarm[n]?.[target] ?? 0) >= C.diplomacy.alarmCoalition && !hasTreaty(sim, 'alliance', n, target) && sphereOf(sim, n) !== target,
     );
     let c = coalitionAgainst(sim, target);
     if (c) {
@@ -569,9 +589,9 @@ export function monthlyDiplomacy(sim: Sim): void {
   updateCoalitions(sim);
 }
 
-/** Policy restriction check used by war declarations. */
+/** Wars only over claims (the Concord of Nations focus), checked by war declarations. */
 export function claimsOnlyPolicy(sim: Sim, nid: NationId): boolean {
-  return !!POLICIES[sim.state.nations[nid].policy]?.claimsOnly;
+  return claimsOnlyFocus(sim, nid);
 }
 
 export { treatyPartners };

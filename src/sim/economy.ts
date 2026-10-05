@@ -17,7 +17,11 @@
 //            (below 40%), at a fixed price per unit; plus 1 crown of commerce each.
 //            Enemy blockades shrink sea trade by the blockaded share of each coast
 //            (realms with a land border trade overland); a blockaded province
-//            loses a quarter of its crowns.
+//            loses a quarter of its crowns. Inside a trade bloc, members buy from
+//            members 20% cheaper, earn 50% more commerce from each other, and
+//            share blockade losses by the size of their taxes.
+// Credit:    loan instalments and reparations (a share of the payer's gross
+//            income last month) are paid with the monthly settlement.
 // Navy/air:  ships and air wings cost upkeep; ships burn coal (oil after Oil-Fired
 //            Boilers; submarines and carriers always oil), aircraft burn oil.
 // Reserve:   military-age men = pop*40 per thousand * (0.2+0.8*integration); the manpower
@@ -28,6 +32,7 @@ import { C, RESOURCE_INFO, STRATEGIC, TERRAIN, UNITS } from './config';
 import { armiesOfNation, memoize, ownedBy } from './index';
 import { nationMods, type Mods } from './modifiers';
 import { fleetFuel, fleetUpkeep, provinceBlockaded, tradeOpen } from './naval';
+import { blocSolidarity, loanInstalment, sameBloc } from './influence';
 import { armiesOf, clamp, controlledProvinces, enemiesOf, months, notify, ownedProvinces, treatyPartners, type Sim } from './state';
 import { armySupplyInfo } from './supply';
 import type { MonthlyLedger, NationId, ProvinceId, ResourceFlow, StrategicResource, UnitType } from './types';
@@ -54,11 +59,28 @@ export function provinceBaseCrowns(sim: Sim, pid: ProvinceId): number {
 }
 
 export function provinceCrowns(sim: Sim, pid: ProvinceId): number {
+  return provinceBaseCrowns(sim, pid) * provinceEfficiency(sim, pid) - provinceBlockadeLoss(sim, pid);
+}
+
+/** Crowns an enemy blockade takes from a coastal province this month (before national modifiers). */
+export function provinceBlockadeLoss(sim: Sim, pid: ProvinceId): number {
   const v = provinceBaseCrowns(sim, pid) * provinceEfficiency(sim, pid);
-  if (v <= 0 || !sim.world.provZones[pid] || !provinceBlockaded(sim, pid)) return v;
-  // an enemy blockade cuts the coast's trade
+  if (v <= 0 || !sim.world.provZones[pid] || !provinceBlockaded(sim, pid)) return 0;
   const owner = sim.state.provinces[pid].owner!;
-  return v * (1 - C.naval.blockadeIncome * Math.max(0, 1 - nationMods(sim, owner).blockadeResist));
+  return v * C.naval.blockadeIncome * Math.max(0, 1 - nationMods(sim, owner).blockadeResist);
+}
+
+/** Crowns blockades take from a realm this month, after its income modifiers. */
+export function blockadeLoss(sim: Sim, nid: NationId): number {
+  let l = 0;
+  for (const pid of ownedBy(sim, nid)) if (sim.world.provZones[pid]) l += provinceBlockadeLoss(sim, pid);
+  return l * incomeMultiplier(sim, nid);
+}
+
+function incomeMultiplier(sim: Sim, nid: NationId): number {
+  let m = 1 + nationMods(sim, nid).income;
+  if (!sim.state.nations[nid].isPlayer && sim.state.settings.aiIncomeBonus) m += sim.state.settings.aiIncomeBonus;
+  return m;
 }
 
 /** Food a province yields its owner each month. */
@@ -348,9 +370,12 @@ export function computeLedger(sim: Sim, nid: NationId, trade: TradeLine[] = trad
     tax += provinceCrowns(sim, pid);
     sup += provinceSupplies(sim, pid);
   }
-  let incomeMul = 1 + mods.income;
-  if (!n.isPlayer && sim.state.settings.aiIncomeBonus) incomeMul += sim.state.settings.aiIncomeBonus;
-  income['Provincial taxes'] = tax * incomeMul;
+  income['Provincial taxes'] = tax * incomeMultiplier(sim, nid);
+  // a trade bloc shares its members' blockade losses
+  if (sim.state.blocs.length) {
+    const share = memoize(sim, 'blocSolidarity', '', () => blocSolidarity(sim, (m) => blockadeLoss(sim, m))).get(nid);
+    if (share) income['Bloc solidarity'] = share;
+  }
 
   let contributions = 0;
   for (const pid of controlledProvinces(sim, nid)) {
@@ -374,15 +399,32 @@ export function computeLedger(sim: Sim, nid: NationId, trade: TradeLine[] = trad
       if (line.res === 'food') foodOut += line.amount;
       else resources[line.res].exported += line.amount;
     } else {
-      purchases += value;
+      purchases += sameBloc(sim, line.from, nid) ? value * (1 - C.bloc.buyDiscount) : value;
       if (line.res === 'food') foodIn += line.amount;
       else resources[line.res].imported += line.amount;
     }
   }
   let pacts = 0;
-  for (const o of treatyPartners(sim, 'trade', nid)) pacts += tradeOpen(sim, nid, o);
+  for (const o of treatyPartners(sim, 'trade', nid)) pacts += tradeOpen(sim, nid, o) * (sameBloc(sim, nid, o) ? 1 + C.bloc.commerceBonus : 1);
   if (pacts) income['Commerce'] = pacts * C.economy.tradeCommerce * Math.max(0, 1 + mods.trade);
   if (sales) income['Resource sales'] = sales;
+  // credit: loans repaid to us, reparations paid to us
+  let repaid = 0;
+  let owed = 0;
+  for (const l of sim.state.loans) {
+    if (l.from === nid) repaid += loanInstalment(sim, l);
+    if (l.to === nid) owed += loanInstalment(sim, l);
+  }
+  if (repaid) income['Loans repaid to us'] = repaid;
+  let repIn = 0;
+  let repOut = 0;
+  for (const r of sim.state.reparations) {
+    if (r.until <= sim.state.tick) continue;
+    const pay = reparationPayment(sim, r.from, r.share);
+    if (r.to === nid) repIn += pay;
+    if (r.from === nid) repOut += pay;
+  }
+  if (repIn) income['Reparations received'] = repIn;
 
   // what is used: coal first goes to the factories; fuel and shells to the army
   let coalFactor = 1;
@@ -431,6 +473,8 @@ export function computeLedger(sim: Sim, nid: NationId, trade: TradeLine[] = trad
   if (funding) expenses['Research funding'] = funding;
 
   if (purchases) expenses['Resource purchases'] = purchases;
+  if (owed) expenses['Loan repayments'] = owed;
+  if (repOut) expenses['Reparations'] = repOut;
 
   if (n.treasury < 0) expenses['Debt interest'] = -n.treasury * C.economy.interestRate;
 
@@ -459,6 +503,13 @@ export function computeLedger(sim: Sim, nid: NationId, trade: TradeLine[] = trad
     industry: ic,
     materielIn: Math.min(materielMade, room),
   };
+}
+
+/** A reparation payment: a share of the payer's gross income last month. */
+export function reparationPayment(sim: Sim, payer: NationId, share: number): number {
+  const n = sim.state.nations[payer];
+  if (!n?.alive) return 0;
+  return Math.max(0, grossIncome(n.lastMonth) - (n.lastMonth.income['Reparations received'] ?? 0)) * share;
 }
 
 export function grossIncome(l: MonthlyLedger): number {
@@ -525,6 +576,8 @@ export function monthlyEconomy(sim: Sim): void {
 
     if (n.treasury < 0) n.debtMonths++;
     else n.debtMonths = 0;
+    // loans: what was paid this month comes off the debt
+    for (const l of st.loans) if (l.to === nid) l.remaining = Math.max(0, l.remaining - loanInstalment(sim, l));
     const stage = debtStage(sim, nid);
     if (stage === 3) bankrupt(sim, nid);
     else if (stage > prevStage) {
@@ -534,6 +587,14 @@ export function monthlyEconomy(sim: Sim): void {
       const gross = Math.max(5, grossIncome(ledger));
       const monthsLeft = (gross * C.economy.creditMonths + n.treasury) / -ledger.net;
       if (monthsLeft <= 3) notify(sim, nid, 'urgent', 'debt', `Bankruptcy in about ${Math.max(1, Math.floor(monthsLeft))} month(s) at the current deficit. Disband regiments, cancel envoys or lower research funding.`);
+    }
+  }
+  const paid = st.loans.filter((l) => l.remaining <= 0.01);
+  if (paid.length) {
+    st.loans = st.loans.filter((l) => l.remaining > 0.01);
+    for (const l of paid) {
+      notify(sim, l.to, 'low', 'loan', `Our loan from ${sim.world.nationDefs[l.from]?.name ?? l.from} is repaid.`);
+      notify(sim, l.from, 'low', 'loan', `${sim.world.nationDefs[l.to]?.name ?? l.to} has repaid our loan.`);
     }
   }
   populationGrowth(sim);

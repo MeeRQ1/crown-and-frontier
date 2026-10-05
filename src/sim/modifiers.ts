@@ -1,8 +1,8 @@
-// National modifiers: every bonus from traits, technology, policy and timed
+// National modifiers: every bonus from traits, technology, national focus and timed
 // effects is summed here. Percentage modifiers are applied as (1 + sum), flat
 // modifiers are added. Player and AI use exactly the same aggregation.
 
-import { POLICIES } from './data/policies';
+import { focusEffects } from './focus';
 import { TECHS } from './data/techs';
 import type { NationState, NationTraits } from './types';
 import type { Sim } from './state';
@@ -88,6 +88,13 @@ export interface Mods {
   airRange: number;
   /** enemy bombing over our land is this much weaker; flak this much stronger */
   airDefence: number;
+  // diplomacy
+  /** influence gained over other realms */
+  influenceGain: number;
+  /** guarantees of independence the realm may give */
+  guarantees: number;
+  /** cost and time of fabricating claims */
+  claimCost: number;
 }
 
 export type ModEffects = Partial<Mods>;
@@ -166,6 +173,9 @@ export const MOD_LABELS: Record<keyof Mods, [string, 'pct' | 'flat' | 'neg']> = 
   airAttack: ['Air combat', 'pct'],
   airRange: ['Air range (provinces)', 'flat'],
   airDefence: ['Enemy bombing over our land', 'neg'],
+  influenceGain: ['Influence gained', 'pct'],
+  guarantees: ['Guarantees we may give', 'flat'],
+  claimCost: ['Cost of fabricating claims', 'pct'],
 };
 
 export function emptyMods(): Mods {
@@ -211,7 +221,7 @@ const cache = new WeakMap<object, Map<string, { key: string; mods: Mods }>>();
 
 function cacheKey(sim: Sim, nid: string): string {
   const n = sim.state.nations[nid];
-  return `${sim.state.tick}|${n.policy}|${n.research.done.length}|${n.modifiers.length}|${n.bankruptUntil > sim.state.tick ? 1 : 0}|${severeDebt(n) ? 1 : 0}`;
+  return `${sim.state.tick}|${n.focus.done.length}|${n.research.done.length}|${n.modifiers.length}|${n.bankruptUntil > sim.state.tick ? 1 : 0}|${severeDebt(n) ? 1 : 0}`;
 }
 
 /** Aggregated modifiers for a nation (cached per tick and relevant state). */
@@ -235,7 +245,7 @@ export function computeMods(sim: Sim, nid: string): Mods {
   const m = emptyMods();
   addMods(m, traitMods(def.traits));
   for (const t of n.research.done) addMods(m, TECHS[t]?.effects ?? {});
-  addMods(m, POLICIES[n.policy]?.effects ?? {});
+  for (const e of focusEffects(sim, nid)) addMods(m, e);
   for (const md of n.modifiers) {
     if (md.until <= sim.state.tick) continue;
     const e = md.effects;

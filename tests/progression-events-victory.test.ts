@@ -1,7 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import { applyCommand, checkCommand } from '../src/sim/commands';
 import { EVENTS, EVENT_MAP } from '../src/sim/data/events';
-import { POLICIES } from '../src/sim/data/policies';
+import { GENERIC_BY_ID } from '../src/sim/focus';
+import { monthlyFocus } from '../src/sim/focus';
 import { startingTechs, TECHS, TECH_LIST } from '../src/sim/data/techs';
 import { joinCoalition, memoriesOf, signTreaty } from '../src/sim/diplomacy';
 import { defaultChoice, eventCtx, monthlyEvents } from '../src/sim/events';
@@ -15,7 +16,7 @@ import { transferProvince } from '../src/sim/war';
 import { strategic } from '../src/sim/ai/strategic';
 import { lineGame } from './helpers';
 
-describe('research and policy', () => {
+describe('research and national focus', () => {
   it('enforces prerequisites and completes the selected technology', () => {
     const sim = lineGame();
     expect(checkCommand(sim, { type: 'research', nation: 'a', tech: 'general_staff' })).toMatch(/Field Telegraph/);
@@ -57,26 +58,33 @@ describe('research and policy', () => {
     }
   });
 
-  it('policy changes cost crowns and lock for 24 months', () => {
+  it('a focus needs its prerequisites, takes its months and then lasts', () => {
     const sim = lineGame();
-    sim.state.tick = 8;
     const n = sim.state.nations.a;
-    n.treasury = 500;
-    const t0 = n.treasury;
-    expect(applyCommand(sim, { type: 'policy', nation: 'a', policy: 'levy' }).ok).toBe(true);
-    expect(n.treasury).toBeLessThan(t0);
-    expect(checkCommand(sim, { type: 'policy', nation: 'a', policy: 'commerce' })).toMatch(/changed recently/);
-    sim.state.tick += months(24);
-    expect(checkCommand(sim, { type: 'policy', nation: 'a', policy: 'commerce' })).toBeNull();
+    expect(checkCommand(sim, { type: 'focus', nation: 'a', focus: 'army_levy' })).toMatch(/General Staff/);
+    expect(applyCommand(sim, { type: 'focus', nation: 'a', focus: 'army_staff' }).ok).toBe(true);
+    for (let i = 0; i < GENERIC_BY_ID.army_staff.months - 1; i++) monthlyFocus(sim);
+    expect(n.focus.done).not.toContain('army_staff');
+    monthlyFocus(sim);
+    expect(n.focus.done).toContain('army_staff');
+    expect(n.focus.current).toBeNull();
+    expect(computeMods(sim, 'a').attack).toBeCloseTo(GENERIC_BY_ID.army_staff.effects.attack ?? 0, 9);
+    // the two army doctrines exclude each other
+    expect(applyCommand(sim, { type: 'focus', nation: 'a', focus: 'army_levy' }).ok).toBe(true);
+    for (let i = 0; i < GENERIC_BY_ID.army_levy.months; i++) monthlyFocus(sim);
+    expect(checkCommand(sim, { type: 'focus', nation: 'a', focus: 'army_prof' })).toMatch(/Excluded by Martial Levy/);
+    // a focus with a year cannot start early
+    expect(checkCommand(sim, { type: 'focus', nation: 'a', focus: 'army_mobile' })).toMatch(/Requires|Not before/);
+    sim.state.tick += months(0);
   });
 
-  it('modifiers from traits, technology and policy stack additively', () => {
+  it('modifiers from traits, technology and focus stack additively', () => {
     const sim = lineGame();
     const n = sim.state.nations.a;
-    n.policy = 'commerce';
+    n.focus.done = ['dip_service', 'dip_charter'];
     n.research.done = ['joint_stock'];
     const m = computeMods(sim, 'a');
-    expect(m.income).toBeCloseTo((POLICIES.commerce.effects.income ?? 0) + (TECHS.joint_stock.effects.income ?? 0), 9);
+    expect(m.income).toBeCloseTo((GENERIC_BY_ID.dip_charter.effects.income ?? 0) + (TECHS.joint_stock.effects.income ?? 0), 9);
   });
 });
 
@@ -130,11 +138,15 @@ describe('victory', () => {
     expect(sim.state.result?.path).toBe('territorial');
   });
 
-  it('timers lose six months per failing month instead of resetting', () => {
+  it('a failing month pauses a timer; from the second in a row it loses six months a month', () => {
     const sim = lineGame();
     sim.state.nations.a.victoryStreak.territorial = 20;
     monthlyVictory(sim);
+    expect(sim.state.nations.a.victoryStreak.territorial).toBe(20);
+    monthlyVictory(sim);
     expect(sim.state.nations.a.victoryStreak.territorial).toBe(14);
+    monthlyVictory(sim);
+    expect(sim.state.nations.a.victoryStreak.territorial).toBe(8);
   });
 
   it('rivals grow wary of a diplomatic front-runner but alarmed by a territorial one', () => {

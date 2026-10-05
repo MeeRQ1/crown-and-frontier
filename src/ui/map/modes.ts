@@ -4,6 +4,7 @@
 
 import { TERRAIN } from '../../sim/config';
 import { coalitionAgainst, opinion } from '../../sim/diplomacy';
+import { sameBloc, sphereOf } from '../../sim/influence';
 import { provinceCrowns } from '../../sim/economy';
 import { armyStrength } from '../../sim/military';
 import { atWar, enemiesOf, hasTreaty, isFriendly, type Sim } from '../../sim/state';
@@ -73,7 +74,7 @@ export const MODES: ModeDef[] = [
     label: 'Diplomacy',
     icon: 'relations',
     key: 'Y',
-    explain: 'Relations with your realm (or with the realm you select): alliances, pacts, trade, wars and the opinion each realm holds of you.',
+    explain: 'Relations with your realm (or with the realm you select): alliances, spheres of influence, guarantees, pacts, trade blocs and agreements, wars and the opinion each realm holds of you.',
   },
   {
     id: 'military',
@@ -200,8 +201,12 @@ export function fillFor(mode: MapMode, c: ModeContext, pid: ProvinceId, focus: N
       if (o === me) return { color: '#cfaa62', alpha: 0.72, hatch: occ };
       if (atWar(sim, me, o)) return { color: '#b8402e', alpha: 0.7, hatch: '#5e1a12' };
       if (hasTreaty(sim, 'alliance', me, o)) return { color: '#3d6cb0', alpha: 0.7 };
+      if (sphereOf(sim, o) === me) return { color: '#8a6fc0', alpha: 0.7 };
+      if (sphereOf(sim, me) === o) return { color: '#5e4a8f', alpha: 0.7 };
       if (coalitionAgainst(sim, me)?.members.includes(o)) return { color: '#8a3a52', alpha: 0.65 };
+      if (sim.state.guarantees.some((g) => g.by === me && g.of === o)) return { color: '#6a8fc8', alpha: 0.65 };
       if (hasTreaty(sim, 'nap', me, o)) return { color: '#5da39c', alpha: 0.65 };
+      if (sim.state.blocs.length && sameBloc(sim, me, o)) return { color: '#c9b46a', alpha: 0.65 };
       if (hasTreaty(sim, 'trade', me, o)) return { color: '#9cc3a5', alpha: 0.65 };
       const op = opinion(sim, o, me);
       const t = (op + 100) / 200;
@@ -250,7 +255,11 @@ export function legendFor(mode: MapMode): LegendItem[] {
       return [
         { color: '#cfaa62', label: 'This realm' },
         { color: '#3d6cb0', label: 'Ally' },
+        { color: '#8a6fc0', label: 'In its sphere of influence' },
+        { color: '#5e4a8f', label: 'Its patron (it is in their sphere)' },
+        { color: '#6a8fc8', label: 'Independence guaranteed by it' },
         { color: '#5da39c', label: 'Non-aggression pact' },
+        { color: '#c9b46a', label: 'Same trade bloc' },
         { color: '#9cc3a5', label: 'Trade agreement' },
         { color: '#b8402e', label: 'At war', hatch: true },
         { color: '#8a3a52', label: 'In a coalition against it' },

@@ -249,6 +249,13 @@ export function diag(sim: Sim, nid: NationId, layer: 'strategic' | 'operational'
   if (st.diagnostics.length > C.ai.diagnosticsKept) st.diagnostics.splice(0, st.diagnostics.length - C.ai.diagnosticsKept);
 }
 
+/** Adds to a participant's contribution to a war (battles, occupation): it shares the spoils. */
+export function addContribution(w: War, nid: NationId, v: number): void {
+  if (!(v > 0)) return;
+  const c = (w.contrib ??= {});
+  c[nid] = Math.round(((c[nid] ?? 0) + v) * 100) / 100;
+}
+
 export function clamp(v: number, lo: number, hi: number): number {
   return v < lo ? lo : v > hi ? hi : v;
 }

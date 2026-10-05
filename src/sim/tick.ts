@@ -11,8 +11,9 @@
 //                                 morale recovery, reinforcement)
 //  7. Recruitment, shipyards, airfields & construction progress
 //  8. War score refresh
-//  9. End of month (every 4th week): economy -> research -> integration/unrest
-//     -> diplomacy -> wars (exhaustion, forced peace) -> events -> victory
+//  9. End of month (every 4th week): economy -> research and national focus ->
+//     integration/unrest -> diplomacy (influence, loans, blocs) -> wars
+//     (exhaustion, forced settlements) -> events -> victory
 // Commands issued between ticks (e.g. while paused) apply immediately and are
 // visible to every phase of the next tick.
 
@@ -28,9 +29,11 @@ import { monthlyIntegration } from './integration';
 import { weeklyArmyCare, weeklyRecruitment } from './military';
 import { weeklyMovement, weeklyOrders } from './movement';
 import { monthlyResearch } from './progression';
+import { monthlyFocus } from './focus';
 import { nextMemoEpoch } from './index';
 import { weeklySieges } from './siege';
 import { monthlyDiplomacy } from './diplomacy';
+import { monthlyInfluence } from './influence';
 import { WEEKS_PER_MONTH, type Sim } from './state';
 import { checkPlayerDefeat, monthlyVictory } from './victory';
 import { monthlyWars, weeklyWarScores } from './war';
@@ -89,9 +92,15 @@ export function step(sim: Sim, opts: StepOptions = {}): void {
   phase('warScores', () => weeklyWarScores(sim));
   if ((st.tick + 1) % WEEKS_PER_MONTH === 0) {
     phase('m.economy', () => monthlyEconomy(sim));
-    phase('m.research', () => monthlyResearch(sim));
+    phase('m.research', () => {
+      monthlyResearch(sim);
+      monthlyFocus(sim);
+    });
     phase('m.integration', () => monthlyIntegration(sim));
-    phase('m.diplomacy', () => monthlyDiplomacy(sim));
+    phase('m.diplomacy', () => {
+      monthlyDiplomacy(sim);
+      monthlyInfluence(sim);
+    });
     phase('m.wars', () => monthlyWars(sim));
     phase('m.events', () => monthlyEvents(sim));
     phase('m.victory', () => {

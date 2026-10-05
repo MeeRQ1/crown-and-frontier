@@ -5,10 +5,12 @@
 // True modal dialogs are kept for confirmations and messages.
 
 import { EVENT_MAP } from '../../sim/data/events';
+import { C } from '../../sim/config';
 import { evaluateTreaty, TREATY_LABELS } from '../../sim/diplomacy';
 import { eventCtx } from '../../sim/events';
-import { dateOf, nationName, provName } from '../../sim/state';
-import { termsCost } from '../../sim/war';
+import { demandCost, describeDemand, evaluateSettlement, settlementCost } from '../../sim/settlement';
+import { dateOf, hasTreaty, nationName, provName } from '../../sim/state';
+import { scoreFor, termsCost } from '../../sim/war';
 import type { App } from '../app';
 import { button, h, rebuild, setChildren } from '../dom';
 import { icon } from '../icons';
@@ -167,11 +169,76 @@ function proposalCard(app: App, id: string, n: number): HTMLElement | null {
   const body: (Node | null)[] = [];
   const from = nationName(sim, p.from);
   let title = '';
+  let declineLabel = 'Decline';
+  let acceptLabel = 'Accept';
+  const extra: HTMLElement[] = [];
   if (p.kind === 'callToArms') {
     const w = sim.state.wars[p.war!];
+    const me = app.player!;
+    const ally = hasTreaty(sim, 'alliance', me, p.from);
+    const guarantor = !ally && sim.state.guarantees.some((g) => g.by === me && g.of === p.from);
     title = `${from} calls us to arms`;
-    body.push(h('p', null, `Our ally ${from} was attacked by ${w ? nationName(sim, w.attackerLead) : 'an enemy'} (${w?.name ?? 'war'}). Honouring the alliance brings us into the war as a defender.`));
-    body.push(h('p', { class: 'small faint' }, 'Declining breaks the alliance, costs 15 trust and angers our former ally. If we do not answer within four weeks we honour the call.'));
+    const why = ally ? `Our ally ${from}` : guarantor ? `${from}, whose independence we guarantee,` : `${from}, a realm in our sphere of influence,`;
+    body.push(h('p', null, `${why} was attacked by ${w ? nationName(sim, w.attackerLead) : 'an enemy'} (${w?.name ?? 'war'}). Answering brings us into the war as a defender.`));
+    body.push(
+      h(
+        'p',
+        { class: 'small faint' },
+        `${ally ? 'Declining breaks the alliance, costs 15 trust and angers our former ally.' : guarantor ? `Declining ends the guarantee and costs ${C.guarantee.trustLoss} trust.` : 'Declining costs influence over them and their good opinion.'} If we do not answer within four weeks we honour the call.`,
+      ),
+    );
+    declineLabel = ally ? 'Decline (break alliance)' : guarantor ? 'Decline (end guarantee)' : 'Decline';
+  } else if (p.kind === 'settlement') {
+    const w = sim.state.wars[p.war!];
+    const demands = p.demands ?? [];
+    const drop = (app.ui.counter = app.ui.counter?.proposal === id ? app.ui.counter : { proposal: id, drop: [] }).drop;
+    title = `Peace settlement from ${from}`;
+    body.push(h('p', null, `${from} proposes to end the ${w?.name ?? 'war'} for every realm in it, on these terms. Untick demands to make a counter-offer instead.`));
+    body.push(
+      h(
+        'ul',
+        { class: 'demand-list' },
+        demands.map((d, i) => {
+          const cb = h('input', { type: 'checkbox', checked: drop.includes(i) ? undefined : true, 'data-fk': `demand-${i}`, 'aria-label': describeDemand(sim, d) });
+          cb.addEventListener('change', () => {
+            if (cb.checked) app.ui.counter!.drop = app.ui.counter!.drop.filter((x) => x !== i);
+            else app.ui.counter!.drop = [...app.ui.counter!.drop, i];
+            // redraw now: the dock is not rebuilt while one of its inputs has focus
+            renderDock(app);
+          });
+          return h('li', null, h('label', null, cb, ' ', describeDemand(sim, d), w ? h('span', { class: 'small faint' }, ` (${demandCost(sim, w, d)})`) : null));
+        }),
+      ),
+    );
+    if (w) {
+      const kept = demands.filter((_, i) => !drop.includes(i));
+      body.push(h('p', { class: 'small faint' }, `Value: ${settlementCost(sim, w, kept)} of ${settlementCost(sim, w, demands)} war-score points. War score: ${Math.round(scoreFor(w, app.player!))} in our view. A 5-year truce follows.`));
+      if (drop.length && kept.length) {
+        const ev = evaluateSettlement(sim, w.id, p.from, kept);
+        body.push(h('p', { class: `small ${ev.accept ? 'good' : 'bad'}` }, `${from} ${ev.accept ? 'would accept' : 'would reject'} this counter-offer (${ev.score >= 0 ? '+' : ''}${Math.round(ev.score)}).`));
+      }
+      const provs = demands.filter((d) => d.kind === 'cede' && d.province).map((d) => d.province!);
+      if (provs.length) {
+        const show = h('button', { class: 'btn quiet small', type: 'button' }, icon('target'), 'Show the provinces');
+        show.addEventListener('click', () => app.highlightProvinces(provs));
+        body.push(show);
+      }
+    }
+    if (drop.length) {
+      acceptLabel = 'Send counter-offer';
+      if (drop.length >= demands.length) extra.push(h('span', { class: 'small bad' }, 'Keep at least one demand, or decline.'));
+    }
+    declineLabel = 'Refuse and fight on';
+  } else if (p.kind === 'loan') {
+    const amount = p.amount ?? 0;
+    title = `${from} offers a loan`;
+    body.push(h('p', null, `${from} would lend us ${Math.round(amount)} crowns now. We repay ${Math.round((amount * (1 + C.loan.interest)) / C.loan.months)} a month for ${C.loan.months} months (${Math.round(C.loan.interest * 100)}% interest).`));
+    body.push(h('p', { class: 'small faint' }, `While we repay, ${from} gains influence over us; enough influence draws a smaller realm into its sphere.`));
+  } else if (p.kind === 'blocInvite' || p.kind === 'blocJoin') {
+    const b = sim.state.blocs.find((x) => x.id === p.bloc);
+    title = p.kind === 'blocJoin' ? `${from} asks to join our trade bloc` : p.bloc === 'new' ? `${from} proposes a trade bloc` : `${from} invites us into the ${b?.name ?? 'trade bloc'}`;
+    body.push(h('p', null, `Members buy from each other ${Math.round(C.bloc.buyDiscount * 100)}% cheaper, earn ${Math.round(C.bloc.commerceBonus * 100)}% more commerce from their agreements with each other, and share the crowns that blockades cost any member.`));
+    if (b) body.push(h('p', { class: 'small faint' }, `Members: ${b.members.map((m) => nationName(sim, m)).join(', ')}; led by ${nationName(sim, b.leader)}.`));
   } else if (p.kind === 'peace') {
     const w = sim.state.wars[p.war!];
     const t = p.terms!;
@@ -188,7 +255,7 @@ function proposalCard(app: App, id: string, n: number): HTMLElement | null {
       }
     }
     body.push(h('p', { class: 'small faint' }, 'A 5-year truce follows any peace.'));
-  } else {
+  } else if (p.kind === 'nap' || p.kind === 'trade' || p.kind === 'alliance') {
     title = `${from} proposes a ${TREATY_LABELS[p.kind].toLowerCase()}`;
     const what: Record<string, string> = {
       nap: 'Neither side may declare war on the other for 5 years. Cancelling early costs trust and imposes a 12-month cooling-off.',
@@ -202,7 +269,14 @@ function proposalCard(app: App, id: string, n: number): HTMLElement | null {
     }
   }
   body.push(h('p', { class: 'small faint' }, `Expires ${dateOf(sim, p.expires).short}.`));
-  const accept = button('Accept', () => app.do({ type: 'respond', proposal: id, accept: true }), { cls: 'primary choice', fk: 'accept' });
-  const decline = button(p.kind === 'callToArms' ? 'Decline (break alliance)' : 'Decline', () => app.do({ type: 'respond', proposal: id, accept: false }), { cls: `choice ${p.kind === 'callToArms' ? 'danger' : ''}`, fk: 'decline' });
-  return cardShell(app, title, p.from, n, body, [accept, decline]);
+  const drop = p.kind === 'settlement' && app.ui.counter?.proposal === id ? app.ui.counter.drop : [];
+  const accept = button(acceptLabel, () => {
+    const r = app.do(drop.length ? { type: 'respond', proposal: id, accept: true, drop } : { type: 'respond', proposal: id, accept: true });
+    if (r.ok) app.ui.counter = null;
+  }, { cls: 'primary choice', fk: 'accept', disabled: drop.length && drop.length >= (p.demands?.length ?? 0) ? 'Keep at least one demand.' : null });
+  const decline = button(declineLabel, () => {
+    app.ui.counter = null;
+    app.do({ type: 'respond', proposal: id, accept: false });
+  }, { cls: `choice ${p.kind === 'callToArms' ? 'danger' : ''}`, fk: 'decline' });
+  return cardShell(app, title, p.from, n, [...body, ...extra], [accept, decline]);
 }

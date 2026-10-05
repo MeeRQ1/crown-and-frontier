@@ -6,7 +6,7 @@ import { C, RESOURCE_INFO, TERRAIN, UNITS, UNIT_TYPES } from '../../sim/config';
 import { checkCommand } from '../../sim/commands';
 import { forecastBattle } from '../../sim/combat';
 import { activeProjects, buildProblem, buildSlots, devCap, devMax, factoryMax, PROJECT_LABELS, projectCost, type ProjectCost } from '../../sim/construction';
-import { fabricateProblem } from '../../sim/diplomacy';
+import { fabricateCost, fabricateMonths, fabricateProblem } from '../../sim/diplomacy';
 import { integrationFactor, provinceCrowns, provinceDeposit, provinceSupplies } from '../../sim/economy';
 import { integrationRate, unrestTarget } from '../../sim/integration';
 import { maxMorale, mergeProblem, recruitProblem, splitProblem, unitCost } from '../../sim/military';
@@ -263,7 +263,7 @@ function provinceCard(app: App, pid: ProvinceId): HTMLElement[] {
     body.appendChild(
       section(
         'Claims',
-        action('Fabricate claim', `${C.diplomacy.fabricateCost} crowns, 12 months. A claim gives a war goal without the trust cost of conquest.`, () => app.do({ type: 'fabricate', province: pid }), fabricateProblem(sim, me, pid)),
+        action('Fabricate claim', `${fabricateCost(sim, me)} crowns, ${fabricateMonths(sim, me)} months. A claim gives a war goal without the trust cost of conquest.`, () => app.do({ type: 'fabricate', province: pid }), fabricateProblem(sim, me, pid)),
       ),
     );
   }

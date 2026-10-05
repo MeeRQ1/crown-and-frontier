@@ -38,7 +38,7 @@ import { armiesIn } from './index';
 import { nationMods, type Mods } from './modifiers';
 import { canEnter, isRiver } from './movement';
 import { range } from './rng';
-import { atWar, bump, isFriendly, nationName, notify, provName, type Sim } from './state';
+import { addContribution, atWar, bump, isFriendly, nationName, notify, provName, type Sim } from './state';
 import { supplyCombatMul, supplyDistances, supplyStatus } from './supply';
 import type { Army, Battle, BattleReport, NationId, ProvinceId, UnitType } from './types';
 
@@ -734,6 +734,11 @@ function endBattle(sim: Sim, b: Battle, winner: 'attacker' | 'defender'): void {
     const winnerDef = winNations.some((n) => w.defenders.includes(n)) && loseNations.some((n) => w.attackers.includes(n));
     if (winnerAtt) w.battleScore = Math.min(C.war.battleScoreCap, w.battleScore + delta);
     else if (winnerDef) w.battleScore = Math.max(-C.war.battleScoreCap, w.battleScore - delta);
+    // contribution to the war: winning, and the casualties inflicted
+    if (winnerAtt || winnerDef) {
+      for (const n of winNations) addContribution(w, n, 1 + loseLoss / 1000 / Math.max(1, winNations.length));
+      for (const n of loseNations) addContribution(w, n, (0.5 * winLoss) / 1000 / Math.max(1, loseNations.length));
+    }
   }
 
   for (const a of winArmies) a.battle = null;
