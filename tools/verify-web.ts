@@ -538,19 +538,27 @@ async function diplomacyFlow(browser: Browser, base: string): Promise<void> {
     app.setSpeed(0);
     app.ui.dockOpen = false;
     document.querySelectorAll<HTMLButtonElement>('.modal-layer:not(.hidden) footer button').forEach((b) => b.click());
+    // closing the notice may resume play: pause again
+    app.setSpeed(0);
     app.refresh();
   });
+  await page.waitForFunction(() => (window as any).cnf.speed === 0);
   const state = <T>(fn: string) => page.evaluate(`(() => { const st = window.cnf.sim.state; return ${fn}; })()`) as Promise<T>;
+  // one atomic click in the page: ledgers are rebuilt when the state changes, so a
+  // located element may be replaced between being found and being clicked
+  const press = async (selector: string) => {
+    await page.waitForSelector(selector, { state: 'attached' });
+    await page.evaluate((sel) => (document.querySelector(sel) as HTMLElement).click(), selector);
+    await page.waitForTimeout(150);
+  };
 
   // ── national focus: P opens the tree; choose a national focus
   await page.keyboard.press('p');
   await page.waitForTimeout(200);
   const title = (await page.locator('.drawer:not(.closed) h2').textContent()) ?? '';
   const branches = await page.locator('[data-branch]').count();
-  const first = page.locator('[data-branch="national"] .focus-card.available button').first();
   const name = (await page.locator('[data-branch="national"] .focus-card.available h4').first().textContent()) ?? '';
-  await first.click();
-  await page.waitForTimeout(200);
+  await press('[data-branch="national"] .focus-card.available button');
   const current = await state<string | null>('st.nations.aur.focus.current');
   const shown = (await page.locator('.drawer .body p').first().textContent()) ?? '';
   record('Focus: P opens the focus tree; choosing a national focus makes it the realm’s focus', /National Focus/.test(title) && branches >= 5 && !!current && current.startsWith('nat_') && shown.includes('National focus'), `${branches} branches; chose "${name.split(' ')[0]}…" → ${current}`);
@@ -558,23 +566,20 @@ async function diplomacyFlow(browser: Browser, base: string): Promise<void> {
   // ── a guarantee, a loan, a trade bloc (Diplomacy ledger)
   await page.evaluate((o) => (window as any).cnf.openDiplomacy(o), ids.protege);
   await page.waitForTimeout(150);
-  await page.locator('[data-fk="Guarantee their independence"]').click();
-  await page.waitForTimeout(150);
+  await press('[data-fk="Guarantee their independence"]');
   const guaranteed = await state<boolean>(`st.guarantees.some((g) => g.by === 'aur' && g.of === '${ids.protege}')`);
   const influenceRow = await page.locator('.diplo-detail').getByText('Our influence over them').count();
   record('Diplomacy: guaranteeing a realm’s independence, with influence shown', guaranteed && influenceRow > 0, `guarantee ${guaranteed ? 'given' : 'missing'}`);
   await page.evaluate((o) => (window as any).cnf.openDiplomacy(o), ids.borrower);
   await page.waitForTimeout(150);
   const t0 = await state<number>(`st.nations.${ids.borrower}.treasury`);
-  await page.locator('[data-fk="Lend 100 crowns"]').click();
-  await page.waitForTimeout(150);
+  await press('[data-fk="Lend 100 crowns"]');
   const loan = await state<{ remaining: number } | null>(`st.loans.find((l) => l.from === 'aur' && l.to === '${ids.borrower}') ?? null`);
   const t1 = await state<number>(`st.nations.${ids.borrower}.treasury`);
   record('Diplomacy: a loan to a realm in debt is accepted and repaid with interest', !!loan && Math.abs(loan.remaining - 120) < 1e-6 && t1 - t0 === 100, `loan ${loan ? `${loan.remaining} owed` : 'refused'}; their treasury ${t0} → ${t1}`);
   await page.evaluate((o) => (window as any).cnf.openDiplomacy(o), ids.partner);
   await page.waitForTimeout(150);
-  await page.locator('[data-fk="Found a trade bloc with them"]').click();
-  await page.waitForTimeout(150);
+  await press('[data-fk="Found a trade bloc with them"]');
   const bloc = await state<string[] | null>(`st.blocs[0]?.members ?? null`);
   const standing = await page.locator('[data-sk="diplo-standing"]').textContent();
   record('Diplomacy: founding a trade bloc with a trade partner', JSON.stringify(bloc) === JSON.stringify(['aur', ids.partner].sort()) && /Customs Union/.test(standing ?? ''), `members ${JSON.stringify(bloc)}`);
@@ -582,14 +587,11 @@ async function diplomacyFlow(browser: Browser, base: string): Promise<void> {
   // ── the peace conference: the AI's suggested terms for both winners, accepted
   await page.evaluate(() => (window as any).cnf.openLedger('wars'));
   await page.waitForTimeout(200);
-  const conf = page.locator('[data-sk="peace-conference"]').first();
-  await conf.locator('[data-fk="settle-suggest"]').click();
-  await page.waitForTimeout(200);
+  await press('[data-sk="peace-conference"] [data-fk="settle-suggest"]');
   const demands = await page.locator('[data-sk="peace-conference"]').first().locator('.demand-list li').count();
   const answer = (await page.locator('[data-sk="peace-conference"]').first().getByText(/Would (accept|refuse)/).first().textContent()) ?? '';
   const allyBefore = await state<number>(`st.nations.${ids.ally}.stats.demandsWon`);
-  await page.locator('[data-sk="peace-conference"]').first().locator('[data-fk="Propose settlement"]').click();
-  await page.waitForTimeout(200);
+  await press('[data-sk="peace-conference"] [data-fk="Propose settlement"]');
   const over = await state<boolean>(`!st.wars['${ids.winWar}']`);
   const allyAfter = await state<number>(`st.nations.${ids.ally}.stats.demandsWon`);
   record('Peace conference: suggested terms share the spoils with an ally, and the settlement ends the war', demands > 1 && /Would accept/.test(answer) && over && allyAfter > allyBefore, `${demands} demands; ${answer.trim()}; war ${over ? 'over' : 'goes on'}; ally received ${allyAfter - allyBefore}`);
@@ -605,12 +607,10 @@ async function diplomacyFlow(browser: Browser, base: string): Promise<void> {
   const card = page.locator('.decision-card');
   const cardTitle = (await card.locator('h3').textContent()) ?? '';
   const boxes = await card.locator('.demand-list input[type=checkbox]').count();
-  await card.locator('[data-fk="demand-1"]').uncheck();
-  await page.waitForTimeout(150);
+  await press('.decision-card [data-fk="demand-1"]');
   const verdict = (await page.locator('.decision-card').getByText(/would (accept|reject) this counter-offer/).textContent()) ?? '';
   const button = (await page.locator('.decision-card [data-fk="accept"]').textContent()) ?? '';
-  await page.locator('.decision-card [data-fk="accept"]').click();
-  await page.waitForTimeout(200);
+  await press('.decision-card [data-fk="accept"]');
   const pending = await state<number>(`st.proposals.filter((p) => p.kind === 'settlement').length`);
   const war2 = await state<boolean>(`!!st.wars['${ids.loseWar}']`);
   const elmsgate = await state<string>(`st.provinces.elmsgate.owner`);
