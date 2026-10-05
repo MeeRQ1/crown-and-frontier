@@ -12,6 +12,8 @@ export interface UISettings {
   autoPauseEvent: boolean;
   autoPauseBattle: boolean;
   autoPauseProposal: boolean;
+  /** when our research or national focus finishes and the next must be chosen */
+  autoPauseChoice: boolean;
   autosaveMonths: number; // 0 = off
   tutorial: boolean;
   /** map presentation */
@@ -34,6 +36,7 @@ export const DEFAULT_SETTINGS: UISettings = {
   autoPauseEvent: true,
   autoPauseBattle: false,
   autoPauseProposal: true,
+  autoPauseChoice: true,
   autosaveMonths: 6,
   tutorial: true,
   showLegend: true,

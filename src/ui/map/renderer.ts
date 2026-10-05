@@ -801,7 +801,32 @@ export class MapRenderer {
     const ctx = this.ctx;
     const me = rs.player;
     ctx.save();
-    if ((rs.mode === 'military' && me) || rs.selectedZone) ctx.clip(geo.seaClip(), 'evenodd');
+    if ((rs.mode === 'military' && me) || rs.mode === 'sea' || rs.selectedZone) ctx.clip(geo.seaClip(), 'evenodd');
+    if (rs.mode === 'sea') {
+      // every zone in the colour of the realm with the strongest warships there
+      for (const z of geo.zoneIds) {
+        const power = new Map<string, number>();
+        for (const f of fleetsIn(sim, z)) power.set(f.nation, (power.get(f.nation) ?? 0) + surfacePower(f) + subPower(f) * 0.5);
+        let best: string | null = null;
+        let bp = 0;
+        for (const [n, p] of [...power].sort((a, b) => (a[0] < b[0] ? -1 : 1))) if (p > bp) (best = n), (bp = p);
+        if (!best) continue;
+        const path = geo.zonePath(z);
+        if (!path) continue;
+        // a light wash and an inked edge in the realm's colour: the water must still read as water
+        const color = sim.world.nationDefs[best]?.color ?? '#5d79a8';
+        ctx.save();
+        ctx.globalAlpha = 0.2;
+        ctx.fillStyle = color;
+        ctx.fill(path);
+        ctx.globalAlpha = 0.85;
+        ctx.strokeStyle = color;
+        ctx.lineWidth = 2.5 * px;
+        ctx.setLineDash([8 * px, 5 * px]);
+        ctx.stroke(path);
+        ctx.restore();
+      }
+    }
     if (rs.mode === 'military' && me) {
       for (const z of geo.zoneIds) {
         let ours = 0;

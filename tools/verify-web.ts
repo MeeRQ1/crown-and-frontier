@@ -646,6 +646,129 @@ async function diplomacyFlow(browser: Browser, base: string): Promise<void> {
   await page.close();
 }
 
+/** The tutorial walks through the new systems, and each new step completes on the real action. */
+async function tutorialFlow(browser: Browser, base: string): Promise<void> {
+  const page = await browser.newPage({ viewport: { width: 1366, height: 800 } });
+  const problems = await watch(page);
+  await page.goto(base);
+  await startCampaign(page);
+  const tut = page.locator('.tutorial:not(.hidden)');
+  const title = async () => ((await tut.count()) ? ((await tut.locator('h4').textContent()) ?? '').trim() : '');
+  const press = async (selector: string) => {
+    await page.waitForSelector(selector, { state: 'attached' });
+    await page.evaluate((sel) => (document.querySelector(sel) as HTMLElement).click(), selector);
+  };
+  // the steps for the new systems, each done the way a player would
+  const actions: Record<string, () => Promise<void>> = {
+    'Industry and resources': () => page.keyboard.press('i'),
+    'Ships and aircraft': () => page.keyboard.press('Shift+Digit9'),
+    'A national focus': async () => {
+      await page.keyboard.press('p');
+      await page.waitForTimeout(200);
+      // with no focus under way the rail marks the Focus ledger; with a ledger open the tutorial sits beside it
+      focusBadge = await page.evaluate(() => [...document.querySelectorAll('.rail button')].some((b) => /Focus/.test(b.textContent ?? '') && !!b.querySelector('.badge')));
+      tutorialClear = await page.evaluate(() => {
+        const a = document.querySelector('.tutorial')!.getBoundingClientRect();
+        const b = document.querySelector('.drawer')!.getBoundingClientRect();
+        return a.left >= b.right || a.right <= b.left || a.top >= b.bottom || a.bottom <= b.top;
+      });
+      await press('[data-branch="national"] .focus-card.available button');
+    },
+    'How wars end': () => page.keyboard.press('w'),
+  };
+  let focusBadge = false;
+  let tutorialClear = false;
+  const total = Number(/of (\d+)/.exec((await tut.locator('.steps').textContent()) ?? '')?.[1] ?? 0);
+  const seen: string[] = [];
+  const completed: string[] = [];
+  for (let guard = 0; guard < 40 && (await tut.count()); guard++) {
+    const t = await title();
+    if (seen[seen.length - 1] !== t) seen.push(t);
+    const act = actions[t];
+    if (act && !completed.includes(t)) {
+      await act();
+      await page.waitForTimeout(300);
+      if ((await title()) !== t) completed.push(t);
+      else break; // the action did not complete its step
+      continue;
+    }
+    await tut.locator('button', { hasText: /^(Next|Skip step|Finish)$/ }).click();
+    await page.waitForTimeout(120);
+  }
+  const want = Object.keys(actions);
+  record(
+    'Tutorial: steps for industry, sea and air, national focus and settlements, each completed by doing it',
+    want.every((t) => completed.includes(t)) && seen[seen.length - 1] === 'You are ready' && total === seen.length,
+    `${seen.length} of ${total} steps shown; completed by action: ${completed.join(', ') || 'none'}; last "${seen[seen.length - 1]}"`,
+  );
+  record('Focus: the rail marks the Focus ledger while no focus is under way; the tutorial never covers an open ledger', focusBadge && tutorialClear, `badge ${focusBadge}, tutorial beside the ledger ${tutorialClear}`);
+  const mode = await page.evaluate(() => (window as any).cnf.mode);
+  await page.evaluate(() => (window as any).cnf.closeLedger());
+  await page.keyboard.press('Shift+Digit8');
+  await page.waitForTimeout(300);
+  const resLegend = (await page.locator('.legend:not(.hidden)').first().textContent()) ?? '';
+  const resMode = await page.evaluate(() => (window as any).cnf.mode);
+  const resDrawn = await canvasDrawn(page);
+  await page.keyboard.press('Shift+Digit9');
+  await page.waitForTimeout(300);
+  const seaLegend = (await page.locator('.legend:not(.hidden)').first().textContent()) ?? '';
+  const seaMode = await page.evaluate(() => (window as any).cnf.mode);
+  record(
+    'Map modes: Shift+8 shows Resources and Shift+9 Sea control, each with a legend',
+    mode === 'sea' && resMode === 'resources' && /Coal/.test(resLegend) && /short/.test(resLegend) && resDrawn && seaMode === 'sea' && /Port level/.test(seaLegend),
+    `${resMode}: "${resLegend.slice(0, 50)}…"; ${seaMode}: "${seaLegend.slice(0, 50)}…"`,
+  );
+  // nothing see-through takes the pointer over the map: every point is the map or visible interface
+  const deadZones = await page.evaluate(() => {
+    const hits: string[] = [];
+    // the canvas's own ancestors are the page behind the map: they do not count as interface
+    const behind = new Set<Element>();
+    for (let c = document.querySelector('canvas.map')?.parentElement ?? null; c; c = c.parentElement) behind.add(c);
+    for (let x = 4; x < innerWidth; x += 20)
+      for (let y = 60; y < innerHeight; y += 20) {
+        const e = document.elementFromPoint(x, y);
+        if (!e || e.tagName === 'CANVAS') continue;
+        let c: Element | null = e;
+        let seen = false;
+        for (; c && !behind.has(c); c = c.parentElement) {
+          const bg = getComputedStyle(c).backgroundColor;
+          if (bg !== 'rgba(0, 0, 0, 0)' && bg !== 'transparent') {
+            seen = true;
+            break;
+          }
+        }
+        if (!seen) hits.push(`${(e as HTMLElement).className || e.tagName}@${x},${y}`);
+      }
+    return hits;
+  });
+  // switching from Diplomacy (which shows its own map) straight to another ledger puts the player's map back
+  await page.keyboard.press('Shift+Digit2');
+  await page.keyboard.press('d');
+  await page.waitForTimeout(150);
+  const during = await page.evaluate(() => (window as any).cnf.mode);
+  await page.keyboard.press('p');
+  await page.waitForTimeout(150);
+  const after = await page.evaluate(() => (window as any).cnf.mode);
+  await page.evaluate(() => (window as any).cnf.closeLedger());
+  record('Switching from Diplomacy to another ledger restores the map mode it replaced', during === 'diplomacy' && after === 'terrain', `terrain → ${during} → ${after}`);
+  // a finished focus pauses the game so that the next can be chosen
+  const paused = await page.evaluate(async () => {
+    const app = (window as any).cnf;
+    const n = app.sim.state.nations[app.player];
+    n.focus.progress = 99; // the focus chosen above finishes at the next month
+    app.setSpeed(4);
+    for (let i = 0; i < 80 && n.focus.current; i++) await new Promise((r) => setTimeout(r, 100));
+    await new Promise((r) => setTimeout(r, 300));
+    const out = { finished: !n.focus.current, speed: app.speed };
+    app.setSpeed(0);
+    return out;
+  });
+  record('A finished national focus pauses the game for the next choice', paused.finished && paused.speed === 0, `finished ${paused.finished}, speed afterwards ${paused.speed}`);
+  record('Map clicks reach the map beside the legend, the mode bar and the minimap', deadZones.length === 0, deadZones.length ? `${deadZones.length} points blocked, e.g. ${deadZones.slice(0, 3).join(', ')}` : 'no transparent box over the map');
+  record('Tutorial and map modes without errors', problems.length === 0, problems.slice(0, 3).join('; '));
+  await page.close();
+}
+
 async function main(): Promise<void> {
   if (!existsSync(join(DIST, 'index.html'))) throw new Error('dist/ missing: run npm run build');
   const zipFiles = existsSync(ZIP) ? unzip(ZIP) : null;
@@ -667,12 +790,17 @@ async function main(): Promise<void> {
       await diplomacyFlow(browser, `${origin}/`);
       return;
     }
+    if (process.env.ONLY === 'tutorial') {
+      await tutorialFlow(browser, `${origin}/`);
+      return;
+    }
     await flow(browser, `${origin}/`, 'Site root');
     await flow(browser, `${origin}${SUB}`, 'Project subpath');
     await mapChoice(browser, `${origin}/`);
     await seaAirFlow(browser, `${origin}/`);
     await mapEditorFlow(browser, `${origin}/`);
     await diplomacyFlow(browser, `${origin}/`);
+    await tutorialFlow(browser, `${origin}/`);
     if (zipFiles) {
       record('Release ZIP has index.html at its root', zipFiles.has('index.html'), `${zipFiles.size} files`);
       await flow(browser, `${origin}/zip/`, 'Unpacked release ZIP');

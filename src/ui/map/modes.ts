@@ -2,7 +2,8 @@
 // legend and explanation shown with it. Every value comes from the live
 // simulation, using only information the game already shows the player.
 
-import { TERRAIN } from '../../sim/config';
+import { RESOURCE_INFO, TERRAIN } from '../../sim/config';
+import { provinceBlockaded } from '../../sim/naval';
 import { coalitionAgainst, opinion } from '../../sim/diplomacy';
 import { sameBloc, sphereOf } from '../../sim/influence';
 import { provinceCrowns } from '../../sim/economy';
@@ -12,7 +13,7 @@ import { isSupplySource, supplyDistances, supplyRange } from '../../sim/supply';
 import type { NationId, ProvinceId } from '../../sim/types';
 import type { IconName } from '../icons';
 
-export type MapMode = 'political' | 'terrain' | 'supply' | 'economy' | 'frontier' | 'diplomacy' | 'military';
+export type MapMode = 'political' | 'terrain' | 'supply' | 'economy' | 'frontier' | 'diplomacy' | 'military' | 'resources' | 'sea';
 
 export interface LegendItem {
   color: string;
@@ -84,7 +85,31 @@ export const MODES: ModeDef[] = [
     explain: 'Active fronts and threats. Your provinces are shaded by the hostile strength that could reach them within two marches; enemy land at war is hatched. Front-line borders are outlined.',
     ramp: { stops: ['#efe6cf', '#e8bf72', '#d0703f', '#9d2f22'], from: 'safe', to: 'heavily threatened' },
   },
+  {
+    id: 'resources',
+    label: 'Resources',
+    icon: 'mine',
+    key: 'I',
+    explain: 'Deposits: each province holds at most one, and yields it to its owner every month (more with development and technology). Hatched: a resource your realm is short of, so taking or trading for that land matters.',
+  },
+  {
+    id: 'sea',
+    label: 'Sea control',
+    icon: 'anchor',
+    key: 'O',
+    explain: 'Who commands each sea zone: the realm with the strongest warships there (submarines count half). Coasts are shaded by port level; a hatched coast is blockaded and loses a quarter of its crowns and its sea trade.',
+  },
 ];
+
+/** Colours of the deposits in the Resources mode. */
+export const RESOURCE_COLORS: Record<string, string> = {
+  food: '#a9c25a',
+  coal: '#3f3d3a',
+  iron: '#a4532f',
+  oil: '#6d3f6a',
+  rubber: '#2f7046',
+  nitrates: '#e3cf6d',
+};
 
 export const MODE_MAP: Record<MapMode, ModeDef> = Object.fromEntries(MODES.map((m) => [m.id, m])) as Record<MapMode, ModeDef>;
 
@@ -212,6 +237,18 @@ export function fillFor(mode: MapMode, c: ModeContext, pid: ProvinceId, focus: N
       const t = (op + 100) / 200;
       return { color: rampColor(['#b86a4b', '#e2cfb0', '#6f9f6c'], t), alpha: 0.6 };
     }
+    case 'resources': {
+      const r = def.resource;
+      if (!r) return p.owner ? { color: '#cfc4ab', alpha: 0.18 } : NONE;
+      const short = !!c.viewer && r !== 'food' && !!st.nations[c.viewer]?.shortages.includes(r);
+      return { color: RESOURCE_COLORS[r], alpha: p.owner ? 0.82 : 0.5, hatch: short ? '#8f2a1c' : occ };
+    }
+    case 'sea': {
+      if (!p.owner) return NONE;
+      if (!sim.world.provZones[pid]) return { color: '#cfc4ab', alpha: 0.15 };
+      const color = p.port >= 3 ? '#1f4f7a' : p.port === 2 ? '#3f7fb8' : p.port === 1 ? '#8ab6d6' : '#d7d0bd';
+      return { color, alpha: 0.72, hatch: provinceBlockaded(sim, pid) ? '#8f2a1c' : null };
+    }
     case 'military': {
       const me = c.viewer;
       if (!me) return p.owner ? { color: sim.world.nationDefs[p.owner].color, alpha: 0.25 } : NONE;
@@ -270,6 +307,20 @@ export function legendFor(mode: MapMode): LegendItem[] {
       return [
         { color: '#9d4a3c', label: 'Enemy land (at war)', hatch: true },
         { color: '#7fa3c7', label: 'Allied or co-belligerent' },
+      ];
+    case 'resources':
+      return [
+        ...(['coal', 'iron', 'oil', 'rubber', 'nitrates', 'food'] as const).map((r) => ({ color: RESOURCE_COLORS[r], label: RESOURCE_INFO[r].label })),
+        { color: '#8f2a1c', label: 'Hatched: your realm is short of it', hatch: true },
+      ];
+    case 'sea':
+      return [
+        { color: '#5d79a8', label: 'Sea zone: the realm with the strongest warships there' },
+        { color: '#8ab6d6', label: 'Port level 1' },
+        { color: '#3f7fb8', label: 'Port level 2' },
+        { color: '#1f4f7a', label: 'Port level 3' },
+        { color: '#d7d0bd', label: 'Coast without a port' },
+        { color: '#8f2a1c', label: 'Hatched: blockaded coast', hatch: true },
       ];
     default:
       return [];

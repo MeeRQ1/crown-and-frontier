@@ -596,7 +596,10 @@ canvas.map.dragging { cursor: grabbing; }
   align-items: flex-start;
   gap: var(--s3);
   max-width: calc(100% - var(--rail-w) - 2 * var(--s6));
+  /* the box spans the legend and the bar; only they take the pointer, the map shows through */
+  pointer-events: none;
 }
+.modes > * { pointer-events: auto; }
 .drawer:not(.closed) ~ .modes { left: calc(var(--rail-w) + var(--drawer-w) + 2 * var(--s5)); }
 .modes .mode-bar { display: flex; gap: 2px; padding: 3px; background: var(--glass); border: 1px solid var(--line); border-radius: var(--r-lg); box-shadow: var(--shadow-2); backdrop-filter: blur(6px); overflow-x: auto; scrollbar-width: none; max-width: 100%; }
 .modes .mode-bar::-webkit-scrollbar { display: none; }
@@ -639,7 +642,8 @@ canvas.map.dragging { cursor: grabbing; }
 .legend .ramp-lbl { display: flex; justify-content: space-between; color: var(--text-3); font-size: var(--fs-xs); }
 
 /* navigation cluster + minimap (bottom right) */
-.navcl { position: absolute; z-index: 19; right: var(--s4); bottom: var(--s4); display: flex; align-items: flex-end; gap: var(--s3); transition: right var(--t-med) var(--ease); }
+.navcl { position: absolute; z-index: 19; right: var(--s4); bottom: var(--s4); display: flex; align-items: flex-end; gap: var(--s3); transition: right var(--t-med) var(--ease); pointer-events: none; }
+.navcl > * { pointer-events: auto; }
 .inspector:not(.closed) ~ .navcl { right: calc(var(--inspector-w) + 2 * var(--s4)); }
 .inspector:not(.closed) ~ .navcl .minimap { display: none; }
 .navcl .nav-btns { display: flex; flex-direction: column; gap: 2px; padding: 3px; background: var(--glass); border: 1px solid var(--line); border-radius: var(--r-lg); box-shadow: var(--shadow-2); backdrop-filter: blur(6px); }
@@ -692,6 +696,10 @@ canvas.map.dragging { cursor: grabbing; }
 /* decision dock (pending events and proposals; bottom centre) */
 .dock { position: absolute; z-index: 23; left: 50%; bottom: var(--s4); transform: translateX(-50%); display: flex; flex-direction: column; align-items: center; gap: var(--s3); width: min(calc(560px * var(--scale)), calc(100% - 32px)); pointer-events: none; }
 .dock > * { pointer-events: auto; }
+/* above the map-mode bar, so a pending decision never hides the modes */
+@media (min-width: 761px) {
+  .dock { bottom: calc(var(--s4) + 48px); }
+}
 .decision-card { width: 100%; background: var(--glass-strong); border: 1px solid var(--line-strong); border-top: 3px solid var(--seal); border-radius: var(--r-lg); box-shadow: var(--shadow-3); padding: var(--s5) var(--s6); animation: toastIn var(--t-slow) var(--ease); }
 .decision-card .dc-head { display: flex; align-items: center; gap: var(--s4); }
 .decision-card .dc-head h3 { flex: 1; margin: 0; }
@@ -745,6 +753,10 @@ canvas.map.dragging { cursor: grabbing; }
 
 /* tutorial coach mark */
 .tutorial { position: absolute; z-index: 24; left: 50%; top: var(--s4); transform: translateX(-50%); width: min(calc(520px * var(--scale)), calc(100% - 24px)); background: var(--glass-strong); border: 1px solid var(--info); border-radius: var(--r-lg); padding: var(--s5) var(--s6); box-shadow: var(--shadow-3); }
+/* with a ledger open, the tutorial moves beside it so that the ledger's tabs stay visible */
+@media (min-width: 761px) {
+  .drawer:not(.closed) ~ .tutorial { left: calc(var(--rail-w) + var(--drawer-w) + 2 * var(--s5)); transform: none; width: min(calc(420px * var(--scale)), calc(100% - var(--rail-w) - var(--drawer-w) - 3 * var(--s5))); }
+}
 .tutorial h4 { color: var(--info); margin-bottom: 4px; font-family: var(--sans); font-size: var(--fs-sm); letter-spacing: 0.08em; text-transform: uppercase; }
 .tutorial .steps { font-size: var(--fs-xs); color: var(--text-3); }
 

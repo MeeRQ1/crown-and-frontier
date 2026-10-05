@@ -71,6 +71,12 @@ const STEPS: Step[] = [
     },
   },
   {
+    title: 'Industry and resources',
+    text: () => ['Open Industry (I). Factories turn coal, iron, oil, rubber and nitrates into materiel for regiments, ships and aircraft, and a shortage slows them. The Resources overlay (Shift+8) shows where each deposit lies; hatched ones are deposits you are short of.'],
+    done: (app) => app.ui.ledgerTab === 'industry' || app.mode === 'resources',
+    show: (app) => app.openLedger('industry'),
+  },
+  {
     title: 'Raise a regiment',
     text: (app) => {
       const sim = app.sim!;
@@ -105,10 +111,37 @@ const STEPS: Step[] = [
     show: (app) => app.setMode('frontier'),
   },
   {
+    title: 'Ships and aircraft',
+    text: (app) => {
+      const sim = app.sim!;
+      const coastal = ownedProvinces(sim, app.player!).some((p) => sim.world.provZones[p]);
+      return [
+        coastal
+          ? 'Open the Sea control overlay (Shift+9): each sea zone takes the colour of the realm with the strongest warships there. Fleets blockade enemy ports, guard your trade and carry armies across the water.'
+          : 'Your realm has no coast, so its wars are fought on land. The Sea control overlay (Shift+9) still shows who commands each sea zone.',
+        ' From the third era, air wings scout, bomb and defend. Military (M) lists armies, fleets and wings.',
+      ];
+    },
+    done: (app) => app.mode === 'sea',
+    show: (app) => app.setMode('sea'),
+  },
+  {
     title: 'Neighbours',
-    text: () => ['Open Diplomacy (D). Every proposal shows whether the other realm would accept and why, before you send it. Rapid conquest alarms neighbours into coalitions.'],
+    text: () => ['Open Diplomacy (D). Every proposal shows whether the other realm would accept and why, before you send it. Envoys, trade, loans and guarantees build influence; enough of it draws a smaller realm into your sphere. Rapid conquest alarms neighbours into coalitions.'],
     done: (app) => app.ui.ledgerTab === 'diplomacy',
     show: (app) => app.openLedger('diplomacy'),
+  },
+  {
+    title: 'A national focus',
+    text: () => ['Open Focus (P) and start a focus. Each takes months, then grants a lasting effect and a reward. Your realm’s national branch holds its own claims and ambitions, and some focuses rule out others.'],
+    done: (app) => !!app.sim!.state.nations[app.player!].focus.current,
+    show: (app) => app.openLedger('focus'),
+  },
+  {
+    title: 'How wars end',
+    text: () => ['Open Wars (W). A war ends in a settlement: the side that is winning lists demands — provinces, crowns, reparations, disarmament, a sphere — paid for with war score and shared out by what each ally contributed. The other side accepts, or you see the counter-offer it would take.'],
+    done: (app) => app.ui.ledgerTab === 'wars',
+    show: (app) => app.openLedger('wars'),
   },
   {
     title: 'Three ways to win',
@@ -123,7 +156,7 @@ const STEPS: Step[] = [
   },
   {
     title: 'You are ready',
-    text: () => ['Choose research (T) and a national focus (P) that fit your plan. The Help ledger (H) explains every rule. Good luck.'],
+    text: () => ['Choose research (T) that fits your plan. The Help ledger (H) explains every rule. Good luck.'],
   },
 ];
 

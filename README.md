@@ -23,8 +23,9 @@ economic prosperity or diplomatic leadership.
   regions, terrain and deposits; edit straits, rivers and ports; merge provinces. A
   validator points at anything to fix. Export and import map files, and play any map.
 - **A living political atlas.** The map shows printed relief, rivers and lettered seas, with
-  realm washes and inked borders. Detail changes with zoom, and seven map modes (political,
-  terrain, supply, economy, frontier, diplomacy, military) each come with a legend.
+  realm washes and inked borders. Detail changes with zoom, and nine map modes (political,
+  terrain, supply, economy, frontier, diplomacy, military, resources, sea control) each come
+  with a legend.
 - **Systems:** an industrial economy with six resources (food, coal, iron, oil, rubber,
   nitrates), factories, materiel and trade agreements that exchange real resources;
   population and manpower; supply lines; an industrial-age roster (infantry, cavalry,
@@ -69,7 +70,7 @@ this if you try.
 | Pan / zoom | Drag / mouse wheel, arrow keys, **+ / −** | Drag / pinch |
 | Pause, speed | **Space**, **1–4** | ▶ and speed pips |
 | Ledgers | **B** realm, **I** industry, **M** military, **T** research, **P** national focus, **D** diplomacy, **W** wars, **V** victory, **L** chronicle, **H** help | Bottom bar |
-| Map modes | **Shift+1…7**, **O** cycles | Mode bar |
+| Map modes | **Shift+1…9**, **O** cycles | Mode bar |
 | Navigate | **F** whole map, **C** centre selection, **Home** capital, **N** next army, **Shift+N** next army group, **K** next battle, **J** latest alert | Navigation buttons |
 | Close | **Esc** cancels, closes, then opens the menu | ✕ buttons |
 

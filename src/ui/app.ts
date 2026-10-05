@@ -592,6 +592,8 @@ export class App {
             this.ui.dockOpen = true;
           }
         }
+        // research or a focus finished: the next must be chosen, or months are lost
+        if ((n.kind === 'research' || n.kind === 'focus') && /Choose the next/.test(n.text) && this.settings.autoPauseChoice) this.setSpeed(0);
         if (n.kind === 'build') this.sound.play('build');
         if (['bankrupt', 'revolt', 'surrender', 'capital', 'debt'].includes(n.kind)) this.sound.play('alert');
       }
@@ -970,6 +972,13 @@ export class App {
   openLedger(tab: LedgerTab): void {
     this.ui.ledgerTab = tab;
     this.drawerEl.classList.remove('closed');
+    // switching from a ledger that chose the map mode to one that does not want it puts the
+    // player's mode back, as closing it would
+    const wanted: MapMode | null = tab === 'diplomacy' ? 'diplomacy' : tab === 'wars' ? 'military' : null;
+    if (this.ledgerMode && this.ledgerMode.shown !== wanted) {
+      if (this.mode === this.ledgerMode.shown) this.setMode(this.ledgerMode.before);
+      this.ledgerMode = null;
+    }
     // the diplomacy map shows our relations; the chosen realm is outlined
     const show: MapMode | null = tab === 'diplomacy' && this.mode !== 'diplomacy' ? 'diplomacy' : tab === 'wars' && this.mode === 'political' ? 'military' : null;
     if (show) {
@@ -1060,6 +1069,7 @@ export class App {
     const warCount = pid ? Object.values(sim.state.wars).filter((w) => w.attackers.includes(pid) || w.defenders.includes(pid)).length : 0;
     const badges: Partial<Record<LedgerTab, number>> = {
       research: n && !n.research.current && n.alive ? 1 : 0,
+      focus: n && !n.focus.current && n.alive ? 1 : 0,
       wars: warCount,
       diplomacy: pid ? sim.state.proposals.filter((p) => p.to === pid && p.kind !== 'peace').length : 0,
     };
@@ -1456,8 +1466,8 @@ export class App {
       return;
     }
     if (dialogOpen) return;
-    // map modes: Shift+1…7
-    if (e.shiftKey && /^Digit[1-7]$/.test(e.code)) {
+    // map modes: Shift+1…9
+    if (e.shiftKey && /^Digit[1-9]$/.test(e.code) && MODES[Number(e.code.slice(5)) - 1]) {
       this.setMode(MODES[Number(e.code.slice(5)) - 1].id);
       e.preventDefault();
       return;
