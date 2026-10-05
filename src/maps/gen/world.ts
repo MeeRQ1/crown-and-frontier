@@ -19,7 +19,7 @@
 import type { NationDef, ProvinceDef, RegionDef, Terrain } from '../../sim/types';
 import { industrialDeposit, type LegacyResource } from '../deposits';
 import type { MapEdge, MapLabelDef } from '../format';
-import { buildMap, fillSea, hashStr, MinHeap, mulberry, pointInPoly, polylineDist, segIntersect, type BuiltMap, type Pt, type Seed } from './core';
+import { buildMap, fillSea, hashStr, MinHeap, mulberry, pointInPoly, polylineDist, segIntersect, type BuiltMap, type Kind, type Pt, type Seed } from './core';
 
 export interface Anchor {
   x: number;
@@ -107,6 +107,22 @@ export interface WorldSpec {
   names: Record<string, string[]>;
   /** raster step in design units (default 14) */
   grid?: number;
+  /**
+   * Gives every province extra seeds along its shores (sea and lake), so the
+   * drawn coast follows the given outline closely: for real coastlines, where
+   * large provinces would otherwise lose their fjords and peninsulas.
+   */
+  coastSeeds?: boolean;
+  /**
+   * Land beyond the map's frame (a regional map cut from a larger land), as
+   * points on the raster: drawn as muted land, never sea, never crossed.
+   */
+  offmap?: Pt[];
+  /**
+   * Names a province from where it lies (a real map names provinces after the
+   * towns in them); null leaves it to the culture lists in `names`.
+   */
+  placeName?: (p: { x: number; y: number; region: string; owner: string | null }, used: Set<string>) => string | null;
   /** open-sea seed spacing (default 96) */
   seaSpacing?: number;
 }
@@ -410,12 +426,29 @@ export function generateWorld(S: WorldSpec, log: (line: string) => void = () => 
       // shore guards just inside the lake edge
       for (let i = 0; i < poly.length; i++) {
         const [x, y] = poly[i];
-        out.push({ kind: 'lake', id: `~lake${n++}`, x: l.cx + (x - l.cx) * 0.88, y: l.cy + (y - l.cy) * 0.88 });
+        if (!l.poly) {
+          out.push({ kind: 'lake', id: `~lake${n++}`, x: l.cx + (x - l.cx) * 0.88, y: l.cy + (y - l.cy) * 0.88 });
+          continue;
+        }
+        // an outlined lake may be any shape: step in along the shore's normal
+        const a = poly[(i - 1 + poly.length) % poly.length];
+        const b = poly[(i + 1) % poly.length];
+        const len = Math.hypot(b[0] - a[0], b[1] - a[1]) || 1;
+        const nx = -(b[1] - a[1]) / len;
+        const ny = (b[0] - a[0]) / len;
+        for (const sgn of [1, -1]) {
+          const gx = x + nx * 6 * sgn;
+          const gy = y + ny * 6 * sgn;
+          if (!pointInPoly(gx, gy, poly)) continue;
+          out.push({ kind: 'lake', id: `~lake${n++}`, x: gx, y: gy });
+          break;
+        }
       }
     });
     return out;
   }
 
+  const offCells = new Set((S.offmap ?? []).map(([x, y]) => idx(x, y)));
   function coastGuards(): Seed[] {
     const out: Seed[] = [];
     let n = 0;
@@ -438,6 +471,7 @@ export function generateWorld(S: WorldSpec, log: (line: string) => void = () => 
             const y = py + ny * 36 * sgn;
             if (lands.some((l) => pointInPoly(x, y, l))) continue;
             if (x < B.minX || y < B.minY || x > B.maxX || y > B.maxY) continue;
+            if (offCells.has(idx(x, y))) continue;
             out.push({ kind: 'sea', id: `~coast${n++}`, x, y });
           }
         }
@@ -499,10 +533,95 @@ export function generateWorld(S: WorldSpec, log: (line: string) => void = () => 
     return out;
   }
 
+  /** Shore cells, each given to the nearest province on its own land (coastSeeds). */
+  function shoreSeeds(): Seed[] {
+    const out: Seed[] = [];
+    for (let c = 0; c < cell.length; c++) {
+      const land = cell[c];
+      if (land < 0) continue;
+      const i = c % NX;
+      const j = Math.floor(c / NX);
+      let shore = false;
+      for (let dj = -1; dj <= 1 && !shore; dj++)
+        for (let di = -1; di <= 1 && !shore; di++) {
+          const ni = i + di;
+          const nj = j + dj;
+          if (ni < 0 || nj < 0 || ni >= NX || nj >= NY) continue;
+          const v = cell[nj * NX + ni];
+          if (v === -1 || v === -2) shore = true;
+        }
+      if (!shore) continue;
+      const x = cx(i);
+      const y = cy(j);
+      // a province's own seed already stands here (coincident seeds would share one cell)
+      if (provs.some((p) => Math.abs(p.x - x) < G / 2 && Math.abs(p.y - y) < G / 2)) continue;
+      // the nearest province it can see over its own land (not across a lake or a bay)
+      const cands = provs.filter((p) => compOf(p) === land && !p.fixed?.pass).map((p) => ({ p, d: (p.x - x) ** 2 + (p.y - y) ** 2 }));
+      cands.sort((a, b) => a.d - b.d || (a.p.tmp < b.p.tmp ? -1 : 1));
+      const seen = cands.find(({ p }) => {
+        const steps = Math.ceil(Math.sqrt((p.x - x) ** 2 + (p.y - y) ** 2) / (G / 2));
+        for (let t = 1; t < steps; t++) {
+          if (cell[idx(x + ((p.x - x) * t) / steps, y + ((p.y - y) * t) / steps)] !== land) return false;
+        }
+        return true;
+      });
+      const best = (seen ?? cands[0])?.p;
+      if (best) out.push({ kind: 'prov', id: best.tmp, x, y });
+    }
+    return out;
+  }
+  /**
+   * Shore seeds cut off from the rest of their province (a province must be one
+   * piece) go to the province around them. Returns how many moved.
+   */
+  function reattachShore(Mb: BuiltMap): number {
+    const first = provs.length;
+    const adj = new Map<number, Array<{ j: number; len: number }>>();
+    for (const sg of Mb.segs.values()) {
+      if (sg.cells.length !== 2) continue;
+      const [a, b] = sg.cells;
+      if (Mb.seeds[a].kind !== 'prov' || Mb.seeds[b].kind !== 'prov') continue;
+      const len = Math.hypot(sg.v1[0] - sg.v0[0], sg.v1[1] - sg.v0[1]);
+      (adj.get(a) ?? adj.set(a, []).get(a)!).push({ j: b, len });
+      (adj.get(b) ?? adj.set(b, []).get(b)!).push({ j: a, len });
+    }
+    // the cells do not depend on who owns them: settle the owners on this diagram
+    const idOf = (i: number) => (i < first ? provs[i].tmp : i < first + shore.length ? shore[i - first].id : Mb.seeds[i].id);
+    let moved = 0;
+    for (let pass = 0; pass < 60; pass++) {
+      let changed = 0;
+      const ownBy = new Map<string, number[]>();
+      for (let i = first; i < first + shore.length; i++) (ownBy.get(idOf(i)) ?? ownBy.set(idOf(i), []).get(idOf(i))!).push(i);
+      provs.forEach((p, k) => {
+        const own = new Set<number>([k, ...(ownBy.get(p.tmp) ?? [])]);
+        if (own.size === 1) return;
+        const reached = new Set<number>([k]);
+        const q = [k];
+        for (let h = 0; h < q.length; h++) for (const { j } of adj.get(q[h]) ?? []) if (own.has(j) && !reached.has(j)) (reached.add(j), q.push(j));
+        for (const i of own) {
+          if (reached.has(i)) continue;
+          const votes = new Map<string, number>();
+          for (const { j, len } of adj.get(i) ?? []) {
+            const id = idOf(j);
+            if (id !== p.tmp) votes.set(id, (votes.get(id) ?? 0) + len);
+          }
+          const to = [...votes].sort((a, b) => b[1] - a[1] || (a[0] < b[0] ? -1 : 1))[0]?.[0];
+          if (to) (shore[i - first].id = to), changed++;
+        }
+      });
+      moved += changed;
+      if (!changed) break;
+    }
+    return moved;
+  }
+  const shore = S.coastSeeds ? shoreSeeds() : [];
+
   function makeSeeds(extraPeaks: Pt[]): Seed[] {
     const seeds: Seed[] = [];
     for (const p of provs) seeds.push({ kind: 'prov', id: p.tmp, x: p.x, y: p.y });
+    seeds.push(...shore);
     seeds.push(...peakSeeds(extraPeaks), ...lakeSeeds(), ...coastGuards());
+    (S.offmap ?? []).forEach(([x, y], k) => seeds.push({ kind: 'edge', id: `~edge${k}`, x, y }));
     fillSea(seeds, B, lands, { spacing: S.seaSpacing ?? 96, clearance: 120, seaGap: 58, seed: 4321 });
     return seeds.map((s) => ({ ...s, x: s.x * K, y: s.y * K }));
   }
@@ -515,7 +634,8 @@ export function generateWorld(S: WorldSpec, log: (line: string) => void = () => 
   let built: BuiltMap | null = null;
   const extraPeaks: Pt[] = [];
   for (let round = 0; round < 8; round++) {
-    built = buildMap(makeSeeds(extraPeaks), scaledBounds, straitsTmp, { minBorder: 14, noiseMin: 9.5 });
+    // a real coastline's lakes and the land beyond its frame come out as one outline per body
+    built = buildMap(makeSeeds(extraPeaks), scaledBounds, straitsTmp, { minBorder: 14, noiseMin: 9.5, ...(S.coastSeeds ? { mergeWaste: ['lake', 'edge'] as Kind[] } : {}) });
     // borders that leak through a ridge get another peak where they cross it
     let leaks = 0;
     for (const [a, ns] of Object.entries(built.neighbors)) {
@@ -537,8 +657,10 @@ export function generateWorld(S: WorldSpec, log: (line: string) => void = () => 
         }
       }
     }
-    if (!leaks) break;
-    log(`round ${round}: ${leaks} border(s) crossed a ridge; closing them`);
+    const moved = S.coastSeeds ? reattachShore(built) : 0;
+    if (moved) log(`round ${round}: ${moved} shore cell(s) cut off from their province reattached`);
+    if (!leaks && !moved) break;
+    if (leaks) log(`round ${round}: ${leaks} border(s) crossed a ridge; closing them`);
     if (round === 7) warnings.push('ridge leaks remain after 8 rounds');
   }
   const M = built!;
@@ -553,6 +675,7 @@ export function generateWorld(S: WorldSpec, log: (line: string) => void = () => 
     for (const seg of M.segs.values()) {
       if (seg.cells.length !== 2) continue;
       const [ci, cj] = seg.cells.map((c) => M.seeds[c]);
+      if (ci.kind === 'prov' && cj.kind === 'prov' && ci.id === cj.id) continue;
       if (ci.kind === 'sea' || cj.kind === 'sea') {
         coastNodes.add(seg.k0);
         coastNodes.add(seg.k1);
@@ -567,6 +690,7 @@ export function generateWorld(S: WorldSpec, log: (line: string) => void = () => 
       for (const [sk, seg] of M.segs) {
         if (seg.cells.length !== 2) continue;
         if (seg.cells.some((c) => M.seeds[c].kind !== 'prov')) continue;
+        if (M.seeds[seg.cells[0]].id === M.seeds[seg.cells[1]].id) continue;
         const mid: Pt = [(seg.v0[0] + seg.v1[0]) / 2, (seg.v0[1] + seg.v1[1]) / 2];
         const d = polylineDist(mid, line);
         const len = Math.hypot(seg.v1[0] - seg.v0[0], seg.v1[1] - seg.v0[1]);
@@ -779,6 +903,15 @@ export function generateWorld(S: WorldSpec, log: (line: string) => void = () => 
   const used = new Set<string>(S.fixed.map((f) => f.name));
   for (const f of S.fixed) nameOf.set(`f_${f.id}`, f.name);
   for (const p of provs) if (p.island && p.island.count === 1 && !p.fixed) (nameOf.set(p.tmp, p.island.name), used.add(p.island.name));
+  if (S.placeName) {
+    const rest = [...out.values()].filter((o) => !nameOf.has(o.tmp));
+    rest.sort((a, b) => b.dev - a.dev || byTmp.get(a.tmp)!.y - byTmp.get(b.tmp)!.y || byTmp.get(a.tmp)!.x - byTmp.get(b.tmp)!.x);
+    for (const o of rest) {
+      const at = byTmp.get(o.tmp)!;
+      const name = S.placeName({ x: at.x, y: at.y, region: o.region, owner: o.owner }, used);
+      if (name) (nameOf.set(o.tmp, name), used.add(name));
+    }
+  }
   const byCulture = new Map<string, Out[]>();
   for (const o of out.values()) if (!nameOf.has(o.tmp)) (byCulture.get(o.culture) ?? byCulture.set(o.culture, []).get(o.culture)!).push(o);
   for (const [c, list] of byCulture) {

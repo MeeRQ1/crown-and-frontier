@@ -84,7 +84,7 @@ export function renderMenu(app: App): HTMLElement {
           'div',
           { class: 'menu-foot' },
           app.store.problem ? h('p', { class: 'callout warn', style: 'margin-bottom:10px' }, icon('alert'), app.store.problem) : null,
-          h('p', null, 'An original game: every realm, place and event is fictional. It runs entirely in your browser, with no account and no server.'),
+          h('p', null, 'An original game: its realms, places and events are fictional, except on The Baltic, 1906, a real-world map drawn from Natural Earth (public domain). It runs entirely in your browser, with no account and no server.'),
         ),
       ),
     ),
@@ -302,7 +302,8 @@ export function renderNewGame(app: App, initialMap: string = DEFAULT_SCENARIO): 
         fact('alert', 'Own land claimed by others', f.claimed ? `${f.claimed} province${f.claimed === 1 ? '' : 's'}` : 'none'),
       ),
     );
-    caption.replaceChildren(h('div', { class: 'cap-t' }, `${mapInfo(map).title} · ${d.short}`), h('div', { class: 'cap-s' }, w.scenario.blurb ?? w.scenario.description));
+    const attribution = mapScenarioPart(map)?.meta.attribution ?? [];
+    caption.replaceChildren(h('div', { class: 'cap-t' }, `${mapInfo(map).title} · ${d.short}`), h('div', { class: 'cap-s' }, w.scenario.blurb ?? w.scenario.description), ...(attribution.length ? [h('div', { class: 'cap-a' }, attribution[0])] : []));
     beginLabel.replaceChildren(shieldSvg(d), h('span', null, d.short, h('small', null, mapInfo(map).title)));
   };
 
@@ -520,8 +521,10 @@ export function renderHowTo(app: App): HTMLElement {
         h('header', null, backBtn(app), h('h2', null, 'How to play')),
         h('p', { class: 'serif', style: 'font-size:var(--fs-lg);color:var(--paper-300)' }, LEDE),
         sec(
-          'The two maps',
+          'The maps',
           h('p', null, h('b', null, 'Aldmere'), ' is the standard campaign: fourteen realms and about three hundred provinces, with mountain passes, rivers, islands and wide unclaimed frontiers. Every realm has several fronts and marches take months. ', h('b', null, 'The Reach'), ' is the quick campaign: nine realms and 99 provinces, where wars are decided in a few seasons.'),
+          h('p', null, h('b', null, 'The Sundered Isles'), ' is a naval campaign among islands, ', h('b', null, 'the Kharan Steppe'), ' a war of movement across open grassland, and ', h('b', null, 'the Middle Sea'), ' a grand campaign of sixteen realms around an inland sea. ', h('b', null, 'The Baltic, 1906'), ' is northern Europe as it was: Sweden, Norway, Denmark, the German Empire and the Russian Empire, with coasts, lakes, rivers and towns from Natural Earth.'),
+          h('p', null, 'The Map library (main menu) lists every map with its size and style, and holds your own maps: make one in the map editor, or import a map file.'),
         ),
         sec(
           'The land',
@@ -600,6 +603,7 @@ export function openMenuDialog(app: App): void {
         app.showScreen(renderHowTo(app));
       }, { icon: 'help' }),
     ),
+    ...(mapScenarioPart(sim.state.scenarioId)?.meta.attribution ?? []).map((a) => h('p', { class: 'small muted', style: 'margin-top:8px' }, a)),
     h('p', { class: 'small muted', style: 'margin-top:12px' }, `Saves are stored in this browser (${app.store.mode}); export to keep a copy elsewhere. Game version ${__APP_VERSION__}, save format ${SCHEMA_VERSION}.`),
   ];
   const resume = button('Resume', () => close(), { cls: 'primary' });

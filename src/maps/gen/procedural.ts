@@ -115,7 +115,7 @@ function fbm(seed: number, base: number) {
 
 // ───────────────────────────── grid helpers ────────────────────────────────
 
-interface Grid {
+export interface Grid {
   nx: number;
   ny: number;
   x0: number;
@@ -126,7 +126,7 @@ const gx = (G: Grid, i: number) => G.x0 + (i + 0.5) * G.g;
 const gy = (G: Grid, j: number) => G.y0 + (j + 0.5) * G.g;
 
 /** 4-connected components of cells where mask is true. */
-function components(G: Grid, mask: Uint8Array): { label: Int32Array; sizes: number[] } {
+export function components(G: Grid, mask: Uint8Array): { label: Int32Array; sizes: number[] } {
   const label = new Int32Array(G.nx * G.ny).fill(-1);
   const sizes: number[] = [];
   const q: number[] = [];
@@ -186,7 +186,7 @@ function distanceField(G: Grid, seed: (c: number) => boolean, pass: (c: number) 
  * Outline of one component of the mask: the longest boundary loop of its cells,
  * with the cell corners as vertices, smoothed into a coastline.
  */
-function outline(G: Grid, inside: (c: number) => boolean, smooth = 3): Pt[] {
+export function outline(G: Grid, inside: (c: number) => boolean, smooth = 3): Pt[] {
   const edges = new Map<string, Array<[number, number]>>();
   const key = (i: number, j: number) => `${i},${j}`;
   const add = (a: [number, number], b: [number, number]) => {
@@ -1000,8 +1000,8 @@ const AFFINITY: Record<ResourceKind, Partial<Record<Terrain, number>>> = {
  * at least one coal field, so each can begin to industrialise; the rest is
  * spread by weighted draws, rarest deposits first.
  */
-function placeDeposits(pkg: MapPackage, P: ProceduralParams): void {
-  const rnd = mulberry(hashStr(`${P.id}:${P.seed}:deposits`));
+export function placeDeposits(pkg: MapPackage, opts: { key: string; climate: Climate; bias?: (p: MapPackage['provinces'][number], kind: ResourceKind) => number }): void {
+  const rnd = mulberry(hashStr(`${opts.key}:deposits`));
   const wet = new Set<string>();
   for (const e of pkg.geometry.edges) {
     if (e.a === SEA) wet.add(e.b);
@@ -1009,7 +1009,7 @@ function placeDeposits(pkg: MapPackage, P: ProceduralParams): void {
   }
   for (const [a, b] of pkg.rivers) (wet.add(a), wet.add(b));
   for (const p of pkg.provinces) p.resource = null;
-  const weight = (kind: ResourceKind, p: (typeof pkg.provinces)[number]) => (AFFINITY[kind][p.terrain] ?? 0) * (kind === 'food' && wet.has(p.id) ? 1.6 : 1);
+  const weight = (kind: ResourceKind, p: (typeof pkg.provinces)[number]) => (AFFINITY[kind][p.terrain] ?? 0) * (kind === 'food' && wet.has(p.id) ? 1.6 : 1) * (opts.bias?.(p, kind) ?? 1);
   // one coal field in every realm
   for (const n of pkg.nations) {
     let best: (typeof pkg.provinces)[number] | null = null;
@@ -1023,7 +1023,7 @@ function placeDeposits(pkg: MapPackage, P: ProceduralParams): void {
   }
   const kinds: ResourceKind[] = ['rubber', 'oil', 'iron', 'nitrates', 'food', 'coal'];
   for (const kind of kinds) {
-    const want = Math.round(pkg.provinces.length * DEPOSIT_SHARE[kind] * (CLIMATE_DEPOSITS[P.climate][kind] ?? 1));
+    const want = Math.round(pkg.provinces.length * DEPOSIT_SHARE[kind] * (CLIMATE_DEPOSITS[opts.climate][kind] ?? 1));
     const have = pkg.provinces.filter((p) => p.resource === kind).length;
     // weighted sampling without replacement (Efraimidis–Spirakis keys)
     const keyed = pkg.provinces
@@ -1096,7 +1096,7 @@ export function buildProceduralMap(P: ProceduralParams, opts: { tries?: number; 
       };
       // borders that round to nothing carry no information (the validator would only warn)
       pkg.geometry.edges = pkg.geometry.edges.filter((e) => e.pts.some((v, i) => v !== e.pts[i % 2]));
-      placeDeposits(pkg, P);
+      placeDeposits(pkg, { key: `${P.id}:${P.seed}`, climate: P.climate });
       addSeaZones(pkg);
       describeRealms(pkg);
       const check = validateMapPackage(pkg);

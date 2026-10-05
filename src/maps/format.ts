@@ -26,7 +26,9 @@ export const MAP_FORMAT_VERSION = 3;
 export const SEA = '~sea';
 export const LAKE = '~lake';
 export const PEAK = '~peak';
-export const NON_PROVINCE_SIDES = [SEA, LAKE, PEAK] as const;
+/** Land beyond the frame of a regional map: impassable, not sea, drawn muted. */
+export const EDGE = '~edge';
+export const NON_PROVINCE_SIDES = [SEA, LAKE, PEAK, EDGE] as const;
 
 export type MapSize = 'small' | 'standard' | 'large' | 'huge';
 export type MapDifficulty = 'gentle' | 'standard' | 'hard';
@@ -93,7 +95,7 @@ export interface MapGeometryData {
   centers: Record<string, { cx: number; cy: number; area: number }>;
   /** every border once; province outlines are rebuilt from these */
   edges: MapEdge[];
-  /** impassable areas drawn on the map: mountain ranges and lakes */
+  /** impassable areas drawn on the map: mountain ranges, lakes, and land beyond the frame ('edge') */
   waste: Array<{ kind: string; poly: number[] }>;
   labels?: MapLabelDef[];
   /** sea zones as drawn (format 3) */

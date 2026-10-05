@@ -180,6 +180,8 @@ export class GeoIndex {
   readonly edgesOf = new Map<string, EdgeGeo[]>();
   readonly peaks: Array<{ poly: number[]; path: Path2D; bbox: BBox }> = [];
   readonly lakes: Array<{ poly: number[]; path: Path2D; bbox: BBox }> = [];
+  /** land beyond the frame of a regional map (impassable, drawn muted) */
+  readonly beyond: Array<{ poly: number[]; path: Path2D; bbox: BBox }> = [];
   readonly straits: Array<[string, string]>;
   readonly labels: MapLabel[];
   /** outline of all land (provinces and mountain cells) against sea and lakes */
@@ -227,6 +229,7 @@ export class GeoIndex {
     for (const w of g.waste) {
       const item = { poly: w.poly, path: pathFrom(w.poly), bbox: bboxOf(w.poly) };
       if (w.kind === 'lake') this.lakes.push(item);
+      else if (w.kind === 'edge') this.beyond.push(item);
       else {
         this.peaks.push(item);
         this.landPath.addPath(item.path);
@@ -309,6 +312,7 @@ export class GeoIndex {
     p.rect(b.minX - 1e4, b.minY - 1e4, b.maxX - b.minX + 2e4, b.maxY - b.minY + 2e4);
     for (const pr of this.provList) p.addPath(pr.path);
     for (const pk of this.peaks) p.addPath(pk.path);
+    for (const b of this.beyond) p.addPath(b.path);
     this.seaClipPath = p;
     return p;
   }

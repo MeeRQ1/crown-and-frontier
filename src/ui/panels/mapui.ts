@@ -201,6 +201,8 @@ export class Minimap {
       }
       g.fillStyle = '#b9ab8e';
       for (const w of r.geo.peaks) g.fill(w.path);
+      g.fillStyle = '#76807d';
+      for (const w of r.geo.beyond) g.fill(w.path);
       this.base = c;
     }
     const c = this.canvas;

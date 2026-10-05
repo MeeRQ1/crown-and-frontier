@@ -47,6 +47,15 @@ describe('built-in maps', () => {
     }
   });
 
+  it('every built-in map exported as a file imports again through the validator, unchanged', async () => {
+    for (const id of BUILTIN_MAPS) {
+      const pkg = await builtinPackage(id);
+      const { pkg: back, check } = parseMapPackage(JSON.stringify(pkg));
+      expect(check.errors, id).toEqual([]);
+      expect(mapChecksum(back!), id).toBe(mapChecksum(pkg));
+    }
+  });
+
   it('the generated built-in maps are exactly what their recipe produces', async () => {
     // the smallest of the three is regenerated here; `npm run genmaps` rebuilds all three
     const recipe = GENERATED_MAPS.find((p) => p.id === 'isles')!;
@@ -65,6 +74,28 @@ describe('built-in maps', () => {
       expect(share('iron')).toBeGreaterThan(0.03);
       expect(share('oil') + share('rubber')).toBeGreaterThan(0.03);
     }
+  });
+});
+
+describe('the real-world map', () => {
+  it('credits Natural Earth, keeps land beyond its frame off the sea, and starts no realm near a victory', async () => {
+    const pkg = await builtinPackage('baltic');
+    expect(pkg.meta.attribution?.[0]).toMatch(/Natural Earth/);
+    expect(pkg.nations.map((n) => n.id).sort()).toEqual(['dan', 'ger', 'nor', 'rus', 'swe']);
+    // land the frame cuts off is drawn as 'edge' waste: no coast, no sea zone, no port
+    expect(pkg.geometry.waste.some((w) => w.kind === 'edge')).toBe(true);
+    const edgeSide = new Set(pkg.geometry.edges.filter((e) => e.a === '~edge' || e.b === '~edge').map((e) => (e.a === '~edge' ? e.b : e.a)));
+    expect(edgeSide.size).toBeGreaterThan(10);
+    const coastal = new Set(pkg.seaZones.flatMap((z) => z.coasts));
+    const inland = [...edgeSide].filter((id) => !id.startsWith('~') && !pkg.geometry.edges.some((e) => (e.a === id && e.b === '~sea') || (e.b === id && e.a === '~sea')));
+    expect(inland.length).toBeGreaterThan(5);
+    for (const id of inland) expect(coastal.has(id), id).toBe(false);
+    // the largest realm starts well short of the territorial and economic thresholds
+    const share = (nid: string) => pkg.provinces.filter((p) => p.owner === nid).length / pkg.provinces.length;
+    const largest = Math.max(...pkg.nations.map((n) => share(n.id)));
+    expect(pkg.rules.victory!.territorialShare!).toBeGreaterThanOrEqual(largest + 0.14);
+    // no natural rubber in northern Europe: only the rubber works and trade houses of 1906
+    expect(pkg.provinces.filter((p) => p.resource === 'rubber').length).toBeLessThanOrEqual(4);
   });
 });
 

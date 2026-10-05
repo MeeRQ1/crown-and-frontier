@@ -11,7 +11,8 @@
 import { Delaunay } from 'd3-delaunay';
 
 export type Pt = [number, number];
-export type Kind = 'prov' | 'sea' | 'peak' | 'lake';
+/** 'edge': land beyond the frame of a regional map */
+export type Kind = 'prov' | 'sea' | 'peak' | 'lake' | 'edge';
 export interface Seed {
   kind: Kind;
   id: string;
@@ -61,6 +62,13 @@ export function lerp(a: Pt, b: Pt, t: number): Pt {
 }
 export function dist(a: Pt, b: Pt): number {
   return Math.hypot(a[0] - b[0], a[1] - b[1]);
+}
+
+/** Signed area (the sign gives the turning direction). */
+export function signedArea(p: Pt[]): number {
+  let s = 0;
+  for (let i = 0, j = p.length - 1; i < p.length; j = i++) s += p[j][0] * p[i][1] - p[i][0] * p[j][1];
+  return s / 2;
 }
 
 export function polyArea(p: Pt[]): number {
@@ -182,7 +190,7 @@ export const flat = (p: Pt[]): number[] => p.flatMap(([x, y]) => [r1(x), r1(y)])
  * route). Where that is not possible the contact is drawn straight and short.
  * Adjacency, rivers and attributes use the original corners (v0/v1).
  */
-export function buildMap(seeds: Seed[], bounds: Bounds, straits: Array<[string, string]>, opts: { minBorder?: number; noiseMin?: number; noiseFactor?: number } = {}): BuiltMap {
+export function buildMap(seeds: Seed[], bounds: Bounds, straits: Array<[string, string]>, opts: { minBorder?: number; noiseMin?: number; noiseFactor?: number; mergeWaste?: Kind[] } = {}): BuiltMap {
   const minBorder = opts.minBorder ?? 14;
   const noiseMin = opts.noiseMin ?? 7;
   const f = opts.noiseFactor ?? 0.55;
@@ -208,9 +216,24 @@ export function buildMap(seeds: Seed[], bounds: Bounds, straits: Array<[string, 
   }
 
   const kindOf = (i: number) => seeds[i].kind;
+  // a province may own several seeds (shore seeds keep a real coastline):
+  // the borders between its own cells are internal and never drawn
+  const internal = (sg: Seg) => sg.cells.length === 2 && kindOf(sg.cells[0]) === 'prov' && kindOf(sg.cells[1]) === 'prov' && seeds[sg.cells[0]].id === seeds[sg.cells[1]].id;
+  // the whole border between two provinces (one segment when each has one seed)
+  const pairLen = new Map<string, number>();
+  const pairOf = (sg: Seg) => {
+    const a = seeds[sg.cells[0]].id;
+    const b = seeds[sg.cells[1]].id;
+    return a < b ? `${a}|${b}` : `${b}|${a}`;
+  };
+  for (const sg of segs.values()) if (sg.cells.length === 2 && kindOf(sg.cells[0]) === 'prov' && kindOf(sg.cells[1]) === 'prov' && !internal(sg)) pairLen.set(pairOf(sg), (pairLen.get(pairOf(sg)) ?? 0) + dist(sg.v0, sg.v1));
+  const seedCount = new Map<string, number>();
+  for (const s of seeds) if (s.kind === 'prov') seedCount.set(s.id, (seedCount.get(s.id) ?? 0) + 1);
+  /** Border length that decides a route: the whole border for provinces with shore seeds, else this segment (as before). */
+  const routeLen = (sg: Seg) => (seedCount.get(seeds[sg.cells[0]].id)! > 1 || seedCount.get(seeds[sg.cells[1]].id)! > 1 ? (pairLen.get(pairOf(sg)) ?? 0) : dist(sg.v0, sg.v1));
   // contacts between provinces too short to be routes collapse to one point
   {
-    const isShort = (sg: Seg) => sg.cells.length === 2 && kindOf(sg.cells[0]) === 'prov' && kindOf(sg.cells[1]) === 'prov' && dist(sg.v0, sg.v1) < minBorder;
+    const isShort = (sg: Seg) => sg.cells.length === 2 && kindOf(sg.cells[0]) === 'prov' && kindOf(sg.cells[1]) === 'prov' && !internal(sg) && routeLen(sg) < minBorder;
     const byVertex = new Map<string, Seg[]>();
     const vertexAt = new Map<string, Pt>();
     for (const sg of segs.values()) {
@@ -262,7 +285,7 @@ export function buildMap(seeds: Seed[], bounds: Bounds, straits: Array<[string, 
     const [i, j] = seg.cells;
     const ki = kindOf(i);
     const kj = kindOf(j);
-    const plain = ki === kj && ki !== 'prov';
+    const plain = (ki === kj && ki !== 'prov') || internal(seg);
     if (plain) {
       seg.path = [d0, d1];
       continue;
@@ -297,15 +320,51 @@ export function buildMap(seeds: Seed[], bounds: Bounds, straits: Array<[string, 
   };
 
   const provIndex = new Map<string, number>();
+  const provSeeds = new Map<string, number[]>();
   seeds.forEach((s, i) => {
-    if (s.kind === 'prov') provIndex.set(s.id, i);
+    if (s.kind !== 'prov') return;
+    if (!provIndex.has(s.id)) provIndex.set(s.id, i);
+    (provSeeds.get(s.id) ?? provSeeds.set(s.id, []).get(s.id)!).push(i);
   });
+  /** Closed loops around a group of cells, chained from the borders not between two of them. */
+  const loopsAround = (cells: number[], inside: (sg: Seg) => boolean): Pt[][] => {
+    const next = new Map<string, Pt[]>();
+    for (const i of cells) {
+      const ring = cellRings[i];
+      for (let k = 0; k + 1 < ring.length; k++) {
+        const ka = vkey(ring[k]);
+        const kb = vkey(ring[k + 1]);
+        if (inside(segs.get(ka < kb ? `${ka}|${kb}` : `${kb}|${ka}`)!)) continue;
+        const piece = segFor(ring[k], ring[k + 1]);
+        next.set(vkey(piece[0]), piece);
+      }
+    }
+    const loops: Pt[][] = [];
+    const used = new Set<string>();
+    for (const start of next.keys()) {
+      if (used.has(start)) continue;
+      const loop: Pt[] = [];
+      let key = start;
+      for (let guard = 0; guard < 100000 && !used.has(key); guard++) {
+        used.add(key);
+        const piece = next.get(key);
+        if (!piece) break;
+        for (let m = 0; m < piece.length - 1; m++) loop.push(piece[m]);
+        key = vkey(piece[piece.length - 1]);
+      }
+      loops.push(loop);
+    }
+    return loops;
+  };
+  /** Outline of a province with several cells: its outer boundary. */
+  const unionPoly = (cells: number[]): Pt[] => loopsAround(cells, internal).reduce((a, b) => (Math.abs(polyArea(b)) > Math.abs(polyArea(a)) ? b : a), [] as Pt[]);
 
   const provinces: BuiltMap['provinces'] = {};
   const neighbors: Record<string, string[]> = {};
   const warnings: string[] = [];
   for (const [id, i] of provIndex) {
-    const poly = cellPoly(i);
+    const own = provSeeds.get(id)!;
+    const poly = own.length === 1 ? cellPoly(i) : unionPoly(own);
     const c = centroid(poly);
     provinces[id] = { poly: flat(poly), cx: r1(c[0]), cy: r1(c[1]), area: Math.round(polyArea(poly)) };
     neighbors[id] = [];
@@ -332,11 +391,12 @@ export function buildMap(seeds: Seed[], bounds: Bounds, straits: Array<[string, 
       push({ a: `~${a.kind}`, b: `~${b.kind}`, pts: flat(seg.path) }, sk);
       continue;
     }
-    const len = dist(seg.v0, seg.v1);
+    const len = a.kind === 'prov' && b.kind === 'prov' ? routeLen(seg) : dist(seg.v0, seg.v1);
     if (a.kind === 'prov' && b.kind === 'prov') {
+      if (a.id === b.id) continue;
       if (len >= minBorder) {
-        neighbors[a.id].push(b.id);
-        neighbors[b.id].push(a.id);
+        if (!neighbors[a.id].includes(b.id)) neighbors[a.id].push(b.id);
+        if (!neighbors[b.id].includes(a.id)) neighbors[b.id].push(a.id);
       } else warnings.push(`tiny border ${a.id}-${b.id} (${len.toFixed(1)}) ignored for adjacency${seg.flat ? ', drawn straight' : ', drawn as a corner'}`);
       // a collapsed contact is a single point: nothing to draw
       if (seg.path.length === 2 && seg.path[0][0] === seg.path[1][0] && seg.path[0][1] === seg.path[1][1]) continue;
@@ -359,9 +419,38 @@ export function buildMap(seeds: Seed[], bounds: Bounds, straits: Array<[string, 
   for (const id of Object.keys(neighbors)) neighbors[id].sort();
 
   const waste: BuiltMap['waste'] = [];
+  const merge = new Set<Kind>(opts.mergeWaste ?? []);
   seeds.forEach((s, i) => {
-    if (s.kind === 'peak' || s.kind === 'lake') waste.push({ kind: s.kind, poly: flat(cellPoly(i)) });
+    if ((s.kind === 'peak' || s.kind === 'lake' || s.kind === 'edge') && !merge.has(s.kind)) waste.push({ kind: s.kind, poly: flat(cellPoly(i)) });
   });
+  // merged kinds: one outline per connected group of cells (a group with a hole keeps its cells)
+  for (const kind of merge) {
+    const cellsOf = seeds.map((s, i) => (s.kind === kind ? i : -1)).filter((i) => i >= 0);
+    const adjacent = new Map<number, number[]>();
+    for (const sg of segs.values()) {
+      if (sg.cells.length !== 2 || kindOf(sg.cells[0]) !== kind || kindOf(sg.cells[1]) !== kind) continue;
+      const [a, b] = sg.cells;
+      (adjacent.get(a) ?? adjacent.set(a, []).get(a)!).push(b);
+      (adjacent.get(b) ?? adjacent.set(b, []).get(b)!).push(a);
+    }
+    const seen = new Set<number>();
+    const same = (sg: Seg) => sg.cells.length === 2 && kindOf(sg.cells[0]) === kind && kindOf(sg.cells[1]) === kind;
+    for (const start of cellsOf) {
+      if (seen.has(start)) continue;
+      const group = [start];
+      seen.add(start);
+      for (let h = 0; h < group.length; h++) for (const n of adjacent.get(group[h]) ?? []) if (!seen.has(n)) (seen.add(n), group.push(n));
+      const loops = loopsAround(group, same).filter((l) => l.length >= 3);
+      // loops turning the same way are lobes of one outline (cells meeting at a corner); one turning the other way is a hole
+      const signs = new Set(loops.map((l) => Math.sign(signedArea(l))));
+      if (loops.length && signs.size === 1) for (const l of loops) waste.push({ kind, poly: flat(l) });
+      else if (loops.length && kind === 'edge') {
+        // beyond the frame nothing is played: water enclosed there is covered too
+        const outer = Math.sign(signedArea(loops.reduce((a, b) => (Math.abs(signedArea(b)) > Math.abs(signedArea(a)) ? b : a))));
+        for (const l of loops) if (Math.sign(signedArea(l)) === outer) waste.push({ kind, poly: flat(l) });
+      } else for (const i of group) waste.push({ kind, poly: flat(cellPoly(i)) });
+    }
+  }
 
   // Connectivity check.
   {

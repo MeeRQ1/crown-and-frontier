@@ -196,6 +196,11 @@ export function nextMemoEpoch(): void {
   memoEpoch++;
 }
 
+/** The current memo epoch (drawing caches key on it, with the tick and revision). */
+export function memoEpochNow(): number {
+  return memoEpoch;
+}
+
 export function memoize<T>(sim: Sim, table: string, key: string, compute: () => T): T {
   const st = sim.state;
   let m = lastMemo && lastMemo.state === st ? lastMemo : memoBy.get(st);

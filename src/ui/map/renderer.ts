@@ -10,13 +10,14 @@ import { SHIPS, TERRAIN } from '../../sim/config';
 import { maxMorale } from '../../sim/military';
 import { fleetsIn, subPower, surfacePower } from '../../sim/naval';
 import { moveCost } from '../../sim/movement';
+import { memoEpochNow } from '../../sim/index';
 import { atWar, isFriendly, menOf, type Sim } from '../../sim/state';
 import type { Army, Fleet, NationId, ProvinceId } from '../../sim/types';
 import { drawShield } from '../heraldry';
 import { iconPath } from '../icons';
 import { BaseMap, PALETTE, type TerrainDetail } from './basemap';
 import { Camera } from './camera';
-import { geoIndex, pairKey, type GeoIndex, type MapGeometry } from './geometry';
+import { geoIndex, pairKey, type GeoIndex, type MapGeometry, type ProvGeo } from './geometry';
 import { buildContext, fillFor, type MapMode } from './modes';
 
 export interface Presentation {
@@ -210,94 +211,22 @@ export class MapRenderer {
     ctx.setTransform(dpr * z, 0, 0, dpr * z, dpr * cam.offX, dpr * cam.offY);
     const px = 1 / z; // one CSS pixel in world units
 
-    // 1. mode washes (multiply: the printed terrain stays visible)
+    // 1–3. washes, hatching, borders and rivers: at the far tier, while the
+    // camera only pans, from a cached layer (redrawn when the realms, the mode
+    // or the zoom change); otherwise drawn directly
     const mctx = buildContext(sim, rs.mode, rs.player);
-    const groups = new Map<string, Path2D>();
-    const hatches: Array<{ id: ProvinceId; color: string }> = [];
-    for (const p of visible) {
-      const f = fillFor(rs.mode, mctx, p.id, rs.focusNation);
-      if (f.alpha > 0) {
-        const k = `${f.color}|${f.alpha}`;
-        let g = groups.get(k);
-        if (!g) groups.set(k, (g = new Path2D()));
-        g.addPath(p.path);
-      }
-      if (f.hatch) hatches.push({ id: p.id, color: f.hatch });
-    }
-    ctx.save();
-    ctx.globalCompositeOperation = 'multiply';
-    for (const [k, path] of groups) {
-      const [color, alpha] = k.split('|');
-      ctx.globalAlpha = Number(alpha);
-      ctx.fillStyle = color;
-      ctx.fill(path);
-    }
-    ctx.restore();
-
-    // 2. occupation / war hatching
-    for (const hch of hatches) {
-      const pat = this.hatchPattern(hch.color);
-      if (!pat) continue;
-      // one pattern pixel = one CSS pixel, anchored to the map
-      pat.setTransform(new DOMMatrix([1 / z, 0, 0, 1 / z, 0, 0]));
+    const farLayer = tier === 'far' && !animating && this.lod ? this.farLayers(sim, rs, tier, mctx) : null;
+    if (farLayer) {
+      const x = dpr * (cam.offX + farLayer.x0 * z);
+      const y = dpr * (cam.offY + farLayer.y0 * z);
       ctx.save();
-      ctx.globalAlpha = 0.75;
-      ctx.fillStyle = pat;
-      ctx.fill(this.geo.provs.get(hch.id)!.path);
+      ctx.setTransform(1, 0, 0, 1, 0, 0);
+      ctx.globalCompositeOperation = 'multiply';
+      ctx.drawImage(farLayer.wash, x, y);
+      ctx.globalCompositeOperation = 'source-over';
+      ctx.drawImage(farLayer.lines, x, y);
       ctx.restore();
-    }
-
-    // 3. province borders (fine), then realm borders with inner ribbons
-    const bstyle = rs.presentation.borders;
-    if (tier !== 'far') {
-      const thin = new Path2D();
-      for (const e of this.geo.edges) {
-        if (e.coast) continue;
-        if (e.bbox[2] < view[0] || e.bbox[0] > view[2] || e.bbox[3] < view[1] || e.bbox[1] > view[3]) continue;
-        const oa = sim.state.provinces[e.a].owner;
-        const ob = sim.state.provinces[e.b].owner;
-        if (oa !== ob) continue;
-        thin.addPath(e.path);
-      }
-      ctx.strokeStyle = 'rgba(52, 44, 34, 0.55)';
-      ctx.lineWidth = (tier === 'close' ? 1.1 : 0.8) * px;
-      ctx.setLineDash([3 * px, 2.5 * px]);
-      ctx.stroke(thin);
-      ctx.setLineDash([]);
-    }
-    const ribbonW = (bstyle === 'strong' ? 11 : bstyle === 'subtle' ? 5 : 8) * px * (tier === 'far' ? 0.8 : 1);
-    for (const [nid, rsh] of this.realms) {
-      ctx.save();
-      ctx.clip(rsh.union);
-      ctx.globalAlpha = rs.mode === 'political' ? 0.55 : 0.32;
-      ctx.strokeStyle = sim.world.nationDefs[nid].color;
-      ctx.lineWidth = ribbonW * 2;
-      ctx.stroke(rsh.border);
-      ctx.restore();
-    }
-    // rivers: strategic lines (attackers crossing one fight at a disadvantage)
-    if (this.geo.riverEdges.length) {
-      if (!this.riverPath) {
-        this.riverPath = new Path2D();
-        for (const e of this.geo.riverEdges) this.riverPath.addPath(e.path);
-      }
-      ctx.save();
-      ctx.lineCap = 'round';
-      ctx.lineJoin = 'round';
-      ctx.strokeStyle = 'rgba(232, 240, 238, 0.55)';
-      ctx.lineWidth = (tier === 'far' ? 3.6 : 4.6) * px;
-      ctx.stroke(this.riverPath);
-      ctx.strokeStyle = '#3d7391';
-      ctx.lineWidth = (tier === 'far' ? 1.9 : tier === 'medium' ? 2.4 : 2.8) * px;
-      ctx.stroke(this.riverPath);
-      ctx.restore();
-    }
-    const realmBorder = new Path2D();
-    for (const rsh of this.realms.values()) realmBorder.addPath(rsh.border);
-    ctx.strokeStyle = 'rgba(33, 27, 21, 0.92)';
-    ctx.lineWidth = (bstyle === 'strong' ? 2.6 : bstyle === 'subtle' ? 1.3 : 1.9) * px;
-    ctx.lineJoin = 'round';
-    ctx.stroke(realmBorder);
+    } else this.paintRealmLayers(ctx, sim, rs, tier, px, view, visible, { wash: true, lines: true, washComposite: 'multiply' }, mctx);
     if (rs.outlineRealm) {
       const r = this.realms.get(rs.outlineRealm);
       if (r) {
@@ -596,6 +525,147 @@ export class MapRenderer {
     const [first, ...rest] = picked.map(frame);
     first.alts = rest;
     return first;
+  }
+
+  /** Far-tier level of detail (cached layers while panning); the benchmark turns it off to compare. */
+  lod = true;
+  private farCache: { key: string; wash: HTMLCanvasElement; lines: HTMLCanvasElement; x0: number; y0: number } | null = null;
+  /** Far-tier layers covering the whole map at the current zoom; null when too large to keep. */
+  private farLayers(sim: Sim, rs: RenderState, tier: Tier, mctx: ReturnType<typeof buildContext>): { wash: HTMLCanvasElement; lines: HTMLCanvasElement; x0: number; y0: number } | null {
+    const z = this.camera.zoom;
+    const dpr = this.dpr;
+    const b = this.geo.bounds;
+    const w = Math.ceil((b.maxX - b.minX) * z * dpr);
+    const h = Math.ceil((b.maxY - b.minY) * z * dpr);
+    if (w * h > 9e6 || w < 1 || h < 1) return null;
+    const st = sim.state;
+    const key = [st.tick, st.rev, memoEpochNow(), rs.mode, rs.focusNation, rs.player, rs.presentation.borders, rs.presentation.patterns, z, dpr].join('|');
+    if (this.farCache?.key === key) return this.farCache;
+    const make = () => {
+      const c = document.createElement('canvas');
+      c.width = w;
+      c.height = h;
+      return c;
+    };
+    const wash = make();
+    const lines = make();
+    const px = 1 / z;
+    const all = this.geo.provList;
+    const view: [number, number, number, number] = [b.minX, b.minY, b.maxX, b.maxY];
+    for (const [c, parts] of [
+      [wash, { wash: true, lines: false, washComposite: 'source-over' as GlobalCompositeOperation }],
+      [lines, { wash: false, lines: true, washComposite: 'source-over' as GlobalCompositeOperation }],
+    ] as const) {
+      const g = c.getContext('2d')!;
+      g.setTransform(dpr * z, 0, 0, dpr * z, -b.minX * dpr * z, -b.minY * dpr * z);
+      this.paintRealmLayers(g, sim, rs, tier, px, view, all, parts, mctx);
+    }
+    this.farCache = { key, wash, lines, x0: b.minX, y0: b.minY };
+    return this.farCache;
+  }
+
+  /** Mode washes, occupation hatching, borders, realm ribbons and rivers. */
+  private paintRealmLayers(
+    ctx: CanvasRenderingContext2D,
+    sim: Sim,
+    rs: RenderState,
+    tier: Tier,
+    px: number,
+    view: [number, number, number, number],
+    visible: ProvGeo[],
+    parts: { wash: boolean; lines: boolean; washComposite: GlobalCompositeOperation },
+    mctx: ReturnType<typeof buildContext>,
+  ): void {
+    const groups = new Map<string, Path2D>();
+    const hatches: Array<{ id: ProvinceId; color: string }> = [];
+    for (const p of visible) {
+      const f = fillFor(rs.mode, mctx, p.id, rs.focusNation);
+      if (f.alpha > 0 && parts.wash) {
+        const k = `${f.color}|${f.alpha}`;
+        let g = groups.get(k);
+        if (!g) groups.set(k, (g = new Path2D()));
+        g.addPath(p.path);
+      }
+      if (f.hatch && parts.lines) hatches.push({ id: p.id, color: f.hatch });
+    }
+    // 1. mode washes (multiply: the printed terrain stays visible)
+    if (parts.wash) {
+      ctx.save();
+      ctx.globalCompositeOperation = parts.washComposite;
+      for (const [k, path] of groups) {
+        const [color, alpha] = k.split('|');
+        ctx.globalAlpha = Number(alpha);
+        ctx.fillStyle = color;
+        ctx.fill(path);
+      }
+      ctx.restore();
+    }
+    if (!parts.lines) return;
+
+    // 2. occupation / war hatching
+    for (const hch of hatches) {
+      const pat = this.hatchPattern(hch.color);
+      if (!pat) continue;
+      // one pattern pixel = one CSS pixel, anchored to the map
+      pat.setTransform(new DOMMatrix([px, 0, 0, px, 0, 0]));
+      ctx.save();
+      ctx.globalAlpha = 0.75;
+      ctx.fillStyle = pat;
+      ctx.fill(this.geo.provs.get(hch.id)!.path);
+      ctx.restore();
+    }
+
+    // 3. province borders (fine), then realm borders with inner ribbons
+    const bstyle = rs.presentation.borders;
+    if (tier !== 'far') {
+      const thin = new Path2D();
+      for (const e of this.geo.edges) {
+        if (e.coast) continue;
+        if (e.bbox[2] < view[0] || e.bbox[0] > view[2] || e.bbox[3] < view[1] || e.bbox[1] > view[3]) continue;
+        const oa = sim.state.provinces[e.a].owner;
+        const ob = sim.state.provinces[e.b].owner;
+        if (oa !== ob) continue;
+        thin.addPath(e.path);
+      }
+      ctx.strokeStyle = 'rgba(52, 44, 34, 0.55)';
+      ctx.lineWidth = (tier === 'close' ? 1.1 : 0.8) * px;
+      ctx.setLineDash([3 * px, 2.5 * px]);
+      ctx.stroke(thin);
+      ctx.setLineDash([]);
+    }
+    const ribbonW = (bstyle === 'strong' ? 11 : bstyle === 'subtle' ? 5 : 8) * px * (tier === 'far' ? 0.8 : 1);
+    for (const [nid, rsh] of this.realms) {
+      ctx.save();
+      ctx.clip(rsh.union);
+      ctx.globalAlpha = rs.mode === 'political' ? 0.55 : 0.32;
+      ctx.strokeStyle = sim.world.nationDefs[nid].color;
+      ctx.lineWidth = ribbonW * 2;
+      ctx.stroke(rsh.border);
+      ctx.restore();
+    }
+    // rivers: strategic lines (attackers crossing one fight at a disadvantage)
+    if (this.geo.riverEdges.length) {
+      if (!this.riverPath) {
+        this.riverPath = new Path2D();
+        for (const e of this.geo.riverEdges) this.riverPath.addPath(e.path);
+      }
+      ctx.save();
+      ctx.lineCap = 'round';
+      ctx.lineJoin = 'round';
+      ctx.strokeStyle = 'rgba(232, 240, 238, 0.55)';
+      ctx.lineWidth = (tier === 'far' ? 3.6 : 4.6) * px;
+      ctx.stroke(this.riverPath);
+      ctx.strokeStyle = '#3d7391';
+      ctx.lineWidth = (tier === 'far' ? 1.9 : tier === 'medium' ? 2.4 : 2.8) * px;
+      ctx.stroke(this.riverPath);
+      ctx.restore();
+    }
+    const realmBorder = new Path2D();
+    for (const rsh of this.realms.values()) realmBorder.addPath(rsh.border);
+    ctx.strokeStyle = 'rgba(33, 27, 21, 0.92)';
+    ctx.lineWidth = (bstyle === 'strong' ? 2.6 : bstyle === 'subtle' ? 1.3 : 1.9) * px;
+    ctx.lineJoin = 'round';
+    ctx.stroke(realmBorder);
   }
 
   private hatchPattern(color: string): CanvasPattern | null {

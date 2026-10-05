@@ -333,7 +333,7 @@ export function normalizeMapPackage(raw: unknown): { pkg: MapPackage; errors: Ma
     const wo = r.obj(x, 'Wasteland');
     const poly = r.points(wo.poly, 'Wasteland outline');
     points += poly.length;
-    pkg.geometry.waste.push({ kind: r.oneOf(wo.kind, ['peak', 'lake'] as const, 'Wasteland kind'), poly });
+    pkg.geometry.waste.push({ kind: r.oneOf(wo.kind, ['peak', 'lake', 'edge'] as const, 'Wasteland kind'), poly });
   }
   if (points > MAP_LIMITS.points) r.err('limit', `The map has ${points} coordinates; at most ${MAP_LIMITS.points} are allowed.`);
   if (g.labels !== undefined) {

@@ -2,7 +2,7 @@
 // naval battles, straits, blockades and armies carried by sea.
 
 import { describe, expect, it } from 'vitest';
-import { builtinPackage } from '../src/maps/builtin';
+import { BUILTIN_MAPS, builtinPackage } from '../src/maps/builtin';
 import { MAP_FORMAT_VERSION } from '../src/maps/format';
 import { generateSeaZones } from '../src/maps/seazones';
 import { checkMapObject, validateMapPackage } from '../src/maps/validate';
@@ -33,7 +33,7 @@ function fresh(sim: Sim) {
 
 describe('sea zones', () => {
   it('the built-in maps have sea zones on every real coast, two-way borders and every strait commanded', async () => {
-    for (const id of ['reach', 'aldmere'] as const) {
+    for (const id of BUILTIN_MAPS) {
       const pkg = await builtinPackage(id);
       expect(pkg.version).toBe(MAP_FORMAT_VERSION);
       expect(pkg.seaZones.length).toBeGreaterThan(5);

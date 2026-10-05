@@ -182,6 +182,10 @@ export class EditorView {
       ctx.fillStyle = PALETTE.lake;
       ctx.fill(l.path);
     }
+    for (const b of geo.beyond) {
+      ctx.fillStyle = PALETTE.beyond;
+      ctx.fill(b.path);
+    }
     // provinces
     for (const p of visible) {
       ctx.fillStyle = this.fillOf(p.id);

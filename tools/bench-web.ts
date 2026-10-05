@@ -107,7 +107,8 @@ for (const m of maps) {
     const r = a.renderer;
     const cam = r.camera;
     const out: Record<string, { draw: number[]; frame: number[] }> = {};
-    for (const [tier, px] of [['far', 30], ['medium', 90], ['close', 200]] as const) {
+    for (const [tier, px, lod] of [['far (no level of detail)', 30, false], ['far', 30, true], ['medium', 90, true], ['close', 200, true]] as const) {
+      r.lod = lod;
       const ids = a.sim.world.provIds;
       const c = r.provinceCenter(ids[Math.floor(ids.length / 2)]);
       cam.centerOn(c.x, c.y, cam.zoomForProvincePx(px), false);

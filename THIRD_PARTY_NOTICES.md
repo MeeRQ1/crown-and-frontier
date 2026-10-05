@@ -33,6 +33,22 @@ editor's chunk and its generator worker. The licence texts ship with the build i
 | delaunator | 5.1.0 | ISC | Mapbox |
 | robust-predicates | 3.0.3 | Unlicense (public domain) | Vladimir Agafonkin |
 
+### Map data: Natural Earth
+
+The real-world map **The Baltic, 1906** is built from **Natural Earth** (naturalearthdata.com),
+version 5.1.2, by `tools/genbaltic.ts`. Natural Earth is in the **public domain**; no
+permission is needed to use it, and it is credited here and in the game (the map library,
+campaign setup and the in-game menu). Layers used: `ne_50m_land`, `ne_50m_lakes`,
+`ne_10m_rivers_lake_centerlines`, `ne_10m_admin_1_states_provinces` and
+`ne_10m_populated_places_simple`; the script pins their SHA-256 sums. The data files are
+downloaded when the script runs and are not part of the repository; the shipped map is the
+script's output (`src/data/maps/baltic.*.json`).
+
+What is not from Natural Earth is authored in `tools/baltic.data.ts`: the realms of 1906 and
+which present-day division belonged to which (approximations noted there), place names as
+written in 1906, district towns that Natural Earth lacks, the Scandes ridges and passes, and
+realm traits.
+
 ### Everything else is original
 
 - **Images:** none are bundled. The map, terrain art, heraldry, markers, icons and favicon
@@ -42,7 +58,8 @@ editor's chunk and its generator worker. The licence texts ship with the build i
   `tools/genworld.ts` (Aldmere) from original, authored geography, and by
   `tools/genmaps.ts` (the Sundered Isles, the Kharan Steppe and the Middle Sea) with the
   procedural generator from fixed parameters. All names, realms, heraldry, events and
-  text are original to this project.
+  text are original to this project, except the real places and realms of The Baltic,
+  1906 (above).
 
 ## Development tools (not shipped)
 
