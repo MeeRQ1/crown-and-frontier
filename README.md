@@ -169,18 +169,27 @@ that the final state matches.
 - [docs/REDESIGN.md](docs/REDESIGN.md): the interface and world redesign: diagnosis, direction and what was built.
 - [docs/expansion/](docs/expansion/): the strategic depth expansion, with the Stage A audit
   ([AUDIT.md](docs/expansion/AUDIT.md)), the plan and requirement ledger
-  ([PLAN.md](docs/expansion/PLAN.md)) and the setting decision ([SETTING.md](docs/expansion/SETTING.md)).
+  ([PLAN.md](docs/expansion/PLAN.md)), the setting decision ([SETTING.md](docs/expansion/SETTING.md))
+  and the recorded player-style session ([SESSIONS.md](docs/expansion/SESSIONS.md)).
 - [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md): the three bundled OFL fonts and the geometry
   libraries of the map generator (d3-delaunay, delaunator, robust-predicates), whose licences ship
   in `licenses/`; Natural Earth (public domain) for the real-world map; and the development tools.
 
 ## Known limitations
 
-- **Balance:** tuned against AI-only campaigns on Aldmere and the Reach (see STATUS.md and
-  `reports/stage-c/`). With navies and air forces (10 seeds per map) the richest heartlands
-  win most often again: Lessia 6 of 10 on Aldmere, Aurel 5 of 10 on the Reach. Hrafnmark
-  and some other small or exposed realms shrink on average. Balance across realms is
-  planned for Stage F. No external players have tested either map yet.
+- **Balance:** tuned against AI-only campaigns, 16 per map (`reports/stage-e/`,
+  `reports/stage-f/`). Half or fewer end on score at the limit on every map, but wins
+  concentrate on some: Astia and Gorathia share the Kharan Steppe, Ostmark wins 9 of 16 on
+  the Sundered Isles, and the richest heartlands still lead on Aldmere and the Reach.
+  Diplomatic Leadership is the most common win on the Reach, the Middle Sea and the Baltic.
+  Hrafnmark and some other small or exposed realms shrink on average. No external players
+  have tested the game; the one recorded session is the author's
+  (`docs/expansion/SESSIONS.md`).
+- **AI wars across the water:** you can fabricate a claim on a coast within one sea zone of
+  your ports, but AI realms plan wars only against realms they border by land or strait, so
+  island AIs seldom start wars.
+- **Crowns pile up** in a small realm late in a campaign: construction slots, slipways and
+  manpower limit spending, and there is no late-game sink yet.
 - **Fog of war:** not implemented. All information is public to everyone, AI included.
 - **Browsers verified:** only headless Chromium 141, on desktop and emulated phone viewports. Firefox,
   Safari, real Chromebooks and real touch devices are untested.
@@ -191,8 +200,8 @@ that the final state matches.
   browser until exported.
 - **The Baltic, 1906:** some borders of 1906 are approximated from present-day divisions
   (see `tools/baltic.data.ts`), and present-day populations stand in for those of 1906. The
-  empires start far larger than the kingdoms. In AI batches Russia has won most campaigns on
-  score (3 of 4), and Norway and Denmark rarely fight.
+  empires start far larger than the kingdoms. In 16 AI campaigns Russia won 6 on score and
+  Sweden and Denmark 10 by diplomacy; Norway and Denmark rarely fight.
 - **Navy and air are abstracted:** fleets fight in sea zones and wings fly missions over a
   province and its neighbours; there are no individual ships' positions, convoys or air
   routes. Troops at sea cannot be redirected until they land.

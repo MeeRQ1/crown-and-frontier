@@ -42,7 +42,7 @@ national focus, Wars, Victory). Then fourteen years:
 | 4 | Switching from Diplomacy straight to another ledger left the Diplomacy map on. | Fixed; browser check. |
 | 5 | A waiting decision card covered the middle of the map-mode bar. | Fixed: the dock sits above the bar. |
 | 6 | A finished focus or technology only showed a toast; at speed 4 the realm went eight months without a focus. | Fixed: a pause setting "When research or a national focus finishes" (on by default) and a Focus badge on the rail; browser check. |
-| 7 | Sea control: a zone washed in a brown realm colour read as land. | Lighter wash with a dashed edge in the realm's colour. |
+| 7 | Sea control: a zone washed in a brown realm colour read as land. A dashed edge tried first drew every inner cell edge of a zone as stripes at far zoom (seen in the Stage F screenshots). | A lighter wash only (24%), no edge. |
 | 8 | Messages said "1 regiment(s) in training" and the like. | Proper singular and plural throughout. |
 | 9 | An island realm with no land or strait border could neither fabricate a claim nor declare any war: fabrication needed a bordering province. | New rule: a claim can be fabricated on a coast within one sea zone of one of our ports; unit test. The AI's own war planning still looks only at realms it borders (known limitation). |
 | 10 | The war button said "Their allies may join: Drentland, Kalda, Sandland", but Kalda and Sandland had pacts with us and did not join. | Fixed: it names only allies that can join, those bound to us by a treaty, and guarantors who will be called. |

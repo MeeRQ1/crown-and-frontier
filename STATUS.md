@@ -1,9 +1,9 @@
 # Status
 
-Last updated at **Stage E of the strategic depth expansion** (save format 4, map format 3).
-Stages A–E are done in this branch. **This is not the finished expansion:** onboarding,
-balance and final delivery (Stage F) are still to come
-([docs/expansion/PLAN.md](docs/expansion/PLAN.md)). The
+Last updated at **Stage F of the strategic depth expansion** (save format 4, map format 3).
+Stages A–F are done in this branch, with the known limitations listed below; nothing in
+the brief has been dropped ([docs/expansion/PLAN.md](docs/expansion/PLAN.md), requirement
+ledger). The branch is a draft pull request and has not been merged or published. The
 rest of this file below the expansion section describes the redesign release (0.2.0) and
 is kept for its evidence. Where a stage changed a fact, it is corrected in place.
 
@@ -16,7 +16,52 @@ is kept for its evidence. Where a stage changed a fact, it is corrected in place
 | C · War on land, at sea and in the air | **Done in this branch** (same draft pull request) |
 | D · Maps, editor, real-world map | **Done in this branch** (same draft pull request) |
 | E · Diplomacy, settlements, national focus | **Done in this branch** (same draft pull request) |
-| F · Onboarding, balance, delivery | Not started |
+| F · Onboarding, balance, delivery | **Done in this branch** (same draft pull request) |
+
+**Stage F delivered:**
+- **Tutorial** of 15 steps, each completed by doing it, now covering industry and resources,
+  ships and aircraft, national focus and how wars end; the diplomacy step introduces
+  influence and spheres. With a ledger open the tutorial sits beside it.
+- **Map modes:** Resources (deposits, hatched where the realm is short) and Sea control (the
+  realm with the strongest warships in each zone, ports by level, blockaded coasts); nine
+  modes on Shift+1…9.
+- **Pausing:** a new setting, on by default, pauses when research or a national focus
+  finishes; the Focus rail is marked while no focus is under way.
+- **A player-style session** in the browser (the Sundered Isles as Dunach, 1885–1899,
+  `docs/expansion/SESSIONS.md`) found 13 issues; 12 are fixed: map clicks swallowed beside
+  the legend and above the minimap, the tutorial covering ledgers, the Diplomacy map left on,
+  a decision card over the mode bar, no pause for a finished focus, sea zones that read as
+  land, sloppy plurals, island realms unable to start any war (claims can now be fabricated
+  on a coast within one sea zone of one of our ports), a war hint that named allies who could
+  not join, the legend under the zoom buttons, the tutorial's project wording, and island
+  realms described as having "0 neighbouring realms". The crown surplus of a small realm is
+  a known limitation.
+- **Balance:** the Sundered Isles, the Middle Sea and the Kharan Steppe are revision 2 with
+  victory thresholds set from 16-seed AI batches (DESIGN.md, *Maps*); saves from revision 1
+  load with a notice (checked with a save from the earlier build).
+
+**Stage F measurements:**
+- 184 Vitest tests pass (one more than Stage E: claims across the water).
+- 61 of 61 browser checks pass in headless Chromium 141 (eight new: the tutorial's new steps
+  completed by doing them, the Focus badge and the tutorial beside a ledger, the Resources
+  and Sea control modes, the map mode restored when switching ledgers, a finished focus
+  pausing the game, map clicks reaching the map beside the legend and minimap, the legend
+  clear of the zoom buttons with two panels open, and no page errors). Two of them fail on
+  the layout before the fix.
+- AI batches, 16 seeds per map at the default length: the three revised maps in
+  `reports/stage-f/`; Aldmere, the Reach and the Baltic in `reports/stage-e/` (their rules
+  did not change in Stage F). No invariant failures in any of the 96 campaigns. Campaigns
+  ending on score: Aldmere 7, the Reach 6, the Sundered Isles 2 (was 9), the Kharan Steppe
+  2, the Middle Sea 8 (was 9), the Baltic 6 — half or fewer on every map, and fewer than
+  after Stage A on both baseline maps. Different winners per map: Aldmere 5, the Reach 6,
+  the Middle Sea 6, the Isles 3 (Ostmark 9 of 16), the Baltic 3, the Steppe 2 (Astia and
+  Gorathia 8 each).
+- Performance: the simulation rules for Aldmere, the Reach and the Baltic are unchanged
+  since the Stage E benchmarks (`reports/perf/stageE-*`: median p99 week 24.7 ms on
+  Aldmere, under the 25 ms worker trigger; 36 of 36 weeks at fastest speed on the large
+  maps), so the worker decision stands: the simulation stays on the main thread.
+- Screenshots: `docs/screenshots/stage-f/` (tutorial, the new map modes, the decision dock,
+  pause settings, and the session).
 
 **Stage E delivered:**
 - **National focus trees replace the six policies.** Every realm has a generic tree of 37
@@ -234,39 +279,39 @@ is kept for its evidence. Where a stage changed a fact, it is corrected in place
   research by era, province card, format-2 conversion notice).
 
 **Checkpoint for continuing:**
-- **Working state:** all of these pass at the end of Stage E.
+- **Working state:** all of these pass at the end of Stage F.
   ```bash
   npm ci && npm run typecheck && npm test && npm run build && npm run package && npm run verify:web
   npm run fuzz -- --scenario reach --seeds 1-3 --years 10 && npm run fuzz -- --scenario isles --seeds 1-3 --years 10
   npm run genmaps && npm run genbaltic && git status   # regenerated maps are unchanged
   ```
 - **Unresolved failures:** none known.
-- **Known gaps** (tracked for later stages):
-  - Oil, rubber, nitrates and iron are still never short in AI batches; coal is the
-    binding resource.
-  - The richest heartlands still lead, though less: Morvaine 6 of 16 on Aldmere (5 of them
-    on score) and Aurel 6 of 16 on the Reach (4 on score), with five and six different
-    winners (before Stage E: Lessia 6 of 10, Aurel 5 of 10). Balance is Stage F's work.
-  - Hrafnmark still shrinks on Aldmere.
-  - A small coal exporter can draw most of its income from trade, although the average is
-    12–15%.
-  - Armour stays rare in AI armies (0.1–0.3% of regiment-months): Tanks arrives in 1916,
-    late in most campaigns.
-  - Stage E batches (16 seeds per map): the Sundered Isles and the Middle Sea still end on
-    score in 9 of 16 campaigns. On the Middle Sea no realm nears the economic or territorial
-    thresholds; on the Isles Ostmark wins 11 of 16 (4 on the economy, 7 on score). Astia
-    wins 9 of 16 on the Kharan Steppe. Diplomatic Leadership is the most common win on the
-    Reach (8 of 16), the Middle Sea (7) and the Baltic (10).
+- **Known limitations** (measured; none of them blocks a requirement):
+  - **Wins concentrate on some maps:** on the Kharan Steppe Astia and Gorathia win 8 of 16
+    each; on the Sundered Isles Ostmark wins 9 of 16; on the Baltic only Russia (on score),
+    Sweden and Denmark win. Aldmere, the Reach and the Middle Sea have five or six
+    different winners in 16 campaigns. The richest heartlands still lead on the two
+    original maps (Morvaine 6 of 16 on Aldmere, Aurel 6 of 16 on the Reach).
+  - **Diplomatic Leadership** is the most common win on the Reach (8 of 16), the Middle Sea
+    (7) and the Baltic (10), and the Middle Sea still ends on score in half its campaigns.
+  - **AI war planning** considers only realms it borders by land or strait; the overseas
+    claims added in Stage F are used by the player only, so island AIs rarely start wars.
+  - **Crown surplus:** a small realm can pile up thousands of crowns (three construction
+    slots, slipways per port level and its manpower pool cap spending); there is no
+    late-game sink for crowns.
   - Every realm joins a trade bloc (80–94% of realm-months); sphere and disarmament demands
     are rare, and guarantees are seldom called on (0–11 times in 16 campaigns per map).
-  - The Baltic, 1906: Russia wins on score (6 of 16), Sweden and Denmark diplomatically, and
-    Norway and Denmark rarely fight. Some 1906 borders are approximations
-    (`tools/baltic.data.ts`).
+  - Oil, rubber, nitrates and iron are still never short in AI batches; coal is the
+    binding resource. Armour stays rare (Tanks arrives in 1916, late in most campaigns).
+  - Hrafnmark still shrinks on Aldmere; Norway and Denmark rarely fight on the Baltic;
+    some 1906 borders are approximations (`tools/baltic.data.ts`).
   - The map editor cannot split provinces, draw coastline or reshape sea zones.
-  - The Middle Sea: 2 of 31 realms at war with a coastal enemy left their fleets in port.
+  - **Verification limits:** headless Chromium only; no Firefox, Safari, real touch device or
+    Chromebook; the player-style session is the author's own (no external players).
 - **Requirement status:** PLAN.md's ledger lists every requirement with its stage and
   status. Nothing has been dropped.
-- **Next steps:** Stage F, in the order listed at the end of PLAN.md.
+- **Next steps:** listed below ("Next steps"): an external playtest, balance of the
+  concentrated maps, cross-browser and device checks, and hosting when you decide.
 
 ## Evidence, kept separate
 
@@ -450,13 +495,14 @@ Three other skews remain:
 
 ## Next steps
 
-1. **External playtest** on both maps (3–5 players): readability of the atlas at each zoom,
-   whether the setup screen explains starts well enough, and pacing on Aldmere.
-2. **Balance:** the wealthy central starts on Aldmere (Lessia, Aurel); small defensive realms
-   (Carrow, Hrafnmark); a late-game sink for crowns.
+1. **External playtest** (3–5 players) on Aldmere and one of the new maps: readability of
+   the atlas at each zoom, whether the tutorial and setup screen explain enough, pacing.
+2. **Balance:** the Steppe's two dominant realms and Ostmark on the Isles; the wealthy
+   heartlands on Aldmere and the Reach; diplomatic wins on the Reach, the Middle Sea and the
+   Baltic; a late-game sink for crowns; AI war planning across the water.
 3. **Cross-browser and devices:** Firefox and WebKit runs of `verify:web`; a real Chromebook
    and a tablet.
-4. **Hosting:** enable GitHub Pages and verify the live URL.
+4. **Hosting:** only when you decide: enable GitHub Pages and verify the live URL.
 
 ## Continuation checkpoint
 

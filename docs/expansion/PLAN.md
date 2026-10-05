@@ -32,7 +32,7 @@ priorities is in [AUDIT.md](AUDIT.md). The era and content decisions are in
 | **C · War on land, at sea and in the air** | Land depth (frontage by terrain, breakthrough, entrenchment lines, rail logistics, armour); map package v3 with sea zones and ports (v1 and v2 upgraded automatically); fleets, naval combat, transports and invasions, blockades; airfields and air missions (superiority, ground support, interdiction, bombing, reconnaissance); military AI for all three arms | B | **done** (this pull request) |
 | **D · Maps** | Map library screen; at least three new fictional maps (small, standard, large); in-browser map editor (provinces, realms, regions, sea zones, routes, validation, export and import); a real-world regional map from Natural Earth (public domain) with attribution; level of detail for large maps | A (format), C (sea zones) | **done** (this pull request) |
 | **E · Diplomacy, settlements and national focus** | Peace settlements with several parties and graded demands; guarantees, spheres and influence; trade blocs; national focus trees (generic and per-realm), replacing the six policies; diplomacy and focus AI | B, C | **done** (this pull request) |
-| **F · Onboarding, balance and delivery** | Tutorial and onboarding for every new system; UI pass; AI system-usage reports; balance from AI batches on every map; player-style sessions; screenshots; final docs, attribution, test and performance results, known limitations | B–E | planned |
+| **F · Onboarding, balance and delivery** | Tutorial and onboarding for every new system; UI pass; AI system-usage reports; balance from AI batches on every map; player-style sessions; screenshots; final docs, attribution, test and performance results, known limitations | B–E | **done** (this pull request) |
 
 ### Acceptance checks per stage
 
@@ -173,6 +173,8 @@ priorities is in [AUDIT.md](AUDIT.md). The era and content decisions are in
   Sea no realm comes near the economic or territorial thresholds (the richest holds 9–12% of
   the development against 13.6% needed) and only diplomacy decides; on the Isles Ostmark
   leads but rarely holds a win. Both are Stage F balance items, with map revisions.
+  **Met after Stage F:** with the revised Isles (2 of 16) and Middle Sea (8 of 16), score
+  endings are half or fewer on every map (see F).
   Rule and AI changes made for this (DESIGN.md, *Victory*): a victory timer pauses instead of
   winding back while a realm is within a tenth of the main measure with every other condition
   met; economic shares in play are 80% of each map's stated share; diplomatic influence
@@ -190,13 +192,28 @@ priorities is in [AUDIT.md](AUDIT.md). The era and content decisions are in
   900-province map (`web-stageE.md`). Median p99 on the standard maps: 24.7, 18.2 and
   18.0 ms, under the 25 ms worker trigger. 183 unit tests and 53 of 53 browser checks pass.
 
-**F**
-- The tutorial covers the new systems. Every system has a ledger and tooltips, and where
-  relevant a map mode.
-- AI batches on every map: no invariant failures, all systems used, wins spread across
-  realms.
-- Player-style sessions are recorded with screenshots. Docs, attribution, final test and
-  performance results, and known limitations are written.
+**F (done)**
+- [x] The tutorial covers the new systems: 15 steps, each completed by doing it, including
+  industry and resources, ships and aircraft, a national focus and how wars end (browser
+  check). Every system has a ledger, with reasons and tooltips on its actions; resources and
+  sea control have their own map modes (Shift+8, Shift+9), next to supply, economy,
+  frontier, diplomacy and military.
+- [x] AI batches on every map, 16 seeds each at the default length (`reports/stage-e/` for
+  Aldmere, the Reach and the Baltic, `reports/stage-f/` for the three revised maps): no
+  invariant failures in 96 campaigns; every system used (industry, navy, air, settlements,
+  guarantees, loans, blocs, spheres, focus; sphere and disarmament demands rare). Score
+  endings are half or fewer on every map (7, 6, 2, 2, 8 and 6 of 16), which also completes
+  the Stage E target.
+- [ ] **Partly met: wins spread across realms.** Aldmere, the Reach and the Middle Sea have
+  five or six different winners in 16 campaigns; the Isles three (Ostmark 9), the Baltic
+  three, and the Kharan Steppe two (Astia and Gorathia 8 each). Recorded as a known
+  limitation with the measurements.
+- [x] A player-style session in the browser, recorded with screenshots and findings
+  (`docs/expansion/SESSIONS.md`, `docs/screenshots/stage-f/`): 13 findings, 12 fixed (eight
+  with browser checks, two of which fail on the old layout), one recorded as a limitation.
+- [x] Docs, attribution (THIRD_PARTY_NOTICES.md; Natural Earth in the game), final results
+  (184 unit tests, 61 of 61 browser checks, fuzzer 0 findings, benchmarks from Stage E with
+  unchanged rules) and known limitations (STATUS.md, README.md) are written.
 
 ## Scope decisions
 
@@ -249,14 +266,14 @@ assigned to a stage and not started. Nothing has been dropped.
 | 21 | Settlements | E | done | Peace settlements with several parties and graded demands (`src/sim/settlement.ts`); tests; peace conference and counter-offer browser flows; Stage E checks |
 | 22 | Research | B (land, industry, society), C (naval, air) | done | 73 technologies in five branches, five eras, horizons; Stage B and C checks |
 | 23 | National focus trees | E | done | Generic tree and a national branch for every realm on every map (`src/sim/focus.ts`, `src/sim/data/focus.ts`); tests; Focus ledger; Stage E checks |
-| 24 | AI that uses every system | B–E, measured in F | B–E systems done | System-usage section in every AI report (`tools/usage.ts`), with Stage E counts |
-| 25 | UI and onboarding | every stage, F | planned | Stage F checks |
-| 26 | Stages A–F, each runnable with concrete checks | A–F | A–E done | Acceptance checks above |
-| 27 | Tests, browser flows, AI campaigns, player-style sessions, screenshots, docs, attribution, test and performance results, known limitations | every stage, F | A–E done for their scope | PR description, STATUS.md, `reports/`, `docs/screenshots/stage-*` |
+| 24 | AI that uses every system | B–E, measured in F | done | System-usage section in every AI report (`tools/usage.ts`); 16-seed batches on every map (`reports/stage-e/`, `reports/stage-f/`); AI war planning stays on bordering realms (STATUS.md, known limitations) |
+| 25 | UI and onboarding | every stage, F | done | 15-step tutorial for every system, nine map modes, pause settings, UI fixes from the session; Stage F checks |
+| 26 | Stages A–F, each runnable with concrete checks | A–F | done | Acceptance checks above (one Stage F check partly met: wins spread across realms) |
+| 27 | Tests, browser flows, AI campaigns, player-style sessions, screenshots, docs, attribution, test and performance results, known limitations | every stage, F | done | PR description, STATUS.md, `docs/expansion/SESSIONS.md`, `reports/`, `docs/screenshots/stage-*` |
 | 28 | Do not merge or publish without instruction | all | followed | Draft pull requests only |
 | 29 | No invented results, untested browser claims or mock interfaces | all | followed | Results come from tools in the repo |
 | 30 | No accounts, backend, paid services or external AI APIs | all | followed | Static build, local storage |
-| 31 | Preserve saves; versioning, migrations, notices; never silently corrupt or discard | A, B, every later stage | done for A–E | Format 2, 3 and 4 migration tests and fixtures (a format-3 save from the Stage D build); format-3 saves from before fleets get defaults and a notice; browser checks |
+| 31 | Preserve saves; versioning, migrations, notices; never silently corrupt or discard | A, B, every later stage | done | Format 2, 3 and 4 migration tests and fixtures (a format-3 save from the Stage D build); format-3 saves from before fleets get defaults and a notice; browser checks; Stage F map revisions load older saves with a notice (checked with a revision-1 Isles save from the earlier build) |
 | 32 | No real-device claims from a resized desktop browser | all | followed | AUDIT.md wording |
 | 33 | Reject malformed or very large imports; never execute imported scripts | A | done | Validator limits, save limit, tests, text-only rendering |
 | 34 | Reviewable pull requests; no silent scope reduction | all | followed | One PR per stage; this ledger |
@@ -264,14 +281,8 @@ assigned to a stage and not started. Nothing has been dropped.
 | 36 | No speculative rewrites; no optimisation that changes rules | all | followed | Rule check record |
 | 37 | Worker only if profiling justifies it | all | followed | Worker decision in AUDIT.md |
 
-## Next steps (Stage F)
+## After Stage F
 
-1. Tutorial steps for the new systems (industry and resources, sea and air, national focus,
-   settlements, influence), and map modes for resources and sea control.
-2. A UI pass over every ledger: tooltips, wording left over from policies, overlaps between
-   the tutorial, ledgers, the decision dock and the map controls.
-3. AI batches on every map with system-usage reports; balance where one realm wins most
-   campaigns (the Kharan Steppe's Astia), where a path dominates, and where campaigns still
-   end on score.
-4. Player-style sessions in the browser, recorded with screenshots and findings.
-5. Final docs, attribution, test and performance results and known limitations.
+The expansion's stages are done. What remains is listed in STATUS.md ("Next steps"): an
+external playtest, balance where wins concentrate, cross-browser and device checks, and
+hosting only when you decide.

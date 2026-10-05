@@ -813,17 +813,12 @@ export class MapRenderer {
         if (!best) continue;
         const path = geo.zonePath(z);
         if (!path) continue;
-        // a light wash and an inked edge in the realm's colour: the water must still read as water
-        const color = sim.world.nationDefs[best]?.color ?? '#5d79a8';
+        // a light wash in the realm's colour: the water must still read as water (the zone
+        // paths are unions of cells, so they are filled, never stroked)
         ctx.save();
-        ctx.globalAlpha = 0.2;
-        ctx.fillStyle = color;
+        ctx.globalAlpha = 0.24;
+        ctx.fillStyle = sim.world.nationDefs[best]?.color ?? '#5d79a8';
         ctx.fill(path);
-        ctx.globalAlpha = 0.85;
-        ctx.strokeStyle = color;
-        ctx.lineWidth = 2.5 * px;
-        ctx.setLineDash([8 * px, 5 * px]);
-        ctx.stroke(path);
         ctx.restore();
       }
     }
