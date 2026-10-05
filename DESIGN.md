@@ -556,7 +556,9 @@ East Water; c is an island realm.
   - **Claim** — provinces we hold claims on. No trust cost.
   - **Conquest** — up to two bordering provinces. Costs 8 trust and alarms the target's neighbours. Forbidden while the Concord of Nations focus is held.
   - **Coalition** — declared by a coalition member; all members join.
-  Claims come from history, events, peace (the previous owner keeps one) or 12-month fabrication.
+  Claims come from history, events, peace (the previous owner keeps one) or 12-month fabrication
+  on a province bordering ours or, from Stage F, on a coast whose sea zone holds or borders a
+  zone with one of our ports (so island realms can make war across the water).
 - **Blocked by:** truces (5 years after peace), non-aggression pacts, and alliances.
 - **Calls to arms:** the target's defensive allies, the realms that guarantee its independence and
   the realm whose sphere it is in are called. AI realms join unless exhausted or already in two

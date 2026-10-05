@@ -601,6 +601,11 @@ canvas.map.dragging { cursor: grabbing; }
 }
 .modes > * { pointer-events: auto; }
 .drawer:not(.closed) ~ .modes { left: calc(var(--rail-w) + var(--drawer-w) + 2 * var(--s5)); }
+/* a ledger and a card open at once: the legend and the mode bar fit between them, clear of the zoom buttons */
+@media (min-width: 761px) {
+  .drawer:not(.closed) ~ .inspector:not(.closed) ~ .modes { max-width: calc(100% - var(--rail-w) - var(--drawer-w) - var(--inspector-w) - 2 * var(--s5) - 3 * var(--s4) - 52px); }
+  .modes .legend { max-width: 100%; }
+}
 .modes .mode-bar { display: flex; gap: 2px; padding: 3px; background: var(--glass); border: 1px solid var(--line); border-radius: var(--r-lg); box-shadow: var(--shadow-2); backdrop-filter: blur(6px); overflow-x: auto; scrollbar-width: none; max-width: 100%; }
 .modes .mode-bar::-webkit-scrollbar { display: none; }
 .modes .mode-bar button {

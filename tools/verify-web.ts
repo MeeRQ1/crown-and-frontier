@@ -765,6 +765,22 @@ async function tutorialFlow(browser: Browser, base: string): Promise<void> {
   });
   record('A finished national focus pauses the game for the next choice', paused.finished && paused.speed === 0, `finished ${paused.finished}, speed afterwards ${paused.speed}`);
   record('Map clicks reach the map beside the legend, the mode bar and the minimap', deadZones.length === 0, deadZones.length ? `${deadZones.length} points blocked, e.g. ${deadZones.slice(0, 3).join(', ')}` : 'no transparent box over the map');
+  // a ledger and a card open at once: the legend stays clear of the zoom buttons
+  await page.evaluate(() => {
+    const app = (window as any).cnf;
+    app.setMode('military');
+    const army = Object.values(app.sim.state.armies as Record<string, { id: string; nation: string }>).find((x) => x.nation === app.player);
+    if (army) app.selectArmy(army.id, false);
+    app.openLedger('wars');
+    app.refresh();
+  });
+  await page.waitForTimeout(600);
+  const clear = await page.evaluate(() => ({
+    legend: document.querySelector('.legend:not(.hidden)')?.getBoundingClientRect().right ?? 0,
+    nav: document.querySelector('.navcl .nav-btns')?.getBoundingClientRect().left ?? 0,
+    inspector: !document.querySelector('.inspector')?.classList.contains('closed'),
+  }));
+  record('With a ledger and a card open, the legend stays clear of the zoom buttons', clear.inspector && clear.legend > 0 && clear.legend <= clear.nav, `legend ends at ${Math.round(clear.legend)} px, zoom buttons start at ${Math.round(clear.nav)} px`);
   record('Tutorial and map modes without errors', problems.length === 0, problems.slice(0, 3).join('; '));
   await page.close();
 }

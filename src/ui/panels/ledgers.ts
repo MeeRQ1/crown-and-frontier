@@ -890,18 +890,25 @@ function nationDetail(app: App, o: NationId): HTMLElement {
           null,
           goals.map((g) => {
             const prob = declareWarProblem(sim, me, o, g);
-            const allies = alliesOf(sim, o).filter((a) => a !== me);
+            // a realm bound to us by an alliance or a pact cannot join against us
+            const bound = (a: string) => hasTreaty(sim, 'alliance', a, me) || hasTreaty(sim, 'nap', a, me);
+            const names = (list: string[]) => list.map((a) => nationName(sim, a)).join(', ');
+            const allies = alliesOf(sim, o).filter((a) => a !== me && !bound(a));
+            const held = alliesOf(sim, o).filter((a) => a !== me && bound(a));
+            const guarantors = sim.state.guarantees.filter((x) => x.of === o && x.by !== me && !allies.includes(x.by) && !bound(x.by)).map((x) => x.by);
             const coal = coalitionAgainst(sim, me);
             const cons = [
               g.type === 'conquest' ? `Costs ${C.war.conquestTrustLoss} trust and alarms their neighbours.` : g.type === 'claim' ? 'Pressing a claim costs no trust.' : 'All coalition members join you.',
-              allies.length ? `Their allies may join: ${allies.map((a) => nationName(sim, a)).join(', ')}.` : 'They have no allies.',
+              allies.length ? `Their allies may join: ${names(allies)}.` : held.length ? 'None of their allies can join.' : 'They have no allies.',
+              held.length ? `${names(held)} ${held.length === 1 ? 'is' : 'are'} bound to us by a treaty and cannot.` : '',
+              guarantors.length ? `${names(guarantors)} ${guarantors.length === 1 ? 'guarantees' : 'guarantee'} their independence and will be called to arms.` : '',
               coal?.members.includes(o) ? 'They are in a coalition against you: all members will join them!' : '',
             ].join(' ');
             const label = `${g.type === 'claim' ? 'Press claims' : g.type === 'coalition' ? 'Coalition war' : 'War of conquest'}: ${g.provinces.map((p) => provName(sim, p)).join(', ')}`;
             return action(label, cons, () => confirmDialog(app, `Declare war on ${def.short}?`, cons, () => app.do(g.type === 'coalition' ? { type: 'coalitionWar', target: o } : { type: 'declareWar', target: o, goal: g })), prob, 'danger');
           }),
         )
-      : h('p', { class: 'small muted' }, 'No war goal: we need a claim on their land (fabricate one from a province of ours that borders it) or a shared border for a war of conquest.');
+      : h('p', { class: 'small muted' }, 'No war goal: we need a claim on their land (fabricate one on a province bordering ours, or on a coast within one sea zone of one of our ports) or a shared border for a war of conquest.');
   const coalAgainstThem = coalitionAgainst(sim, o);
   const myAlarm = st.alarm[me]?.[o] ?? 0;
   const theirAlarm = st.alarm[o]?.[me] ?? 0;
@@ -997,7 +1004,7 @@ function warsLedger(app: App): HTMLElement {
                 ),
               ),
             )
-          : h('p', { class: 'small muted' }, 'None yet. Fabricate a claim from a province of ours that borders the land we want, or share a border for a war of conquest.'),
+          : h('p', { class: 'small muted' }, 'None yet. Fabricate a claim on a province bordering ours or on a coast within one sea zone of one of our ports, or share a border for a war of conquest.'),
       ),
       section(
         'Who might come for us',

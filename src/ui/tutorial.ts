@@ -40,6 +40,14 @@ function suggestProject(app: App): { pid: string; kind: ProjectKind } | { reason
   return { reason };
 }
 
+/** What the suggested project is for, in the tutorial's words. */
+const PROJECT_WHY: Partial<Record<ProjectKind, string>> = {
+  dev: 'Development raises income for good',
+  infra: 'Railways speed armies and supplies and help new land integrate',
+  charter: 'Charters integrate frontier land faster',
+  fort: 'Forts slow invaders and shelter your armies',
+};
+
 const STEPS: Step[] = [
   {
     title: 'Welcome',
@@ -62,7 +70,7 @@ const STEPS: Step[] = [
     text: (app) => {
       const s = suggestProject(app);
       if ('reason' in s) return [`Projects use construction slots and crowns. Right now: ${s.reason} Skip this step for now.`];
-      return [`Start a project: ${PROJECT_LABELS[s.kind]} in ${provName(app.sim!, s.pid)}. Development raises income for good, but every crown spent here is not spent on soldiers.`];
+      return [`Start a project: ${PROJECT_LABELS[s.kind]} in ${provName(app.sim!, s.pid)}. ${PROJECT_WHY[s.kind] ?? 'Projects pay off for years'}, but every crown spent here is not spent on soldiers.`];
     },
     done: (app) => activeProjects(app.sim!, app.player!).length > 0,
     show: (app) => {

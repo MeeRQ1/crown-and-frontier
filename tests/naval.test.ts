@@ -331,3 +331,16 @@ describe('armies by sea', () => {
     expect(checkInvariants(sim)).toEqual([]);
   });
 });
+
+describe('claims across the water', () => {
+  it('a realm can fabricate a claim on a coast within one sea zone of one of its ports, and no further', () => {
+    const sim = seaGame();
+    for (const n of Object.values(sim.state.nations)) n.treasury = 500;
+    // c1 lies on East Water: b2's port is on it, a2's port on Middle Water next to it
+    expect(checkCommand(sim, { type: 'fabricate', nation: 'b', province: 'c1' })).toBeNull();
+    expect(checkCommand(sim, { type: 'fabricate', nation: 'a', province: 'c1' })).toBeNull();
+    // from West Water alone (a1) East Water is two zones away
+    sim.state.provinces.a2.port = 0;
+    expect(checkCommand(sim, { type: 'fabricate', nation: 'a', province: 'c1' })).toMatch(/within one sea zone/);
+  });
+});

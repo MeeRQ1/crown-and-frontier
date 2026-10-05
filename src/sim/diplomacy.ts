@@ -356,10 +356,18 @@ export function fabricateProblem(sim: Sim, nid: NationId, pid: ProvinceId): stri
   if (p.claims.includes(nid)) return 'We already hold a claim here.';
   if (st.fabrications.some((f) => f.nation === nid && f.province === pid)) return 'Our agents are already forging this claim.';
   if (st.fabrications.filter((f) => f.nation === nid).length >= 1) return 'Only one claim can be fabricated at a time.';
-  const adjacent = sim.world.prov[pid].neighbors.some((nb) => st.provinces[nb].owner === nid);
-  if (!adjacent) return 'Claims can only be fabricated on provinces bordering our own.';
+  const adjacent = sim.world.prov[pid].neighbors.some((nb) => st.provinces[nb].owner === nid) || acrossTheWater(sim, nid, pid);
+  if (!adjacent) return 'Claims can only be fabricated on provinces bordering our own, or on a coast within one sea zone of one of our ports.';
   if (st.nations[nid].treasury < fabricateCost(sim, nid)) return `Needs ${fabricateCost(sim, nid)} crowns.`;
   return null;
+}
+
+/** A coast on a sea zone that holds, or borders, a zone with one of our ports: an island realm can claim overseas. */
+export function acrossTheWater(sim: Sim, nid: NationId, pid: ProvinceId): boolean {
+  const st = sim.state;
+  const ours = (z: string) => sim.world.zones[z].coasts.some((q) => st.provinces[q].owner === nid && st.provinces[q].port > 0);
+  for (const z of sim.world.provZones[pid] ?? []) if (ours(z) || sim.world.zones[z].neighbors.some(ours)) return true;
+  return false;
 }
 
 /** Crowns and months it takes to fabricate a claim (Realpolitik makes it cheaper and quicker). */
