@@ -30,7 +30,7 @@ priorities is in [AUDIT.md](AUDIT.md). The era and content decisions are in
 | **A · Foundations** | Audit; confirmed bug fixes; baselines and tools; derived indexes; versioned map packages; save format 2 with migration; replayable bug reports; setting decision | — | **done** (this pull request) |
 | **B · Industrial economy and research** | The new era's calendar; six resources; industry and production; trade as resource exchange; the five-era tree with horizons; data-driven land roster (infantry, cavalry, artillery, engineers, armour); save format 3 with conversion from 1640 saves; built-in maps converted; economy AI | A | **done** (this pull request) |
 | **C · War on land, at sea and in the air** | Land depth (frontage by terrain, breakthrough, entrenchment lines, rail logistics, armour); map package v3 with sea zones and ports (v1 and v2 upgraded automatically); fleets, naval combat, transports and invasions, blockades; airfields and air missions (superiority, ground support, interdiction, bombing, reconnaissance); military AI for all three arms | B | **done** (this pull request) |
-| **D · Maps** | Map library screen; at least three new fictional maps (small, standard, large); in-browser map editor (provinces, realms, regions, sea zones, routes, validation, export and import); a real-world regional map from Natural Earth (public domain) with attribution; level of detail for large maps | A (format), C (sea zones) | planned |
+| **D · Maps** | Map library screen; at least three new fictional maps (small, standard, large); in-browser map editor (provinces, realms, regions, sea zones, routes, validation, export and import); a real-world regional map from Natural Earth (public domain) with attribution; level of detail for large maps | A (format), C (sea zones) | **done** (this pull request) |
 | **E · Diplomacy, settlements and national focus** | Peace settlements with several parties and graded demands; guarantees, spheres and influence; trade blocs; national focus trees (generic and per-realm), replacing the six policies; diplomacy and focus AI | B, C | planned |
 | **F · Onboarding, balance and delivery** | Tutorial and onboarding for every new system; UI pass; AI system-usage reports; balance from AI batches on every map; player-style sessions; screenshots; final docs, attribution, test and performance results, known limitations | B–E | planned |
 
@@ -107,15 +107,49 @@ priorities is in [AUDIT.md](AUDIT.md). The era and content decisions are in
   Tarsk on the Reach lost its only factory in its last war and went bankrupt; Drevenholt on
   Aldmere was down to one province).
 
-**D**
-- At least three new fictional maps validate, have their own campaign style and pass AI
-  batches without invariant failures.
-- The editor can create a map from scratch, edit an existing one, validate it with
-  actionable messages, and export it. Its files import through the same validator.
-  Browser flows cover create, edit, export and import.
-- The real-world map is built from Natural Earth by a reproducible script. Its attribution
-  is shown in the game and recorded in THIRD_PARTY_NOTICES.md.
-- Far-zoom frame time on a large map is measured before and after level of detail.
+**D (done)**
+- [x] Three new fictional maps validate and have their own campaign styles: the Sundered
+  Isles (small, 116 provinces, naval war among islands), the Kharan Steppe (standard, 263,
+  war of movement) and the Middle Sea (large, 548, 16 realms around an inland sea). They are
+  made by the procedural generator from fixed recipes (`npm run genmaps`, byte for byte).
+  40-year AI batches (`reports/stage-d/`, 3 seeds each) show no invariant failures.
+  Industry and air are used by every realm. Navy: all coastal realms build ships, and on
+  the Isles and the Steppe every realm at war with a coastal enemy used its fleet. On the
+  Middle Sea 29 of 31 did; Dijkenland and Agoara did not, once each.
+  The first Isles batch found a real bug: a fleet whose transports sank kept more
+  regiments aboard than it had room for. It is fixed, with a regression test that fails on
+  the old code.
+- [x] The editor creates a map from scratch (the generator in a worker), edits an existing
+  one (a library map, or a copy of a built-in map), validates it after every edit with
+  findings that point at the province, realm or sea zone to fix, and exports it. Files
+  import through the same validator. Editing operations are unit-tested
+  (`tests/editor.test.ts`). Browser flows (`npm run verify:web`) cover:
+  - create, rename, paint, undo;
+  - a finding, its Show link, and undo repairing it;
+  - save and export, with the file validating and keeping its checksum;
+  - delete and re-import;
+  - a refused broken file;
+  - markup in map text shown as text;
+  - playing an editor map;
+  - editing a copy of a built-in map.
+- [x] The Baltic, 1906 is built from Natural Earth 5.1.2 by `npm run genbaltic`, which
+  downloads the layers and checks their pinned SHA-256 sums. It has 233 provinces, 5 realms
+  and 42 sea zones. Its attribution shows in the map library, the campaign setup and the
+  in-game menu, and is recorded in THIRD_PARTY_NOTICES.md. Four 40-year AI campaigns ran
+  with no invariant failures.
+- [x] Far-zoom frame time measured on the same build with level of detail off and on
+  (`reports/perf/web-stageD.md`): on the 900-province stress map, 103.7 → 33.0 ms average
+  (p95 124.5 → 39.4); on the Middle Sea, 36.5 → 25.4 ms.
+- [x] Simulation benchmarks run one at a time (`reports/perf/stageD-*.md`): p99 week
+  Aldmere 24.1 and 18.3 ms, the Steppe 17.1, the Baltic 19.9, the Middle Sea 31.0 and 31.7.
+  Browser: 36 of 36 weeks at fastest speed on the Middle Sea and the 900-province map, so
+  the large-map trigger is not reached. The standard-map trigger (p99 above 25 ms) was
+  crossed in one of three Aldmere runs (22.0 ms on the Stage C code; 24.1 and 26.2 ms on
+  Stage D, with identical rule checksums), so it sits at the edge. Decision: no worker yet;
+  re-measured with three runs per standard map after Stage E, and adopted in Stage F if the
+  median p99 exceeds 25 ms or the browser drops a week.
+- Every built-in map exports and imports again unchanged (unit test). 159 unit tests and
+  45 of 45 browser checks pass.
 
 **E**
 - Peace settlements with several parties and graded demands, guarantees and influence
@@ -139,13 +173,17 @@ priorities is in [AUDIT.md](AUDIT.md). The era and content decisions are in
 - **"Settlements"** is read as negotiated **peace settlements** (Stage E). Frontier
   settlement already exists and is extended by the Stage B economy. If a different
   meaning was intended, it can be added to Stage E.
-- **The real-world map** uses Natural Earth admin-1 boundaries (public domain; the source
-  is reachable from this environment). Region, period and realm treatment are decided in
-  Stage D.
+- **The real-world map** uses Natural Earth (public domain). Decided in Stage D: the
+  Baltic in 1906, after Norway's independence, with five realms (Sweden, Norway, Denmark,
+  the German Empire and the Russian Empire, with Finland and the Baltic provinces as part
+  of Russia). Borders follow present-day first-level divisions mapped to their 1906 realm
+  and province, with the approximations listed in `tools/baltic.data.ts`.
 - **Policies** are replaced by national focus trees in Stage E, not extended. Two of six
   policies are never used by the AI today.
 - **A simulation worker** is not introduced until the measured triggers in AUDIT.md are
-  reached.
+  reached. After Stage D the standard-map trigger is at the edge (one of three Aldmere runs
+  above 25 ms, from run-to-run spread on unchanged rules). From Stage E on, it is judged by
+  the median of three runs.
 - **Multiplayer, accounts and online features** are out of scope for every stage, as the
   brief requires.
 
@@ -166,9 +204,9 @@ assigned to a stage and not started. Nothing has been dropped.
 | 8 | Fix important failures | A, every stage | done for all confirmed | AUDIT.md table |
 | 9 | Diagnostic export | A | done | `src/sim/diagnostics.ts`, `tools/replay.ts`, tests |
 | 10 | Versioned map and content schemas | A (maps v1, saves 2), B (maps v2 with deposits, saves 3), C (maps v3 with sea zones) | done for A–C | `src/maps/`, `src/sim/migrate.ts`; v1 and v2 packages upgrade to v3 (`tests/naval.test.ts`, `tests/saves-maps.test.ts`) |
-| 11 | Map library with ≥3 new fictional maps | D | planned | Stage D checks |
-| 12 | In-browser map editor | D | planned | Stage D checks |
-| 13 | Real-world regional map with licensed data | D | planned | Natural Earth (public domain) |
+| 11 | Map library with ≥3 new fictional maps | D | done | Map library screen; the Sundered Isles, the Kharan Steppe, the Middle Sea (`tools/genmaps.ts`); `reports/stage-d/`; browser flows |
+| 12 | In-browser map editor | D | done | `src/ui/editor/`, `src/maps/edit.ts`; `tests/editor.test.ts`; browser flows for create, edit, export and import |
+| 13 | Real-world regional map with licensed data | D | done | The Baltic, 1906 from Natural Earth 5.1.2 (public domain), `tools/genbaltic.ts`; attribution in game and THIRD_PARTY_NOTICES.md |
 | 14 | Deeper land warfare | B (roster: engineers, armour, machine guns, breakthrough), C | done | Terrain frontage, breakthrough, entrenchment deepened by Trench Warfare and Elastic Defence, rail and motor logistics (B); landings, air support and interdiction, straits closed by sea control (C); `tests/industry.test.ts`, `tests/worked-sea-air.test.ts`, combat matrix (`tests/matrix.test.ts`) |
 | 15 | Navy | C | done | `src/sim/naval.ts`, `src/sim/ai/navy.ts`; `tests/naval.test.ts`, worked examples, browser flows, Stage C checks |
 | 16 | Air | C | done | `src/sim/air.ts`; `tests/air.test.ts`, worked examples, browser flow, Stage C checks |
@@ -194,15 +232,15 @@ assigned to a stage and not started. Nothing has been dropped.
 | 36 | No speculative rewrites; no optimisation that changes rules | all | followed | Rule check record |
 | 37 | Worker only if profiling justifies it | all | followed | Worker decision in AUDIT.md |
 
-## Next steps (Stage D)
+## Next steps (Stage E)
 
-1. A map library screen: built-in and imported maps with size, realms, start year, style
-   and a preview; import, export and delete for custom maps.
-2. At least three new fictional maps (small, standard, large), each with its own campaign
-   style, made with the shared generator core and validated like any import.
-3. An in-browser editor: create a map from scratch or edit an existing one (provinces,
-   realms, regions, terrain and deposits, sea zones and ports, straits and rivers),
-   validation with actionable messages, export and import through the same validator.
-4. A real-world regional map built from Natural Earth by a reproducible script, with the
-   attribution shown in the game and recorded in THIRD_PARTY_NOTICES.md.
-5. Far-zoom level of detail for large maps, measured before and after.
+1. Peace settlements with several parties: every belligerent on the winning side states
+   demands (provinces, money, release of occupied land, disarmament, a guarantee), graded by
+   war score and contribution; the losers accept, counter or fight on.
+2. Guarantees, spheres and influence: guarantee a realm's independence; build influence
+   with envoys, trade and loans; a sphere shapes the alignment of smaller realms.
+3. Trade blocs: realms that trade inside a bloc pay less and share blockade losses.
+4. National focus trees replacing the six policies: a generic tree and trees for each realm
+   on every built-in map, with AI paths that fit the realm's situation.
+5. AI use of all of these, with system-usage counts in the AI reports, and fewer campaigns
+   ending on score at the limit (half or fewer on every map).

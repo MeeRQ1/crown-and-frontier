@@ -1,7 +1,7 @@
 # Crown & Frontier
 
-A single-player grand strategy game for the browser. You rule a young crown on a divided
-continent at the dawn of the industrial age (Aldmere from 1880, the Reach from 1895). Grow by
+A single-player grand strategy game for the browser. You rule a young crown at the dawn of the
+industrial age, on one of six maps or one you make yourself. Grow by
 settlement, investment or conquest, but every province you gain
 beyond your heartland is **raw frontier**: it pays little, raises no troops and supplies no
 armies until you integrate it. Outlast your AI rivals and win by territorial dominance,
@@ -9,9 +9,19 @@ economic prosperity or diplomatic leadership.
 
 ![Crown & Frontier: Aldmere, the standard campaign](docs/screenshots/after-aldmere/laptop-03-map-overview.jpg)
 
-- **Two maps.** *Aldmere*, the standard campaign, has 298 provinces, 14 realms, four mountain
-  ranges with six passes, six rivers, 34 unclaimed frontier provinces and 30 sea zones. *The
-  Reach*, the quick campaign, has 99 provinces, 9 realms and 13 sea zones.
+- **Six maps.**
+  - *Aldmere*, the standard campaign: 298 provinces, 14 realms, four mountain ranges with
+    six passes, six rivers, 34 unclaimed frontier provinces and 30 sea zones.
+  - *The Reach*, the quick campaign: 99 provinces and 9 realms.
+  - Three generated maps: *the Sundered Isles* (116 provinces, a naval war among islands),
+    *the Kharan Steppe* (263, a war of movement) and *the Middle Sea* (548 provinces and 16
+    realms around an inland sea).
+  - A real-world map, *The Baltic, 1906*: Sweden, Norway, Denmark, the German Empire and the
+    Russian Empire, built from Natural Earth (public domain).
+- **Map library and editor.** Keep your own maps in the browser. Generate a new map from a
+  seed, size, number of realms, shape and climate, then edit it by hand. Paint realms,
+  regions, terrain and deposits; edit straits, rivers and ports; merge provinces. A
+  validator points at anything to fix. Export and import map files, and play any map.
 - **A living political atlas.** The map shows printed relief, rivers and lettered seas, with
   realm washes and inked borders. Detail changes with zoom, and seven map modes (political,
   terrain, supply, economy, frontier, diplomacy, military) each come with a legend.
@@ -94,6 +104,8 @@ npm run sim -- --scenario reach --seeds 1-10 --difficulty all --years 40 --out r
 npm run examples       # worked combat examples from the real combat code
 npm run genworld       # regenerate Aldmere from tools/aldmere.spec.ts (deterministic)
 npm run genmap         # regenerate the Reach's geometry (byte-identical to the checked-in file)
+npm run genmaps        # regenerate the Isles, the Steppe and the Middle Sea from their recipes
+npm run genbaltic      # rebuild The Baltic, 1906 from Natural Earth (downloads and checks the data)
 npm run check          # typecheck + tests + build + package + verify:web
 npm run fuzz -- --scenario aldmere --seeds 1-3 --years 8   # random legal/illegal commands + invariants
 npm run bench -- --scenario aldmere --seeds 1-2 --years 30 # simulation benchmarks (tick percentiles, phases, heap)
@@ -119,14 +131,17 @@ src/sim/        headless simulation — no DOM; runs in tests and CLI tools
   save, migrate (save formats), diagnostics + replay (bug reports)
 src/maps/       map package format (v3: sea zones and ports), validator (imports are
                 sanitised and size-limited), sea-zone generation, built-in maps as packages,
-                conversion to the simulation and renderer
+                conversion to the simulation and renderer, editing operations (edit.ts)
+  gen/          world generator, procedural maps, names, shared Voronoi core
   ai/           strategic, operational/execution layers, navy and air, difficulty profiles
   data/         technologies, policies, personalities, events
-src/data/       both maps: realms and regions (aldmere.ts, reach.ts), generated province data
-                (aldmere.provinces.json, reach.adjacency.json) and geometry (*.map.json, loaded on demand)
+src/data/       built-in map data: Aldmere and the Reach (realms and regions in aldmere.ts and
+                reach.ts, generated province data and geometry), and maps/ (generated maps and
+                the Baltic); geometry is loaded on demand
 src/ui/         map renderer (map/), design system (style.css), HUD, inspector, ledgers,
-                dialogs, screens, tutorial, storage, audio
-tools/          map generators (mapgen/core.ts shared), AI campaign runner, realm tracer,
+                dialogs, screens, map library (library.ts, maplib.ts), map editor (editor/),
+                tutorial, storage, audio
+tools/          map generators (genworld, genmap, genmaps, genbaltic), AI campaign runner, realm tracer,
                 ZIP packager, web verifier, combat examples, benchmarks, fuzzer, rule check
 tests/          Vitest suites
 e2e/            scripted browser playthrough (development helper)
@@ -147,12 +162,13 @@ that the final state matches.
 - [docs/expansion/](docs/expansion/): the strategic depth expansion, with the Stage A audit
   ([AUDIT.md](docs/expansion/AUDIT.md)), the plan and requirement ledger
   ([PLAN.md](docs/expansion/PLAN.md)) and the setting decision ([SETTING.md](docs/expansion/SETTING.md)).
-- [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md): the three bundled OFL fonts (licences ship in
-  `licenses/`) and the development tools. No other third-party code or assets ship in the game.
+- [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md): the three bundled OFL fonts and the geometry
+  libraries of the map generator (d3-delaunay, delaunator, robust-predicates), whose licences ship
+  in `licenses/`; Natural Earth (public domain) for the real-world map; and the development tools.
 
 ## Known limitations
 
-- **Balance:** tuned against AI-only campaigns on both maps (see STATUS.md and
+- **Balance:** tuned against AI-only campaigns on Aldmere and the Reach (see STATUS.md and
   `reports/stage-c/`). With navies and air forces (10 seeds per map) the richest heartlands
   win most often again: Lessia 6 of 10 on Aldmere, Aurel 5 of 10 on the Reach. Hrafnmark
   and some other small or exposed realms shrink on average. Balance across realms is
@@ -160,9 +176,16 @@ that the final state matches.
 - **Fog of war:** not implemented. All information is public to everyone, AI included.
 - **Browsers verified:** only headless Chromium 141, on desktop and emulated phone viewports. Firefox,
   Safari, real Chromebooks and real touch devices are untested.
-- **Not yet in the game:** the map library and editor, the real-world map, peace
-  settlements with several parties and focus trees are planned in the remaining expansion
-  stages (docs/expansion/PLAN.md). Multiplayer, espionage and dynasties are out of scope.
+- **Not yet in the game:** peace settlements with several parties, guarantees and
+  influence, trade blocs and focus trees are planned for Stage E (docs/expansion/PLAN.md).
+  Multiplayer, espionage and dynasties are out of scope.
+- **Map editor:** it cannot split a province, draw coastline by hand or reshape sea zones;
+  generate a new map for a different coast. Maps made in the editor are kept only in this
+  browser until exported.
+- **The Baltic, 1906:** some borders of 1906 are approximated from present-day divisions
+  (see `tools/baltic.data.ts`), and present-day populations stand in for those of 1906. The
+  empires start far larger than the kingdoms. In AI batches Russia has won most campaigns on
+  score (3 of 4), and Norway and Denmark rarely fight.
 - **Navy and air are abstracted:** fleets fight in sea zones and wings fly missions over a
   province and its neighbours; there are no individual ships' positions, convoys or air
   routes. Troops at sea cannot be redirected until they land.
@@ -172,5 +195,6 @@ that the final state matches.
 ## Licence
 
 This repository does not yet include a source licence. The owner decides the licence and whether the
-repository is public. All game content (names, map, rules and text) is original. See
-THIRD_PARTY_NOTICES.md for the development tools.
+repository is public. All game content (names, maps, rules and text) is original, except the
+geography and place names of The Baltic, 1906, which come from Natural Earth (public domain). See
+THIRD_PARTY_NOTICES.md for the bundled fonts and libraries, the map data and the development tools.

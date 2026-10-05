@@ -1,9 +1,10 @@
 # Status
 
-Last updated at **Stage C of the strategic depth expansion** (save format 3, map format 3).
-Stages A, B and C are done in this branch. **This is not the finished expansion:** the map
-library and editor, new maps and the real-world map, peace settlements and focus trees are
-planned in Stages D–F ([docs/expansion/PLAN.md](docs/expansion/PLAN.md)). The
+Last updated at **Stage D of the strategic depth expansion** (save format 3, map format 3).
+Stages A–D are done in this branch. **This is not the finished expansion:** peace
+settlements, guarantees and influence, trade blocs and focus trees (Stage E), and
+onboarding, balance and final delivery (Stage F) are still to come
+([docs/expansion/PLAN.md](docs/expansion/PLAN.md)). The
 rest of this file below the expansion section describes the redesign release (0.2.0) and
 is kept for its evidence. Where a stage changed a fact, it is corrected in place.
 
@@ -13,10 +14,69 @@ is kept for its evidence. Where a stage changed a fact, it is corrected in place
 |---|---|
 | A · Foundations | **Done in this branch** (draft pull request, not merged) |
 | B · Industrial economy and research | **Done in this branch** (same draft pull request) |
-| C · War on land, at sea and in the air | **In progress** (checkpoint: simulation and AI committed; interface, tests, measurements and docs next) |
-| D · Maps, editor, real-world map | Not started |
+| C · War on land, at sea and in the air | **Done in this branch** (same draft pull request) |
+| D · Maps, editor, real-world map | **Done in this branch** (same draft pull request) |
 | E · Diplomacy, settlements, national focus | Not started |
 | F · Onboarding, balance, delivery | Not started |
+
+**Stage D delivered:**
+- **Six built-in maps.** New: the Sundered Isles (116 provinces, 8 realms), the Kharan
+  Steppe (263, 11) and the Middle Sea (548, 16), made by the procedural generator from
+  fixed recipes; and **The Baltic, 1906** (233 provinces, 5 realms), built from Natural
+  Earth (public domain) by a reproducible script with pinned checksums. Its attribution is
+  shown in the game and in THIRD_PARTY_NOTICES.md.
+- **Generators:** a shared world generator (Aldmere goes through it byte-identical) and a
+  procedural generator. It takes a seed, size, realms, shape, climate, mountains, rivers,
+  lakes and frontier; makes realm and place names from nine fictional cultures; gives
+  balanced starting sizes and a deposit mix like Aldmere's, with coal for every realm; and
+  scales victory thresholds. For real coastlines it adds shore seeds (the drawn coast
+  follows the data), land beyond the frame (`~edge`: impassable, never sea, drawn muted)
+  and naming by location.
+- **Map library** (main menu): every map with a preview, size, difficulty, realms, sea
+  zones, start year, style, mechanics and attribution. Play, edit or edit a copy, export,
+  import (validated; a clashing id is renamed with a notice), delete. The player's maps
+  are kept in the browser apart from saves.
+- **Map editor:**
+  - New map from the generator, in a Web Worker (6.1 s for 520 provinces in the browser).
+  - Painting realms, regions, terrain and deposits; a province inspector; straits, rivers
+    and ports; merging provinces; realm, region and map settings; regenerating sea zones.
+  - Validation after every edit, with a Show link for each finding.
+  - Undo and redo, a kept draft, save to library, export, open file, and play.
+- **Level of detail:** at far zoom the realm layers come from a cached image while the
+  camera pans.
+- **Fixes:**
+  - Confirmation dialogs on the menu screens never appeared (deleting a save from the Load
+    screen after quitting asked nothing and did nothing). The app now has one dialog layer
+    above every screen.
+  - Transports sunk with troops aboard could leave a fleet carrying more regiments than it
+    had room for (found by the first Isles AI batch). Each fix has a regression check.
+
+**Stage D measurements** (details in PLAN.md "D (done)"):
+- 159 Vitest tests pass (16 more than Stage C: editor operations, generated and real
+  maps, round-trips, the transport fix).
+- 45 of 45 browser checks pass in headless Chromium 141. Ten are new: the library and
+  editor flows (create, edit, findings and undo, save and export, delete and re-import, a
+  refused file, markup kept as text, play, edit a copy, no errors), plus the save-deletion
+  confirmation.
+- AI batches, 40 years (`reports/stage-d/`): no invariant failures on the Isles, the
+  Steppe or the Middle Sea (3 seeds each) or the Baltic (4 seeds). Industry and air are
+  used by every realm. Navy on the Middle Sea: 29 of 31 realms at war with a coastal enemy
+  used their fleets.
+- Far zoom on the 900-province stress map: 103.7 → 33.0 ms a frame on average with level of
+  detail (`reports/perf/web-stageD.md`).
+- Simulation benchmarks, run one at a time (`reports/perf/stageD-*.md`), p99 week: Aldmere
+  24.1 and 18.3 ms (seeds 1–2), the Steppe 17.1, the Baltic 19.9, the Middle Sea (large)
+  31.0 and 31.7. In the browser the Middle Sea and the 900-province map keep 36 of 36
+  weeks at fastest speed.
+- **Worker trigger:** Aldmere's rules did not change in Stage D (its rule checksums match
+  Stage C), yet the same seed's p99 measured 22.0 ms (Stage C code), 24.1 and 26.2 ms
+  (Stage D code) on this machine. The 25 ms trigger was therefore crossed in one of three
+  runs, by run-to-run spread. The simulation stays on the main thread for now: the browser
+  keeps every week, and the slowest weeks are the first AI planning weeks of a campaign. The
+  decision is due again after Stage E, which adds focus and settlement planning to the AI:
+  three runs per standard map, and the worker comes in Stage F if their median p99 is above
+  25 ms or the browser drops a week.
+- Screenshots: `docs/screenshots/stage-d/`.
 
 **Stage C delivered:**
 - **Sea zones and map format 3.** Zones are generated from each map's coastline
@@ -104,12 +164,11 @@ is kept for its evidence. Where a stage changed a fact, it is corrected in place
   research by era, province card, format-2 conversion notice).
 
 **Checkpoint for continuing:**
-- **Working state:** all of these pass at the end of Stage C.
+- **Working state:** all of these pass at the end of Stage D.
   ```bash
   npm ci && npm run typecheck && npm test && npm run build && npm run package && npm run verify:web
-  npm run fuzz -- --scenario reach --seeds 1-7 --years 10 && npm run fuzz -- --scenario aldmere --seeds 1-2 --years 8
-  npm run fuzz -- --scenario reach --seeds 1-3 --years 10 --tech all
-  npx tsx tools/matrix.ts --out reports/stage-c/combat-matrix.md
+  npm run fuzz -- --scenario isles --seeds 1-3 --years 10 && npm run fuzz -- --scenario baltic --seeds 1-2 --years 10
+  npm run genmaps && npm run genbaltic && git status   # regenerated maps are unchanged
   ```
 - **Unresolved failures:** none known.
 - **Known gaps** (tracked for later stages):
@@ -125,9 +184,13 @@ is kept for its evidence. Where a stage changed a fact, it is corrected in place
     them with the other map modes.
   - Armour stays rare in AI armies (0.1–0.3% of regiment-months): Tanks arrives in 1916,
     late in most campaigns.
+  - The Baltic, 1906: Russia won 3 of 4 AI campaigns on score, and Norway and Denmark
+    rarely fight. Some 1906 borders are approximations (`tools/baltic.data.ts`).
+  - The map editor cannot split provinces, draw coastline or reshape sea zones.
+  - The Middle Sea: 2 of 31 realms at war with a coastal enemy left their fleets in port.
 - **Requirement status:** PLAN.md's ledger lists every requirement with its stage and
   status. Nothing has been dropped.
-- **Next steps:** Stage D, in the order listed at the end of PLAN.md.
+- **Next steps:** Stage E, in the order listed at the end of PLAN.md.
 
 ## Evidence, kept separate
 

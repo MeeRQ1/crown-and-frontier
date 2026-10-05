@@ -38,8 +38,8 @@ different: compact and defensible (Carrow, Calder, Istrel, Fenward), exposed fro
 with difficult borders (Morvaine, Tarsk), and frontier to settle (Drevenholt). The setup
 screen shows each start's neighbours, passes, river borders, frontier and claims.
 
-**How Aldmere is made** (`tools/genworld.ts` from `tools/aldmere.spec.ts`, shared core in
-`tools/mapgen/core.ts`): the authored spec gives the coastline, islands, lakes, mountain
+**How Aldmere is made** (`tools/genworld.ts` from `tools/aldmere.spec.ts`, through the shared
+world generator `src/maps/gen/world.ts` and core `src/maps/gen/core.ts`): the authored spec gives the coastline, islands, lakes, mountain
 ridges with their passes, river courses, and regions with anchors, target province counts,
 biomes and wealth. The generator rasterises land, lakes and mountain walls; grows regions
 from their anchors (walls and water stop growth, so ranges and seas become region
@@ -336,6 +336,124 @@ follow from the cells. The method is deterministic. The built-in maps ship the r
 generated on import and are upgraded with a notice. The validator checks zone ids, two-way
 adjacency, coasts that exist and touch water, that every strait has a commanding zone, and
 size limits on zones and the zone grid.
+
+## Maps (`src/maps/`)
+
+Every map is a **map package** (`format.ts`): rules, realms, regions, provinces, routes, sea
+zones and drawn geometry in one versioned JSON file. Built-in maps, generated maps, maps
+made in the editor and imported files all pass through the same validator (`validate.ts`)
+and the same conversion to the simulation's scenario and the renderer's geometry.
+
+**Six built-in maps.**
+
+| Map | Provinces | Realms | Start | Style | Made by |
+|---|---|---|---|---|---|
+| Aldmere | 298 | 14 | 1880 | Continental war on several fronts | `tools/genworld.ts` (authored spec) |
+| The Reach | 99 | 9 | 1895 | Quick campaign around one mountain spine | `tools/genmap.ts` (authored) |
+| The Sundered Isles | 116 | 8 | 1885 | Naval war among islands | `tools/genmaps.ts` (procedural recipe) |
+| The Kharan Steppe | 263 | 11 | 1880 | War of movement across open grassland | `tools/genmaps.ts` |
+| The Middle Sea | 548 | 16 | 1875 | Grand alliances around an inland sea | `tools/genmaps.ts` |
+| The Baltic, 1906 | 233 | 5 | 1906 | Great powers and small kingdoms around one sea | `tools/genbaltic.ts` (Natural Earth) |
+
+Generated maps ship as checked-in JSON (`src/data/maps/`), so every browser plays exactly the
+same map; the scripts regenerate them byte for byte, and a test regenerates the Isles.
+
+**The world generator** (`gen/world.ts`) turns a spec into a map: it rasterises land, lakes
+and mountain walls; grows regions from their anchors; splits each region into provinces by
+k-means (cities, capitals and passes stay pinned); builds Voronoi cells with noisy shared
+borders; adds peaks along ridges and closes borders that leak through them; routes rivers
+along province borders; links islands by strait; and derives terrain, deposits,
+development, forts, claims and names. Aldmere goes through it unchanged.
+
+**The procedural generator** (`gen/procedural.ts`) writes such a spec from a few parameters:
+seed, provinces (40–900), realms (2–24), the shape of the land (one continent, an
+archipelago, an inland sea, peninsulas, twin lands), climate, and how mountainous, wet and
+wild it is. It draws a coastline from shaped noise, ranges with passes, lakes and rivers;
+places capitals far apart; grows regions into realms (starting sizes within 1.5× of each
+other); names realms, places and features from nine fictional cultures (`gen/names.ts`);
+gives realms arms, traits and personalities; and scales victory thresholds to the number of
+realms (`rules.ts`, the formulas under Victory). **Deposits** follow Aldmere's mix (coal
+14%, food 10%, iron 6.5%, nitrates 6%, oil 3.5%, rubber 3% of provinces), shifted by
+climate and placed on the terrain that suits each; every realm starts with one coal field.
+The same parameters always give the same map.
+
+**The map library** (`src/ui/library.ts`, `maplib.ts`) lists the built-in maps and the
+player's own maps, each with a preview, size, difficulty, realms, sea zones, start year,
+style, mechanics and attribution. Built-in maps can be played, exported or copied into the
+editor; the player's maps can also be edited and deleted. The player's maps live in this
+browser (IndexedDB, else localStorage, else memory for the session), in a store of their
+own apart from saves. Every map is validated when it is imported, when it is stored and
+when it is read back. An import whose id is taken gets a new id and a notice. A stored map
+that no longer validates is listed with the reason and kept until the player deletes it.
+Map files are data only: unknown fields are dropped, text is drawn as text, and nothing in
+a file is ever run. Campaigns on a player's map save the map inside the save, so deleting
+or editing the map never breaks them; editing a stored map raises its revision.
+
+**The map editor** (`src/ui/editor/`) works on a map package:
+- **New map:** the procedural generator, in a Web Worker. Profiling justified the worker:
+  in headless Chromium, generation took about 1 s for 90 provinces and 6.1 s for 520
+  (8.5 s in Node for the Middle Sea's 548), long enough to freeze the page on the main
+  thread.
+- **Edit:** paint realms, regions, terrain and deposits by clicking or dragging; edit a
+  province (name, owner, region, terrain, deposit, development, population, fort, roads,
+  factories, port, claims, capital); add and remove straits and rivers; place and remove
+  ports; merge two neighbouring provinces; add, rename and remove realms (colour,
+  personality, capital) and regions; rename sea zones; set the map's name, id,
+  description, author, start year, difficulty and style; recompute size, mechanics and
+  victory thresholds; regenerate sea zones from the coastline.
+- **Check:** the validator runs after every edit. The Check tab lists errors and warnings
+  in plain words, and each one has a Show button that selects the province, realm or sea
+  zone to fix. Errors keep a map out of the library and out of play; warnings do not.
+- **Keep:** undo and redo (80 steps), an unfinished map kept in this browser, save to the
+  library, export to a file (with a warning if it has errors), open a file, and Play, which
+  saves the map and opens the campaign setup on it.
+
+The editing operations are pure functions on the package (`src/maps/edit.ts`). Each keeps
+the map consistent where an edit implies it: a realm that loses its capital gets its most
+developed remaining province, development stays within what the terrain allows, a strait
+is listed on both sides and commanded by a sea zone, and a merged province keeps one
+outline. Anything an edit cannot make consistent on its own is left to the validator.
+Drawn geometry is replaced, never changed in place, so the undo history can share it. Not
+supported: splitting a province or drawing new coastline by hand (generate a new map
+instead), and editing sea zone shapes (they follow the coastline).
+
+**The real-world map** (`tools/genbaltic.ts`, data notes in `tools/baltic.data.ts`) is built
+from **Natural Earth** 5.1.2 (public domain): coastline and islands from `ne_50m_land`, lakes
+from `ne_50m_lakes`, rivers from `ne_10m_rivers_lake_centerlines`, realm and region borders
+from `ne_10m_admin_1_states_provinces`, and towns from `ne_10m_populated_places_simple`.
+The script downloads the layers, checks their pinned SHA-256 sums, projects them
+(Lambert conformal conic), and builds the map through the world generator. Authored
+additions are the realms of 1906 and the table placing each present-day division in its
+1906 realm and province; that table approximates some borders (North Schleswig, the line
+between Posen and Congress Poland, Memelland, the Karelian Isthmus). Also authored: names
+as written in 1906 (Kristiania, Reval, Königsberg, Helsingfors…), district towns Natural
+Earth lacks, the Scandes ridges and four passes, island and sea names, and realm traits.
+Present-day populations stand in for those of 1906 when sizing cities and wealth.
+Provinces grow larger in the thinly settled north. Deposits follow the game's usual mix,
+weighted towards known mining districts (Bergslagen iron, Scanian coal, Estland's oil
+shale). No rubber grows in northern Europe, so the map's three rubber deposits stand for
+the rubber works and colonial trade houses of 1906 (Treugolnik in St Petersburg, Provodnik
+in Riga, Hamburg). The empires start far larger than the kingdoms (Russia 101 provinces,
+Denmark 12), so the victory thresholds sit at least 0.15 above the largest starting share.
+The attribution is shown in the map library, the campaign setup and the in-game menu.
+
+Two generator features exist for real coastlines, and are off for the fictional maps:
+- **Shore seeds** let a province own extra Voronoi seeds along its shores, so the drawn
+  coast follows the data instead of falling back by half a province. Each shore cell goes
+  to the nearest province it can see over land. A cell cut off from its province is handed
+  to the province around it, until every province is one piece.
+- **Land beyond the frame** (side `~edge`, waste kind `edge`): where the frame cuts through
+  land, the land outside is impassable, never sea and never a coast. It is drawn muted, so
+  no province gains a false coast or port. Lake and off-map cells are merged into one
+  outline per body.
+
+**Level of detail.** At the far zoom tier, while the camera only pans, the realm layers
+(mode washes, occupation hatching, borders, ribbons, rivers) come from a cached image of
+the whole map, redrawn when realms, mode, focus or zoom change; the result is identical to
+direct drawing (mean pixel difference 0.33/255). Measured on the same build with the
+switch off and on (headless Chromium, software rendering): on the 900-province stress map,
+far-zoom panning frames fall from 103.7 ms to 33.0 ms on average (p95 124.5 → 39.4); on the
+Middle Sea from 36.5 to 25.4 ms (`reports/perf/web-stageD.md`).
 
 ## The navy (`naval.ts`)
 

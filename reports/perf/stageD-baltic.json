@@ -1,0 +1,231 @@
+{
+ "env": {
+  "label": "",
+  "scenario": "baltic",
+  "provinces": 233,
+  "realms": 5,
+  "years": 30,
+  "seeds": "1-1",
+  "node": "v22.22.2",
+  "cpu": "Intel(R) Xeon(R) Processor @ 2.80GHz ×4",
+  "os": "linux 6.18.44-fc-v70",
+  "memoryGB": 16,
+  "gcExposed": true,
+  "date": "2026-10-05"
+ },
+ "creation": {
+  "buildWorldMs": 2.5,
+  "createGameMs": 5.5
+ },
+ "runs": [
+  {
+   "seed": 1,
+   "weeks": 1440,
+   "tick": {
+    "avg": 5.86,
+    "p50": 5.12,
+    "p95": 13.59,
+    "p99": 19.93,
+    "max": 38.6,
+    "maxAt": 121
+   },
+   "phases": {
+    "proposals": {
+     "avg": 0,
+     "p99": 0,
+     "max": 0.1
+    },
+    "ai.strategic": {
+     "avg": 2.16,
+     "p99": 6.49,
+     "max": 27.3
+    },
+    "ai.operational": {
+     "avg": 1.85,
+     "p99": 11.86,
+     "max": 20.8
+    },
+    "ai": {
+     "avg": 4.02,
+     "p99": 15.47,
+     "max": 33.1
+    },
+    "orders": {
+     "avg": 0.01,
+     "p99": 0.04,
+     "max": 0.4
+    },
+    "naval": {
+     "avg": 0.07,
+     "p99": 0.23,
+     "max": 1.8
+    },
+    "movement": {
+     "avg": 0.04,
+     "p99": 0.21,
+     "max": 1.1
+    },
+    "air": {
+     "avg": 0.07,
+     "p99": 0.2,
+     "max": 1.3
+    },
+    "battles": {
+     "avg": 0.06,
+     "p99": 0.54,
+     "max": 27.5
+    },
+    "sieges": {
+     "avg": 0.05,
+     "p99": 0.21,
+     "max": 1.3
+    },
+    "armyCare": {
+     "avg": 0.65,
+     "p99": 1.52,
+     "max": 2.5
+    },
+    "recruitment": {
+     "avg": 0.04,
+     "p99": 0.17,
+     "max": 1.2
+    },
+    "construction": {
+     "avg": 0.01,
+     "p99": 0.08,
+     "max": 0.5
+    },
+    "warScores": {
+     "avg": 0.01,
+     "p99": 0.08,
+     "max": 0.6
+    },
+    "m.economy": {
+     "avg": 1.91,
+     "p99": 4.03,
+     "max": 6.5
+    },
+    "m.research": {
+     "avg": 0.04,
+     "p99": 0.14,
+     "max": 0.6
+    },
+    "m.integration": {
+     "avg": 0.83,
+     "p99": 3,
+     "max": 5.1
+    },
+    "m.diplomacy": {
+     "avg": 0.1,
+     "p99": 0.2,
+     "max": 5.4
+    },
+    "m.wars": {
+     "avg": 0.03,
+     "p99": 0.16,
+     "max": 0.4
+    },
+    "m.events": {
+     "avg": 0.12,
+     "p99": 0.65,
+     "max": 4.2
+    },
+    "m.victory": {
+     "avg": 0.24,
+     "p99": 0.62,
+     "max": 2.5
+    }
+   },
+   "slowest": [
+    {
+     "tick": 122,
+     "ms": 38.6,
+     "parts": "battles 27.5, ai 8.8, ai.operational 6.9"
+    },
+    {
+     "tick": 1,
+     "ms": 37.6,
+     "parts": "ai 33.1, ai.strategic 27.3, ai.operational 5.6"
+    },
+    {
+     "tick": 96,
+     "ms": 33.5,
+     "parts": "ai 23.5, ai.operational 20.8, m.economy 4.4, m.integration 3.2, ai.strategic 2.6"
+    },
+    {
+     "tick": 812,
+     "ms": 33.2,
+     "parts": "ai 26.9, ai.operational 20, ai.strategic 6.8, m.economy 2.3"
+    },
+    {
+     "tick": 808,
+     "ms": 24.6,
+     "parts": "ai 17.5, ai.operational 14, ai.strategic 3.5, m.economy 3.4"
+    }
+   ],
+   "stateKB": {
+    "y0": 86,
+    "y1": 115,
+    "y10": 229,
+    "y20": 240,
+    "y30": 257
+   },
+   "heapMB": {
+    "y0": 12.8,
+    "y1": 15,
+    "y10": 18.1,
+    "y20": 18.9,
+    "y30": 19
+   },
+   "counts": {
+    "y0": {
+     "armies": 10,
+     "wars": 0,
+     "battles": 0,
+     "notifications": 0,
+     "diagnostics": 0,
+     "memories": 0
+    },
+    "y1": {
+     "armies": 7,
+     "wars": 0,
+     "battles": 0,
+     "notifications": 115,
+     "diagnostics": 27,
+     "memories": 12
+    },
+    "y10": {
+     "armies": 17,
+     "wars": 0,
+     "battles": 0,
+     "notifications": 400,
+     "diagnostics": 400,
+     "memories": 29
+    },
+    "y20": {
+     "armies": 33,
+     "wars": 0,
+     "battles": 0,
+     "notifications": 400,
+     "diagnostics": 400,
+     "memories": 30
+    },
+    "y30": {
+     "armies": 37,
+     "wars": 0,
+     "battles": 0,
+     "notifications": 400,
+     "diagnostics": 400,
+     "memories": 34
+    }
+   },
+   "calls": {
+    "findPathMs": 0.09,
+    "pathsFound": 195,
+    "reachFromMs": 0.1,
+    "supplyDistancesMs": 0.12,
+    "evaluateTreatyMs": 0.06
+   }
+  }
+ ]
+}
