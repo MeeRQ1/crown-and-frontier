@@ -54,6 +54,10 @@ export interface ProceduralParams {
   cultures?: string[];
   /** fixed texts for a curated map */
   meta?: Partial<MapMeta>;
+  /** a curated map's revision (default 1); raised when its realms or rules change */
+  revision?: number;
+  /** victory thresholds measured for a curated map, over the scaled defaults */
+  victory?: Partial<NonNullable<MapRules['victory']>>;
 }
 
 export const DEFAULT_PARAMS: ProceduralParams = {
@@ -961,7 +965,7 @@ export function proceduralSpec(P: ProceduralParams, salt = 0): { spec: WorldSpec
   const rules: MapRules = {
     startYear: clamp(Math.round(P.startYear), 1870, 1930),
     campaignYears: years,
-    victory: scaledVictory(regionDefs.length, realms),
+    victory: { ...scaledVictory(regionDefs.length, realms), ...P.victory },
     researchCostMul: researchCostFor(provinces, realms),
   };
   return { spec, meta, rules };
@@ -1063,7 +1067,8 @@ function describeRealms(pkg: MapPackage): void {
     s.n.startType =
       s === byDev[0] ? 'Wealthy heartland' : s.wild >= 4 ? 'Frontier to settle' : s.coast > 0.6 ? 'Maritime trader' : s.neighbours >= 4 ? 'Exposed crossroads' : s.size <= 5 ? 'Compact defensive' : 'Established crown';
     s.n.rating = s === byDev[0] ? 'recommended' : s === byDev[byDev.length - 1] ? 'challenging' : 'standard';
-    s.n.summary = `${s.size} provinces of mostly ${main}${s.coast > 0.4 ? ' along the coast' : ''}; ${s.neighbours} neighbouring realm${s.neighbours === 1 ? '' : 's'}${s.wild ? ' and open frontier' : ''}.`;
+    const near = s.neighbours ? `${s.neighbours} neighbouring realm${s.neighbours === 1 ? '' : 's'}` : 'no neighbours by land';
+    s.n.summary = `${s.size} provinces of mostly ${main}${s.coast > 0.4 ? ' along the coast' : ''}; ${near}${s.wild ? ' and open frontier' : ''}.`;
   }
 }
 
@@ -1083,7 +1088,7 @@ export function buildProceduralMap(P: ProceduralParams, opts: { tries?: number; 
         format: MAP_FORMAT,
         version: MAP_FORMAT_VERSION,
         id: P.id,
-        revision: 1,
+        revision: P.revision ?? 1,
         meta,
         rules,
         regions: spec.regionDefs.filter((r) => world.provinces.some((p) => p.region === r.id)),

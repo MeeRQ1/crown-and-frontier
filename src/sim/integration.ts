@@ -69,7 +69,7 @@ export function integrationRate(sim: Sim, pid: ProvinceId): IntegrationBreakdown
   if (garrisoned(sim, pid)) mul('Garrisoned', 1 + C.integration.garrisonBonus);
   const cap = st.nations[nid].capital;
   const hops = cap ? (sim.world.hop(cap, pid) ?? 10) : 10;
-  mul(`${hops} step(s) from the capital`, Math.max(C.integration.distanceFloor, 1 - C.integration.distancePenalty * hops));
+  mul(`${hops} step${hops === 1 ? '' : 's'} from the capital`, Math.max(C.integration.distanceFloor, 1 - C.integration.distancePenalty * hops));
   mul('Realm modifiers', Math.max(0.1, 1 + nationMods(sim, nid).integration));
   mul(`Unrest ${Math.round(p.unrest)}`, 1 - p.unrest / 200);
   const load = frontierLoad(sim, nid);

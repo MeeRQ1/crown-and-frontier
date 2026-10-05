@@ -19,6 +19,11 @@ export const GENERATED_MAPS: ProceduralParams[] = [
     id: 'isles',
     name: 'The Sundered Isles',
     seed: 3,
+    // revision 2 (Stage F): island realms are described as having no neighbours by land; the
+    // richest realm held 79–100% of the 21.6% in play (27% × 0.8) in 16 AI campaigns but kept
+    // it in only 4, and 9 of 16 ended on score: 25% (20% in play)
+    revision: 2,
+    victory: { economicShare: 0.25 },
     provinces: 110,
     realms: 8,
     shape: 'archipelago',
@@ -42,6 +47,12 @@ export const GENERATED_MAPS: ProceduralParams[] = [
     id: 'steppe',
     name: 'The Kharan Steppe',
     seed: 3,
+    // revision 2 (Stage F): Astia starts with an eighth of the steppe's development and won
+    // 9 of 16 AI campaigns, 7 of them on the economy, at the scaled 21% (16.8% in play). At 25%
+    // Gorathia won 10 of 16 on diplomacy instead; 23% with 1.2 influence per realm (12 of 10
+    // rivals) asks more of both: Astia 8 and Gorathia 8, and campaigns last 42 years, not 33
+    revision: 2,
+    victory: { economicShare: 0.23, diplomaticInfluencePerRealm: 1.2 },
     provinces: 260,
     realms: 11,
     shape: 'continent',
@@ -65,6 +76,11 @@ export const GENERATED_MAPS: ProceduralParams[] = [
     id: 'midsea',
     name: 'The Middle Sea',
     seed: 1,
+    // revision 2 (Stage F): among sixteen realms the richest held 9–12% of the development in
+    // 16 AI campaigns, short of the 13.6% in play (17% × 0.8); at 13% (10.4% in play) the
+    // economy can decide a campaign
+    revision: 2,
+    victory: { economicShare: 0.13 },
     provinces: 520,
     realms: 16,
     shape: 'inland-sea',

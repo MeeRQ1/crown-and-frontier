@@ -27,7 +27,7 @@ import { atWar, provName } from '../../sim/state';
 import type { AirMission, AirWing, Fleet, ProvinceId, ShipType, StrategicResource, WingType } from '../../sim/types';
 import type { App } from '../app';
 import { action, button, h, row } from '../dom';
-import { fmt, weeks } from '../format';
+import { fmt, plural, weeks } from '../format';
 import { icon } from '../icons';
 import { section, shield } from './common';
 import { confirmDialog } from './dialogs';
@@ -270,7 +270,7 @@ export function wingCard(app: App, w: AirWing): HTMLElement[] {
     body.appendChild(section('Missions', h('div', { class: 'actions' }, acts)));
     const fields = sim.world.provIds.filter((pid) => st.provinces[pid].airfield > 0 && st.provinces[pid].controller === w.nation && pid !== w.base);
     if (fields.length) {
-      body.appendChild(section('Rebase', h('div', { class: 'actions' }, fields.slice(0, 6).map((pid) => action(`To ${provName(sim, pid)}`, `${airfieldRoom(sim, pid)} free place(s).`, () => app.do({ type: 'rebaseWing', wing: w.id, base: pid }), rebaseProblem(sim, w.nation, w.id, pid))))));
+      body.appendChild(section('Rebase', h('div', { class: 'actions' }, fields.slice(0, 6).map((pid) => action(`To ${provName(sim, pid)}`, `${plural(airfieldRoom(sim, pid), 'free place')}.`, () => app.do({ type: 'rebaseWing', wing: w.id, base: pid }), rebaseProblem(sim, w.nation, w.id, pid))))));
     }
     body.appendChild(section('Orders', action('Disband the wing', 'No more upkeep or fuel. This cannot be undone.', () => confirmDialog(app, `Disband ${w.name}?`, 'The aircraft and crews are stood down for good.', () => app.do({ type: 'disbandWing', wing: w.id }), 'Disband'), null)));
   }

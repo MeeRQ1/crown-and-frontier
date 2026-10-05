@@ -372,7 +372,11 @@ wild it is. It draws a coastline from shaped noise, ranges with passes, lakes an
 places capitals far apart; grows regions into realms (starting sizes within 1.5× of each
 other); names realms, places and features from nine fictional cultures (`gen/names.ts`);
 gives realms arms, traits and personalities; and scales victory thresholds to the number of
-realms (`rules.ts`, the formulas under Victory). **Deposits** follow Aldmere's mix (coal
+realms (`rules.ts`, the formulas under Victory). A curated recipe may set measured thresholds
+over the scaled ones and carries its own revision: in Stage F the Isles (economic share 25%,
+was 27%), the Steppe (economic share 23%, was 21%; influence 1.2 per realm, was 1.07) and the
+Middle Sea (economic share 13%, was 17%) were set from 16-seed AI batches, as revision 2 of
+each map. Saves from revision 1 load with a notice. **Deposits** follow Aldmere's mix (coal
 14%, food 10%, iron 6.5%, nitrates 6%, oil 3.5%, rubber 3% of provinces), shifted by
 climate and placed on the terrain that suits each; every realm starts with one coal field.
 The same parameters always give the same map.

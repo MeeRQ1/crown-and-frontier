@@ -192,7 +192,7 @@ export function weeklyRecruitment(sim: Sim): void {
     }
     if (p.controller !== p.owner || (p.owner && !p.recruits.every((r) => r.nation === p.owner))) {
       const lost = cancelRecruits(sim, pid);
-      if (lost && p.owner) notify(sim, p.owner, 'normal', 'recruit', `${lost} regiment(s) in training at ${provName(sim, pid)} were dispersed by the occupation.`, { province: pid });
+      if (lost && p.owner) notify(sim, p.owner, 'normal', 'recruit', `${lost} regiment${lost === 1 ? '' : 's'} in training at ${provName(sim, pid)} ${lost === 1 ? 'was' : 'were'} dispersed by the occupation.`, { province: pid });
       continue;
     }
     if (!done.length) continue;
@@ -228,7 +228,7 @@ export function splitProblem(sim: Sim, nid: NationId, id: ArmyId, counts: Partia
     const c = counts[t] ?? 0;
     if (c < 0 || !Number.isInteger(c)) return 'Invalid regiment count.';
     const have = a.regiments.filter((r) => r.type === t).length;
-    if (c > have) return `Only ${have} ${UNITS[t].label} regiment(s) in this army.`;
+    if (c > have) return `Only ${have} ${UNITS[t].label} regiment${have === 1 ? '' : 's'} in this army.`;
     take += c;
   }
   if (take === 0) return 'Choose at least one regiment to detach.';

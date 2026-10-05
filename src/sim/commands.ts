@@ -260,7 +260,7 @@ function execute(sim: Sim, cmd: Command): CommandResult {
         orderRecruit(sim, cmd.nation, cmd.province, cmd.unit);
         done++;
       }
-      return { ok: true, message: `${done} regiment(s) in training.` };
+      return { ok: true, message: `${done} regiment${done === 1 ? '' : 's'} in training.` };
     }
     case 'cancelRecruit':
       cancelRecruits(sim, cmd.province, cmd.nation);

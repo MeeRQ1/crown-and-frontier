@@ -219,7 +219,7 @@ function sideCalc(sim: Sim, pid: ProvinceId, s: SideSnap, enemyAntiCav = 0): Sid
     fire *= air.mul;
     notes.push(...air.notes);
   }
-  if (reserveRegs > 0) notes.push(`Frontage ${terr.frontage}: ${reserveRegs} regiment(s) held in reserve`);
+  if (reserveRegs > 0) notes.push(`Frontage ${terr.frontage}: ${reserveRegs} regiment${reserveRegs === 1 ? '' : 's'} held in reserve`);
   const supplyWorst = Math.min(...s.armies.map((a) => a.supply));
   if (s.armies.length && supplyStatus(supplyWorst) !== 'supplied') notes.push(`${supplyStatus(supplyWorst) === 'strained' ? 'Strained' : 'Unsupplied'} troops ${supplyStatus(supplyWorst) === 'strained' ? '−10%' : '−25%'}`);
   const mr = moraleRatio(s);
@@ -769,7 +769,7 @@ function endBattle(sim: Sim, b: Battle, winner: 'attacker' | 'defender'): void {
   bump(sim);
 
   const outcome =
-    `${winner === 'attacker' ? 'Attackers' : 'Defenders'} (${winNations.map((n) => nationName(sim, n)).join(', ')}) won after ${b.rounds.length} round(s).` +
+    `${winner === 'attacker' ? 'Attackers' : 'Defenders'} (${winNations.map((n) => nationName(sim, n)).join(', ')}) won after ${b.rounds.length} round${b.rounds.length === 1 ? '' : 's'}.` +
     (surrendered.length ? ` Surrendered: ${surrendered.join(', ')}.` : '');
   const report: BattleReport = {
     id: b.id,

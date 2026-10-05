@@ -41,9 +41,12 @@ economic prosperity or diplomatic leadership.
   counter-offers; 20 events; and three victory paths.
 - **AI rivals:** five temperaments and three difficulty levels, using exactly the same rules
   and commands as you.
-- **Help and saving:** a tutorial, rich tooltips, visible reasons for every unavailable
-  action, battle forecasts, army groups and standing orders, autosave, and save
-  export/import. Works with mouse, keyboard and touch.
+- **Help and saving:** a 15-step tutorial that you complete by doing each thing (the capital,
+  a project, industry and resources, a regiment, a march, supply and the frontier, sea and
+  air, diplomacy, a national focus, how wars end, victory), rich tooltips, visible reasons for
+  every unavailable action, battle forecasts, army groups and standing orders, autosave, and
+  save export/import. The game pauses for wars, events, proposals and a finished technology
+  or focus (each can be turned off). Works with mouse, keyboard and touch.
 - **No installation, account or server:** static HTML5 files; everything runs in your browser.
 
 ## Play
@@ -181,9 +184,8 @@ that the final state matches.
 - **Fog of war:** not implemented. All information is public to everyone, AI included.
 - **Browsers verified:** only headless Chromium 141, on desktop and emulated phone viewports. Firefox,
   Safari, real Chromebooks and real touch devices are untested.
-- **Not yet in the game:** the tutorial does not yet cover focus trees, settlements,
-  guarantees, influence, loans or trade blocs (Stage F; the Help ledger does). Multiplayer,
-  espionage and dynasties are out of scope.
+- **Not in the game:** multiplayer, espionage and dynasties are out of scope. The tutorial
+  introduces settlements and influence in a sentence each; the Help ledger explains them.
 - **Map editor:** it cannot split a province, draw coastline by hand or reshape sea zones;
   generate a new map for a different coast. Maps made in the editor are kept only in this
   browser until exported.

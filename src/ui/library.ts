@@ -4,6 +4,7 @@
 
 import { BUILTIN_MAPS, builtinPackage, builtinScenario, type BuiltinMapId } from '../maps/builtin';
 import type { MapPackage, MapScenarioPart } from '../maps/format';
+import { plural } from './format';
 import type { MapCheck, MapIssue } from '../maps/validate';
 import type { App } from './app';
 import { button, h, setChildren, type Child } from './dom';
@@ -150,7 +151,7 @@ export function renderMapLibrary(app: App): HTMLElement {
         draw();
         const parts = [`${r.map.pkg.meta.name} was added to your maps.`];
         if (r.renamed) parts.push(`Its id "${r.renamed.from}" was already taken, so it is stored as "${r.renamed.to}".`);
-        if (r.check.warnings.length) parts.push(`${r.check.warnings.length} warning(s): ${r.check.warnings.slice(0, 2).map((w) => w.message).join(' ')}`);
+        if (r.check.warnings.length) parts.push(`${plural(r.check.warnings.length, 'warning')}: ${r.check.warnings.slice(0, 2).map((w) => w.message).join(' ')}`);
         say(parts.join(' '), r.check.warnings.length ? 'warn' : 'good');
         builtins.parentElement?.querySelector(`[data-map="${CSS.escape(r.map.id)}"]`)?.scrollIntoView({ block: 'nearest' });
       } catch (e) {

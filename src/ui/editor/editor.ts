@@ -10,6 +10,7 @@ import type { Personality, Resource, Terrain } from '../../sim/types';
 import { PERSONALITIES } from '../../sim/data/personalities';
 import * as E from '../../maps/edit';
 import type { MapPackage } from '../../maps/format';
+import { plural } from '../format';
 import { buildProceduralMap, CLIMATES, DEFAULT_PARAMS, MAP_SHAPES, SHAPE_LABELS, type Climate, type MapShape, type ProceduralParams } from '../../maps/gen/procedural';
 import { parseMapPackage, validateMapPackage, type MapCheck, type MapIssue } from '../../maps/validate';
 import { RESOURCES, TERRAINS } from '../../maps/vocab';
@@ -372,7 +373,7 @@ export function renderEditor(app: App, initial: MapPackage | null): HTMLElement 
       'div',
       { class: 'ed-form', 'data-zone': zid },
       h('h3', null, z.name),
-      h('div', { class: 'small muted' }, `Sea zone ${z.id} · ${z.coasts.length} coastal provinces · ${z.neighbors.length} neighbouring zones${z.straits?.length ? ` · commands ${z.straits.length} strait(s)` : ''}`),
+      h('div', { class: 'small muted' }, `Sea zone ${z.id} · ${z.coasts.length} coastal provinces · ${z.neighbors.length} neighbouring zones${z.straits?.length ? ` · commands ${plural(z.straits.length, 'strait')}` : ''}`),
       field('Name', textInput(z.name, (v) => edit(() => {
         const nm = v.trim().slice(0, 60);
         if (!nm) return { ok: false, message: 'A sea zone needs a name.' };
@@ -513,7 +514,7 @@ export function renderEditor(app: App, initial: MapPackage | null): HTMLElement 
 
   const checkPanel = (): Child[] => [
     check.errors.length
-      ? h('div', { class: 'callout bad' }, icon('alert'), h('span', null, `${check.errors.length} error(s): the map cannot be played or saved to the library until they are fixed.`))
+      ? h('div', { class: 'callout bad' }, icon('alert'), h('span', null, `${plural(check.errors.length, 'error')}: the map cannot be played or saved to the library until they are fixed.`))
       : h('div', { class: 'callout good' }, icon('check'), h('span', null, 'The map passes every check and can be played.')),
     h('div', { class: 'ed-issues' }, issueRows(check.errors, 'bad'), issueRows(check.warnings, 'warn')),
     h('p', { class: 'small muted' }, 'These are the checks every imported map goes through: references, two-way borders, visible routes, closed outlines, capitals, sea zones and ports, and one connected world.'),
@@ -789,7 +790,7 @@ export function renderEditor(app: App, initial: MapPackage | null): HTMLElement 
     drawHeader();
     const go = () => downloadText(`${pkg.id}.map.json`, JSON.stringify(pkg));
     if (check.ok) return go();
-    confirmDialog(app, 'Export a map with errors?', `The map has ${check.errors.length} error(s). The file will keep your work, but it will not import or play until they are fixed.`, go, 'Export anyway', false);
+    confirmDialog(app, 'Export a map with errors?', `The map has ${plural(check.errors.length, 'error')}. The file will keep your work, but it will not import or play until they are fixed.`, go, 'Export anyway', false);
   };
   const play = async () => {
     if (!(await saveToLibrary())) return;

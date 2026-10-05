@@ -52,12 +52,12 @@ export function siegeInfo(sim: Sim, pid: ProvinceId, battleAt?: Set<ProvinceId>)
   const sappers = Math.min(C.siege.engineerMax, team.reduce((s, a) => s + a.regiments.filter((r) => r.type === 'engineers').length, 0));
   if (sappers > 0) {
     rate *= 1 + C.siege.engineerBonus * sappers;
-    notes.push(`${sappers} engineer regiment(s) +${Math.round(C.siege.engineerBonus * sappers * 100)}%`);
+    notes.push(`${sappers} engineer regiment${sappers === 1 ? '' : 's'} +${Math.round(C.siege.engineerBonus * sappers * 100)}%`);
   }
   const g = Math.min(C.siege.artilleryMax, guns);
   if (g && p.fort > 0) {
     rate *= 1 + C.siege.artilleryBonus * g;
-    notes.push(`${g} artillery regiment(s) +${Math.round(C.siege.artilleryBonus * g * 100)}%`);
+    notes.push(`${g} artillery regiment${g === 1 ? '' : 's'} +${Math.round(C.siege.artilleryBonus * g * 100)}%`);
   }
   const sm = nationMods(sim, lead).siege;
   if (sm) {

@@ -586,7 +586,7 @@ export function monthlyEconomy(sim: Sim): void {
     } else if (stage >= 1 && ledger.net < 0) {
       const gross = Math.max(5, grossIncome(ledger));
       const monthsLeft = (gross * C.economy.creditMonths + n.treasury) / -ledger.net;
-      if (monthsLeft <= 3) notify(sim, nid, 'urgent', 'debt', `Bankruptcy in about ${Math.max(1, Math.floor(monthsLeft))} month(s) at the current deficit. Disband regiments, cancel envoys or lower research funding.`);
+      if (monthsLeft <= 3) notify(sim, nid, 'urgent', 'debt', `Bankruptcy in about ${Math.max(1, Math.floor(monthsLeft))} month${Math.max(1, Math.floor(monthsLeft)) === 1 ? '' : 's'} at the current deficit. Disband regiments, cancel envoys or lower research funding.`);
     }
   }
   const paid = st.loans.filter((l) => l.remaining <= 0.01);
