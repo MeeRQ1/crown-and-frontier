@@ -543,6 +543,21 @@ async function diplomacyFlow(browser: Browser, base: string): Promise<void> {
     app.refresh();
   });
   await page.waitForFunction(() => (window as any).cnf.speed === 0);
+  // a dialog may still open after the import, and the import's file input may hold the
+  // focus (either would swallow the ledger keys): close dialogs and drop the focus until
+  // no dialog has been open for half a second
+  for (let quiet = 0; quiet < 5; ) {
+    const open = await page.evaluate(() => {
+      const b = [...document.querySelectorAll<HTMLButtonElement>('.modal-layer:not(.hidden) footer button')];
+      b.forEach((x) => x.click());
+      (window as any).cnf.setSpeed(0);
+      // the file input used for the import may keep the focus, and keys typed into an input are ignored
+      (document.activeElement as HTMLElement | null)?.blur?.();
+      return b.length;
+    });
+    quiet = open ? 0 : quiet + 1;
+    await page.waitForTimeout(100);
+  }
   const state = <T>(fn: string) => page.evaluate(`(() => { const st = window.cnf.sim.state; return ${fn}; })()`) as Promise<T>;
   // one atomic click in the page: ledgers are rebuilt when the state changes, so a
   // located element may be replaced between being found and being clicked
