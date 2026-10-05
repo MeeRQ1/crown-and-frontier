@@ -153,7 +153,7 @@ for (const m of maps) {
     const a = window.cnf;
     const r = a.renderer;
     const out: Record<string, number[]> = {};
-    for (const mode of ['political', 'terrain', 'supply', 'economy', 'frontier', 'diplomacy', 'military']) {
+    for (const mode of ['political', 'terrain', 'supply', 'economy', 'frontier', 'diplomacy', 'military', 'resources', 'sea']) {
       a.setMode(mode);
       for (let i = 0; i < 10; i++) {
         a.mapDirty = true;
@@ -185,7 +185,7 @@ for (const m of maps) {
   const ledgers = await page.evaluate(async () => {
     const a = window.cnf;
     const out: Record<string, number> = {};
-    for (const tab of ['realm', 'military', 'research', 'policy', 'diplomacy', 'wars', 'victory', 'log']) {
+    for (const tab of ['realm', 'industry', 'military', 'research', 'focus', 'diplomacy', 'wars', 'victory', 'log']) {
       const t = performance.now();
       a.openLedger(tab);
       out[tab] = performance.now() - t;

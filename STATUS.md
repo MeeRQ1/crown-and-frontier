@@ -47,7 +47,8 @@ is kept for its evidence. Where a stage changed a fact, it is corrected in place
   lends from large treasuries, founds, joins and grows trade blocs, and builds influence over
   smaller realms with envoys; keeps the peace while it holds a peaceful victory; once a year
   pursues the victory it is closest to among its temperament's path and the territorial and
-  economic paths.
+  economic paths; on the diplomatic path sends envoys first to partners whose opinion sits
+  near the bar; as a diplomatic or commercial winner demands a sphere over a smaller loser.
 - **Rule changes for victory** (to reduce endings on score): diplomatic influence counts each
   partner once for its strongest bond (an alliance or our sphere 2, our guarantee 1) plus a
   trade agreement; a month in which a condition fails pauses its timer before it decays,
@@ -56,6 +57,37 @@ is kept for its evidence. Where a stage changed a fact, it is corrected in place
   shares are 80% of each map's stated share.
 - **Fixes along the way:** two drafts of the peace conference (two wars led at once) no
   longer reset each other; ticking a box in a decision card redraws it at once.
+
+**Stage E measurements** (details in PLAN.md "E (done)"):
+- 183 Vitest tests pass (24 more than Stage D: settlements, influence, guarantees, loans,
+  blocs, focus, the format-3 → 4 conversion with a fixture from the Stage D build, and the
+  paused victory timer).
+- 53 of 53 browser checks pass in headless Chromium 141; eight are new (focus, guarantee,
+  loan, trade bloc, peace conference, a settlement struck down to a counter-offer, the
+  Diplomacy map's legend, no page errors).
+- AI batches at each map's default length, 16 seeds per map (`reports/stage-e/`): no
+  invariant failures. Campaigns ending on score at the limit: Aldmere 7 of 16 (Stage A
+  baseline 14 of 30), the Reach 6 of 16 (baseline 21 of 30), the Kharan Steppe 2, the
+  Baltic 6, **the Sundered Isles 9 and the Middle Sea 9** — half or fewer on four maps of
+  six; the two others are Stage F balance work (below).
+- System use per campaign (AI only, all maps): 4–19 peace settlements, 14–31% of them shared
+  among several winners; every demand kind is used, but spheres (0–9 per 16 campaigns) and
+  disarmament (0–12) are rare. 2–9 guarantees and 1–12 loans per campaign. Every realm on
+  every map completed national focuses; 72–100% took a claim and 84–100% their ambition.
+- Simulation benchmarks, run one at a time on a 4-core Xeon @ 2.1 GHz (`reports/perf/stageE-*.md`;
+  a slower machine than Stage D's), p99 week: Aldmere 31.2, 24.7 and 20.7 ms (seeds 1–3; the
+  Stage D code on the same machine 26.1, 22.3 and 22.2), the Kharan Steppe 18.2, 19.3 and
+  17.5, the Baltic 20.0, 12.3 and 18.0, the Middle Sea (large) 52.7 and 52.3. In the browser
+  the Middle Sea and the 900-province map keep 36 of 36 weeks at fastest speed
+  (`reports/perf/web-stageE.md`).
+- **Worker decision:** the median p99 of three runs is 24.7 ms on Aldmere (trigger: above
+  25 ms), 18.2 on the Steppe and 18.0 on the Baltic, and the browser keeps every week on
+  the large maps, so the simulation stays on the main thread. Aldmere's median is 11% above
+  the Stage D code's on this machine, and one run reached 31.2 ms: Stage F measures again
+  at the end.
+- Fuzzer: 0 findings on the Reach and the Sundered Isles (seeds 1–3, 10 years), with focus,
+  guarantee and loan commands among the accepted ones.
+- Screenshots: `docs/screenshots/stage-e/`.
 
 **Stage D delivered:**
 - **Six built-in maps.** New: the Sundered Isles (116 provinces, 8 realms), the Kharan
@@ -202,28 +234,34 @@ is kept for its evidence. Where a stage changed a fact, it is corrected in place
   research by era, province card, format-2 conversion notice).
 
 **Checkpoint for continuing:**
-- **Working state:** all of these pass at the end of Stage D.
+- **Working state:** all of these pass at the end of Stage E.
   ```bash
   npm ci && npm run typecheck && npm test && npm run build && npm run package && npm run verify:web
-  npm run fuzz -- --scenario isles --seeds 1-3 --years 10 && npm run fuzz -- --scenario baltic --seeds 1-2 --years 10
+  npm run fuzz -- --scenario reach --seeds 1-3 --years 10 && npm run fuzz -- --scenario isles --seeds 1-3 --years 10
   npm run genmaps && npm run genbaltic && git status   # regenerated maps are unchanged
   ```
 - **Unresolved failures:** none known.
 - **Known gaps** (tracked for later stages):
   - Oil, rubber, nitrates and iron are still never short in AI batches; coal is the
     binding resource.
-  - The richest heartlands win most AI campaigns again: Lessia 6 of 10 on Aldmere, Aurel
-    5 of 10 on the Reach (Stage B: Morvaine and Tarsk 4 each; six winners on the Reach).
-    Balance is Stage F's work.
+  - The richest heartlands still lead, though less: Morvaine 6 of 16 on Aldmere (5 of them
+    on score) and Aurel 6 of 16 on the Reach (4 on score), with five and six different
+    winners (before Stage E: Lessia 6 of 10, Aurel 5 of 10). Balance is Stage F's work.
   - Hrafnmark still shrinks on Aldmere.
   - A small coal exporter can draw most of its income from trade, although the average is
     12–15%.
-  - No deposit or sea-control map mode yet (cards and ledgers show both); Stage F adds
-    them with the other map modes.
   - Armour stays rare in AI armies (0.1–0.3% of regiment-months): Tanks arrives in 1916,
     late in most campaigns.
-  - The Baltic, 1906: Russia won 3 of 4 AI campaigns on score, and Norway and Denmark
-    rarely fight. Some 1906 borders are approximations (`tools/baltic.data.ts`).
+  - Stage E batches (16 seeds per map): the Sundered Isles and the Middle Sea still end on
+    score in 9 of 16 campaigns. On the Middle Sea no realm nears the economic or territorial
+    thresholds; on the Isles Ostmark wins 11 of 16 (4 on the economy, 7 on score). Astia
+    wins 9 of 16 on the Kharan Steppe. Diplomatic Leadership is the most common win on the
+    Reach (8 of 16), the Middle Sea (7) and the Baltic (10).
+  - Every realm joins a trade bloc (80–94% of realm-months); sphere and disarmament demands
+    are rare, and guarantees are seldom called on (0–11 times in 16 campaigns per map).
+  - The Baltic, 1906: Russia wins on score (6 of 16), Sweden and Denmark diplomatically, and
+    Norway and Denmark rarely fight. Some 1906 borders are approximations
+    (`tools/baltic.data.ts`).
   - The map editor cannot split provinces, draw coastline or reshape sea zones.
   - The Middle Sea: 2 of 31 realms at war with a coastal enemy left their fleets in port.
 - **Requirement status:** PLAN.md's ledger lists every requirement with its stage and

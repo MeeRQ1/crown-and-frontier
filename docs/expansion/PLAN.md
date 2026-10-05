@@ -151,13 +151,44 @@ priorities is in [AUDIT.md](AUDIT.md). The era and content decisions are in
 - Every built-in map exports and imports again unchanged (unit test). 159 unit tests and
   45 of 45 browser checks pass.
 
-**E**
-- Peace settlements with several parties and graded demands, guarantees and influence
-  are covered by tests and the AI uses them (system-usage counts).
-- Focus trees for every realm on every built-in map; the AI completes focus paths that
-  fit its situation.
-- Fewer campaigns end on score at the limit than after Stage A (14 of 30 on Aldmere, 21 of
-  30 on the Reach); the target is half or fewer on every map.
+**E (done)**
+- [x] Peace settlements with several parties and graded demands, guarantees, influence and
+  spheres, loans and trade blocs are covered by tests (`tests/stage-e.test.ts`) and browser
+  flows (guarantee, loan, bloc, peace conference, counter-offer, the Diplomacy map's
+  legend), and the AI uses them. AI batches at each map's default length, 16 seeds per map
+  (`reports/stage-e/`), no invariant failures. Per campaign: 4–19 peace settlements (14–31%
+  shared among several winners), 2–9 guarantees, 1–12 loans; 80–94% of realm-months inside a
+  trade bloc; 4–20% of realm-months in another realm's sphere. Every demand kind is used,
+  though spheres (0–9 per 16 campaigns; none on the Isles and the Baltic) and disarmament
+  (0–12) are rare, and guarantees were honoured by joining a war 0–11 times per 16 campaigns.
+- [x] Focus trees for every realm on every built-in map: a generic tree of 37 focuses and a
+  national branch of 5–7 made from each map (hand-written names on Aldmere, the Reach and
+  the Baltic). In the batches every realm completed national focuses, 72–100% of realms took
+  a claim (island realms have none to take) and 84–100% completed their ambition; 29–37 focuses per surviving
+  realm per campaign.
+- [ ] **Partly met.** Campaigns ending on score at the limit, 16 seeds per map: Aldmere 7
+  (Stage A: 14 of 30), the Reach 6 (Stage A: 21 of 30), the Kharan Steppe 2, the Baltic 6,
+  the Sundered Isles 9, the Middle Sea 9. Fewer than after Stage A on both baseline maps
+  (44% and 38% against 47% and 70%), and half or fewer on four maps of six. On the Middle
+  Sea no realm comes near the economic or territorial thresholds (the richest holds 9–12% of
+  the development against 13.6% needed) and only diplomacy decides; on the Isles Ostmark
+  leads but rarely holds a win. Both are Stage F balance items, with map revisions.
+  Rule and AI changes made for this (DESIGN.md, *Victory*): a victory timer pauses instead of
+  winding back while a realm is within a tenth of the main measure with every other condition
+  met; economic shares in play are 80% of each map's stated share; diplomatic influence
+  counts each partner once for its strongest bond plus trade; allies and sphere members are
+  not wary of a diplomatic front-runner; the AI pursues the victory it is closest to, keeps
+  the peace while it holds or nearly holds a peaceful victory, sends envoys to partners near
+  the opinion bar, and demands spheres as a diplomatic or commercial winner.
+- [x] Save format 4: format-3 saves convert with a notice, each realm's policy becoming the
+  matching completed focus (fixture: a save written by the Stage D build, with a war under
+  way). Format-1 and format-2 saves still convert (browser checks).
+- [x] Performance, run one at a time on a 4-core Xeon @ 2.1 GHz (`reports/perf/stageE-*`):
+  p99 week Aldmere 31.2, 24.7 and 20.7 ms (Stage D code on the same machine 26.1, 22.3 and
+  22.2), the Steppe 18.2, 19.3 and 17.5, the Baltic 20.0, 12.3 and 18.0, the Middle Sea 52.7
+  and 52.3; 36 of 36 weeks at fastest speed in the browser on the Middle Sea and the
+  900-province map (`web-stageE.md`). Median p99 on the standard maps: 24.7, 18.2 and
+  18.0 ms, under the 25 ms worker trigger. 183 unit tests and 53 of 53 browser checks pass.
 
 **F**
 - The tutorial covers the new systems. Every system has a ledger and tooltips, and where
@@ -183,7 +214,8 @@ priorities is in [AUDIT.md](AUDIT.md). The era and content decisions are in
 - **A simulation worker** is not introduced until the measured triggers in AUDIT.md are
   reached. After Stage D the standard-map trigger is at the edge (one of three Aldmere runs
   above 25 ms, from run-to-run spread on unchanged rules). From Stage E on, it is judged by
-  the median of three runs.
+  the median of three runs: after Stage E it is 24.7 ms on Aldmere (one run 31.2 ms), so
+  the trigger is not reached, and the browser keeps every week on the large maps.
 - **Multiplayer, accounts and online features** are out of scope for every stage, as the
   brief requires.
 
