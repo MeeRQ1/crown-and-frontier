@@ -641,7 +641,6 @@ function navalBattle(sim: Sim, zone: ZoneId, A: Fleet[], B: Fleet[]): void {
   const st = sim.state;
   const startA = sideValue(A);
   const startB = sideValue(B);
-  const capBefore = new Map<Fleet, number>([...A, ...B].map((f) => [f, fleetCapacity(f)]));
   const shipsBefore = new Map<NationId, number>();
   for (const f of [...A, ...B]) shipsBefore.set(f.nation, (shipsBefore.get(f.nation) ?? 0) + f.ships.length);
   let rounds = 0;
@@ -662,25 +661,22 @@ function navalBattle(sim: Sim, zone: ZoneId, A: Fleet[], B: Fleet[]): void {
       break;
     }
   }
-  // armies aboard sunk transports go down with them
+  // regiments aboard sunk transports go down with them: whatever no longer fits
+  // in the transports still afloat is lost, last aboard first
   for (const f of [...A, ...B]) {
-    const before = capBefore.get(f) ?? 0;
-    if (!before || !f.cargo.length) continue;
-    const after = fleetCapacity(f);
-    if (after >= before) continue;
-    const lost = 1 - after / before;
-    for (const id of [...f.cargo]) {
-      const a = st.armies[id];
+    if (!f.cargo.length) continue;
+    let excess = cargoRegiments(sim, f) - fleetCapacity(f);
+    for (let i = f.cargo.length - 1; i >= 0 && excess > 0; i--) {
+      const a = st.armies[f.cargo[i]];
       if (!a) continue;
-      for (const reg of a.regiments) {
-        const dead = Math.round(reg.men * lost);
-        reg.men -= dead;
-        st.nations[a.nation].stats.menLost += dead;
+      while (excess > 0 && a.regiments.length) {
+        const reg = a.regiments.pop()!;
+        st.nations[a.nation].stats.menLost += reg.men;
+        excess--;
       }
-      a.regiments = a.regiments.filter((reg) => reg.men >= C.army.minRegimentMen);
       if (!a.regiments.length) {
-        delete st.armies[id];
-        f.cargo = f.cargo.filter((c) => c !== id);
+        delete st.armies[a.id];
+        f.cargo.splice(i, 1);
         touchArmies(sim);
       }
     }

@@ -30,6 +30,7 @@ import { renderLedger, type LedgerTab } from './panels/ledgers';
 import { Minimap, renderModes, renderNavCluster } from './panels/mapui';
 import { openMenuDialog, renderEndScreen, renderMenu, screenCleanup } from './screens';
 import { loadSettings, saveSettings, type UISettings } from './settings';
+import { MapLibrary } from './maplib';
 import { downloadText, SaveStore } from './storage';
 import { Tutorial } from './tutorial';
 
@@ -72,6 +73,8 @@ export class App {
   readonly root: HTMLElement;
   settings: UISettings;
   store = new SaveStore();
+  /** maps made in the editor or imported (stored apart from saves) */
+  maps = new MapLibrary();
   sound = new Sound();
   sim: Sim | null = null;
   renderer: MapRenderer | null = null;
@@ -206,7 +209,8 @@ export class App {
   async boot(progress: (pct: number, text: string) => void): Promise<void> {
     progress(55, 'Opening the archives…');
     await this.store.init();
-    progress(80, 'Inking the maps…');
+    progress(70, 'Inking the maps…');
+    await this.maps.init().catch(() => undefined);
     await fontsReady;
     progress(95, 'Unrolling the atlas…');
     this.showMenu();

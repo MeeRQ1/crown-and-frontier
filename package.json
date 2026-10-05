@@ -23,12 +23,12 @@
     "bench": "node --expose-gc --import tsx tools/bench.ts",
     "bench:web": "tsx tools/bench-web.ts",
     "rulecheck": "tsx tools/rulecheck.ts",
-    "fuzz": "tsx tools/fuzz.ts"
+    "fuzz": "tsx tools/fuzz.ts",
+    "genmaps": "tsx tools/genmaps.ts"
   },
   "devDependencies": {
     "@types/d3-delaunay": "^6.0.4",
     "@types/node": "^22.20.4",
-    "d3-delaunay": "^6.0.4",
     "playwright": "1.56.1",
     "tsx": "^4.23.15",
     "typescript": "~5.9.3",
@@ -38,6 +38,7 @@
   "dependencies": {
     "@fontsource-variable/alegreya": "^5.3.0",
     "@fontsource-variable/source-sans-3": "^5.3.0",
-    "@fontsource/alegreya-sc": "^5.3.0"
+    "@fontsource/alegreya-sc": "^5.3.0",
+    "d3-delaunay": "^6.0.4"
   }
 }

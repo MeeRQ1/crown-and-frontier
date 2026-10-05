@@ -369,7 +369,7 @@ entering a zone that holds enemy warships stops there and fights.
   30% in the first round and 60% in the second.
 
 Damage per ship is fire × 32 × roll ÷ its hull. A side falling below half its starting
-fighting value withdraws. Armies aboard sunk transports are lost in proportion.
+fighting value withdraws. Regiments aboard sunk transports go down with them: whatever no longer fits in the transports still afloat is lost.
 
 **Sea control.**
 

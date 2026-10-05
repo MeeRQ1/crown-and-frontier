@@ -15,23 +15,26 @@ export interface SlotInfo {
   size: number;
 }
 
-const DB_NAME = 'crown-and-frontier';
-const STORE = 'saves';
-const LS_PREFIX = 'cnf-save:';
-
 export class SaveStore {
   mode: StoreMode = 'memory';
   problem: string | null = null;
   private db: IDBDatabase | null = null;
   private mem = new Map<string, string>();
 
+  /** Saves by default; the map library keeps its maps in a store of its own. */
+  constructor(
+    private readonly dbName = 'crown-and-frontier',
+    private readonly storeName = 'saves',
+    private readonly prefix = 'cnf-save:',
+  ) {}
+
   async init(): Promise<void> {
     try {
       if (typeof indexedDB === 'undefined') throw new Error('IndexedDB unavailable');
       this.db = await new Promise<IDBDatabase>((resolve, reject) => {
-        const req = indexedDB.open(DB_NAME, 1);
+        const req = indexedDB.open(this.dbName, 1);
         req.onupgradeneeded = () => {
-          if (!req.result.objectStoreNames.contains(STORE)) req.result.createObjectStore(STORE);
+          if (!req.result.objectStoreNames.contains(this.storeName)) req.result.createObjectStore(this.storeName);
         };
         req.onsuccess = () => resolve(req.result);
         req.onerror = () => reject(req.error ?? new Error('open failed'));
@@ -44,7 +47,7 @@ export class SaveStore {
       this.db = null;
     }
     try {
-      const k = `${LS_PREFIX}__probe`;
+      const k = `${this.prefix}__probe`;
       localStorage.setItem(k, '1');
       localStorage.removeItem(k);
       this.mode = 'localstorage';
@@ -56,14 +59,14 @@ export class SaveStore {
   }
 
   private tx(mode: IDBTransactionMode): IDBObjectStore {
-    return this.db!.transaction(STORE, mode).objectStore(STORE);
+    return this.db!.transaction(this.storeName, mode).objectStore(this.storeName);
   }
 
   async put(key: string, text: string): Promise<void> {
     if (this.mode === 'indexeddb' && this.db) {
       await new Promise<void>((resolve, reject) => {
-        const t = this.db!.transaction(STORE, 'readwrite');
-        t.objectStore(STORE).put(text, key);
+        const t = this.db!.transaction(this.storeName, 'readwrite');
+        t.objectStore(this.storeName).put(text, key);
         t.oncomplete = () => resolve();
         t.onerror = () => reject(t.error ?? new Error('write failed'));
         t.onabort = () => reject(t.error ?? new Error('write aborted'));
@@ -74,7 +77,7 @@ export class SaveStore {
     }
     if (this.mode === 'localstorage') {
       try {
-        localStorage.setItem(LS_PREFIX + key, text);
+        localStorage.setItem(this.prefix + key, text);
       } catch (e) {
         throw new Error(quotaMessage(e));
       }
@@ -93,7 +96,7 @@ export class SaveStore {
     }
     if (this.mode === 'localstorage') {
       try {
-        return localStorage.getItem(LS_PREFIX + key);
+        return localStorage.getItem(this.prefix + key);
       } catch {
         return null;
       }
@@ -104,8 +107,8 @@ export class SaveStore {
   async remove(key: string): Promise<void> {
     if (this.mode === 'indexeddb' && this.db) {
       await new Promise<void>((resolve, reject) => {
-        const t = this.db!.transaction(STORE, 'readwrite');
-        t.objectStore(STORE).delete(key);
+        const t = this.db!.transaction(this.storeName, 'readwrite');
+        t.objectStore(this.storeName).delete(key);
         t.oncomplete = () => resolve();
         t.onerror = () => reject(t.error);
       });
@@ -113,7 +116,7 @@ export class SaveStore {
     }
     if (this.mode === 'localstorage') {
       try {
-        localStorage.removeItem(LS_PREFIX + key);
+        localStorage.removeItem(this.prefix + key);
       } catch {
         /* ignore */
       }
@@ -135,7 +138,7 @@ export class SaveStore {
       try {
         for (let i = 0; i < localStorage.length; i++) {
           const k = localStorage.key(i);
-          if (k?.startsWith(LS_PREFIX)) out.push(k.slice(LS_PREFIX.length));
+          if (k?.startsWith(this.prefix)) out.push(k.slice(this.prefix.length));
         }
       } catch {
         /* ignore */

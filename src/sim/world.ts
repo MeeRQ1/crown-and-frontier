@@ -86,8 +86,7 @@ export function buildReachScenario(): ScenarioDef {
   return scenarioFromPackage(builtinScenario('reach'));
 }
 
-registerMapScenario(builtinScenario('aldmere'));
-registerMapScenario(builtinScenario('reach'));
+for (const id of BUILTIN_MAPS) registerMapScenario(builtinScenario(id));
 
 export function edgeKey(a: ProvinceId, b: ProvinceId): string {
   return a < b ? `${a}|${b}` : `${b}|${a}`;

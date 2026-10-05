@@ -270,6 +270,39 @@ describe('armies by sea', () => {
     expect(checkInvariants(sim)).toEqual([]);
   });
 
+  it('regiments that no longer fit after a transport sinks are lost; the rest stay aboard (isles seed 2 regression)', () => {
+    // found by an AI campaign on the Sundered Isles: troops were thinned in proportion
+    // and a fleet ended up carrying 6 regiments with room for 4
+    let partial = 0;
+    for (let seed = 1; seed <= 30; seed++) {
+      const sim = seaGame({ seed });
+      declareWar(sim, 'a', 'b', { type: 'conquest', provinces: ['b1'] });
+      // a convoy lying off its own coast with six regiments aboard, one transport already damaged
+      const tr = fleet(sim, 'a', 'zm', ['transport', 'transport', 'transport'], 'a2');
+      tr.ships[seed % 3].hp = 8;
+      const army = addArmy(sim, 'a', 'a2', { infantry: 6 });
+      army.embarked = tr.id;
+      tr.cargo = [army.id];
+      fleet(sim, 'b', 'zm', ['screen']);
+      fresh(sim);
+      const menBefore = army.regiments.map((r) => r.men);
+      weeklyNaval(sim);
+      expect(checkInvariants(sim)).toEqual([]);
+      const f = sim.state.fleets[tr.id];
+      const a = sim.state.armies[army.id];
+      const room = f ? f.ships.reduce((s, x) => s + SHIPS[x.type].capacity, 0) : 0;
+      const regs = a?.regiments.length ?? 0;
+      expect(regs).toBeLessThanOrEqual(room);
+      if (a && room < 6 && room > 0) {
+        partial++;
+        // whole regiments go down; those still aboard keep their men
+        expect(regs).toBe(room);
+        expect(a.regiments.map((r) => r.men)).toEqual(menBefore.slice(0, regs));
+      }
+    }
+    expect(partial).toBeGreaterThan(0);
+  });
+
   it('a campaign saved with troops at sea continues exactly like the original', () => {
     const sim = seaGame();
     const tr = fleet(sim, 'a', 'zw', ['transport', 'transport'], 'a1');

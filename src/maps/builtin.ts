@@ -10,6 +10,9 @@ import reachAdjacency from '../data/reach.adjacency.json';
 import aldmereSeas from '../data/aldmere.seas.json';
 import { REACH_LABELS, REACH_NATIONS, REACH_PROVINCES, REACH_REGIONS, STRAITS } from '../data/reach';
 import reachSeas from '../data/reach.seas.json';
+import islesScenario from '../data/maps/isles.scenario.json';
+import steppeScenario from '../data/maps/steppe.scenario.json';
+import midseaScenario from '../data/maps/midsea.scenario.json';
 import type { ProvinceDef, SeaZoneDef } from '../sim/types';
 import { MAP_FORMAT, MAP_FORMAT_VERSION, type MapGeometryData, type MapPackage, type MapScenarioPart, type SeaGeometry } from './format';
 
@@ -17,8 +20,18 @@ import { MAP_FORMAT, MAP_FORMAT_VERSION, type MapGeometryData, type MapPackage, 
 type SeaData = { zones: SeaZoneDef[]; ports: Record<string, number> };
 const withPorts = (provinces: ProvinceDef[], seas: SeaData): ProvinceDef[] => provinces.map((p) => (seas.ports[p.id] ? { ...p, port: seas.ports[p.id] } : p));
 
-export const BUILTIN_MAPS = ['aldmere', 'reach'] as const;
+export const BUILTIN_MAPS = ['aldmere', 'reach', 'isles', 'steppe', 'midsea'] as const;
 export type BuiltinMapId = (typeof BUILTIN_MAPS)[number];
+
+/** Built-in maps made by the procedural generator (tools/genmaps.ts): data shipped as generated. */
+const GENERATED: Record<string, unknown> = { isles: islesScenario, steppe: steppeScenario, midsea: midseaScenario };
+
+function generatedScenario(id: string): MapScenarioPart {
+  // the checked-in file carries a "generated" note that is not part of the package
+  const { generated: _note, ...part } = GENERATED[id] as MapScenarioPart & { generated?: string };
+  void _note;
+  return part as MapScenarioPart;
+}
 
 function aldmereScenario(): MapScenarioPart {
   const data = aldmereProvinces as unknown as { provinces: ProvinceDef[]; straits: Array<[string, string]>; rivers: Array<[string, string]> };
@@ -93,7 +106,7 @@ const scenarioCache = new Map<string, MapScenarioPart>();
 export function builtinScenario(id: BuiltinMapId): MapScenarioPart {
   let s = scenarioCache.get(id);
   if (!s) {
-    s = id === 'aldmere' ? aldmereScenario() : reachScenario();
+    s = id === 'aldmere' ? aldmereScenario() : id === 'reach' ? reachScenario() : generatedScenario(id);
     scenarioCache.set(id, s);
   }
   return s;
@@ -108,6 +121,9 @@ type RawGeometry = {
 
 /** The drawn half of a built-in map (a separate download). */
 export async function builtinGeometry(id: BuiltinMapId): Promise<MapGeometryData> {
+  if (id === 'isles') return (await import('../data/maps/isles.map.json')).default as unknown as MapGeometryData;
+  if (id === 'steppe') return (await import('../data/maps/steppe.map.json')).default as unknown as MapGeometryData;
+  if (id === 'midsea') return (await import('../data/maps/midsea.map.json')).default as unknown as MapGeometryData;
   if (id === 'aldmere') {
     const [{ default: g }, { default: seas }] = await Promise.all([import('../data/aldmere.map.json'), import('../data/aldmere.seamap.json')]);
     return toGeometry(g as unknown as RawGeometry, ALDMERE_LABELS, seas as unknown as SeaGeometry | null);

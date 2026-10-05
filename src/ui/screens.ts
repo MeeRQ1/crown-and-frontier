@@ -18,6 +18,7 @@ import { button, h, setChildren, type Child } from './dom';
 import { fmt } from './format';
 import { shieldSvg } from './heraldry';
 import { icon, type IconName } from './icons';
+import { renderMapLibrary } from './library';
 import { loadGeometry } from './map/maps';
 import { MapRenderer } from './map/renderer';
 import { confirmDialog, dialog } from './panels/dialogs';
@@ -29,7 +30,7 @@ export const screenCleanup = new WeakMap<HTMLElement, () => void>();
 
 const LEDE = 'A young crown on a divided continent. Every province beyond your heartland is raw frontier: little tax, few recruits, restless people, until you bind it to the crown. Settle, trade or conquer, and hold what you take.';
 
-const MAP_KIND: Record<string, string> = { aldmere: 'Standard campaign', reach: 'Quick campaign' };
+const MAP_KIND: Record<string, string> = { small: 'Quick campaign', standard: 'Standard campaign', large: 'Grand campaign', huge: 'Grand campaign' };
 
 /** Title, kind and campaign lengths (with their calendar years) from the map's own rules. */
 function mapInfo(id: string): { title: string; kind: string; startYear: number; lengths: Array<[number, string]>; defaultYears: number } {
@@ -39,7 +40,7 @@ function mapInfo(id: string): { title: string; kind: string; startYear: number; 
   const names = opts.length === 3 ? ['Short', 'Standard', 'Long'] : opts.length === 2 ? ['Standard', 'Long'] : [''];
   return {
     title: part?.meta.name ?? id,
-    kind: MAP_KIND[id] ?? 'Custom campaign',
+    kind: !part ? 'Custom campaign' : part.meta.origin === 'builtin' ? (MAP_KIND[part.meta.size] ?? 'Campaign') : 'Your map',
     startYear: rules.startYear,
     lengths: opts.map((y, i) => [y, `${names[i] ? `${names[i]} · ` : ''}${y} years (${rules.startYear}–${rules.startYear + y})`]),
     defaultYears: rules.campaignYears.default,
@@ -91,11 +92,12 @@ export function renderMenu(app: App): HTMLElement {
   );
   screenCleanup.set(el, () => view.destroy());
   // the menu is usable at once; the atlas behind it is prepared a moment later
-  const newItem = item('flag', 'New campaign', 'Aldmere, or the quick Reach', () => app.showScreen(renderNewGame(app)), true);
+  const newItem = item('flag', 'New campaign', 'Choose a map and a realm', () => app.showScreen(renderNewGame(app)), true);
   setChildren(
     list,
     newItem,
     item('upload', 'Load or import', 'Saves in this browser, or a save file', () => app.showScreen(renderLoad(app))),
+    item('globe', 'Map library', 'Every map, your own maps, and the map editor', () => app.showScreen(renderMapLibrary(app))),
     item('settings', 'Settings', 'Display, map, sound, pausing and saving', () => app.showScreen(renderSettingsScreen(app))),
     item('help', 'How to play', 'Rules, the map, controls and victory', () => app.showScreen(renderHowTo(app))),
   );
@@ -180,6 +182,8 @@ function segmented<T extends string | number>(label: string, options: Array<[T, 
 }
 
 export function renderNewGame(app: App, initialMap: string = DEFAULT_SCENARIO): HTMLElement {
+  // the library's version of each custom map (a loaded save may have registered an older one)
+  app.maps.registerAll();
   let map = scenarioIds().includes(initialMap) ? initialMap : DEFAULT_SCENARIO;
   const firstRealm = (id: string) => {
     const w = getWorld(id);
