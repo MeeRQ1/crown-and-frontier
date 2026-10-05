@@ -13,6 +13,7 @@ import { mapChecksum, type MapPackage } from '../src/maps/format';
 import { parseMapPackage } from '../src/maps/validate';
 import { seaAirSave } from './sea-air-save';
 import { diploSave } from './diplo-save';
+import { SCHEMA_VERSION } from '../src/sim/config';
 
 const DIST = 'dist';
 const ZIP = 'release/crown-and-frontier-web.zip';
@@ -537,9 +538,6 @@ async function diplomacyFlow(browser: Browser, base: string): Promise<void> {
     const app = (window as any).cnf;
     app.setSpeed(0);
     app.ui.dockOpen = false;
-    document.querySelectorAll<HTMLButtonElement>('.modal-layer:not(.hidden) footer button').forEach((b) => b.click());
-    // closing the notice may resume play: pause again
-    app.setSpeed(0);
     app.refresh();
   });
   await page.waitForFunction(() => (window as any).cnf.speed === 0);
@@ -548,12 +546,18 @@ async function diplomacyFlow(browser: Browser, base: string): Promise<void> {
   // no dialog has been open for half a second
   for (let quiet = 0; quiet < 5; ) {
     const open = await page.evaluate(() => {
-      const b = [...document.querySelectorAll<HTMLButtonElement>('.modal-layer:not(.hidden) footer button')];
-      b.forEach((x) => x.click());
+      // close the game menu or a notice by its own Resume or Close button (never by the
+      // other footer buttons: one of them saves and quits to the main menu)
+      const layers = [...document.querySelectorAll<HTMLElement>('.modal-layer:not(.hidden)')];
+      for (const l of layers) {
+        const b = [...l.querySelectorAll<HTMLButtonElement>('footer button')].find((x) => /^(Resume|Close|OK|Continue)$/.test(x.textContent?.trim() ?? ''));
+        if (b) b.click();
+        else l.querySelector<HTMLElement>('.modal')?.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+      }
       (window as any).cnf.setSpeed(0);
       // the file input used for the import may keep the focus, and keys typed into an input are ignored
       (document.activeElement as HTMLElement | null)?.blur?.();
-      return b.length;
+      return layers.length;
     });
     quiet = open ? 0 : quiet + 1;
     await page.waitForTimeout(100);
@@ -568,6 +572,7 @@ async function diplomacyFlow(browser: Browser, base: string): Promise<void> {
   };
 
   // ── national focus: P opens the tree; choose a national focus
+  if ((await page.evaluate(() => (window as any).cnf.player)) !== 'aur') throw new Error('the prepared campaign is no longer loaded');
   await page.keyboard.press('p');
   await page.waitForTimeout(200);
   const title = (await page.locator('.drawer:not(.closed) h2').textContent()) ?? '';
@@ -785,7 +790,7 @@ async function main(): Promise<void> {
       await page.waitForSelector('.modal h2:has-text("This save was converted")', { timeout: 10000 }).catch(() => null);
       const old = await page.evaluate(() => ({ tick: (window as any).cnf.sim?.state.tick, schema: (window as any).cnf.sim?.state.schema, map: (window as any).cnf.sim?.state.scenarioId }));
       const notice = await page.locator('.modal', { hasText: 'save format 1' }).count();
-      record('A format-1 save is converted on import, with a notice', old.tick === 60 && old.schema === 3 && old.map === 'reach' && notice === 1, `tick ${old.tick}, format ${old.schema}, ${old.map}`);
+      record('A format-1 save is converted on import, with a notice', old.tick === 60 && old.schema === SCHEMA_VERSION && old.map === 'reach' && notice === 1, `tick ${old.tick}, format ${old.schema}, ${old.map}`);
       // a format-2 save (Stage A build) is converted to the industrial age, and the player is told
       await page.locator('.modal footer button').first().click();
       await page.getByRole('button', { name: 'Game menu' }).click();
@@ -798,7 +803,7 @@ async function main(): Promise<void> {
         return { tick: sim?.state.tick, schema: sim?.state.schema, map: sim?.state.scenarioId, oldUnits: regs.filter((t: string) => ['foot', 'horse', 'guns'].includes(t)).length };
       });
       const notice2 = await page.locator('.modal', { hasText: 'industrial age' }).count();
-      record('A format-2 save is converted to the industrial age on import, with a notice', f2.tick === 240 && f2.schema === 3 && f2.map === 'aldmere' && f2.oldUnits === 0 && notice2 === 1, `tick ${f2.tick}, format ${f2.schema}, ${f2.map}`);
+      record('A format-2 save is converted to the industrial age on import, with a notice', f2.tick === 240 && f2.schema === SCHEMA_VERSION && f2.map === 'aldmere' && f2.oldUnits === 0 && notice2 === 1, `tick ${f2.tick}, format ${f2.schema}, ${f2.map}`);
       // a stored save that cannot be converted stays listed, is refused with a reason, and can still be exported
       const unconvertible = JSON.parse(readFileSync(join('tests', 'fixtures', 'custom-map-save-format2-168569b.json'), 'utf8'));
       unconvertible.mapPackage.provinces[0].neighbors.push('nowhere');
