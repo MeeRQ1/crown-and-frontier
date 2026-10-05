@@ -1,9 +1,8 @@
 # Status
 
-Last updated at **Stage D of the strategic depth expansion** (save format 3, map format 3).
-Stages A–D are done in this branch. **This is not the finished expansion:** peace
-settlements, guarantees and influence, trade blocs and focus trees (Stage E), and
-onboarding, balance and final delivery (Stage F) are still to come
+Last updated at **Stage E of the strategic depth expansion** (save format 4, map format 3).
+Stages A–E are done in this branch. **This is not the finished expansion:** onboarding,
+balance and final delivery (Stage F) are still to come
 ([docs/expansion/PLAN.md](docs/expansion/PLAN.md)). The
 rest of this file below the expansion section describes the redesign release (0.2.0) and
 is kept for its evidence. Where a stage changed a fact, it is corrected in place.
@@ -16,8 +15,47 @@ is kept for its evidence. Where a stage changed a fact, it is corrected in place
 | B · Industrial economy and research | **Done in this branch** (same draft pull request) |
 | C · War on land, at sea and in the air | **Done in this branch** (same draft pull request) |
 | D · Maps, editor, real-world map | **Done in this branch** (same draft pull request) |
-| E · Diplomacy, settlements, national focus | Not started |
+| E · Diplomacy, settlements, national focus | **Done in this branch** (same draft pull request) |
 | F · Onboarding, balance, delivery | Not started |
+
+**Stage E delivered:**
+- **National focus trees replace the six policies.** Every realm has a generic tree of 37
+  focuses in five branches (industry, army, sea and air, diplomacy, state) and a national
+  branch of 5–7 made from its map: a heritage fitting its temperament, one or two exclusive
+  claims on neighbouring regions, developing its home region, its main deposit, a navy league
+  or a railway network, and an ambition that follows its victory path. Aldmere, the Reach
+  and the Baltic have hand-written names; other maps, including editor maps, get names from
+  their realms and regions. Focus ledger (P).
+- **Peace settlements with several parties.** A war leader ends a war for everyone with a
+  list of graded demands (provinces, crowns, reparations, disarmament, renouncing claims,
+  entering a sphere), each from a loser to a winner. Contribution (battles, casualties,
+  ships sunk, enemy land held) sets each winner's fair share; slighted allies resent the
+  leader. A refused settlement names the counter-offer the other side would accept; a
+  player offered one can strike demands and send it back. A side that holds a war score of
+  90 for a year dictates a settlement. Peace conference in the Wars ledger.
+- **Influence, spheres, guarantees, loans and trade blocs.** Influence grows from envoys,
+  trade, loans, guarantees and alliances; a larger realm with enough of it holds a smaller
+  one in its sphere (opinion, no hostile alliances or coalitions, defended when attacked,
+  counted toward Diplomatic Leadership). Guarantees of independence call the guarantor to
+  arms. Loans are repaid over two years with interest and buy influence. Trade blocs give
+  members cheaper purchases, more commerce and shared blockade losses. All in the Diplomacy
+  ledger and the Diplomacy map mode.
+- **Save format 4:** a format-3 save converts with a notice; each realm's policy becomes the
+  matching completed focus (fixture from the Stage D build).
+- **AI:** chooses focuses by temperament and situation; dictates settlements by
+  contribution and takes the counter-offer it can get; guarantees threatened neighbours,
+  lends from large treasuries, founds, joins and grows trade blocs, and builds influence over
+  smaller realms with envoys; keeps the peace while it holds a peaceful victory; once a year
+  pursues the victory it is closest to among its temperament's path and the territorial and
+  economic paths.
+- **Rule changes for victory** (to reduce endings on score): diplomatic influence counts each
+  partner once for its strongest bond (an alliance or our sphere 2, our guarantee 1) plus a
+  trade agreement; a month in which a condition fails pauses its timer before it decays,
+  and a realm within a tenth of the main measure, every other condition met, stays paused;
+  allies and sphere members are not wary of a diplomatic front-runner (cap −20); economic
+  shares are 80% of each map's stated share.
+- **Fixes along the way:** two drafts of the peace conference (two wars led at once) no
+  longer reset each other; ticking a box in a decision card redraws it at once.
 
 **Stage D delivered:**
 - **Six built-in maps.** New: the Sundered Isles (116 provinces, 8 realms), the Kharan
@@ -190,7 +228,7 @@ is kept for its evidence. Where a stage changed a fact, it is corrected in place
   - The Middle Sea: 2 of 31 realms at war with a coastal enemy left their fleets in port.
 - **Requirement status:** PLAN.md's ledger lists every requirement with its stage and
   status. Nothing has been dropped.
-- **Next steps:** Stage E, in the order listed at the end of PLAN.md.
+- **Next steps:** Stage F, in the order listed at the end of PLAN.md.
 
 ## Evidence, kept separate
 

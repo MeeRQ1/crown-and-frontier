@@ -605,9 +605,10 @@ East Water; c is an island realm.
   over the side's total. The AI leader's budget is 0.9 × its war score + 0.3 × the losing
   leader's exhaustion − 3; each winner's part of it (the leader first in line for war-goal
   provinces) is filled in order with: occupied land next to it or claimed by it (at most 2 per
-  ally, 3 for the leader, 3–4 in all, never a capital it does not claim), renunciation of the
-  loser's claims on it, disarmament of a dangerous neighbour, a sphere for a diplomatic realm
-  larger than the loser, reparations (10–20%), then crowns. An ally given less than half its
+  ally, 3 for the leader, 3–4 in all, never a capital it does not claim), a sphere for a
+  diplomatic or commercial realm (or one on the diplomatic path) over 1.2× the loser's
+  development when no one holds the loser yet, renunciation of the loser's claims on it,
+  disarmament of a dangerous neighbour, reparations (10–20%), then crowns. An ally given less than half its
   fair share resents the leader (−8 or more opinion); a winner whose claim was handed to another
   resents the receiver (−10); the losing leader resents the settlement (up to −30).
 - **Unresolvable wars cannot happen:** a white peace is forced after 8 years, or after 3 years
@@ -733,7 +734,10 @@ war weariness, a rival close to victory, and alarmed neighbours.
 
 All three paths are evaluated monthly for every realm and shown in the Victory ledger.
 A month in which a path's conditions fail pauses its timer; from the second failing month in
-a row it loses 6 months a month.
+a row it loses 6 months a month. A realm that falls short only on the main measure, and by at
+most a tenth (≥ 90% of the territorial share with the regions held, of the economic share, or
+of the influence needed), with every other condition met, keeps its timer paused instead:
+the knife-edge flickers of an opinion or a treaty no longer wind back years of standing.
 
 1. **Territorial Dominance:** own and control ≥ 75% of the provinces in *R* regions and
    ≥ *T* of all provinces, held for 24 months.
@@ -751,8 +755,12 @@ a row it loses 6 months a month.
 |---|---|---|
 | *R* regions dominated | 3 of 14 | 6 of 42 |
 | *T* share of all provinces | 23% (23 provinces) | 18% (54 provinces) |
-| *E* share of world development | 25% | 18% |
+| *E* share of world development | 20% (the stated 25% × 0.8) | 14.4% (18% × 0.8) |
 | *D* influence per other realm | 1.25 (10 with 8 rivals) | 0.85 (12 with 13 rivals) |
+
+Every map's stated economic share is multiplied by 0.8 in play (Stage E): focus trees develop
+every realm, so a leader's share of the world's development runs lower than before; the
+Victory ledger and the map editor show the share in play.
 
 Aldmere's thresholds are scaled from the Reach's by what "dominant" means among fourteen
 realms rather than nine: an average realm holds 7% of Aldmere against 11% of the Reach. The
@@ -783,7 +791,7 @@ not implemented, and this is stated in the Help ledger.
 
 | Layer | When | Decides |
 |---|---|---|
-| Strategic (`strategic.ts`) | monthly, staggered | goal and victory path; army size target from income, reserve and supply (a larger share when threatened or at war); research by branch weights and situation; national focus (when none is under way: the temperament's branch weight × how well the focus's tags fit — war, threat, coast, shortages, frontier load, victory path — preferring the national branch and earlier rows); construction by value per crown; envoys and treaties (mutual acceptance required; envoys also toward smaller realms it could draw into its sphere); guarantees (once a year, of a smaller neighbour threatened by a realm it fears), loans (once a year, from a treasury above 4× income, to a realm in debt or one it wants in its sphere) and trade blocs (join a bloc whose leader it trades with, or found one with its best trade partner; leaders invite partners); coalition wars; peace (as war leader, a settlement for its side by contribution, or the counter-offer it would get; an ally on the winning side leaves the spoils to the settlement; white peace or concessions when losing or tired); war (see below; never while holding the conditions of a diplomatic or economic victory) |
+| Strategic (`strategic.ts`) | monthly, staggered | goal and victory path (once a year it pursues the path it is closest to among its temperament's and the two material paths — condition progress + half its timer, leaning to its temperament's path; only diplomatic temperaments pursue diplomatic leadership); army size target from income, reserve and supply (a larger share when threatened or at war); research by branch weights and situation; national focus (when none is under way: the temperament's branch weight × how well the focus's tags fit — war, threat, coast, shortages, frontier load, victory path — preferring the national branch and earlier rows); construction by value per crown; envoys and treaties (mutual acceptance required; envoys also toward smaller realms it could draw into its sphere and, on the diplomatic path, toward partners that count toward leadership whose opinion sits within 10 of the bar); guarantees (once a year, of a smaller neighbour threatened by a realm it fears), loans (once a year, from a treasury above 4× income, to a realm in debt or one it wants in its sphere) and trade blocs (join a bloc whose leader it trades with, or found one with its best trade partner; leaders invite partners); coalition wars; peace (as war leader, a settlement for its side by contribution, or the counter-offer it would get; an ally on the winning side leaves the spoils to the settlement; white peace or concessions when losing or tired); war (see below; never while holding the conditions of a diplomatic or economic victory, or while that timer is paused just short of them) |
 | Operational (`operational.ts`) | weekly (every 2 weeks on Easy) | peace: garrisons for restless frontier, gathering and merging at a rally point; war: objectives (defend, liberate, attack), strength-based assignment of armies, staging and merging before attacks, forecast checks, withdrawal from superior enemies, recovery of battered armies |
 | Execution | inside both | recruitment toward the target composition at safe sites; issuing and re-issuing orders; recovering from rejected orders |
 

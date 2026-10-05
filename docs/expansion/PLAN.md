@@ -31,7 +31,7 @@ priorities is in [AUDIT.md](AUDIT.md). The era and content decisions are in
 | **B · Industrial economy and research** | The new era's calendar; six resources; industry and production; trade as resource exchange; the five-era tree with horizons; data-driven land roster (infantry, cavalry, artillery, engineers, armour); save format 3 with conversion from 1640 saves; built-in maps converted; economy AI | A | **done** (this pull request) |
 | **C · War on land, at sea and in the air** | Land depth (frontage by terrain, breakthrough, entrenchment lines, rail logistics, armour); map package v3 with sea zones and ports (v1 and v2 upgraded automatically); fleets, naval combat, transports and invasions, blockades; airfields and air missions (superiority, ground support, interdiction, bombing, reconnaissance); military AI for all three arms | B | **done** (this pull request) |
 | **D · Maps** | Map library screen; at least three new fictional maps (small, standard, large); in-browser map editor (provinces, realms, regions, sea zones, routes, validation, export and import); a real-world regional map from Natural Earth (public domain) with attribution; level of detail for large maps | A (format), C (sea zones) | **done** (this pull request) |
-| **E · Diplomacy, settlements and national focus** | Peace settlements with several parties and graded demands; guarantees, spheres and influence; trade blocs; national focus trees (generic and per-realm), replacing the six policies; diplomacy and focus AI | B, C | planned |
+| **E · Diplomacy, settlements and national focus** | Peace settlements with several parties and graded demands; guarantees, spheres and influence; trade blocs; national focus trees (generic and per-realm), replacing the six policies; diplomacy and focus AI | B, C | **done** (this pull request) |
 | **F · Onboarding, balance and delivery** | Tutorial and onboarding for every new system; UI pass; AI system-usage reports; balance from AI batches on every map; player-style sessions; screenshots; final docs, attribution, test and performance results, known limitations | B–E | planned |
 
 ### Acceptance checks per stage
@@ -212,19 +212,19 @@ assigned to a stage and not started. Nothing has been dropped.
 | 16 | Air | C | done | `src/sim/air.ts`; `tests/air.test.ts`, worked examples, browser flow, Stage C checks |
 | 17 | About 5–7 resources | B | done | Food, coal, iron, oil, rubber, nitrates; `tests/industry.test.ts` |
 | 18 | Industry | B | done | Factories, materiel, shortages; Stage B checks |
-| 19 | Trade | B (resource exchange), E (trade blocs) | done for B | Stage B checks |
-| 20 | Diplomacy | E | planned | Stage E checks |
-| 21 | Settlements | E | planned | Peace settlements (scope decision) |
+| 19 | Trade | B (resource exchange), E (trade blocs) | done | Stage B checks; trade blocs (`src/sim/influence.ts`, `tests/stage-e.test.ts`, browser flow, Stage E checks) |
+| 20 | Diplomacy | E | done | Guarantees, influence and spheres, loans, trade blocs (`src/sim/influence.ts`); `tests/stage-e.test.ts`; browser flows; Stage E checks |
+| 21 | Settlements | E | done | Peace settlements with several parties and graded demands (`src/sim/settlement.ts`); tests; peace conference and counter-offer browser flows; Stage E checks |
 | 22 | Research | B (land, industry, society), C (naval, air) | done | 73 technologies in five branches, five eras, horizons; Stage B and C checks |
-| 23 | National focus trees | E | planned | Stage E checks |
-| 24 | AI that uses every system | B–E, measured in F | B and C systems done | System-usage section in every AI report (`tools/usage.ts`) |
+| 23 | National focus trees | E | done | Generic tree and a national branch for every realm on every map (`src/sim/focus.ts`, `src/sim/data/focus.ts`); tests; Focus ledger; Stage E checks |
+| 24 | AI that uses every system | B–E, measured in F | B–E systems done | System-usage section in every AI report (`tools/usage.ts`), with Stage E counts |
 | 25 | UI and onboarding | every stage, F | planned | Stage F checks |
-| 26 | Stages A–F, each runnable with concrete checks | A–F | A, B and C done | Acceptance checks above |
-| 27 | Tests, browser flows, AI campaigns, player-style sessions, screenshots, docs, attribution, test and performance results, known limitations | every stage, F | A–C done for their scope | PR description, STATUS.md, `reports/`, `docs/screenshots/stage-*` |
+| 26 | Stages A–F, each runnable with concrete checks | A–F | A–E done | Acceptance checks above |
+| 27 | Tests, browser flows, AI campaigns, player-style sessions, screenshots, docs, attribution, test and performance results, known limitations | every stage, F | A–E done for their scope | PR description, STATUS.md, `reports/`, `docs/screenshots/stage-*` |
 | 28 | Do not merge or publish without instruction | all | followed | Draft pull requests only |
 | 29 | No invented results, untested browser claims or mock interfaces | all | followed | Results come from tools in the repo |
 | 30 | No accounts, backend, paid services or external AI APIs | all | followed | Static build, local storage |
-| 31 | Preserve saves; versioning, migrations, notices; never silently corrupt or discard | A, B, every later stage | done for A–C | Format 2 and 3 migration tests and fixtures; format-3 saves from before fleets get defaults and a notice; browser checks |
+| 31 | Preserve saves; versioning, migrations, notices; never silently corrupt or discard | A, B, every later stage | done for A–E | Format 2, 3 and 4 migration tests and fixtures (a format-3 save from the Stage D build); format-3 saves from before fleets get defaults and a notice; browser checks |
 | 32 | No real-device claims from a resized desktop browser | all | followed | AUDIT.md wording |
 | 33 | Reject malformed or very large imports; never execute imported scripts | A | done | Validator limits, save limit, tests, text-only rendering |
 | 34 | Reviewable pull requests; no silent scope reduction | all | followed | One PR per stage; this ledger |
@@ -232,15 +232,14 @@ assigned to a stage and not started. Nothing has been dropped.
 | 36 | No speculative rewrites; no optimisation that changes rules | all | followed | Rule check record |
 | 37 | Worker only if profiling justifies it | all | followed | Worker decision in AUDIT.md |
 
-## Next steps (Stage E)
+## Next steps (Stage F)
 
-1. Peace settlements with several parties: every belligerent on the winning side states
-   demands (provinces, money, release of occupied land, disarmament, a guarantee), graded by
-   war score and contribution; the losers accept, counter or fight on.
-2. Guarantees, spheres and influence: guarantee a realm's independence; build influence
-   with envoys, trade and loans; a sphere shapes the alignment of smaller realms.
-3. Trade blocs: realms that trade inside a bloc pay less and share blockade losses.
-4. National focus trees replacing the six policies: a generic tree and trees for each realm
-   on every built-in map, with AI paths that fit the realm's situation.
-5. AI use of all of these, with system-usage counts in the AI reports, and fewer campaigns
-   ending on score at the limit (half or fewer on every map).
+1. Tutorial steps for the new systems (industry and resources, sea and air, national focus,
+   settlements, influence), and map modes for resources and sea control.
+2. A UI pass over every ledger: tooltips, wording left over from policies, overlaps between
+   the tutorial, ledgers, the decision dock and the map controls.
+3. AI batches on every map with system-usage reports; balance where one realm wins most
+   campaigns (the Kharan Steppe's Astia), where a path dominates, and where campaigns still
+   end on score.
+4. Player-style sessions in the browser, recorded with screenshots and findings.
+5. Final docs, attribution, test and performance results and known limitations.

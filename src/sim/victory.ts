@@ -30,7 +30,8 @@ import type { NationId, VictoryPath } from './types';
  * realms, so the shares that mean "dominant" are smaller).
  */
 export function victoryRules(sim: Sim) {
-  return { ...C.victory, ...(sim.world.scenario.victory ?? {}) };
+  const r = { ...C.victory, ...(sim.world.scenario.victory ?? {}) };
+  return { ...r, economicShare: r.economicShare * C.victory.economicScale };
 }
 
 export const VICTORY_MONTHS: Record<VictoryPath, number> = {
@@ -49,6 +50,8 @@ export interface PathProgress {
   met: boolean;
   /** 0..1 progress toward meeting the condition */
   progress: number;
+  /** not met, but within C.victory.nearMiss of the main measure with every other condition met: the timer pauses instead of winding back */
+  near: boolean;
   streak: number;
   required: number;
   lines: string[];
@@ -130,6 +133,7 @@ export function victoryProgress(sim: Sim, nid: NationId): VictoryProgress {
   const territorial: PathProgress = {
     met: tMet,
     progress: Math.min(1, Math.min(regions.length / victoryRules(sim).territorialRegions, share / victoryRules(sim).territorialShare)),
+    near: !tMet && regions.length >= victoryRules(sim).territorialRegions && share >= victoryRules(sim).territorialShare * C.victory.nearMiss,
     streak: n.victoryStreak.territorial,
     required: C.victory.territorialMonths,
     lines: [
@@ -156,6 +160,7 @@ export function victoryProgress(sim: Sim, nid: NationId): VictoryProgress {
   const economic: PathProgress = {
     met: eMet,
     progress: Math.min(1, devShareV / victoryRules(sim).economicShare),
+    near: !eMet && devShareV >= victoryRules(sim).economicShare * C.victory.nearMiss && unrest <= C.victory.economicUnrest && n.treasury >= 0 && !bankrupt && !occupied,
     streak: n.victoryStreak.economic,
     required: C.victory.economicMonths,
     lines: [
@@ -171,6 +176,7 @@ export function victoryProgress(sim: Sim, nid: NationId): VictoryProgress {
   const diplomatic: PathProgress = {
     met: dMet,
     progress: Math.min(1, infl / need, n.trust / C.victory.diplomaticTrust),
+    near: !dMet && infl >= need * C.victory.nearMiss && n.trust >= C.victory.diplomaticTrust && !offensive,
     streak: n.victoryStreak.diplomatic,
     required: C.victory.diplomaticMonths,
     lines: [
@@ -211,7 +217,7 @@ export function monthlyVictory(sim: Sim): void {
         missed[k] = 0;
       } else {
         missed[k]++;
-        if (missed[k] >= 2) n.victoryStreak[k] = Math.max(0, before - C.victory.streakDecay);
+        if (missed[k] >= 2 && !vp[k].near) n.victoryStreak[k] = Math.max(0, before - C.victory.streakDecay);
       }
       if (vp[k].met && before === 0) {
         notify(sim, null, nid === playerId(sim) ? 'normal' : 'urgent', 'victory', `${nationName(sim, nid)} now meets the conditions for ${VICTORY_LABELS[k]}. They win if they hold them for ${VICTORY_MONTHS[k]} months.`);

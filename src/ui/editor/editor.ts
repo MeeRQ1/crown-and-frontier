@@ -5,7 +5,7 @@
 // or sea zone to fix), and saves it to the map library, exports it as a file,
 // or opens it for play. Unfinished work is kept as a draft in this browser.
 
-import { TERRAIN } from '../../sim/config';
+import { C, TERRAIN } from '../../sim/config';
 import type { Personality, Resource, Terrain } from '../../sim/types';
 import { PERSONALITIES } from '../../sim/data/personalities';
 import * as E from '../../maps/edit';
@@ -413,7 +413,7 @@ export function renderEditor(app: App, initial: MapPackage | null): HTMLElement 
         { class: 'ed-facts small' },
         h('div', null, `${pkg.provinces.length} provinces (${m.size}) · ${pkg.nations.length} realms · ${pkg.regions.length} regions · ${pkg.seaZones.length} sea zones`),
         h('div', null, `Campaign lengths: ${r.campaignYears.options.join(', ')} years (default ${r.campaignYears.default})`),
-        h('div', null, `Victory: ${v.territorialRegions ?? '–'} regions and ${Math.round((v.territorialShare ?? 0) * 100)}% of provinces; ${Math.round((v.economicShare ?? 0) * 100)}% of development; diplomatic influence ${v.diplomaticInfluencePerRealm ?? '–'} per realm. Research cost ×${r.researchCostMul ?? 1}.`),
+        h('div', null, `Victory: ${v.territorialRegions ?? '–'} regions and ${Math.round((v.territorialShare ?? 0) * 100)}% of provinces; ${Math.round((v.economicShare ?? 0) * 100)}% of development (${Math.round((v.economicShare ?? 0) * C.victory.economicScale * 100)}% in play); diplomatic influence ${v.diplomaticInfluencePerRealm ?? '–'} per realm. Research cost ×${r.researchCostMul ?? 1}.`),
         h('div', null, `Mechanics: ${m.mechanics.join(', ') || 'none listed'}`),
         m.attribution?.length ? h('div', null, `Sources: ${m.attribution.join('; ')}`) : null,
       ),

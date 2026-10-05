@@ -575,9 +575,13 @@ export const C = {
     regionHold: 0.75,
     territorialMonths: 24,
     economicShare: 0.25,
+    /** every map's economic share is multiplied by this: focus trees develop every realm, so a leader's share runs lower (Stage E) */
+    economicScale: 0.8,
     economicUnrest: 25,
     economicMonths: 60,
     streakDecay: 6,
+    /** falling short of the main measure by at most this share (influence, development), with every other condition met, pauses a timer instead of winding it back (Stage E) */
+    nearMiss: 0.9,
     diplomaticInfluencePerRealm: 1.25, // influence needed per other surviving realm
     diplomaticMinInfluence: 6,
     diplomaticTreatyAge: 36, // months a treaty must exist to count

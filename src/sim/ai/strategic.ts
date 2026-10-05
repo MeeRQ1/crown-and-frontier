@@ -372,7 +372,11 @@ function diplomacy(sim: Sim, nid: NationId): void {
         let v = 0;
         if (wantsTreaty(sim, nid, o, 'alliance')) v += 3;
         if (wantsTreaty(sim, nid, o, 'trade')) v += 1.5;
-        if (n.ai.goal.victory === 'diplomatic') v += 2;
+        if (n.ai.goal.victory === 'diplomatic') {
+          v += 2;
+          // a partner that counts toward leadership but whose opinion of us sits near the bar
+          if (op < C.victory.diplomaticOpinion + 10 && (hasTreaty(sim, 'alliance', nid, o) || hasTreaty(sim, 'trade', nid, o) || sphereOf(sim, o) === nid)) v += 3;
+        }
         if (isThreatened(sim, nid) === o) v += 2;
         // a smaller realm we could draw into our sphere
         if (sphereMinded && totalDev(sim, o) < myDev * 0.7 && !sphereOf(sim, o) && influenceOver(sim, nid, o) < C.influence.sphere * 1.3) v += 1.5;
@@ -569,11 +573,13 @@ export function warGate(sim: Sim, nid: NationId): string | null {
   if (n.treasury < 0.5 * grossIncome(n.lastMonth)) return 'treasury too low';
   if (st.tick >= endTick(sim) - months(18)) return 'campaign ending';
   if (regimentCount(sim, nid) < n.ai.armyTarget * 0.75) return 'army below target';
-  // a realm holding the conditions of a peaceful victory does not throw them away
+  // a realm holding the conditions of a peaceful victory (or with its timer paused just
+  // short of them) does not throw them away
   const s = n.victoryStreak;
   if (s.diplomatic > 0 || s.economic > 0) {
     const vp = victoryProgress(sim, nid);
-    if ((vp.diplomatic.met && s.diplomatic > 0) || (vp.economic.met && s.economic > 0)) return 'holding the conditions of a peaceful victory';
+    const holds = (k: 'diplomatic' | 'economic') => (vp[k].met || vp[k].near) && s[k] > 0;
+    if (holds('diplomatic') || holds('economic')) return 'holding the conditions of a peaceful victory';
   }
   return null;
 }
@@ -845,9 +851,33 @@ function trySettlement(sim: Sim, nid: NationId, warId: string, other: NationId, 
 
 // ───────────────────────────── Goal & rally ─────────────────────────────────
 
+/**
+ * Once a year a realm pursues the victory it is closest to among its
+ * temperament's path and the two material ones (territorial and economic):
+ * condition progress plus half the timer it has built, with a lean toward its
+ * temperament's path. Only diplomatic temperaments pursue diplomatic leadership,
+ * whose conditions many realms meet now and then. The path steers research,
+ * construction, focus and diplomacy.
+ */
+function chooseVictoryPath(sim: Sim, nid: NationId): void {
+  const st = sim.state;
+  const n = st.nations[nid];
+  if (dateOf(sim).month !== 0 && st.tick > 4) return;
+  const vp = victoryProgress(sim, nid);
+  const home = pers(sim, nid).victory;
+  const score = (k: VictoryPath) => vp[k].progress + (vp[k].streak / vp[k].required) * 0.5 + (k === home ? 0.1 : 0);
+  const paths = [...new Set<VictoryPath>([home, 'territorial', 'economic'])];
+  const best = paths.sort((a, b) => score(b) - score(a) || (a < b ? -1 : 1))[0];
+  if (best !== n.ai.goal.victory && score(best) > score(n.ai.goal.victory) + 0.05) {
+    diag(sim, nid, 'strategic', `Victory path → ${best} (${Math.round(vp[best].progress * 100)}% of the conditions)`);
+    n.ai.goal = { ...n.ai.goal, victory: best };
+  }
+}
+
 function chooseGoal(sim: Sim, nid: NationId): void {
   const st = sim.state;
   const n = st.nations[nid];
+  chooseVictoryPath(sim, nid);
   const war = warsOf(sim, nid);
   const prev = n.ai.goal.kind;
   let kind: typeof n.ai.goal.kind = 'develop';

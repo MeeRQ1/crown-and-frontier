@@ -194,7 +194,7 @@ function realmLedger(app: App): HTMLElement {
         bar(load, Math.max(cap, load), load > cap ? 'bad' : 'good', 'Frontier load'),
         overextension(sim, pid) > 0
           ? h('p', { class: 'bad small' }, `Overextended ${Math.round(overextension(sim, pid) * 100)}%: integration slows, unrest and research penalties apply.`)
-          : h('p', { class: 'small muted' }, 'Conquered and settled provinces add frontier load until integrated. Charters, railways, garrisons and the Frontier Settlement policy speed integration.'),
+          : h('p', { class: 'small muted' }, 'Conquered and settled provinces add frontier load until integrated. Charters, railways, garrisons and the Frontier Settlement focus speed integration.'),
         h('h3', { style: 'margin-top:10px' }, 'Research funding'),
         funding,
         h('p', { class: 'small muted' }, `Research: ${researchRate(sim, pid).toFixed(2)} points/month. Funding costs a share of gross income (${fmt(grossIncome(l), 1)}).`),
@@ -1312,7 +1312,7 @@ function victoryLedger(app: App): HTMLElement {
   return h(
     'div',
     null,
-    h('p', null, `The campaign ends in ${dateOf(sim, endTick(sim)).short}. A timer pauses the first month its condition fails, then loses 6 months for every further month in a row. Every realm, AI or not, can win.`),
+    h('p', null, `The campaign ends in ${dateOf(sim, endTick(sim)).short}. A timer pauses the first month its condition fails, then loses ${C.victory.streakDecay} months for every further month in a row — unless the realm is within ${Math.round((1 - C.victory.nearMiss) * 100)}% of the main measure with every other condition met, when it stays paused. Every realm, AI or not, can win.`),
     h(
       'div',
       { class: 'cols' },
@@ -1322,7 +1322,7 @@ function victoryLedger(app: App): HTMLElement {
           { class: 'card' },
           h('h3', null, VICTORY_LABELS[k]),
           h('p', { class: 'small muted' }, desc[k]),
-          mine ? h('div', null, ...mine[k].lines.map((l) => h('p', { class: 'small' }, l)), row('Held', `${mine[k].streak}/${mine[k].required} months`), bar(mine[k].streak, mine[k].required, mine[k].met ? 'good' : 'warn')) : null,
+          mine ? h('div', null, ...mine[k].lines.map((l) => h('p', { class: 'small' }, l)), row('Held', `${mine[k].streak}/${mine[k].required} months${mine[k].near ? ' · paused, just short' : ''}`), bar(mine[k].streak, mine[k].required, mine[k].met ? 'good' : 'warn')) : null,
           k === 'diplomatic' && me && Object.keys(infl).length ? h('p', { class: 'small muted' }, `Partners: ${Object.entries(infl).map(([n, v]) => `${nationName(sim, n)} ${v}`).join(', ')} (need ${influenceNeeded(sim, me)}, have ${influence(sim, me)})`) : null,
           h('h4', { style: 'margin-top:8px' }, 'Leaders'),
           ...alive
@@ -1422,7 +1422,7 @@ function helpLedger(app: App): HTMLElement {
     { class: 'cols' },
     sec('Controls', 'Click / tap: select a province or army. Drag: pan. Wheel / pinch: zoom. Right-click, long-press, or “Set destination” (G): move the selected army.', 'Space: pause. 1–4: speed. B, I, M, T, P, D, W, V, L, H: ledgers. O: cycle map overlays. N: next army. Home: capital. Esc: close / deselect.'),
     sec('The loop', 'Read the world → choose a priority → commit crowns, materiel, resources and men → watch the consequences → adapt. Orders persist until completed or invalidated. The game is paused whenever a decision needs you (configurable in Settings).'),
-    sec('Frontier integration', 'Every province has integration 0–100. Low integration means little tax, few recruits, no development, no supply source and more unrest. New conquests start at 10 (25 with a claim), settled land at 20. Roads, garrisons, claims, charters and the Frontier Settlement policy speed it up; too much raw frontier at once overextends your administration.'),
+    sec('Frontier integration', 'Every province has integration 0–100. Low integration means little tax, few recruits, no development, no supply source and more unrest. New conquests start at 10 (25 with a claim), settled land at 20. Roads, garrisons, claims, charters and the Frontier Settlement focus speed it up; too much raw frontier at once overextends your administration.'),
     sec('Economy', 'Crowns come from development and population (scaled by integration and unrest), from trade and from surplus manufactured goods; armies, forts, envoys and research funding cost upkeep. Food feeds armies on supply lines. Deposits yield coal, iron, oil, rubber and nitrates; factories burn coal to make materiel, which equips and reinforces regiments. Trade agreements move surplus resources to partners who need them at fixed prices. Running short of a resource has a named effect shown on the Industry ledger (I). The manpower pool refills from the military reserve, which men under arms already use.'),
     sec('War', 'Declare war with a claim (no trust cost) or a conquest goal (costs trust, alarms neighbours). Battles: terrain, forts, entrenchment, supply, composition, morale and technology decide; forecasts show three outcomes. Winning a battle does not take land — standing in a province besieges it. Peace uses war score; every choice shows whether the enemy would accept and why.'),
     sec(

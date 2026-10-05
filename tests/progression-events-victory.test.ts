@@ -11,7 +11,7 @@ import { computeMods } from '../src/sim/modifiers';
 import { monthlyResearch, techCost } from '../src/sim/progression';
 import { bump, months } from '../src/sim/state';
 import { runTicks } from '../src/sim/tick';
-import { monthlyVictory, victoryProgress } from '../src/sim/victory';
+import { monthlyVictory, victoryProgress, victoryRules } from '../src/sim/victory';
 import { transferProvince } from '../src/sim/war';
 import { strategic } from '../src/sim/ai/strategic';
 import { lineGame } from './helpers';
@@ -147,6 +147,30 @@ describe('victory', () => {
     expect(sim.state.nations.a.victoryStreak.territorial).toBe(14);
     monthlyVictory(sim);
     expect(sim.state.nations.a.victoryStreak.territorial).toBe(8);
+  });
+
+  it('falling just short of the main measure, with every other condition met, keeps a timer paused', () => {
+    const sim = lineGame();
+    const devs = (a1: number, a2: number, a3: number) => {
+      Object.assign(sim.state.provinces.a1, { dev: a1 });
+      Object.assign(sim.state.provinces.a2, { dev: a2 });
+      Object.assign(sim.state.provinces.a3, { dev: a3 });
+      bump(sim); // direct edit: refresh derived lookups
+    };
+    // the rest of the world is sized so that realm a's 4 development is 95% of the share in play
+    const others = 4 / (0.95 * victoryRules(sim).economicShare) - 4;
+    sim.state.provinces.b3.dev = Math.max(1, Math.round(others - 13));
+    devs(2, 1, 1); // within a tenth of the economic share
+    const vp = victoryProgress(sim, 'a').economic;
+    expect(vp.met).toBe(false);
+    expect(vp.near).toBe(true);
+    sim.state.nations.a.victoryStreak.economic = 30;
+    for (let m = 0; m < 3; m++) monthlyVictory(sim);
+    expect(sim.state.nations.a.victoryStreak.economic).toBe(30);
+    devs(1, 1, 1); // a quarter less: clearly short, so the timer winds back
+    expect(victoryProgress(sim, 'a').economic.near).toBe(false);
+    monthlyVictory(sim);
+    expect(sim.state.nations.a.victoryStreak.economic).toBe(24);
   });
 
   it('rivals grow wary of a diplomatic front-runner but alarmed by a territorial one', () => {

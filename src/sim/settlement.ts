@@ -28,7 +28,7 @@ import { C } from './config';
 import { PERSONALITIES } from './data/personalities';
 import { addMemory, type Evaluation, type OpinionPart } from './diplomacy';
 import { grossIncome, totalDev } from './economy';
-import { addInfluence, armyCap } from './influence';
+import { addInfluence, armyCap, sphereOf } from './influence';
 import { nationPotential } from './military';
 import {
   aliveNations,
@@ -298,14 +298,15 @@ export function buildSettlement(sim: Sim, warId: string, leader: NationId): Dema
         mineTaken++;
       }
     }
+    // a sphere for a diplomatic or commercial realm larger than the loser, if no one holds it yet
+    const sphereMinded = pers.id === 'diplomat' || pers.id === 'commercial' || st.nations[win].ai.goal.victory === 'diplomatic';
+    if (sphereMinded && !out.some((d) => d.kind === 'sphere' && d.from === theirLead) && !sphereOf(sim, theirLead) && totalDev(sim, win) > totalDev(sim, theirLead) * 1.2)
+      take({ kind: 'sphere', from: theirLead, to: win });
     // the leader of the losers renounces its claims on a winner it claimed land from
     if (ownedProvinces(sim, win).some((pid) => st.provinces[pid].claims.includes(theirLead))) take({ kind: 'renounce', from: theirLead, to: win });
     // disarm a dangerous neighbour
     if (borders(sim, win, theirLead) && nationPotential(sim, theirLead) > nationPotential(sim, win) * 0.5 && armyCap(sim, theirLead) === null && left >= C.settlement.disarmCost)
       take({ kind: 'disarm', from: theirLead, to: win });
-    // a sphere for a diplomatic realm larger than the loser
-    if ((pers.id === 'diplomat' || st.nations[win].ai.goal.victory === 'diplomatic') && totalDev(sim, win) > totalDev(sim, theirLead) * 1.2)
-      take({ kind: 'sphere', from: theirLead, to: win });
     // reparations from the loser's leader
     if (grossIncome(st.nations[theirLead].lastMonth) >= 20 && !out.some((d) => d.kind === 'reparations' && d.from === theirLead)) {
       if (left >= C.settlement.reparationsCost * 0.2) take({ kind: 'reparations', from: theirLead, to: win, amount: 0.2 });

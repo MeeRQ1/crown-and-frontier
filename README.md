@@ -33,8 +33,11 @@ economic prosperity or diplomatic leadership.
   carriers) that fight for sea zones, close straits, blockade coasts and carry armies to
   hostile shores; **air wings** (reconnaissance, fighters, ground attack, bombers) flying
   from airfields for air superiority, ground support, interdiction and bombing; a five-era
-  research tree of 73 technologies in five branches with horizon years; national policies;
-  diplomacy and coalitions; 20 events; and three victory paths.
+  research tree of 73 technologies in five branches with horizon years; **national focus
+  trees** (a generic tree and a national branch for every realm); diplomacy with coalitions,
+  **guarantees, influence and spheres, loans and trade blocs**; **peace settlements** with
+  several parties and graded demands, shared by each winner's contribution, with
+  counter-offers; 20 events; and three victory paths.
 - **AI rivals:** five temperaments and three difficulty levels, using exactly the same rules
   and commands as you.
 - **Help and saving:** a tutorial, rich tooltips, visible reasons for every unavailable
@@ -65,7 +68,7 @@ this if you try.
 | Add a waypoint | **Shift**+right-click | — |
 | Pan / zoom | Drag / mouse wheel, arrow keys, **+ / −** | Drag / pinch |
 | Pause, speed | **Space**, **1–4** | ▶ and speed pips |
-| Ledgers | **B** realm, **I** industry, **M** military, **T** research, **P** policy, **D** diplomacy, **W** wars, **V** victory, **L** chronicle, **H** help | Bottom bar |
+| Ledgers | **B** realm, **I** industry, **M** military, **T** research, **P** national focus, **D** diplomacy, **W** wars, **V** victory, **L** chronicle, **H** help | Bottom bar |
 | Map modes | **Shift+1…7**, **O** cycles | Mode bar |
 | Navigate | **F** whole map, **C** centre selection, **Home** capital, **N** next army, **Shift+N** next army group, **K** next battle, **J** latest alert | Navigation buttons |
 | Close | **Esc** cancels, closes, then opens the menu | ✕ buttons |
@@ -127,14 +130,15 @@ src/sim/        headless simulation — no DOM; runs in tests and CLI tools
   index.ts      derived lookups (armies by province, provinces by owner, relations)
   economy, construction, integration, military, movement, supply, combat, siege,
   naval (fleets, sea control, landings), air (airfields, wings, missions),
-  war, diplomacy, progression, events, victory, invariants,
+  war, settlement (peace settlements), diplomacy, influence (spheres, guarantees,
+  loans, trade blocs), progression, focus (national focus), events, victory, invariants,
   save, migrate (save formats), diagnostics + replay (bug reports)
 src/maps/       map package format (v3: sea zones and ports), validator (imports are
                 sanitised and size-limited), sea-zone generation, built-in maps as packages,
                 conversion to the simulation and renderer, editing operations (edit.ts)
   gen/          world generator, procedural maps, names, shared Voronoi core
   ai/           strategic, operational/execution layers, navy and air, difficulty profiles
-  data/         technologies, policies, personalities, events
+  data/         technologies, focus trees, personalities, events
 src/data/       built-in map data: Aldmere and the Reach (realms and regions in aldmere.ts and
                 reach.ts, generated province data and geometry), and maps/ (generated maps and
                 the Baltic); geometry is loaded on demand
@@ -176,9 +180,9 @@ that the final state matches.
 - **Fog of war:** not implemented. All information is public to everyone, AI included.
 - **Browsers verified:** only headless Chromium 141, on desktop and emulated phone viewports. Firefox,
   Safari, real Chromebooks and real touch devices are untested.
-- **Not yet in the game:** peace settlements with several parties, guarantees and
-  influence, trade blocs and focus trees are planned for Stage E (docs/expansion/PLAN.md).
-  Multiplayer, espionage and dynasties are out of scope.
+- **Not yet in the game:** the tutorial does not yet cover focus trees, settlements,
+  guarantees, influence, loans or trade blocs (Stage F; the Help ledger does). Multiplayer,
+  espionage and dynasties are out of scope.
 - **Map editor:** it cannot split a province, draw coastline by hand or reshape sea zones;
   generate a new map for a different coast. Maps made in the editor are kept only in this
   browser until exported.
@@ -189,8 +193,9 @@ that the final state matches.
 - **Navy and air are abstracted:** fleets fight in sea zones and wings fly missions over a
   province and its neighbours; there are no individual ships' positions, convoys or air
   routes. Troops at sea cannot be redirected until they land.
-- **Save format:** 3. Format-1 and format-2 saves are converted on load. Format-3 saves
-  written before Stage C load with empty navies and air arms and a notice.
+- **Save format:** 4. Format-1, format-2 and format-3 saves are converted on load, each with
+  a notice; a format-3 campaign keeps each realm's national policy as the matching
+  completed focus. Format-3 saves written before Stage C load with empty navies and air arms.
 
 ## Licence
 
