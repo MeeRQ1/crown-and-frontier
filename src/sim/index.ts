@@ -218,6 +218,24 @@ export function memoize<T>(sim: Sim, table: string, key: string, compute: () => 
 }
 
 /**
+ * Like memoize, but kept for the whole week: for AI heuristics (threat, the value
+ * of a trade agreement) that may lag the commands issued earlier the same week.
+ * Never use it for anything a rule depends on.
+ */
+const weekMemo = new WeakMap<object, { tick: number; epoch: number; tables: Map<string, Map<string, unknown>> }>();
+export function memoWeek<T>(sim: Sim, table: string, key: string, compute: () => T): T {
+  const st = sim.state;
+  let m = weekMemo.get(st);
+  if (!m || m.tick !== st.tick || m.epoch !== memoEpoch) weekMemo.set(st, (m = { tick: st.tick, epoch: memoEpoch, tables: new Map() }));
+  let t = m.tables.get(table);
+  if (!t) m.tables.set(table, (t = new Map()));
+  if (t.has(key)) return t.get(key) as T;
+  const v = compute();
+  t.set(key, v);
+  return v;
+}
+
+/**
  * Consistency check for tests and AI campaigns: every index that is current for
  * its key must match a fresh scan. A mismatch means some code changed armies,
  * ownership, control, wars or treaties without invalidating (touchArmies/bump).

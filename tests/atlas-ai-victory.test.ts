@@ -78,3 +78,18 @@ describe('victory timer outlook', () => {
     for (const k of ['territorial', 'economic', 'diplomatic'] as const) expect(vp[k].met).toBe(vp[k].conditions.every((c) => c.ok));
   });
 });
+
+describe('nation distance from realm distance fields', () => {
+  it('equals the smallest hop between any two provinces of the realms', async () => {
+    const { createGame } = await import('../src/sim/game');
+    const { nationDistance, ownedProvinces } = await import('../src/sim/state');
+    const sim = createGame({ scenario: 'aldmere', seed: 3, playerNation: null });
+    const ids = sim.world.nationIds;
+    for (const a of ids)
+      for (const b of ids) {
+        let best = Infinity;
+        for (const x of ownedProvinces(sim, a)) for (const y of ownedProvinces(sim, b)) best = Math.min(best, sim.world.hop(x, y) ?? Infinity);
+        expect(nationDistance(sim, a, b)).toBe(best);
+      }
+  });
+});

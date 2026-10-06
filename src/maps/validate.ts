@@ -32,7 +32,7 @@ export interface MapCheck {
 export const MAP_LIMITS = {
   bytes: 8 * 1024 * 1024,
   provinces: 1500,
-  nations: 32,
+  nations: 64,
   regions: 300,
   edges: 30000,
   points: 600000,

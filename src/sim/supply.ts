@@ -152,6 +152,15 @@ export function supplyAt(sim: Sim, nid: NationId, pid: ProvinceId, extraRegiment
   return { connected, distance: dist, range, capacity, load, level, status: supplyStatus(level), reasons, remedies };
 }
 
+/**
+ * Whether an army of `nid` in `pid` draws on the national stockpile: within
+ * supply range of a source and the stockpile not empty (supplyAt's `connected`,
+ * without the capacity and load it also works out).
+ */
+export function supplyConnected(sim: Sim, nid: NationId, pid: ProvinceId): boolean {
+  return supplyDistances(sim, nid)[pid] <= supplyRange(sim, nid) && sim.state.nations[nid].supplies > 0;
+}
+
 export function armySupplyInfo(sim: Sim, a: Army, quick = false): SupplyInfo {
   return supplyAt(sim, a.nation, a.location, 0, !quick);
 }

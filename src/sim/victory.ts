@@ -22,7 +22,8 @@ import { C } from './config';
 import { opinion, worldDev } from './diplomacy';
 import { sphereMembers } from './influence';
 import { ownedProvinces, aliveNations, months, notify, nationName, endTick, dateOf, type Sim, warsOf } from './state';
-import type { NationId, VictoryPath } from './types';
+import type { NationId, Treaty, VictoryPath } from './types';
+import { memoize } from './index';
 
 /**
  * Victory thresholds for the map being played: the defaults in config,
@@ -97,6 +98,16 @@ export function establishedPartners(sim: Sim, nid: NationId): NationId[] {
   return Object.keys(influenceByPartner(sim, nid)).sort();
 }
 
+/** The treaties a realm is party to (indexed once per week and revision). */
+function treatiesOf(sim: Sim, nid: NationId): readonly Treaty[] {
+  const by = memoize(sim, 'treatiesByRealm', '', () => {
+    const m = new Map<NationId, Treaty[]>();
+    for (const t of sim.state.treaties) for (const x of [t.a, t.b]) (m.get(x) ?? m.set(x, []).get(x)!).push(t);
+    return m;
+  });
+  return by.get(nid) ?? [];
+}
+
 /**
  * Influence per partner: its strongest bond (an established alliance or our
  * sphere 2, our guarantee 1) plus an established trade agreement (1).
@@ -107,8 +118,8 @@ export function influenceByPartner(sim: Sim, nid: NationId): Record<NationId, nu
   const trade: Record<NationId, number> = {};
   const ok = (other: NationId) => opinion(sim, other, nid) >= C.victory.diplomaticOpinion;
   const old = (since: number, m: number) => st.tick - since >= months(m);
-  for (const t of st.treaties) {
-    if (t.type === 'nap' || (t.a !== nid && t.b !== nid) || !old(t.since, C.victory.diplomaticTreatyAge)) continue;
+  for (const t of treatiesOf(sim, nid)) {
+    if (t.type === 'nap' || !old(t.since, C.victory.diplomaticTreatyAge)) continue;
     const other = t.a === nid ? t.b : t.a;
     if (t.type === 'alliance') bond[other] = 2;
     else trade[other] = 1;

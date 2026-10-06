@@ -169,6 +169,10 @@ export interface World {
    * compact all-pairs matrix built once per map.
    */
   hop(a: ProvinceId, b: ProvinceId): number | undefined;
+  /** a province's row of the hop matrix, in provIds order (0xffff: unreachable); shared, do not modify */
+  hopRow(a: ProvinceId): Uint16Array | undefined;
+  /** a province's position in provIds */
+  provIndex: ReadonlyMap<ProvinceId, number>;
 }
 
 // ───────────────────────────── Dynamic state ────────────────────────────────

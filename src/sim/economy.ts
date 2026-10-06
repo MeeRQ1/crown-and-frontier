@@ -36,7 +36,7 @@ import { nationMods, type Mods } from './modifiers';
 import { fleetFuel, fleetUpkeep, provinceBlockaded, tradeOpen } from './naval';
 import { blocSolidarity, loanInstalment, sameBloc } from './influence';
 import { armiesOf, clamp, controlledProvinces, enemiesOf, months, notify, ownedProvinces, treatyPartners, type Sim } from './state';
-import { armySupplyInfo } from './supply';
+import { supplyConnected } from './supply';
 import { contractPlan, planAmount, settleContracts, type ContractPlan } from './trade';
 import type { MonthlyLedger, NationId, ProvinceId, ResourceFlow, StrategicResource, UnitType } from './types';
 
@@ -228,7 +228,7 @@ export function foodBalance(sim: Sim, nid: NationId): { produced: number; eaten:
     for (const a of armiesOf(sim, nid)) {
       let use = 0;
       for (const r of a.regiments) use += UNITS[r.type].supplyUse * (0.5 + 0.5 * (r.men / C.regimentSize));
-      if (armySupplyInfo(sim, a, true).connected) eaten += use;
+      if (supplyConnected(sim, a.nation, a.location)) eaten += use;
     }
     return { produced: sup * Math.max(0, 1 + nationMods(sim, nid).supplyProd), eaten };
   });
@@ -462,8 +462,7 @@ export function computeLedger(sim: Sim, nid: NationId, contracts: ContractPlan =
       upkeep += regimentUpkeep(sim, nid, r.type, r.men);
       use += UNITS[r.type].supplyUse * (0.5 + 0.5 * (r.men / C.regimentSize));
     }
-    const info = armySupplyInfo(sim, a, true);
-    if (info.connected) supUse += use;
+    if (supplyConnected(sim, a.nation, a.location)) supUse += use;
     else foraging += use;
   }
   expenses['Army upkeep'] = upkeep;
