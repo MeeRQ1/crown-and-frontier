@@ -4,12 +4,12 @@
 // Acceptance is a transparent score: every term is listed with its value and
 // the proposal is accepted when the total is >= 0. No hidden dice.
 
-import { C } from './config';
+import { C, RESOURCE_INFO } from './config';
 import { PERSONALITIES } from './data/personalities';
 import { claimsOnlyFocus } from './focus';
 import { sameBloc, sphereOf } from './influence';
 import { tradeValue } from './economy';
-import { endContractsBetween } from './trade';
+import { dependenceOn, endContractsBetween } from './trade';
 import { nationStrength } from './military';
 import { nationMods } from './modifiers';
 import {
@@ -225,6 +225,9 @@ export function evaluateTreaty(sim: Sim, from: NationId, to: NationId, type: Tre
   const dist = nationDistance(sim, from, to);
   const plan = st.nations[to].ai.warPlan;
   if (plan && plan.target === from) add('We have designs on their land', -100);
+  // economic dependence: a realm that relies on the proposer's goods wants it close
+  const dep = type !== 'trade' ? dependenceOn(sim, to, from) : null;
+  if (dep && dep.share >= C.trade.dependence) add(`We rely on them for ${RESOURCE_INFO[dep.res].label.toLowerCase()} (${Math.round(dep.share * 100)}% of our supply)`, Math.min(15, dep.share * 25));
   if (type === 'nap') {
     add('Base reluctance', -10);
     add(`Opinion of them (${op})`, op * 0.4);

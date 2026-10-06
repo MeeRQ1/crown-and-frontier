@@ -238,7 +238,7 @@ function peaceOps(sim: Sim, nid: NationId, armies: Army[]): void {
 
 // ───────────────────────────── War-time operations ──────────────────────────
 
-interface Objective {
+export interface Objective {
   pid: ProvinceId;
   kind: 'defend' | 'liberate' | 'attack';
   value: number;
@@ -250,7 +250,7 @@ function fortNeed(fort: number): number {
   return fort > 0 ? C.siege.minRegimentsPerLevel * fort * 1.0 : 0.6;
 }
 
-function warObjectives(sim: Sim, nid: NationId): Objective[] {
+export function warObjectives(sim: Sim, nid: NationId): Objective[] {
   const st = sim.state;
   const n = st.nations[nid];
   const d = diffOf(sim);
@@ -393,9 +393,44 @@ function warOps(sim: Sim, nid: NationId, armies: Army[]): void {
       moveTo(sim, a, best.post);
       continue;
     }
+    // no front of ours to cover (an ally's war, or the enemy is far off): march
+    // to the war rather than wait at the rally point, stopping at the last
+    // friendly province before enemy land, where supply still reaches
+    const stage = fit(a) ? stagingFor(sim, nid, a.location, r, objs) : null;
+    if (stage) {
+      a.task = `advance:${stage}`;
+      moveTo(sim, a, stage, a.location !== stage && a.path[a.path.length - 1] !== stage ? `${a.name} marches to the front at ${provName(sim, stage)}` : undefined);
+      continue;
+    }
     a.task = 'reserve';
     if (rally && a.location !== rally) moveTo(sim, a, rally);
   }
+}
+
+/**
+ * Where an army with no objective of its own should stand to join the war: on
+ * the way to the nearest attack objective it can reach, the last province held
+ * by us or a friend before enemy land. Null when no objective can be reached
+ * (overseas, or every route is barred) or the army already stands there.
+ */
+export function stagingFor(sim: Sim, nid: NationId, from: ProvinceId, r: Reach, objs: Objective[]): ProvinceId | null {
+  const st = sim.state;
+  let target: ProvinceId | null = null;
+  let best = Infinity;
+  for (const o of objs) {
+    if (o.kind !== 'attack') continue;
+    const d = r.dist[o.pid];
+    if (d !== undefined && d < best) (best = d), (target = o.pid);
+  }
+  if (!target || best > C.ai.advanceRange) return null;
+  const path = pathVia(r, from, target) ?? [];
+  let stage: ProvinceId = from;
+  for (const p of path) {
+    const c = st.provinces[p].controller;
+    if (c && atWar(sim, nid, c)) break;
+    if (c && isFriendly(sim, nid, c)) stage = p;
+  }
+  return stage === from ? null : stage;
 }
 
 /**

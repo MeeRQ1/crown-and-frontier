@@ -45,6 +45,7 @@ import { buildSettlement, counterOffer, describeDemand, evaluateSettlement, sett
 import { aiRand, diffOf, issue } from './common';
 import { coastalShare, navalStrategy, planInvasion } from './navy';
 import { aiTrade } from './trade';
+import { dependenceOn } from '../trade';
 import {
   blocOf,
   foundBlocProblem,
@@ -648,6 +649,12 @@ export function warCandidates(sim: Sim, nid: NationId): { cands: WarCandidate[];
     if (warsOf(sim, t).some((w) => w.defenders.includes(t)) && p.id !== 'opportunist') {
       value *= 0.5;
       notes.push('already beset');
+    }
+    // war ends our contracts with them: a realm that depends on their goods thinks twice
+    const dep = dependenceOn(sim, nid, t);
+    if (dep && dep.share >= C.trade.dependence) {
+      value *= Math.max(0.3, 1 - dep.share);
+      notes.push(`we depend on their ${dep.res}`);
     }
     const reachable = goal.provinces.filter((pid) => dist[pid] <= range).length;
     if (!reachable) continue;
