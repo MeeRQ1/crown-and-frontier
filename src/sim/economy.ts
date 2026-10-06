@@ -31,7 +31,7 @@
 
 import { airFuel, airUpkeep, bombingLoss } from './air';
 import { C, RESOURCE_INFO, STRATEGIC, TERRAIN, UNITS } from './config';
-import { armiesOfNation, memoize, ownedBy } from './index';
+import { armiesOfNation, memoize, memoWeek, ownedBy } from './index';
 import { nationMods, type Mods } from './modifiers';
 import { fleetFuel, fleetUpkeep, provinceBlockaded, tradeOpen } from './naval';
 import { blocSolidarity, loanInstalment, sameBloc } from './influence';
@@ -312,9 +312,9 @@ export function surplusMatches(sim: Sim): TradeLine[] {
  * (sales, the value of what it can buy, and commerce), for treaty evaluation.
  */
 export function tradeValue(sim: Sim, nid: NationId, partner: NationId): number {
-  // an estimate for treaty decisions: balances are cached for the phase (read-only here)
-  const A = memoize(sim, 'tradeBalance', nid, () => tradeBalance(sim, nid));
-  const B = memoize(sim, 'tradeBalance', partner, () => tradeBalance(sim, partner));
+  // an estimate for treaty decisions: each realm's balance is worked out once a week
+  const A = memoWeek(sim, 'tradeBalance', nid, () => tradeBalance(sim, nid));
+  const B = memoWeek(sim, 'tradeBalance', partner, () => tradeBalance(sim, partner));
   let v = C.economy.tradeCommerce * Math.max(0, 1 + nationMods(sim, nid).trade);
   for (const res of ['food', ...STRATEGIC]) {
     const sell = Math.max(0, Math.min(A.surplus[res] - A.keep[res], B.keep[res] - B.surplus[res]));
