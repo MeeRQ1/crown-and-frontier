@@ -160,7 +160,10 @@ export function equalEarth(lon0: number): Projection {
 export interface RealRegion {
   id: string;
   name: string;
+  /** the realm that holds it; for unclaimed land, the realm whose names it takes */
   realm: string;
+  /** frontier no realm holds at the start (settled by construction) */
+  unclaimed?: boolean;
   /** terrain weights for provinces without a fixed terrain */
   biome: Partial<Record<Terrain, number>>;
   /** integration range of its provinces at the start (loosely held lands) */
@@ -197,8 +200,32 @@ export interface AutoRegions {
   name(group: string, realm: string, divisions: Division[], single: boolean, shares: number[]): string;
 }
 
+/**
+ * Geography authored instead of read from Natural Earth (an invented world):
+ * the same layers in Natural Earth's shapes, and the division at a point
+ * instead of division polygons.
+ */
+export interface MapSource {
+  /** land polygons */
+  land: Feature[];
+  /** lake polygons, with a `name` */
+  lakes: Feature[];
+  /** river lines, with a `name` */
+  rivers: Feature[];
+  /** towns: `name`, `latitude`, `longitude`, `pop_max`, `adm0_a3` */
+  places: Feature[];
+  /** the divisions' properties: `adm0_a3`, `name`, `region` */
+  divisions: Array<Record<string, unknown>>;
+  /** the index of the division at a point of land (-1 for none) */
+  divisionAt(lon: number, lat: number): number;
+  /** where the geography comes from, for the report */
+  credit: string;
+}
+
 export interface RealMapDef {
   id: string;
+  /** authored geography instead of Natural Earth's */
+  source?: MapSource;
   /** regions made from the divisions instead of `regions` and `classify` */
   auto?: AutoRegions;
   revision: number;
@@ -296,6 +323,13 @@ function fillPoly(G: Grid, rings: Pt[][], set: (c: number) => void): void {
 }
 
 export function buildRealMap(D: RealMapDef, log: (l: string) => void = () => {}): RealMapResult {
+  // Natural Earth, or the map's own authored layers
+  const src = (k: LayerKey): Feature[] => {
+    if (!D.source) return layer(k);
+    const S = D.source;
+    return k === 'lakes50' ? S.lakes : k === 'rivers10' ? S.rivers : k === 'places' ? S.places : k === 'admin' ? [] : S.land;
+  };
+  const owner = (r: RealRegion | undefined): string | null => (!r || r.unclaimed ? null : r.realm);
   const STEP = 14;
   const KM = D.km;
   const CELL_KM2 = (STEP * KM) ** 2;
@@ -357,17 +391,21 @@ export function buildRealMap(D: RealMapDef, log: (l: string) => void = () => {})
 
   // land, lakes, divisions
   const land = new Uint8Array(CELLS);
-  for (const f of layer(D.land)) for (const poly of polygons(f.geometry)) if (bbHits(poly)) fill(poly, (c) => (land[c] = 1));
+  for (const f of src(D.land)) for (const poly of polygons(f.geometry)) if (bbHits(poly)) fill(poly, (c) => (land[c] = 1));
   const lakeAt = new Int16Array(CELLS).fill(-1);
-  const lakeFeatures = layer('lakes50').filter((f) => typeof f.properties.name === 'string' && D.lakes[f.properties.name as string]);
+  const lakeFeatures = src('lakes50').filter((f) => typeof f.properties.name === 'string' && D.lakes[f.properties.name as string]);
   lakeFeatures.forEach((f, k) => {
     for (const poly of polygons(f.geometry)) if (bbHits(poly)) fill(poly, (c) => (lakeAt[c] = k));
   });
-  const adminFeatures = layer('admin').filter((f) => polygons(f.geometry).some(bbHits));
+  const adminFeatures: Feature[] = D.source
+    ? D.source.divisions.map((properties) => ({ properties, geometry: { type: 'None', coordinates: [] } }))
+    : src('admin').filter((f) => polygons(f.geometry).some(bbHits));
   const adminAt = new Int16Array(CELLS).fill(-1);
-  adminFeatures.forEach((f, k) => {
-    for (const poly of polygons(f.geometry)) fill(poly, (c) => (adminAt[c] = k));
-  });
+  if (D.source) for (let c = 0; c < CELLS; c++) adminAt[c] = land[c] ? D.source.divisionAt(lonlat[c][0], lonlat[c][1]) : -1;
+  else
+    adminFeatures.forEach((f, k) => {
+      for (const poly of polygons(f.geometry)) fill(poly, (c) => (adminAt[c] = k));
+    });
   log(`rasterised land, ${lakeFeatures.length} lakes, ${adminFeatures.length} divisions`);
   // fjords and inlets a cell or two wide cannot hold a border: fill them, so no province is cut in two
   for (let pass = 0; pass < 2; pass++) {
@@ -597,7 +635,7 @@ export function buildRealMap(D: RealMapDef, log: (l: string) => void = () => {})
   // towns by the cell they stand in (largest first), to name islands and pieces of regions after
   const notYetEarly = new Set(D.notYet);
   const townAt = new Map<number, string>();
-  for (const f of layer('places')) {
+  for (const f of src('places')) {
     const p = f.properties as { name: string; latitude: number; longitude: number; pop_max: number; adm0_a3: string };
     const name = String(p.name).replace(/\s+/g, ' ').trim();
     if (!D.inCrop(p.longitude, p.latitude) || notYetEarly.has(name)) continue;
@@ -733,7 +771,7 @@ export function buildRealMap(D: RealMapDef, log: (l: string) => void = () => {})
     if (regional) log(`  regional landmass ${name}: ${Math.round(cells.length * CELL_KM2)} km², mostly ${reg}, around ${lonlat[cells[Math.floor(cells.length / 2)]].map((v) => v.toFixed(1)).join(', ')}`);
     if (!regional) for (const c of cells) region[c] = reg;
     const count = regional ? 0 : Math.max(1, Math.round((cells.length * CELL_KM2) / (D.provKm2 * (regionDef.get(reg)!.sparse ?? 1))));
-    islands.push({ name, poly: outline(G, (c) => comp.label[c] === lab, 2), region: reg, owner: regionDef.get(reg)!.realm, count, cells, label: lab, ...(regional ? { regional: true } : {}) });
+    islands.push({ name, poly: outline(G, (c) => comp.label[c] === lab, 2), region: reg, owner: owner(regionDef.get(reg)), count, cells, label: lab, ...(regional ? { regional: true } : {}) });
   }
   const islandOfLabel = new Map(islands.map((isl, k) => [isl.label, k]));
   const raster = new Int16Array(CELLS).fill(-1);
@@ -776,7 +814,7 @@ export function buildRealMap(D: RealMapDef, log: (l: string) => void = () => {})
     for (let k = 0; k < q.length; k++) for (const n of nbrs4(q[k])) if (seaDist[n] > seaDist[q[k]] + 1) (seaDist[n] = seaDist[q[k]] + 1), q.push(n);
   }
   const riverList: RiverSpec[] = [];
-  for (const f of layer('rivers10')) {
+  for (const f of src('rivers10')) {
     const name = D.rivers[String(f.properties.name)];
     if (!name || f.properties.featurecla !== 'River') continue;
     for (const ln of lines(f.geometry)) {
@@ -817,7 +855,7 @@ export function buildRealMap(D: RealMapDef, log: (l: string) => void = () => {})
 
   // cities: realm capitals, then the largest towns, spaced apart
   const notYet = new Set(D.notYet);
-  const places = layer('places')
+  const places = src('places')
     .map((f) => f.properties as { name: string; latitude: number; longitude: number; pop_max: number; adm0_a3: string })
     .map((p) => ({ ...p, name: p.name.replace(/\s+/g, ' ').trim() }))
     .filter((p) => D.inCrop(p.longitude, p.latitude) && !notYet.has(p.name))
@@ -850,8 +888,8 @@ export function buildRealMap(D: RealMapDef, log: (l: string) => void = () => {})
     const c = landCellNear(p.at[0], p.at[1]);
     if (c < 0) return false;
     const reg = region[c]!;
-    const realm = regionDef.get(reg)!.realm;
-    if (capital && realm !== capital) throw new Error(`${D.id}: ${p.name} lies in ${reg} (${realm}), not ${capital}`);
+    const realm = owner(regionDef.get(reg));
+    if (capital && realm !== capital) throw new Error(`${D.id}: ${p.name} lies in ${reg} (${realm ?? 'unclaimed'}), not ${capital}`);
     // a whole island holds as many provinces as its count: a city there must not exceed it
     const isl = raster[c] > 0 ? islands[raster[c] - 1] : null;
     if (isl && !isl.regional && !capital && fixed.filter((f) => raster[landCellNear(f.x, f.y)] === raster[c]).length >= isl.count) return false;
@@ -890,7 +928,7 @@ export function buildRealMap(D: RealMapDef, log: (l: string) => void = () => {})
     const c = landCellNear(at[0], at[1]);
     if (c < 0) throw new Error(`${D.id}: pass ${pass.name} is not on land`);
     const reg = region[c]!;
-    fixed.push({ id: slug(pass.name), name: pass.name, x: Math.round(cxOf(c)), y: Math.round(cyOf(c)), region: reg, owner: regionDef.get(reg)!.realm, terrain: 'mountains', resource: null, dev: 1, pop: 6, fort: 1, pass: true });
+    fixed.push({ id: slug(pass.name), name: pass.name, x: Math.round(cxOf(c)), y: Math.round(cyOf(c)), region: reg, owner: owner(regionDef.get(reg)), terrain: 'mountains', resource: null, dev: 1, pop: 6, fort: 1, pass: true });
     takenNames.add(pass.name);
   }
 
@@ -927,7 +965,7 @@ export function buildRealMap(D: RealMapDef, log: (l: string) => void = () => {})
     const count = Math.max(target, fixedMain + (cells.length && fixedMain === 0 ? 1 : 0)) + passes + isl.reduce((s, i) => s + i.count, 0) + fixedHere.filter(onIsland).length;
     const density = (townPop.get(r.id) ?? 0) / ((cells.length + islandCells) * CELL_KM2);
     const wealth = Math.max(1.3, Math.min(4.2, 2.4 + 0.9 * Math.log10(Math.max(1, density) / 25)));
-    regions.push({ id: r.id, culture: r.realm, anchors: cells.map((c) => ({ x: cxOf(c), y: cyOf(c), owner: r.realm })), count, biome: r.biome, wealth, integ: r.integ });
+    regions.push({ id: r.id, culture: r.realm, anchors: cells.map((c) => ({ x: cxOf(c), y: cyOf(c), owner: owner(r) })), count, biome: r.biome, wealth, integ: r.integ });
     regionDefs.push({ id: r.id, name: r.name });
   }
   const keptIslands = islands.map(({ cells: _c, label: _l, ...i }) => i);
@@ -1082,7 +1120,7 @@ export function buildRealMap(D: RealMapDef, log: (l: string) => void = () => {})
   const { world, pkg, check } = built;
   if (!check.ok && process.env.REALMAP_DUMP) writeFileSync(process.env.REALMAP_DUMP, JSON.stringify(pkg));
   if (!check.ok) throw new Error(`${D.id}: the map does not validate: ${check.errors.slice(0, 6).map((e) => e.message).join(' ')}`);
-  const report = worldReport(D.meta.name, `npm run genreal -- --map ${D.id}`, spec, world) + extraReport(pkg, check.warnings.map((w) => w.message));
+  const report = worldReport(D.meta.name, `npm run genreal -- --map ${D.id}`, spec, world) + extraReport(pkg, check.warnings.map((w) => w.message), D.source?.credit);
   return { pkg, report, world };
 }
 
@@ -1159,7 +1197,7 @@ function rulesFor(D: RealMapDef, pkg: MapPackage): MapPackage['rules'] {
   };
 }
 
-function extraReport(pkg: MapPackage, warnings: string[]): string {
+function extraReport(pkg: MapPackage, warnings: string[], credit?: string): string {
   const lines = ['', '## Realms at the start', '', '| Realm | Provinces | Development | Capital |', '|---|---|---|---|'];
   for (const nat of pkg.nations) {
     const mine = pkg.provinces.filter((p) => p.owner === nat.id);
@@ -1172,7 +1210,7 @@ function extraReport(pkg: MapPackage, warnings: string[]): string {
     `- Sea zones: ${pkg.seaZones.length}; ports: ${pkg.provinces.filter((p) => p.port).length}`,
     `- Deposits: ${[...dep].map(([k, n]) => `${k} ${n}`).join(', ')}`,
     `- Victory: ${JSON.stringify(pkg.rules.victory)}; research cost ×${pkg.rules.researchCostMul}`,
-    `- Natural Earth ${NE_VERSION}: ${Object.values(LAYERS).map((l) => `${l.file} (sha256 ${l.sha256.slice(0, 12)}…)`).join(', ')}`,
+    credit ? `- Geography: ${credit}` : `- Natural Earth ${NE_VERSION}: ${Object.values(LAYERS).map((l) => `${l.file} (sha256 ${l.sha256.slice(0, 12)}…)`).join(', ')}`,
     `- Validator warnings: ${warnings.length ? warnings.join(' / ') : 'none'}`,
     '',
     '### Province names',
