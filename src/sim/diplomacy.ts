@@ -294,14 +294,14 @@ export function signTreaty(sim: Sim, type: TreatyType, a: NationId, b: NationId)
     since: st.tick,
     until: type === 'nap' ? st.tick + months(C.diplomacy.napMonths) : null,
   });
-  bump(sim);
+  bump(sim, type === 'alliance' ? 'all' : 'terms');
 }
 
 export function removeTreaty(sim: Sim, type: TreatyType, a: NationId, b: NationId): boolean {
   const before = sim.state.treaties.length;
   sim.state.treaties = sim.state.treaties.filter((t) => !(t.type === type && ((t.a === a && t.b === b) || (t.a === b && t.b === a))));
   if (sim.state.treaties.length !== before) {
-    bump(sim);
+    bump(sim, type === 'alliance' ? 'all' : 'terms');
     return true;
   }
   return false;

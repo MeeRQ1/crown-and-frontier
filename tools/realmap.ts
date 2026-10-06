@@ -27,6 +27,7 @@ import { slug } from '../src/maps/gen/names';
 import { components, outline, placeDeposits, type Climate, type Grid } from '../src/maps/gen/procedural';
 import { generateWorld, worldReport, type FixedProv, type IslandSpec, type LakeSpec, type RangeSpec, type RegionSpec, type RiverSpec, type WorldSpec } from '../src/maps/gen/world';
 import { researchCostFor, scaledVictory } from '../src/maps/rules';
+import { ringFromEdges, type EdgeLike } from '../src/maps/rings';
 import { decodeGrid } from '../src/maps/seazones';
 import { addSeaZones, validateMapPackage } from '../src/maps/validate';
 import type { NationDef, RegionDef, ResourceKind, Terrain } from '../src/sim/types';
@@ -187,13 +188,13 @@ export interface AutoRegions {
   /** the group a division's regions stay within (default: its country) */
   groupOf?(d: Division, realm: string): string;
   /** target region area in km² for a group at a latitude */
-  targetKm2(group: string, realm: string, lat: number): number;
+  targetKm2(group: string, realm: string, lat: number, lon: number): number;
   /** province area multiplier (thinly settled land gets larger provinces) */
-  sparse(group: string, realm: string, lat: number): number;
+  sparse(group: string, realm: string, lat: number, lon: number): number;
   biome(group: string, lat: number, lon: number): Partial<Record<Terrain, number>>;
   integ?(group: string, realm: string): [number, number] | undefined;
-  /** the region's name, from its group and its divisions (largest first); `single` when the group is one region */
-  name(group: string, realm: string, divisions: Division[], single: boolean): string;
+  /** the region's name, from its group and its divisions (largest first, with their shares of its area); `single` when the group is one region */
+  name(group: string, realm: string, divisions: Division[], single: boolean, shares: number[]): string;
 }
 
 export interface RealMapDef {
@@ -236,6 +237,10 @@ export interface RealMapDef {
   names: Record<string, string>;
   /** places Natural Earth lists that did not yet exist as towns at the start */
   notYet: string[];
+  /** a town's population at the start (default: Natural Earth's present-day figure); sizes cities and region wealth */
+  popOf?(p: { name: string; adm0: string; pop: number; lon: number; lat: number }): number;
+  /** how far (km) from a province's centre a town may lie to give it its name, for a region of sparse 1 (default 140) */
+  nameKm?: number;
   straits: Array<{ name: string; a: [number, number]; b: [number, number] }>;
   straitMaxKm: number;
   cities: { max: number; minPop: number; spacingKm: number };
@@ -251,6 +256,18 @@ export interface RealMapResult {
   pkg: MapPackage;
   report: string;
   world: ReturnType<typeof generateWorld>;
+}
+
+/** Province outlines as the game draws them (from the shipped borders), for the preview. */
+function shippedOutlines(pkg: MapPackage): Record<string, { poly: number[]; cx: number; cy: number }> {
+  const byProv = new Map<string, EdgeLike[]>();
+  for (const e of pkg.geometry.edges) for (const s of [e.a, e.b]) (byProv.get(s) ?? byProv.set(s, []).get(s)!).push(e);
+  const out: Record<string, { poly: number[]; cx: number; cy: number }> = {};
+  for (const p of pkg.provinces) {
+    const c = pkg.geometry.centers[p.id];
+    out[p.id] = { poly: ringFromEdges(p.id, byProv.get(p.id) ?? []), cx: c.cx, cy: c.cy };
+  }
+  return out;
 }
 
 /** Fills the cells whose centres lie inside a polygon (even-odd over its rings), by scanlines. */
@@ -314,7 +331,8 @@ export function buildRealMap(D: RealMapDef, log: (l: string) => void = () => {})
   };
   log(`${D.id}: grid ${G.nx}×${G.ny} (${CELLS} cells, ${Math.round(CELL_KM2)} km² each)`);
   const lonlat = Array.from({ length: CELLS }, (_, c) => fromDu(cxOf(c), cyOf(c)));
-  const crop = Uint8Array.from(lonlat, ([lon, lat]) => (D.inCrop(lon, lat) ? 1 : 0));
+  // on a world map the margin beyond the seam would repeat the far side's land: it stays sea
+  const crop = Uint8Array.from(lonlat, ([lon, lat]) => (D.inCrop(lon, lat) && (!D.wrapOcean || (lon > D.box.west && lon <= D.box.east)) ? 1 : 0));
   // a polygon ring, projected; rings that cross the frame's seam (a world map's
   // antimeridian, relative to lon0) are split there by the projection's wrap
   const projRing = (ring: number[][]): Pt[] => ring.map(([lon, lat]) => proj(lon, lat));
@@ -446,7 +464,8 @@ export function buildRealMap(D: RealMapDef, log: (l: string) => void = () => {})
       list.sort((a, b) => b.cells - a.cells || (a.div.name < b.div.name ? -1 : 1));
       const cells = list.reduce((s, u) => s + u.cells, 0);
       const lat = list.reduce((s, u) => s + u.lat, 0) / cells;
-      const k = Math.max(1, Math.min(list.length, Math.round((cells * CELL_KM2) / A.targetKm2(group, realm, lat))));
+      const lon = lonlat[cellAt(list.reduce((s, u) => s + u.sx, 0) / cells, list.reduce((s, u) => s + u.sy, 0) / cells)][0];
+      const k = Math.max(1, Math.min(list.length, Math.round((cells * CELL_KM2) / A.targetKm2(group, realm, lat, lon))));
       // weighted k-means over the divisions' centres; the largest divisions seed it, then the farthest
       const pt = (u: Unit): Pt => [u.sx / u.cells, u.sy / u.cells];
       const centres: Pt[] = [pt(list[0])];
@@ -477,15 +496,71 @@ export function buildRealMap(D: RealMapDef, log: (l: string) => void = () => {})
         });
       }
       const clusters = centres.map((_, i) => list.filter((u) => assign.get(u) === i)).filter((m) => m.length);
-      clusters.forEach((m) => {
+      // a cluster far below the target (a few small divisions on the edge) joins the nearest other cluster
+      const target = A.targetKm2(group, realm, lat, lon) / CELL_KM2;
+      for (let again = true; again && clusters.length > 1; ) {
+        again = false;
+        const size = (m: Unit[]) => m.reduce((s, u) => s + u.cells, 0);
+        const small = clusters.map((m, i) => ({ i, n: size(m) })).filter((x) => x.n < target / 3).sort((a, b) => a.n - b.n || a.i - b.i)[0];
+        if (!small) break;
+        const at = (m: Unit[]): Pt => [m.reduce((s, u) => s + u.sx, 0) / size(m), m.reduce((s, u) => s + u.sy, 0) / size(m)];
+        const [sx, sy] = at(clusters[small.i]);
+        let best = -1;
+        let bd = Infinity;
+        clusters.forEach((m, i) => {
+          if (i === small.i) return;
+          const [x, y] = at(m);
+          const d = Math.hypot(x - sx, y - sy);
+          if (d < bd) (bd = d), (best = i);
+        });
+        clusters[best].push(...clusters[small.i]);
+        clusters.splice(small.i, 1);
+        again = true;
+      }
+      const mid = (m: Unit[]): Pt => {
+        const w = m.reduce((s, u) => s + u.cells, 0);
+        return [m.reduce((s, u) => s + u.sx, 0) / w, m.reduce((s, u) => s + u.sy, 0) / w];
+      };
+      const names = clusters.map((m) => {
+        const w = m.reduce((s, u) => s + u.cells, 0);
+        return A.name(group, realm, m.map((u) => u.div), clusters.length === 1, m.map((u) => u.cells / w));
+      });
+      // clusters named alike take a direction from where they lie among their namesakes
+      for (const n of new Set(names)) {
+        const same = names.map((x, i) => (x === n ? i : -1)).filter((i) => i >= 0);
+        if (same.length < 2) continue;
+        const at = same.map((i) => mid(clusters[i]));
+        const cx = at.reduce((s, p) => s + p[0], 0) / at.length;
+        const cy = at.reduce((s, p) => s + p[1], 0) / at.length;
+        const spread = Math.max(...at.map(([x, y]) => Math.hypot(x - cx, y - cy)));
+        const taken = new Set<string>();
+        const order = same.map((_, k) => k).sort((a, b) => Math.hypot(at[a][0] - cx, at[a][1] - cy) - Math.hypot(at[b][0] - cx, at[b][1] - cy));
+        for (const k of order) {
+          const [x, y] = at[k];
+          const dx = x - cx;
+          const dy = y - cy;
+          const ns = dy > 0 ? 'Southern' : 'Northern';
+          const ew = dx > 0 ? 'Eastern' : 'Western';
+          const diag = `${dy > 0 ? 'South' : 'North'}-${dx > 0 ? 'Eastern' : 'Western'}`;
+          const prefer = same.length >= 3 && Math.hypot(dx, dy) < 0.35 * spread ? ['Central'] : [];
+          prefer.push(...(Math.abs(dx) > Math.abs(dy) ? [ew, diag, ns] : [ns, diag, ew]));
+          let name = prefer.map((d) => `${d} ${n}`).find((c) => !taken.has(c)) ?? `${n} ${k + 1}`;
+          if (taken.has(name)) name = `${n} ${k + 1}`;
+          taken.add(name);
+          names[same[k]] = name;
+        }
+      }
+      clusters.forEach((m, ci) => {
         const cl = m.reduce((s, u) => s + u.cells, 0);
         const la = m.reduce((s, u) => s + u.lat, 0) / cl;
-        const lo = lonlat[cellAt(m[0].sx / m[0].cells, m[0].sy / m[0].cells)][0];
-        const name = A.name(group, realm, m.map((u) => u.div), clusters.length === 1);
-        let id = slug(`${group}-${name}`).slice(0, 40) || slug(group);
+        const [mx, my] = mid(m);
+        const lo = lonlat[cellAt(mx, my)][0];
+        const name = names[ci];
+        let id = slug(name).slice(0, 40) || slug(group);
+        if (usedIds.has(id)) id = slug(`${group}-${name}`).slice(0, 40);
         for (let n = 2; usedIds.has(id); n++) id = `${slug(`${group}-${name}`).slice(0, 36)}-${n}`;
         usedIds.add(id);
-        out.push({ id, name, realm, biome: A.biome(group, la, lo), sparse: A.sparse(group, realm, la), integ: A.integ?.(group, realm) });
+        out.push({ id, name, realm, biome: A.biome(group, la, lo), sparse: A.sparse(group, realm, la, lo), integ: A.integ?.(group, realm) });
         for (const u of m) regionOfUnit.set(u, id);
       });
     }
@@ -508,25 +583,75 @@ export function buildRealMap(D: RealMapDef, log: (l: string) => void = () => {})
   for (let c = 0; c < CELLS; c++) if (comp.label[c] >= 0) (byLabel.get(comp.label[c]) ?? byLabel.set(comp.label[c], []).get(comp.label[c])!).push(c);
   const masses = [...byLabel.entries()].sort((a, b) => b[1].length - a[1].length || a[0] - b[0]);
   const mainLabel = masses[0][0];
-  const isRegionalLabel = new Map<number, boolean>(masses.map(([k, cells], i) => [k, i === 0 || cells.length * CELL_KM2 >= D.regionalKm2]));
+  // an island shared by realms (Hispaniola, Timor) is divided among regions too, so each keeps its part
+  const realmsOn = (cells: number[]) => {
+    const area = new Map<string, number>();
+    for (const c of cells) {
+      const realm = regionDef.get(region[c]!)?.realm;
+      if (realm) area.set(realm, (area.get(realm) ?? 0) + CELL_KM2);
+    }
+    return [...area.values()].filter((a) => a >= D.minIslandKm2).length;
+  };
+  const isRegionalLabel = new Map<number, boolean>(masses.map(([k, cells], i) => [k, i === 0 || cells.length * CELL_KM2 >= D.regionalKm2 || realmsOn(cells) > 1]));
+
+  // towns by the cell they stand in (largest first), to name islands and pieces of regions after
+  const notYetEarly = new Set(D.notYet);
+  const townAt = new Map<number, string>();
+  for (const f of layer('places')) {
+    const p = f.properties as { name: string; latitude: number; longitude: number; pop_max: number; adm0_a3: string };
+    const name = String(p.name).replace(/\s+/g, ' ').trim();
+    if (!D.inCrop(p.longitude, p.latitude) || notYetEarly.has(name)) continue;
+    const pop = D.popOf ? D.popOf({ name, adm0: p.adm0_a3, pop: p.pop_max, lon: p.longitude, lat: p.latitude }) : p.pop_max;
+    const at = proj(p.longitude, p.latitude);
+    const c = cellAt(at[0], at[1]);
+    const prev = townAt.get(c);
+    if (!prev || pop > Number(prev.split('\u0000')[1])) townAt.set(c, `${D.names[name] ?? name}\u0000${pop}`);
+  }
+  /** The largest town on a set of cells, if any. */
+  const townOn = (cells: Iterable<number>, avoid: (n: string) => boolean = () => false): string | null => {
+    let best: string | null = null;
+    let bp = -1;
+    for (const c of cells) {
+      const t = townAt.get(c);
+      if (!t) continue;
+      const [n, pop] = t.split('\u0000');
+      if (Number(pop) > bp && !avoid(n)) (bp = Number(pop)), (best = n);
+    }
+    return best;
+  };
+  /** A direction to set before a name, unless the name already starts with one. */
+  const DIRECTION = /^(North-Eastern|North-Western|South-Eastern|South-Western|Northern|Southern|Eastern|Western|Central|Upper|Lower|Inner|Outer|North|South|East|West)\b/;
+  const roman = (k: number): string => {
+    let out = '';
+    for (const [v, r] of [[40, 'XL'], [10, 'X'], [9, 'IX'], [5, 'V'], [4, 'IV'], [1, 'I']] as Array<[number, string]>) while (k >= v) (out += r), (k -= v);
+    return out;
+  };
 
   // regions on the landmasses divided among regions: one piece each. A detached piece joins
   // the neighbouring region of its realm it touches most; with no such neighbour (or when it
-  // is worth two provinces) a piece worth half a province becomes a region of its own in the
-  // same realm, and a smaller one joins whichever region it touches most
+  // is worth two provinces) a piece worth half a province, or one with no neighbour of its
+  // realm and as large as the smallest island kept, becomes a region of its own in the same
+  // realm; a smaller sliver joins whichever region it touches most
   const extraRegions: RealRegion[] = [];
   {
+    const regionNames = () => new Set([...regionDef.values()].map((x) => x.name));
     const dirName = (base: RealRegion, piece: number[], main: number[]) => {
-      const isl = D.islandNames.find(([, lon, lat]) => {
+      const taken = regionNames();
+      const isl = D.islandNames.find(([n, lon, lat]) => {
         const at = proj(lon, lat);
-        return piece.includes(cellAt(at[0], at[1]));
+        return !taken.has(n) && piece.includes(cellAt(at[0], at[1]));
       })?.[0];
       if (isl) return isl;
+      const town = townOn(piece, (n) => taken.has(n));
+      if (town) return town;
       const mid = (p: number[]) => [p.reduce((s, c) => s + cxOf(c), 0) / p.length, p.reduce((s, c) => s + cyOf(c), 0) / p.length];
       const [ax, ay] = mid(piece);
       const [bx, by] = mid(main);
-      const dir = Math.abs(ax - bx) > Math.abs(ay - by) ? (ax > bx ? 'East' : 'West') : ay > by ? 'South' : 'North';
-      return `${dir} ${base.name}`;
+      const dir = Math.abs(ax - bx) > Math.abs(ay - by) ? (ax > bx ? 'Eastern' : 'Western') : ay > by ? 'Southern' : 'Northern';
+      const name = DIRECTION.test(base.name) ? `Outer ${base.name.replace(DIRECTION, '').trim()}` : `${dir} ${base.name}`;
+      let out = name;
+      for (let k = 2; taken.has(out); k++) out = `${name} ${roman(k)}`;
+      return out;
     };
     for (let round = 0; round < 6; round++) {
       let changed = false;
@@ -551,11 +676,12 @@ export function buildRealMap(D: RealMapDef, log: (l: string) => void = () => {})
           const prov = D.provKm2 * (base.sparse ?? 1);
           const area = p.length * CELL_KM2;
           const sameRealm = to !== undefined && regionDef.get(to)!.realm === base.realm;
-          if (area >= 0.5 * prov && (!sameRealm || area >= 2 * prov)) {
+          // land never changes hands here unless it is a sliver: an exclave large enough to
+          // stand as an island stays with its realm as a region of its own
+          if ((area >= 0.5 * prov || (!sameRealm && area >= D.minIslandKm2)) && (!sameRealm || area >= 2 * prov)) {
             let id = `${r}-${extraRegions.length + 2}`;
             while (regionDef.has(id)) id += 'b';
             const def: RealRegion = { ...base, id, name: dirName(base, p, pieces[0]) };
-            if ([...regionDef.values()].some((x) => x.name === def.name)) def.name = `${def.name} ${extraRegions.length + 2}`;
             extraRegions.push(def);
             regionDef.set(id, def);
             for (const c of p) region[c] = id;
@@ -589,8 +715,9 @@ export function buildRealMap(D: RealMapDef, log: (l: string) => void = () => {})
       const d = set.has(cellAt(p[0], p[1])) ? -1 : Math.hypot(p[0] - x, p[1] - y);
       if (d < bd) (bd = d), (best = name);
     }
-    let name = bd < 80 / KM && best ? best : fallback;
-    for (let k = 2; usedIslandNames.has(name); k++) name = `${fallback} ${k}`;
+    let name = bd < 80 / KM && best ? best : townOn(cells, (n) => usedIslandNames.has(n)) ?? fallback;
+    // numbered in roman numerals: province ids keep letters only, so arabic digits would collide
+    for (let k = 2; usedIslandNames.has(name); k++) name = `${fallback} ${roman(k)}`;
     usedIslandNames.add(name);
     return name;
   };
@@ -603,6 +730,7 @@ export function buildRealMap(D: RealMapDef, log: (l: string) => void = () => {})
     const lat = cells.reduce((s, c) => s + lonlat[c][1], 0) / cells.length;
     void lat;
     const name = islandName(cells, `${regionDef.get(reg)!.name} Isle`);
+    if (regional) log(`  regional landmass ${name}: ${Math.round(cells.length * CELL_KM2)} km², mostly ${reg}, around ${lonlat[cells[Math.floor(cells.length / 2)]].map((v) => v.toFixed(1)).join(', ')}`);
     if (!regional) for (const c of cells) region[c] = reg;
     const count = regional ? 0 : Math.max(1, Math.round((cells.length * CELL_KM2) / (D.provKm2 * (regionDef.get(reg)!.sparse ?? 1))));
     islands.push({ name, poly: outline(G, (c) => comp.label[c] === lab, 2), region: reg, owner: regionDef.get(reg)!.realm, count, cells, label: lab, ...(regional ? { regional: true } : {}) });
@@ -693,6 +821,7 @@ export function buildRealMap(D: RealMapDef, log: (l: string) => void = () => {})
     .map((f) => f.properties as { name: string; latitude: number; longitude: number; pop_max: number; adm0_a3: string })
     .map((p) => ({ ...p, name: p.name.replace(/\s+/g, ' ').trim() }))
     .filter((p) => D.inCrop(p.longitude, p.latitude) && !notYet.has(p.name))
+    .map((p) => (D.popOf ? { ...p, pop_max: Math.round(D.popOf({ name: p.name, adm0: p.adm0_a3, pop: p.pop_max, lon: p.longitude, lat: p.latitude })) } : p))
     .map((p) => ({ ...p, at: proj(p.longitude, p.latitude), period: D.names[p.name] ?? p.name }))
     .filter((p) => {
       const c = cellAt(p.at[0], p.at[1]);
@@ -808,20 +937,25 @@ export function buildRealMap(D: RealMapDef, log: (l: string) => void = () => {})
   void known;
   const townNames = places.filter((p) => !takenNames.has(p.period));
   const dirs = ['North', 'South', 'East', 'West', 'Upper', 'Lower', 'Inner', 'Outer'];
+  // how far from a province's centre a town may lie to name it: wider where provinces are larger
+  const nameKm = (reg: string) => (D.nameKm ?? 140) * Math.sqrt(regionDef.get(reg)?.sparse ?? 1);
   const placeName: WorldSpec['placeName'] = (p, used) => {
     // province ids come from names: two towns spelled apart (Beja, Béja) must not share one
     const usedIds = new Set([...used].map(slug));
     let best: (typeof townNames)[number] | null = null;
     let bd = Infinity;
-    for (const t of townNames) {
-      if (used.has(t.period) || usedIds.has(slug(t.period))) continue;
-      const d = Math.hypot(t.at[0] - p.x, t.at[1] - p.y);
-      if (d > 140 / KM || d >= bd) continue;
-      const c = landCellNear(t.at[0], t.at[1]);
-      if (c < 0 || region[c] !== p.region) continue;
-      (bd = d), (best = t);
+    // the nearest town in the region: within reach of the province first, else anywhere in the region
+    for (const reach of [nameKm(p.region) / KM, (3 * nameKm(p.region)) / KM]) {
+      for (const t of townNames) {
+        if (used.has(t.period) || usedIds.has(slug(t.period))) continue;
+        const d = Math.hypot(t.at[0] - p.x, t.at[1] - p.y);
+        if (d > reach || d >= bd) continue;
+        const c = landCellNear(t.at[0], t.at[1]);
+        if (c < 0 || region[c] !== p.region) continue;
+        (bd = d), (best = t);
+      }
+      if (best) return best.period;
     }
-    if (best) return best.period;
     const reg = regionDef.get(p.region)!.name;
     const cells = regionCells.get(p.region) ?? [];
     let mx = 0;
@@ -832,7 +966,9 @@ export function buildRealMap(D: RealMapDef, log: (l: string) => void = () => {})
     const dx = p.x - mx;
     const dy = p.y - my;
     const prefer = Math.abs(dy) > Math.abs(dx) ? (dy < 0 ? [0, 4, 6, 2, 3] : [1, 5, 7, 2, 3]) : dx > 0 ? [2, 6, 0, 1] : [3, 7, 0, 1];
-    for (const k of [...prefer, ...dirs.keys()]) {
+    // a region already named for a direction (Northern Algeria) takes Upper, Lower, Inner or Outer
+    const order = DIRECTION.test(reg) ? [4, 5, 6, 7] : [...prefer, ...dirs.keys()];
+    for (const k of order) {
       const n = `${dirs[k]} ${reg}`;
       if (!used.has(n) && !usedIds.has(slug(n))) return n;
     }
@@ -886,48 +1022,65 @@ export function buildRealMap(D: RealMapDef, log: (l: string) => void = () => {})
     names: Object.fromEntries(D.nations.map((n) => [n.id, []])),
     placeName,
     coastSeeds: true,
+    onePiece: true,
     offmap,
     cells: raster,
     straitLinks: D.straits.map((s) => ({ name: s.name, a: proj(...s.a), b: proj(...s.b) })),
     straitMax: D.straitMaxKm / KM,
   };
-  const world = generateWorld(spec, log);
+  // a province split in two by an inlet the raster could not resolve: its region's provinces are
+  // placed again from another seed, until every province is one piece (deterministic)
+  const reseed: Record<string, number> = {};
+  const attempt = () => {
+    const world = generateWorld({ ...spec, reseed: { ...reseed } }, log);
 
-  // a strait that turned out to be a land border too (a channel narrower than the raster) is only a border
-  const riverPairs = new Set(world.rivers.map(([a, b]) => [a, b].sort().join('|')));
-  world.straits = world.straits.filter(([a, b]) => !riverPairs.has([a, b].sort().join('|')));
-  const pkg: MapPackage = {
-    format: MAP_FORMAT,
-    version: MAP_FORMAT_VERSION,
-    id: D.id,
-    revision: D.revision,
-    meta: D.meta,
-    rules: { startYear: D.startYear, campaignYears: D.campaignYears },
-    regions: regionDefs.filter((r) => world.provinces.some((p) => p.region === r.id)),
-    nations: D.nations,
-    provinces: world.provinces,
-    straits: world.straits,
-    rivers: world.rivers,
-    seaZones: [],
-    geometry: { bounds: world.geometry.bounds, centers: world.geometry.provinces, edges: world.geometry.edges, waste: world.geometry.waste, labels: world.geometry.labels },
+    // a strait that turned out to be a land border too (a channel narrower than the raster) is only a border
+    const riverPairs = new Set(world.rivers.map(([a, b]) => [a, b].sort().join('|')));
+    world.straits = world.straits.filter(([a, b]) => !riverPairs.has([a, b].sort().join('|')));
+    const pkg: MapPackage = {
+      format: MAP_FORMAT,
+      version: MAP_FORMAT_VERSION,
+      id: D.id,
+      revision: D.revision,
+      meta: D.meta,
+      rules: { startYear: D.startYear, campaignYears: D.campaignYears },
+      regions: regionDefs.filter((r) => world.provinces.some((p) => p.region === r.id)),
+      nations: D.nations,
+      provinces: world.provinces,
+      straits: world.straits,
+      rivers: world.rivers,
+      seaZones: [],
+      geometry: { bounds: world.geometry.bounds, centers: world.geometry.provinces, edges: world.geometry.edges, waste: world.geometry.waste, labels: world.geometry.labels },
+    };
+    pkg.geometry.edges = pkg.geometry.edges.filter((e) => e.pts.some((v, i) => v !== e.pts[i % 2]));
+    const hints = D.depositHints.map((h) => ({ ...h, at: proj(h.lon, h.lat), r: h.km / KM }));
+    placeDeposits(pkg, {
+      key: D.id,
+      climate: D.climate,
+      bias: (p, kind: ResourceKind) => {
+        const c = pkg.geometry.centers[p.id];
+        let w = 1;
+        for (const h of hints) if (h.kind === kind && Math.hypot(c.cx - h.at[0], c.cy - h.at[1]) < h.r) w = Math.max(w, h.weight);
+        return w;
+      },
+    });
+    addSeaZones(pkg);
+    if (D.wrapOcean) wrapZones(pkg);
+    pkg.meta = { ...D.meta, size: sizeFor(pkg.provinces.length) };
+    pkg.rules = rulesFor(D, pkg);
+    const check = validateMapPackage(pkg);
+    return { world, pkg, check };
   };
-  pkg.geometry.edges = pkg.geometry.edges.filter((e) => e.pts.some((v, i) => v !== e.pts[i % 2]));
-  const hints = D.depositHints.map((h) => ({ ...h, at: proj(h.lon, h.lat), r: h.km / KM }));
-  placeDeposits(pkg, {
-    key: D.id,
-    climate: D.climate,
-    bias: (p, kind: ResourceKind) => {
-      const c = pkg.geometry.centers[p.id];
-      let w = 1;
-      for (const h of hints) if (h.kind === kind && Math.hypot(c.cx - h.at[0], c.cy - h.at[1]) < h.r) w = Math.max(w, h.weight);
-      return w;
-    },
-  });
-  addSeaZones(pkg);
-  if (D.wrapOcean) wrapZones(pkg);
-  pkg.meta = { ...D.meta, size: sizeFor(pkg.provinces.length) };
-  pkg.rules = rulesFor(D, pkg);
-  const check = validateMapPackage(pkg);
+  let built = attempt();
+  for (let tries = 0; !built.check.ok && tries < 6; tries++) {
+    const split = built.check.errors.filter((e) => /more than one piece/.test(e.message)).map((e) => built.pkg.provinces.find((p) => p.id === e.ref)?.region);
+    if (!split.length || split.some((r) => !r)) break;
+    for (const r of split) reseed[r!] = (reseed[r!] ?? 0) + 1;
+    log(`provinces in more than one piece (${split.join(', ')}): placing their regions' provinces again`);
+    built = attempt();
+  }
+  const { world, pkg, check } = built;
+  if (!check.ok && process.env.REALMAP_DUMP) writeFileSync(process.env.REALMAP_DUMP, JSON.stringify(pkg));
   if (!check.ok) throw new Error(`${D.id}: the map does not validate: ${check.errors.slice(0, 6).map((e) => e.message).join(' ')}`);
   const report = worldReport(D.meta.name, `npm run genreal -- --map ${D.id}`, spec, world) + extraReport(pkg, check.warnings.map((w) => w.message));
   return { pkg, report, world };
@@ -1043,7 +1196,7 @@ export function writeRealMap(r: RealMapResult): void {
   const nm = new Map(pkg.provinces.map((p) => [p.id, p.name]));
   writeFileSync(
     new URL(`../reports/maps/${pkg.id}-preview.svg`, import.meta.url),
-    previewSvg(world.geometry.bounds, { ...world.geometry, provinces: world.polys } as unknown as Parameters<typeof previewSvg>[1], pkg.straits, (id) => own.get(id) ?? null, (n) => col.get(n)!, (id) => nm.get(id)!, 1),
+    previewSvg(world.geometry.bounds, { ...world.geometry, provinces: shippedOutlines(pkg) } as unknown as Parameters<typeof previewSvg>[1], pkg.straits, (id) => own.get(id) ?? null, (n) => col.get(n)!, (id) => nm.get(id)!, 1),
   );
   writeFileSync(new URL(`../reports/maps/${pkg.id}-map.md`, import.meta.url), report);
 }

@@ -31,7 +31,7 @@
 
 import { airFuel, airUpkeep, bombingLoss } from './air';
 import { C, RESOURCE_INFO, STRATEGIC, TERRAIN, UNITS } from './config';
-import { armiesOfNation, memoize, memoWeek, ownedBy } from './index';
+import { armiesOfNation, memoGeo, memoize, memoWeek, ownedBy } from './index';
 import { nationMods, type Mods } from './modifiers';
 import { fleetFuel, fleetUpkeep, provinceBlockaded, tradeOpen } from './naval';
 import { blocSolidarity, loanInstalment, sameBloc } from './influence';
@@ -179,7 +179,7 @@ export interface ResourcePlan {
 }
 
 export function resourcePlan(sim: Sim, nid: NationId): ResourcePlan {
-  return memoize(sim, 'resourcePlan', nid, () => {
+  return memoGeo(sim, 'resourcePlan', nid, () => {
     const produced = { coal: 0, iron: 0, oil: 0, rubber: 0, nitrates: 0 } as Record<StrategicResource, number>;
     const need = { coal: 0, iron: 0, oil: 0, rubber: 0, nitrates: 0 } as Record<StrategicResource, number>;
     for (const pid of ownedBy(sim, nid)) {
@@ -221,7 +221,7 @@ export function resourcePlan(sim: Sim, nid: NationId): ResourcePlan {
 
 /** Food a realm's provinces produce this month, and what its armies on supply lines eat. */
 export function foodBalance(sim: Sim, nid: NationId): { produced: number; eaten: number } {
-  return memoize(sim, 'foodBalance', nid, () => {
+  return memoGeo(sim, 'foodBalance', nid, () => {
     let sup = 0;
     for (const pid of ownedProvinces(sim, nid)) sup += provinceSupplies(sim, pid);
     let eaten = 0;

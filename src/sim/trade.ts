@@ -25,7 +25,7 @@
 import { C, RESOURCE_INFO, STRATEGIC } from './config';
 import { addMemory, opinion } from './diplomacy';
 import { foodBalance, resourceCap, resourcePlan, stockpileCap, surplusMatches } from './economy';
-import { memoize } from './index';
+import { memoGeo, memoize } from './index';
 import { sameBloc } from './influence';
 import { tradeOpen } from './naval';
 import { PERSONALITIES } from './data/personalities';
@@ -551,7 +551,7 @@ function defaulted(sim: Sim, c: TradeContract, by: NationId, other: NationId, wh
 
 /** Every realm's position in one good, for AI matching: forecast surplus or need a month. */
 export function surplusOf(sim: Sim, nid: NationId, res: Tradeable, months = C.trade.lookahead): { surplus: number; need: number; minStock: number; short: number } {
-  return memoize(sim, 'tradeSurplus', `${nid}|${res}|${months}`, () => {
+  return memoGeo(sim, 'tradeSurplus', `${nid}|${res}|${months}`, () => {
     const f = forecast(sim, nid, res, months);
     const keep = capOf(sim, nid, res) * C.resources.keepShare;
     const minStock = Math.min(...f.map((m) => m.stock));

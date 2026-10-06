@@ -2,7 +2,7 @@
 // checkCommand() never mutates state; applyCommand() validates first and
 // leaves state untouched when it fails (returning a player-readable reason).
 
-import { buildWingProblem, cancelWing, inRange, missionProblem, MISSION_LABELS, rebaseProblem, startWing } from './air';
+import { buildWingProblem, cancelWing, inRange, missionProblem, MISSION_LABELS, rebaseProblem, startWing, touchWings } from './air';
 import { C, SHIPS, WINGS } from './config';
 import { nextMemoEpoch } from './index';
 import { buildProblem, cancelProblem, cancelProject, startProject } from './construction';
@@ -363,6 +363,7 @@ function execute(sim: Sim, cmd: Command): CommandResult {
       const w = st.wings[cmd.wing];
       w.mission = cmd.mission;
       w.target = cmd.mission === 'idle' ? null : cmd.target;
+      touchWings(sim);
       return { ok: true };
     }
     case 'rebaseWing': {
@@ -372,10 +373,12 @@ function execute(sim: Sim, cmd: Command): CommandResult {
         w.mission = 'idle';
         w.target = null;
       }
+      touchWings(sim);
       return { ok: true };
     }
     case 'disbandWing':
       delete st.wings[cmd.wing];
+      touchWings(sim);
       return { ok: true, message: 'Air wing disbanded.' };
     case 'cancelBuild':
       cancelProject(sim, cmd.province);

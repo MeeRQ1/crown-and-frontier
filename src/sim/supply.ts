@@ -13,7 +13,7 @@
 
 import { C, TERRAIN } from './config';
 import { CostHeap } from './heap';
-import { armiesIn } from './index';
+import { armiesIn, geoRev } from './index';
 import { nationMods } from './modifiers';
 import { fleetEpoch, straitBlocked } from './naval';
 import { isFriendly, type Sim } from './state';
@@ -45,12 +45,57 @@ export function isSupplySource(sim: Sim, pid: ProvinceId): boolean {
   return sim.state.nations[p.owner]?.capital === pid;
 }
 
+/** Railway level from which a supply step costs less (construction bumps geography only on reaching it). */
+export const RAIL_STEP = 2;
+
 function stepCost(sim: Sim, pid: ProvinceId): number {
   const t = sim.world.prov[pid].terrain;
   let c = 1;
   if (t === 'mountains' || t === 'marsh') c += 0.5;
-  if (sim.state.provinces[pid].infra >= 2) c -= 0.5;
+  if (sim.state.provinces[pid].infra >= RAIL_STEP) c -= 0.5;
   return Math.max(0.5, c);
+}
+
+const sourcesMemo = new WeakMap<object, { tick: number; geo: number; key: string }>();
+
+/** Which provinces are supply sources this week, as a hash (shared by every realm). */
+function sourcesKey(sim: Sim): string {
+  const st = sim.state;
+  const geo = geoRev(sim);
+  const hit = sourcesMemo.get(st);
+  if (hit && hit.tick === st.tick && hit.geo === geo) return hit.key;
+  let h = 2166136261;
+  let n = 0;
+  const ids = sim.world.provIds;
+  for (let i = 0; i < ids.length; i++) {
+    if (!isSupplySource(sim, ids[i])) continue;
+    h = Math.imul(h ^ i, 16777619) >>> 0;
+    n++;
+  }
+  const key = `${n}:${h}`;
+  sourcesMemo.set(st, { tick: st.tick, geo, key });
+  return key;
+}
+
+/** The straits closed to a realm by enemy warships, as a bit string. */
+const blockedMemo = new WeakMap<object, Map<NationId, { tick: number; fleets: number; geo: number; key: string }>>();
+
+function blockedKey(sim: Sim, nid: NationId): string {
+  if (!sim.world.straitZone.size) return '';
+  const st = sim.state;
+  const fleets = fleetEpoch(sim);
+  const geo = geoRev(sim);
+  let per = blockedMemo.get(st);
+  if (!per) blockedMemo.set(st, (per = new Map()));
+  const hit = per.get(nid);
+  if (hit && hit.tick === st.tick && hit.fleets === fleets && hit.geo === geo) return hit.key;
+  let key = '';
+  for (const k of sim.world.straitZone.keys()) {
+    const [a, b] = k.split('|');
+    key += straitBlocked(sim, nid, a, b) ? '1' : '0';
+  }
+  per.set(nid, { tick: st.tick, fleets, geo, key });
+  return key;
 }
 
 /** Supply distance from the nearest friendly source to every province (Infinity if unreachable). */
@@ -60,8 +105,9 @@ export function supplyDistances(sim: Sim, nid: NationId): Record<ProvinceId, num
     per = new Map();
     distCache.set(sim.state, per);
   }
-  // sea control changes which straits carry supply
-  const key = `${sim.state.tick}|${sim.state.rev}|${fleetEpoch(sim)}`;
+  // the distances hold until control, sides, forts or railways change (geoRev), the supply
+  // sources change (integration, revolts) or sea control opens or shuts one of our straits
+  const key = `${geoRev(sim)}|${sourcesKey(sim)}|${blockedKey(sim, nid)}`;
   const hit = per.get(nid);
   if (hit && hit.key === key) return hit.dist;
 

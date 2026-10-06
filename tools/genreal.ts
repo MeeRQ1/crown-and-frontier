@@ -1,11 +1,12 @@
 // Builds the real-world campaign maps from Natural Earth (tools/realmap.ts):
-//   npm run genreal -- --map europe
+//   npm run genreal -- --map europe   (or earth)
 //     src/data/maps/<id>.scenario.json, <id>.map.json, reports/maps/<id>-map.md, <id>-preview.svg
 
+import { earthDef } from './earth.data';
 import { europeDef } from './europe.data';
 import { buildRealMap, writeRealMap, type RealMapDef } from './realmap';
 
-export const REAL_MAPS: Record<string, () => RealMapDef> = { europe: europeDef };
+export const REAL_MAPS: Record<string, () => RealMapDef> = { europe: europeDef, earth: earthDef };
 
 const isMain = process.argv[1]?.endsWith('genreal.ts');
 if (isMain) {

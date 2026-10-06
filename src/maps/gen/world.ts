@@ -18,7 +18,8 @@
 
 import type { NationDef, ProvinceDef, RegionDef, Terrain } from '../../sim/types';
 import { industrialDeposit, type LegacyResource } from '../deposits';
-import type { MapEdge, MapLabelDef } from '../format';
+import { NON_PROVINCE_SIDES, type MapEdge, type MapLabelDef } from '../format';
+import { loopsFromEdges, type EdgeLike } from '../rings';
 import { buildMap, fillSea, hashStr, MinHeap, mulberry, pointInPoly, polylineDist, segIntersect, type BuiltMap, type Kind, type Pt, type Seed } from './core';
 
 export interface Anchor {
@@ -130,6 +131,10 @@ export interface WorldSpec {
    * towns in them); null leaves it to the culture lists in `names`.
    */
   placeName?: (p: { x: number; y: number; region: string; owner: string | null }, used: Set<string>) => string | null;
+  /** shore cells joined to their province only at a corner go to a neighbour too (a province is then always one piece) */
+  onePiece?: boolean;
+  /** per region, a number added to the seed its provinces are placed from (a retry after a bad placement) */
+  reseed?: Record<string, number>;
   /** open-sea seed spacing (default 96) */
   seaSpacing?: number;
   /**
@@ -166,6 +171,9 @@ export interface WorldResult {
 export class WorldError extends Error {}
 
 /** Generates a world from its spec. `log` receives progress lines. */
+/** Land borders shorter than this are drawn as a corner and are not routes. */
+const MIN_BORDER = 14;
+
 export function generateWorld(S: WorldSpec, log: (line: string) => void = () => {}): WorldResult {
   const K = S.scale;
   const G = S.grid ?? 14;
@@ -430,7 +438,19 @@ export function generateWorld(S: WorldSpec, log: (line: string) => void = () => 
     if (k < 0) fail(`${r.id}: count too small`);
     if (!k) continue;
     if (!cells.length) fail(`${r.id}: region has no land`);
-    kmeans(cells, k, pinned, hashStr(r.id)).forEach((c, n) => provs.push({ tmp: `g_${r.id}_${n}`, x: c.x, y: c.y, region: r.id, owner: owners[c.own], fixed: null, island: null, land: Math.max(0, cell[idx(c.x, c.y)]) }));
+    const placed = kmeans(cells, k, pinned, hashStr(r.id));
+    // a retry nudges the region's provinces off the placement that failed
+    const again = S.reseed?.[r.id] ?? 0;
+    if (again) {
+      const rnd = mulberry(hashStr(`${r.id}:again:${again}`));
+      const mine = new Set(cells);
+      for (const c of placed) {
+        const x = c.x + (rnd() * 2 - 1) * 9 * again;
+        const y = c.y + (rnd() * 2 - 1) * 9 * again;
+        if (mine.has(idx(x, y))) (c.x = x), (c.y = y);
+      }
+    }
+    placed.forEach((c, n) => provs.push({ tmp: `g_${r.id}_${n}`, x: c.x, y: c.y, region: r.id, owner: owners[c.own], fixed: null, island: null, land: Math.max(0, cell[idx(c.x, c.y)]) }));
   }
   S.islands.forEach((isl, k) => {
     if (isl.regional) return;
@@ -668,7 +688,7 @@ export function generateWorld(S: WorldSpec, log: (line: string) => void = () => 
         const q = [k];
         for (let h = 0; h < q.length; h++) for (const { j } of adj.get(q[h]) ?? []) if (own.has(j) && !reached.has(j)) (reached.add(j), q.push(j));
         for (const i of own) {
-          if (reached.has(i)) continue;
+          if (reached.has(i) || detached.has(i)) continue;
           const votes = new Map<string, number>();
           for (const { j, len } of adj.get(i) ?? []) {
             const id = idOf(j);
@@ -684,6 +704,49 @@ export function generateWorld(S: WorldSpec, log: (line: string) => void = () => 
     return moved;
   }
   const shore = S.coastSeeds ? shoreSeeds() : [];
+  /** shore cells moved off a piece held at a corner: reattachment leaves them where they went */
+  const detached = new Map<number, number>();
+
+  /**
+   * A piece of a province held on only at a corner (a border shorter than the
+   * minimum is drawn as a point) is a second loop in its outline: its shore
+   * cells go to the neighbour that borders the piece most.
+   */
+  function detachPieces(Mb: BuiltMap): number {
+    const first = provs.length;
+    const byProv = new Map<string, EdgeLike[]>();
+    for (const e of Mb.edges) for (const s of [e.a, e.b]) (byProv.get(s) ?? byProv.set(s, []).get(s)!).push(e);
+    let moved = 0;
+    for (const p of provs) {
+      const { loops } = loopsFromEdges(p.tmp, byProv.get(p.tmp) ?? []);
+      if (loops.length < 2) continue;
+      const outer = loops.reduce((a, b) => (b.area > a.area ? b : a));
+      for (const l of loops) {
+        if (l === outer || l.sides.every((x) => (NON_PROVINCE_SIDES as readonly string[]).includes(x))) continue;
+        const ring: Pt[] = [];
+        const onRing = new Set<string>();
+        for (let k = 0; k < l.ring.length; k += 2) ring.push([l.ring[k], l.ring[k + 1]]), onRing.add(`${l.ring[k]},${l.ring[k + 1]}`);
+        // the neighbour with the longest drawn border along the piece takes it
+        const len = new Map<string, number>();
+        for (const e of byProv.get(p.tmp) ?? []) {
+          const o = e.a === p.tmp ? e.b : e.a;
+          if ((NON_PROVINCE_SIDES as readonly string[]).includes(o) || !onRing.has(`${e.pts[0]},${e.pts[1]}`)) continue;
+          let d = 0;
+          for (let k = 2; k < e.pts.length; k += 2) d += Math.hypot(e.pts[k] - e.pts[k - 2], e.pts[k + 1] - e.pts[k - 1]);
+          len.set(o, (len.get(o) ?? 0) + d);
+        }
+        const to = [...len].sort((a, b) => b[1] - a[1] || (a[0] < b[0] ? -1 : 1))[0]?.[0];
+        if (!to) continue;
+        for (let i = first; i < first + shore.length; i++) {
+          if (shore[i - first].id !== p.tmp) continue;
+          const sd = Mb.seeds[i];
+          // a cell is moved off a corner at most twice: no passing back and forth
+          if ((detached.get(i) ?? 0) < 2 && pointInPoly(sd.x, sd.y, ring)) (shore[i - first].id = to), detached.set(i, (detached.get(i) ?? 0) + 1), moved++;
+        }
+      }
+    }
+    return moved;
+  }
 
   function makeSeeds(extraPeaks: Pt[]): Seed[] {
     const seeds: Seed[] = [];
@@ -704,7 +767,7 @@ export function generateWorld(S: WorldSpec, log: (line: string) => void = () => 
   const extraPeaks: Pt[] = [];
   for (let round = 0; round < 8; round++) {
     // a real coastline's lakes and the land beyond its frame come out as one outline per body
-    built = buildMap(makeSeeds(extraPeaks), scaledBounds, straitsTmp, { minBorder: 14, noiseMin: 9.5, ...(S.coastSeeds ? { mergeWaste: ['lake', 'edge'] as Kind[] } : {}) });
+    built = buildMap(makeSeeds(extraPeaks), scaledBounds, straitsTmp, { minBorder: MIN_BORDER, noiseMin: 9.5, ...(S.coastSeeds ? { mergeWaste: ['lake', 'edge'] as Kind[] } : {}) });
     // borders that leak through a ridge get another peak where they cross it
     let leaks = 0;
     for (const [a, ns] of Object.entries(built.neighbors)) {
@@ -726,7 +789,7 @@ export function generateWorld(S: WorldSpec, log: (line: string) => void = () => 
         }
       }
     }
-    const moved = S.coastSeeds ? reattachShore(built) : 0;
+    const moved = S.coastSeeds ? reattachShore(built) + (S.onePiece ? detachPieces(built) : 0) : 0;
     if (moved) log(`round ${round}: ${moved} shore cell(s) cut off from their province reattached`);
     if (!leaks && !moved) break;
     if (leaks) log(`round ${round}: ${leaks} border(s) crossed a ridge; closing them`);

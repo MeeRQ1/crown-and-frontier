@@ -132,7 +132,7 @@ export function giveGuarantee(sim: Sim, by: NationId, of: NationId): void {
   st.guarantees.push({ by, of, since: st.tick });
   st.nations[by].stats.guaranteesGiven++;
   addMemory(sim, of, by, 'guarantee', C.guarantee.opinion, 0);
-  bump(sim);
+  bump(sim, 'terms');
   notify(sim, of, 'normal', 'guarantee', `${nationName(sim, by)} guarantees our independence: they will defend us if we are attacked.`);
   notify(sim, null, 'low', 'guarantee', `${nationName(sim, by)} guarantees the independence of ${nationName(sim, of)}.`);
 }
@@ -149,7 +149,7 @@ export function endGuarantee(sim: Sim, by: NationId, of: NationId, broken: boole
     addMemory(sim, of, by, 'betrayal', C.guarantee.revokeOpinion, 0.3);
     notify(sim, of, 'normal', 'guarantee', `${nationName(sim, by)} no longer guarantees our independence.`);
   }
-  bump(sim);
+  bump(sim, 'terms');
 }
 
 // ───────────────────────────── Loans ────────────────────────────────────────
@@ -274,7 +274,7 @@ export function foundBloc(sim: Sim, nid: NationId, partner: NationId): TradeBloc
   const b: TradeBloc = { id: `b${st.counters.bloc}`, name: `${sim.world.nationDefs[nid].adjective} Customs Union`, leader: nid, members: [nid, partner].sort(), since: st.tick };
   st.blocs.push(b);
   st.nations[nid].treasury -= C.bloc.cost;
-  bump(sim);
+  bump(sim, 'terms');
   notify(sim, null, 'low', 'bloc', `${nationName(sim, nid)} and ${nationName(sim, partner)} found the ${b.name}.`);
   notify(sim, partner, 'normal', 'bloc', `We joined ${nationName(sim, nid)} in founding the ${b.name}.`);
   return b;
@@ -336,7 +336,7 @@ export function addToBloc(sim: Sim, blocId: string, nid: NationId): void {
   if (!b || b.members.includes(nid)) return;
   b.members.push(nid);
   b.members.sort();
-  bump(sim);
+  bump(sim, 'terms');
   for (const m of b.members) if (m !== nid) notify(sim, m, 'low', 'bloc', `${nationName(sim, nid)} joins the ${b.name}.`);
   notify(sim, nid, 'normal', 'bloc', `We joined the ${b.name}.`);
 }
@@ -351,7 +351,7 @@ export function leaveBloc(sim: Sim, nid: NationId, why?: string): void {
     st.blocs = st.blocs.filter((x) => x !== b);
     for (const m of b.members) notify(sim, m, 'normal', 'bloc', `The ${b.name} has dissolved.`);
   } else for (const m of b.members) notify(sim, m, 'low', 'bloc', `${nationName(sim, nid)} left the ${b.name}${why ? ` (${why})` : ''}.`);
-  bump(sim);
+  bump(sim, 'terms');
 }
 
 /**
@@ -410,7 +410,7 @@ export function monthlyInfluence(sim: Sim): void {
     if (!st.nations[h]?.alive) delete st.influence[h];
     else for (const t of Object.keys(st.influence[h])) if (!st.nations[t]?.alive) delete st.influence[h][t];
   }
-  bump(sim);
+  bump(sim, 'terms');
   for (const t of alive) {
     const now = sphereOf(sim, t);
     const was = before.get(t);

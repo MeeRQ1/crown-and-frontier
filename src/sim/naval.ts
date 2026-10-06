@@ -24,7 +24,7 @@
 // coast.
 
 import { C, SHIPS, SHIP_TYPES } from './config';
-import { memoize, touchArmies } from './index';
+import { memoGeo, touchArmies } from './index';
 import { armyCap } from './influence';
 import { nationMods } from './modifiers';
 import { range } from './rng';
@@ -388,7 +388,7 @@ interface Balance {
 
 /** Naval balance in a zone from `nid`'s side (friends: us, allies, co-belligerents). */
 export function zoneBalance(sim: Sim, zone: ZoneId, nid: NationId): Balance {
-  return memoize(sim, 'zoneBalance', `${zone}|${nid}|${fleetEpoch(sim)}`, () => {
+  return memoGeo(sim, 'zoneBalance', `${zone}|${nid}|${fleetEpoch(sim)}`, () => {
     const b: Balance = { friendSurface: 0, hostileSurface: 0, hostileSubs: 0 };
     for (const f of fleetsIn(sim, zone)) {
       if (atWar(sim, nid, f.nation)) {
@@ -425,7 +425,7 @@ export function provinceBlockaded(sim: Sim, pid: ProvinceId): boolean {
 
 /** Share of a realm's coastal development that is blockaded (0–1). */
 export function blockadeShare(sim: Sim, nid: NationId): number {
-  return memoize(sim, 'blockadeShare', `${nid}|${fleetEpoch(sim)}`, () => {
+  return memoGeo(sim, 'blockadeShare', `${nid}|${fleetEpoch(sim)}`, () => {
     let all = 0;
     let cut = 0;
     for (const pid of sim.world.provIds) {
