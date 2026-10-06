@@ -176,8 +176,30 @@ export interface Division {
   props: Record<string, unknown>;
 }
 
+/**
+ * Regions made automatically from the divisions (a world map has too many to
+ * author): each division gets a realm; within a realm and a group (usually the
+ * country) the divisions are clustered into regions of about the target area.
+ */
+export interface AutoRegions {
+  /** the realm of a division at a point; null leaves it off the map; undefined is an error */
+  realmOf(d: Division, lon: number, lat: number): string | null | undefined;
+  /** the group a division's regions stay within (default: its country) */
+  groupOf?(d: Division, realm: string): string;
+  /** target region area in km² for a group at a latitude */
+  targetKm2(group: string, realm: string, lat: number): number;
+  /** province area multiplier (thinly settled land gets larger provinces) */
+  sparse(group: string, realm: string, lat: number): number;
+  biome(group: string, lat: number, lon: number): Partial<Record<Terrain, number>>;
+  integ?(group: string, realm: string): [number, number] | undefined;
+  /** the region's name, from its group and its divisions (largest first); `single` when the group is one region */
+  name(group: string, realm: string, divisions: Division[], single: boolean): string;
+}
+
 export interface RealMapDef {
   id: string;
+  /** regions made from the divisions instead of `regions` and `classify` */
+  auto?: AutoRegions;
   revision: number;
   meta: MapMeta;
   startYear: number;
@@ -365,20 +387,113 @@ export function buildRealMap(D: RealMapDef, log: (l: string) => void = () => {})
     return { adm0: String(p.adm0_a3), name: String(p.name), group: String(p.region ?? ''), props: p };
   };
   const divCache = new Map<number, Division>();
-  for (let c = 0; c < CELLS; c++) {
-    if (!mask[c]) continue;
-    if (admin[c] < 0) {
-      mask[c] = 0;
-      continue;
+  const divOf = (c: number) => divCache.get(admin[c]) ?? divCache.set(admin[c], division(admin[c])).get(admin[c])!;
+  let declared = D.regions;
+  if (D.auto) declared = autoRegions(D.auto);
+  else
+    for (let c = 0; c < CELLS; c++) {
+      if (!mask[c]) continue;
+      if (admin[c] < 0) {
+        mask[c] = 0;
+        continue;
+      }
+      const d = divOf(c);
+      const r = D.classify(d, lonlat[c][0], lonlat[c][1]);
+      if (r === undefined) unknown.set(`${d.adm0}/${d.name}`, (unknown.get(`${d.adm0}/${d.name}`) ?? 0) + 1);
+      if (r) region[c] = r;
+      else (mask[c] = 0), (leftOut[c] = r === null ? 1 : 0);
     }
-    const d = divCache.get(admin[c]) ?? divCache.set(admin[c], division(admin[c])).get(admin[c])!;
-    const r = D.classify(d, lonlat[c][0], lonlat[c][1]);
-    if (r === undefined) unknown.set(`${d.adm0}/${d.name}`, (unknown.get(`${d.adm0}/${d.name}`) ?? 0) + 1);
-    if (r) region[c] = r;
-    else (mask[c] = 0), (leftOut[c] = r === null ? 1 : 0);
-  }
   if (unknown.size) throw new Error(`${D.id}: divisions without a region: ${[...unknown].map(([k, n]) => `${k} (${n} cells)`).join(', ')}`);
-  const regionDef = new Map(D.regions.map((r) => [r.id, r]));
+
+  /** Auto mode: realm per cell, then divisions clustered into regions within each realm and group. */
+  function autoRegions(A: AutoRegions): RealRegion[] {
+    interface Unit { realm: string; group: string; div: Division; cells: number; sx: number; sy: number; lat: number }
+    const units = new Map<string, Unit>();
+    const unitOf = new Array<Unit | null>(CELLS).fill(null);
+    for (let c = 0; c < CELLS; c++) {
+      if (!mask[c]) continue;
+      if (admin[c] < 0) {
+        mask[c] = 0;
+        continue;
+      }
+      const d = divOf(c);
+      const realm = A.realmOf(d, lonlat[c][0], lonlat[c][1]);
+      if (realm === undefined) {
+        unknown.set(`${d.adm0}/${d.name}`, (unknown.get(`${d.adm0}/${d.name}`) ?? 0) + 1);
+        continue;
+      }
+      if (realm === null) {
+        mask[c] = 0;
+        leftOut[c] = 1;
+        continue;
+      }
+      const group = A.groupOf?.(d, realm) ?? d.adm0;
+      const key = `${realm}|${group}|${admin[c]}`;
+      const u = units.get(key) ?? units.set(key, { realm, group, div: d, cells: 0, sx: 0, sy: 0, lat: 0 }).get(key)!;
+      u.cells++;
+      u.sx += cxOf(c);
+      u.sy += cyOf(c);
+      u.lat += lonlat[c][1];
+      unitOf[c] = u;
+    }
+    const out: RealRegion[] = [];
+    const regionOfUnit = new Map<Unit, string>();
+    const groups = new Map<string, Unit[]>();
+    for (const u of units.values()) (groups.get(`${u.realm}|${u.group}`) ?? groups.set(`${u.realm}|${u.group}`, []).get(`${u.realm}|${u.group}`)!).push(u);
+    const usedIds = new Set<string>();
+    for (const [gk, list] of [...groups].sort((a, b) => (a[0] < b[0] ? -1 : 1))) {
+      const [realm, group] = gk.split('|');
+      list.sort((a, b) => b.cells - a.cells || (a.div.name < b.div.name ? -1 : 1));
+      const cells = list.reduce((s, u) => s + u.cells, 0);
+      const lat = list.reduce((s, u) => s + u.lat, 0) / cells;
+      const k = Math.max(1, Math.min(list.length, Math.round((cells * CELL_KM2) / A.targetKm2(group, realm, lat))));
+      // weighted k-means over the divisions' centres; the largest divisions seed it, then the farthest
+      const pt = (u: Unit): Pt => [u.sx / u.cells, u.sy / u.cells];
+      const centres: Pt[] = [pt(list[0])];
+      while (centres.length < k) {
+        let best = list[0];
+        let bd = -1;
+        for (const u of list) {
+          const d = Math.min(...centres.map((c) => Math.hypot(c[0] - pt(u)[0], c[1] - pt(u)[1]))) * Math.sqrt(u.cells);
+          if (d > bd) (bd = d), (best = u);
+        }
+        centres.push(pt(best));
+      }
+      const assign = new Map<Unit, number>();
+      for (let it = 0; it < 30; it++) {
+        for (const u of list) {
+          let bi = 0;
+          let bd = Infinity;
+          centres.forEach((c, i) => {
+            const d = Math.hypot(c[0] - pt(u)[0], c[1] - pt(u)[1]);
+            if (d < bd) (bd = d), (bi = i);
+          });
+          assign.set(u, bi);
+        }
+        centres.forEach((_, i) => {
+          const mine = list.filter((u) => assign.get(u) === i);
+          const w = mine.reduce((s, u) => s + u.cells, 0);
+          if (w) centres[i] = [mine.reduce((s, u) => s + u.sx, 0) / w, mine.reduce((s, u) => s + u.sy, 0) / w];
+        });
+      }
+      const clusters = centres.map((_, i) => list.filter((u) => assign.get(u) === i)).filter((m) => m.length);
+      clusters.forEach((m) => {
+        const cl = m.reduce((s, u) => s + u.cells, 0);
+        const la = m.reduce((s, u) => s + u.lat, 0) / cl;
+        const lo = lonlat[cellAt(m[0].sx / m[0].cells, m[0].sy / m[0].cells)][0];
+        const name = A.name(group, realm, m.map((u) => u.div), clusters.length === 1);
+        let id = slug(`${group}-${name}`).slice(0, 40) || slug(group);
+        for (let n = 2; usedIds.has(id); n++) id = `${slug(`${group}-${name}`).slice(0, 36)}-${n}`;
+        usedIds.add(id);
+        out.push({ id, name, realm, biome: A.biome(group, la, lo), sparse: A.sparse(group, realm, la), integ: A.integ?.(group, realm) });
+        for (const u of m) regionOfUnit.set(u, id);
+      });
+    }
+    for (let c = 0; c < CELLS; c++) if (unitOf[c]) region[c] = regionOfUnit.get(unitOf[c]!)!;
+    log(`auto regions: ${out.length} from ${units.size} divisions in ${groups.size} groups`);
+    return out;
+  }
+  const regionDef = new Map(declared.map((r) => [r.id, r]));
   for (let c = 0; c < CELLS; c++) if (region[c] && !regionDef.has(region[c]!)) throw new Error(`${D.id}: classify returned an undeclared region "${region[c]}"`);
 
   // landmasses: the largest is the mainland; large ones are divided among regions; small ones are whole islands
@@ -395,13 +510,28 @@ export function buildRealMap(D: RealMapDef, log: (l: string) => void = () => {})
   const mainLabel = masses[0][0];
   const isRegionalLabel = new Map<number, boolean>(masses.map(([k, cells], i) => [k, i === 0 || cells.length * CELL_KM2 >= D.regionalKm2]));
 
-  // regions on the landmasses divided among regions: one piece each; small enclaves join their surroundings
+  // regions on the landmasses divided among regions: one piece each. A detached piece joins
+  // the neighbouring region of its realm it touches most; with no such neighbour (or when it
+  // is worth two provinces) a piece worth half a province becomes a region of its own in the
+  // same realm, and a smaller one joins whichever region it touches most
+  const extraRegions: RealRegion[] = [];
   {
-    let changed = true;
-    let rounds = 0;
-    while (changed && rounds++ < 6) {
-      changed = false;
+    const dirName = (base: RealRegion, piece: number[], main: number[]) => {
+      const isl = D.islandNames.find(([, lon, lat]) => {
+        const at = proj(lon, lat);
+        return piece.includes(cellAt(at[0], at[1]));
+      })?.[0];
+      if (isl) return isl;
+      const mid = (p: number[]) => [p.reduce((s, c) => s + cxOf(c), 0) / p.length, p.reduce((s, c) => s + cyOf(c), 0) / p.length];
+      const [ax, ay] = mid(piece);
+      const [bx, by] = mid(main);
+      const dir = Math.abs(ax - bx) > Math.abs(ay - by) ? (ax > bx ? 'East' : 'West') : ay > by ? 'South' : 'North';
+      return `${dir} ${base.name}`;
+    };
+    for (let round = 0; round < 6; round++) {
+      let changed = false;
       const seen = new Uint8Array(CELLS);
+      const piecesOf = new Map<string, number[][]>();
       for (let c0 = 0; c0 < CELLS; c0++) {
         if (seen[c0] || !mask[c0] || !isRegionalLabel.get(comp.label[c0])) continue;
         const r = region[c0];
@@ -410,53 +540,36 @@ export function buildRealMap(D: RealMapDef, log: (l: string) => void = () => {})
         for (let k = 0; k < piece.length; k++) for (const n of nbrs4(piece[k])) if (!seen[n] && mask[n] && region[n] === r && comp.label[n] === comp.label[c0]) (seen[n] = 1), piece.push(n);
         (piecesOf.get(r!) ?? piecesOf.set(r!, []).get(r!)!).push(piece);
       }
-      for (const [r, pieces] of piecesOf) {
+      for (const [r, pieces] of [...piecesOf].sort((a, b) => (a[0] < b[0] ? -1 : 1))) {
         if (pieces.length < 2) continue;
-        pieces.sort((a, b) => b.length - a.length);
-        // keep the largest, and any other piece on its own landmass worth a province (a later sub-region)
+        pieces.sort((a, b) => b.length - a.length || a[0] - b[0]);
+        const base = regionDef.get(r)!;
         for (const p of pieces.slice(1)) {
-          const own = comp.label[p[0]] !== comp.label[pieces[0][0]];
-          if (own && p.length * CELL_KM2 >= 0.5 * D.provKm2 * (regionDef.get(r)!.sparse ?? 1)) continue;
-          // otherwise the neighbouring region it touches most
           const votes = new Map<string, number>();
-          for (const c of p) for (const n of nbrs4(c)) if (mask[n] && region[n] !== r && region[n]) votes.set(region[n]!, (votes.get(region[n]!) ?? 0) + 1);
+          for (const c of p) for (const n of nbrs4(c)) if (mask[n] && region[n] !== r && region[n]) votes.set(region[n]!, (votes.get(region[n]!) ?? 0) + (regionDef.get(region[n]!)!.realm === base.realm ? 1000 : 1));
           const to = [...votes].sort((a, b) => b[1] - a[1] || (a[0] < b[0] ? -1 : 1))[0]?.[0];
-          if (to) {
+          const prov = D.provKm2 * (base.sparse ?? 1);
+          const area = p.length * CELL_KM2;
+          const sameRealm = to !== undefined && regionDef.get(to)!.realm === base.realm;
+          if (area >= 0.5 * prov && (!sameRealm || area >= 2 * prov)) {
+            let id = `${r}-${extraRegions.length + 2}`;
+            while (regionDef.has(id)) id += 'b';
+            const def: RealRegion = { ...base, id, name: dirName(base, p, pieces[0]) };
+            if ([...regionDef.values()].some((x) => x.name === def.name)) def.name = `${def.name} ${extraRegions.length + 2}`;
+            extraRegions.push(def);
+            regionDef.set(id, def);
+            for (const c of p) region[c] = id;
+            changed = true;
+          } else if (to) {
             for (const c of p) region[c] = to;
             changed = true;
           }
         }
       }
-      piecesOf.clear();
+      if (!changed) break;
     }
   }
-  // a region present on two landmasses divided among regions: the smaller part becomes its own region
-  const extraRegions: RealRegion[] = [];
-  {
-    const where = new Map<string, Map<number, number>>();
-    for (let c = 0; c < CELLS; c++) {
-      if (!mask[c] || !isRegionalLabel.get(comp.label[c])) continue;
-      const m = where.get(region[c]!) ?? where.set(region[c]!, new Map()).get(region[c]!)!;
-      m.set(comp.label[c], (m.get(comp.label[c]) ?? 0) + 1);
-    }
-    for (const [r, m] of where) {
-      if (m.size < 2) continue;
-      const parts = [...m].sort((a, b) => b[1] - a[1]);
-      parts.slice(1).forEach(([lab], n) => {
-        const base = regionDef.get(r)!;
-        const id = `${r}-${n + 2}`;
-        const isl = D.islandNames.find(([, lon, lat]) => {
-          const at = proj(lon, lat);
-          return comp.label[cellAt(at[0], at[1])] === lab;
-        })?.[0];
-        const def: RealRegion = { ...base, id, name: isl ?? `${base.name} (${n + 2})` };
-        extraRegions.push(def);
-        regionDef.set(id, def);
-        for (let c = 0; c < CELLS; c++) if (mask[c] && comp.label[c] === lab && region[c] === r) region[c] = id;
-      });
-    }
-  }
-  const allRegions = [...D.regions, ...extraRegions];
+  const allRegions = [...declared, ...extraRegions];
 
   // the raster for the generator: 0 mainland, k+1 island k (regional or whole), -2 lakes, -1 sea
   const islands: Array<IslandSpec & { cells: number[]; label: number }> = [];
@@ -935,4 +1048,3 @@ export function writeRealMap(r: RealMapResult): void {
   writeFileSync(new URL(`../reports/maps/${pkg.id}-map.md`, import.meta.url), report);
 }
 
-const piecesOf = new Map<string, number[][]>();
