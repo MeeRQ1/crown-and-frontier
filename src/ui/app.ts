@@ -28,6 +28,7 @@ import { dialog, pendingDecisions, renderDock } from './panels/dialogs';
 import { attention, renderHud } from './panels/hud';
 import { renderInspector } from './panels/inspector';
 import { renderLedger, type LedgerTab } from './panels/ledgers';
+import type { LogFilter } from './ledgers/chronicle';
 import { Minimap, renderModes, renderNavCluster } from './panels/mapui';
 import { openMenuDialog, renderEndScreen, renderMenu, screenCleanup } from './screens';
 import { loadSettings, saveSettings, type UISettings } from './settings';
@@ -49,7 +50,7 @@ export interface UIState {
   split: Record<string, number>;
   ledgerTab: LedgerTab | null;
   diploTarget: NationId | null;
-  logFilter: 'all' | 'urgent' | 'battles';
+  logFilter: LogFilter;
   inspectorPeek: boolean;
   presentationOpen: boolean;
   dockOpen: boolean;
@@ -62,6 +63,11 @@ export interface UIState {
   /** Industry & Trade: the good in the workspace, and a contract being drafted */
   tradeGood: Tradeable | null;
   tradeDraft: ContractTerms | null;
+  /** the technology and the focus shown in the Research and National Focus inspectors */
+  techSel: string | null;
+  focusSel: string | null;
+  /** the How to Play article open */
+  helpTopic: string | null;
 }
 
 const RAIL: Array<{ tab: LedgerTab; label: string; icon: Parameters<typeof icon>[0]; key: string; desk?: boolean }> = [
@@ -129,6 +135,8 @@ export class App {
   private hoverPos: { x: number; y: number } | null = null;
   private pointerDown = false;
   private resizeObs: ResizeObserver | null = null;
+  /** measures the legend and mode bar so the decision dock can stack above them */
+  private modesObs: ResizeObserver | null = null;
   private lastAlertProvince: ProvinceId | null = null;
 
   // DOM
@@ -194,7 +202,7 @@ export class App {
   }
 
   private freshUI(): UIState {
-    return { peace: null, settle: {}, counter: null, split: {}, ledgerTab: null, diploTarget: null, logFilter: 'all', inspectorPeek: false, presentationOpen: false, dockOpen: false, dockItem: null, attentionOpen: false, groupOrders: false, legendOpen: this.settings?.showLegend ?? true, tradeGood: null, tradeDraft: null };
+    return { peace: null, settle: {}, counter: null, split: {}, ledgerTab: null, diploTarget: null, logFilter: 'all', inspectorPeek: false, presentationOpen: false, dockOpen: false, dockItem: null, attentionOpen: false, groupOrders: false, legendOpen: this.settings?.showLegend ?? true, tradeGood: null, tradeDraft: null, techSel: null, focusSel: null, helpTopic: null };
   }
 
   get player(): NationId | null {
@@ -308,6 +316,8 @@ export class App {
     cancelAnimationFrame(this.raf);
     this.resizeObs?.disconnect();
     this.resizeObs = null;
+    this.modesObs?.disconnect();
+    this.modesObs = null;
     this.gameEl?.remove();
     this.gameEl = null;
     this.renderer = null;
@@ -366,6 +376,8 @@ export class App {
     this.bindCanvas();
     this.resizeObs = new ResizeObserver(() => this.resize());
     this.resizeObs.observe(this.stageEl);
+    this.modesObs = new ResizeObserver(() => this.stageEl.style.setProperty('--modes-h', `${Math.ceil(this.modesEl.getBoundingClientRect().height)}px`));
+    this.modesObs.observe(this.modesEl);
     this.resize();
   }
 

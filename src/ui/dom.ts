@@ -72,18 +72,21 @@ export function button(
 
 /**
  * Rebuild a container's contents without losing the reader's place: the
- * scroll position and the focused control (matched by its data-fk key) are
+ * scroll positions (both axes) and the focused control (matched by its data-fk key) are
  * restored after the rebuild.
  */
 export function rebuild(el: Element, render: () => void): void {
   const active = document.activeElement as HTMLElement | null;
   const fk = active && el.contains(active) ? active.getAttribute('data-fk') : null;
-  const scrollers = [...el.querySelectorAll('.scroll')].map((s) => [s.getAttribute('data-sk'), (s as HTMLElement).scrollTop] as const);
+  const scrollers = [...el.querySelectorAll('.scroll')].map((s) => [s.getAttribute('data-sk'), (s as HTMLElement).scrollTop, (s as HTMLElement).scrollLeft] as const);
   render();
-  for (const [k, top] of scrollers) {
+  for (const [k, top, left] of scrollers) {
     if (!k) continue;
-    const s = el.querySelector(`.scroll[data-sk="${k}"]`) as HTMLElement | null;
-    if (s) s.scrollTop = top;
+    const s = el.querySelector(`.scroll[data-sk="${CSS.escape(k)}"]`) as HTMLElement | null;
+    if (s) {
+      s.scrollTop = top;
+      s.scrollLeft = left;
+    }
   }
   if (fk) {
     const again = el.querySelector(`[data-fk="${CSS.escape(fk)}"]`) as HTMLElement | null;

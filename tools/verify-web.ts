@@ -576,12 +576,71 @@ async function diplomacyFlow(browser: Browser, base: string): Promise<void> {
   await page.keyboard.press('p');
   await page.waitForTimeout(200);
   const title = (await page.locator('.drawer:not(.closed) h2').textContent()) ?? '';
-  const branches = await page.locator('[data-branch]').count();
-  const name = (await page.locator('[data-branch="national"] .focus-card.available h4').first().textContent()) ?? '';
-  await press('[data-branch="national"] .focus-card.available button');
+  const branches = await page.locator('.tree-lane').count();
+  const edges = await page.locator('.tree-edges .edge').count();
+  // select an available national focus in the plan, then choose it from the inspector
+  const name = (await page.locator('.tree-node.available[data-node^="nat_"] .tn-title').first().textContent()) ?? '';
+  await press('.tree-node.available[data-node^="nat_"]');
+  const inspected = (await page.locator('.tree-inspector h3').textContent()) ?? '';
+  await press('.tree-inspector .action button');
   const current = await state<string | null>('st.nations.aur.focus.current');
-  const shown = (await page.locator('.drawer .body p').first().textContent()) ?? '';
-  record('Focus: P opens the focus tree; choosing a national focus makes it the realm’s focus', /National Focus/.test(title) && branches >= 5 && !!current && current.startsWith('nat_') && shown.includes('National focus'), `${branches} branches; chose "${name.split(' ')[0]}…" → ${current}`);
+  const shown = (await page.locator('.drawer .strip').first().textContent()) ?? '';
+  record(
+    'Focus: P opens the focus plan; selecting a national focus inspects it, and choosing it makes it the realm’s focus',
+    /National Focus/.test(title) && branches >= 5 && edges > 10 && inspected === name && !!current && current.startsWith('nat_') && shown.includes(name),
+    `${branches} branches, ${edges} connectors; chose "${name.split(' ')[0]}…" → ${current}`,
+  );
+
+  // ── research: T opens the era-by-branch plan; arrow keys move between nodes; the plane keeps its
+  //    scroll position through the weekly re-render; choosing from the inspector starts research
+  await page.keyboard.press('t');
+  await page.waitForTimeout(250);
+  const techEdges = await page.locator('.tree-edges .edge').count();
+  const techName = (await page.locator('.tree-node.available .tn-title').first().textContent()) ?? '';
+  await press('.tree-node.available');
+  const techInspected = (await page.locator('.tree-inspector h3').textContent()) ?? '';
+  await page.locator('.tree-node.selected').focus();
+  await page.keyboard.press('ArrowRight');
+  const movedTo = await page.evaluate(() => document.activeElement?.getAttribute('data-node') ?? '');
+  await page.evaluate(() => ((document.querySelector('.tree-scroll') as HTMLElement).scrollLeft = 300));
+  await page.evaluate(() => (window as any).cnf.refresh());
+  await page.waitForTimeout(100);
+  const keptScroll = await page.evaluate(() => (document.querySelector('.tree-scroll') as HTMLElement).scrollLeft);
+  await press('.tree-inspector .action button');
+  const researching = await state<string | null>('st.nations.aur.research.current');
+  record(
+    'Research: T opens the plan with dependency connectors; a node inspects, arrow keys move between nodes, scroll survives a re-render, and choosing starts research',
+    techEdges > 40 && techInspected === techName && !!movedTo && keptScroll >= 250 && !!researching,
+    `${techEdges} connectors; inspected "${techInspected}", arrow → ${movedTo}, scroll ${Math.round(keptScroll)}; researching ${researching}`,
+  );
+
+  // ── victory: three comparable routes, each with its conditions against thresholds and a timer outlook
+  await page.keyboard.press('v');
+  await page.waitForTimeout(200);
+  const routes = await page.locator('.route').count();
+  const condRows = await page.locator('.route .register.conditions tbody tr').count();
+  const outlooks = await page.locator('.route .timer p').count();
+  record('Victory: three routes stated alike, with every condition as a measure against its threshold and what next month does to the timer', routes === 3 && condRows >= 9 && outlooks === 3, `${routes} routes, ${condRows} conditions, ${outlooks} timer outlooks`);
+
+  // ── chronicle: filters by kind with counts; an empty filter says what would appear there
+  await page.keyboard.press('l');
+  await page.waitForTimeout(200);
+  const filterCount = await page.locator('.filter-bar button').count();
+  const entriesAll = await page.locator('.chron-item').count();
+  await press('[data-fk="log:battles"]');
+  const battleView = (await page.locator('.battle-item').count()) > 0 || (await page.locator('.empty-state').count()) > 0;
+  await press('[data-fk="log:all"]');
+  record('Chronicle: entries grouped by month with kind filters; battle reports or an explained empty state', filterCount === 7 && entriesAll > 0 && battleView, `${filterCount} filters, ${entriesAll} entries`);
+
+  // ── how to play: a contents index beside one article; choosing an entry opens it
+  await page.keyboard.press('h');
+  await page.waitForTimeout(200);
+  const indexItems = await page.locator('.manual-index .mi-item').count();
+  await press('[data-fk="help:trade"]');
+  const article = (await page.locator('.manual-article h3').textContent()) ?? '';
+  await page.keyboard.press('h');
+  await page.waitForTimeout(100);
+  record('How to Play: a field manual with a contents index; choosing “Trade contracts” opens that article', indexItems >= 15 && article === 'Trade contracts', `${indexItems} articles; opened "${article}"`);
 
   // ── a guarantee, a loan, a trade bloc (Diplomacy ledger)
   await page.evaluate((o) => (window as any).cnf.openDiplomacy(o), ids.protege);
@@ -672,7 +731,8 @@ async function tutorialFlow(browser: Browser, base: string): Promise<void> {
         const b = document.querySelector('.drawer')!.getBoundingClientRect();
         return a.left >= b.right || a.right <= b.left || a.top >= b.bottom || a.bottom <= b.top;
       });
-      await press('[data-branch="national"] .focus-card.available button');
+      await press('.tree-node.available[data-node^="nat_"]');
+      await press('.tree-inspector .action button');
     },
     'How wars end': () => page.keyboard.press('w'),
   };

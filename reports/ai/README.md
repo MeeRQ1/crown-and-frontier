@@ -2,8 +2,8 @@
 
 Fixed-seed AI-only campaigns: 8 seeds (1–8) × 50-year limit, normal difficulty, on
 each of Aldmere, the Reach, the Isles and the Middle Sea, run with
-`tools/sim-cli.ts` (see `.scratch`-free command below). Reports record the seed
-and settings of every run, so any one can be reproduced.
+`tools/sim-cli.ts`. Reports record the seed and settings of every run, so any
+one can be reproduced.
 
     npx tsx tools/sim-cli.ts --scenario <map> --seeds <n> --years 50 --quiet --json <out>.json
     npx tsx tools/sim-cli.ts --merge <a>.json,<b>.json,… --out <map>.md

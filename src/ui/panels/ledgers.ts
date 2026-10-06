@@ -1,36 +1,33 @@
 // Modal ledgers opened from the navigation bar.
 
-import { C, forceLabel, RESOURCE_INFO, UNITS, UNIT_TYPES } from '../../sim/config';
+import { C, RESOURCE_INFO, UNITS, UNIT_TYPES } from '../../sim/config';
 import { navyAirSection } from './sea';
-import { PROJECT_LABELS } from '../../sim/construction';
 import { PERSONALITIES } from '../../sim/data/personalities';
-import { FOCUS_BRANCHES, type FocusBranch, type FocusDef } from '../../sim/data/focus';
-import { describeReward, focusMonthsLeft, focusProblem, focusStatus, focusTree, getFocus } from '../../sim/focus';
-import { BRANCHES, ERAS, TECH_LIST, TECHS, type Branch, type Era } from '../../sim/data/techs';
+import { TECHS } from '../../sim/data/techs';
 import { claimsOn, coalitionAgainst, envoyProblem, envoySlots, evaluateTreaty, joinCoalitionProblem, opinion, opinionParts, TREATY_LABELS, treatyProblem } from '../../sim/diplomacy';
-import { debtStage, grossIncome, manpowerRegen, menServing, poolCap, provinceCrowns, reserveCap, stockpileCap } from '../../sim/economy';
+import { menServing, reserveCap } from '../../sim/economy';
 import { checkCommand } from '../../sim/commands';
 import { armyCap, blocOf, evaluateBloc, evaluateLoan, foundBlocProblem, guaranteeProblem, guaranteesBy, guaranteeSlots, guarantorsOf, influenceGain, influenceOver, inviteProblem, joinProblem, loanProblem, sphereMembers, sphereOf } from '../../sim/influence';
-import { adminCapacity, frontierLoad, overextension } from '../../sim/integration';
 import { maxMorale, nationStrength, unitUnlocked } from '../../sim/military';
-import { describeEffects } from '../../sim/modifiers';
-import { earliestYear, researchProblem, researchRate, techCost, yearsEarly } from '../../sim/progression';
-import { diagnosticBundle } from '../../sim/diagnostics';
-import { aliveNations, alliesOf, armiesOf, atWar, dateOf, endTick, hasTreaty, menOf, nationName, ownedProvinces, provName, sideOf, truceUntil, warsOf } from '../../sim/state';
+import { aliveNations, alliesOf, armiesOf, atWar, dateOf, hasTreaty, menOf, nationName, ownedProvinces, provName, sideOf, truceUntil, warsOf } from '../../sim/state';
 import { armySupplyInfo } from '../../sim/supply';
 import type { Army, Demand, DemandKind, NationId, PeaceTerms, StrategicResource, TreatyType, War } from '../../sim/types';
 import { buildSettlement, contributionShares, counterOffer, DEMAND_LABELS, demandCost, describeDemand, evaluateSettlement, settlementCost } from '../../sim/settlement';
-import { allScores, victoryRules, dominatedRegions, influence, influenceByPartner, influenceNeeded, SCORE_FORMULA, VICTORY_LABELS, VICTORY_MONTHS, victoryProgress } from '../../sim/victory';
 import { computeWarScore, evaluatePeace, goalOptions, provinceCost, scoreFor, termsCost, declareWarProblem } from '../../sim/war';
 import type { App } from '../app';
 import { action, bar, button, h, rebuild, row, setChildren } from '../dom';
 import { fmt, men, plural, signed } from '../format';
-import { downloadText } from '../storage';
 import { confirmDialog } from './dialogs';
 import { section, shield } from './common';
 import { icon } from '../icons';
 import { emblem, type EmblemName } from '../emblems';
 import { industryLedger as industryLedgerNew } from '../ledgers/industry';
+import { realmLedger as realmLedgerNew } from '../ledgers/realm';
+import { researchLedger as researchLedgerNew } from '../ledgers/research';
+import { focusLedger as focusLedgerNew } from '../ledgers/focus';
+import { victoryLedger as victoryLedgerNew } from '../ledgers/victory';
+import { chronicleLedger } from '../ledgers/chronicle';
+import { helpLedger as helpLedgerNew } from '../ledgers/help';
 
 export type LedgerTab = 'realm' | 'industry' | 'military' | 'research' | 'focus' | 'diplomacy' | 'wars' | 'victory' | 'log' | 'help';
 
@@ -83,19 +80,19 @@ export function renderLedger(app: App): void {
 }
 
 /** Ledgers that need a wide workspace (trees and negotiations). */
-const WIDE = new Set<LedgerTab>(['industry']);
+const WIDE = new Set<LedgerTab>(['industry', 'research', 'focus']);
 
 const BODIES: Record<LedgerTab, (app: App) => HTMLElement> = {
-  realm: realmLedger,
+  realm: realmLedgerNew,
   industry: industryLedgerNew,
   military: militaryLedger,
-  research: researchLedger,
-  focus: focusLedger,
+  research: researchLedgerNew,
+  focus: focusLedgerNew,
   diplomacy: diplomacyLedger,
   wars: warsLedger,
-  victory: victoryLedger,
-  log: logLedger,
-  help: helpLedger,
+  victory: victoryLedgerNew,
+  log: chronicleLedger,
+  help: helpLedgerNew,
 };
 
 function noRealm(): HTMLElement {
@@ -104,112 +101,7 @@ function noRealm(): HTMLElement {
 
 // ───────────────────────────── Realm ────────────────────────────────────────
 
-function realmLedger(app: App): HTMLElement {
-  const sim = app.sim!;
-  const pid = app.player;
-  if (!pid) return noRealm();
-  const n = sim.state.nations[pid];
-  const l = n.lastMonth;
-  const list = (obj: Record<string, number>) => Object.entries(obj).map(([k, v]) => row(k, fmt(v, 1)));
-  const stage = debtStage(sim, pid);
-  const funding = h(
-    'div',
-    { class: 'row' },
-    ([0, 1, 2, 3] as const).map((lvl) =>
-      button(`${['Minimal', 'Standard', 'Generous', 'Lavish'][lvl]} (${Math.round(C.economy.fundingCost[lvl] * 100)}% → ×${C.economy.fundingMul[lvl]})`, () => app.do({ type: 'funding', level: lvl }), {
-        cls: `small ${n.research.funding === lvl ? 'active' : ''}`,
-      }),
-    ),
-  );
-  const cap = adminCapacity(sim, pid);
-  const load = frontierLoad(sim, pid);
-  const provs = ownedProvinces(sim, pid).sort((a, b) => sim.state.provinces[a].integration - sim.state.provinces[b].integration || (a < b ? -1 : 1));
-  return h(
-    'div',
-    null,
-    h(
-      'div',
-      { class: 'cols' },
-      h(
-        'div',
-        { class: 'card' },
-        h('h3', null, 'Crowns (last month)'),
-        h('h4', null, 'Income'),
-        ...list(l.income),
-        h('h4', { style: 'margin-top:8px' }, 'Expenses'),
-        ...list(l.expenses),
-        row(h('b', null, 'Net'), h('b', { class: l.net >= 0 ? 'good' : 'bad' }, signed(l.net))),
-        row('Treasury', fmt(n.treasury)),
-        stage
-          ? h('p', { class: 'bad small' }, ['', 'In debt: 2% interest a month. Projects and recruitment need positive funds.', 'Severe debt: morale recovery halved, +3 unrest. Bankruptcy when debt exceeds 3 months of income.', 'Bankruptcy!'][stage])
-          : h('p', { class: 'small muted' }, 'Debt is allowed but telegraphed: in debt → severe debt (after 3 months) → bankruptcy (debt beyond 3 months of income) which halts construction, halves morale and costs 25% income for two years.'),
-      ),
-      h(
-        'div',
-        { class: 'card' },
-        h('h3', null, 'Food'),
-        ...list(l.suppliesIn),
-        ...list(l.suppliesOut),
-        row(h('b', null, 'Net'), h('b', { class: l.netSupplies >= 0 ? 'good' : 'bad' }, signed(l.netSupplies))),
-        row('Stockpile', `${fmt(n.supplies)} / ${fmt(stockpileCap(sim, pid))}`),
-        bar(n.supplies, stockpileCap(sim, pid), n.supplies > 0 ? 'good' : 'bad', 'Stockpile'),
-        h('p', { class: 'small muted' }, 'Armies within supply range eat from the stockpile; cut-off armies forage (at most “strained”). Food deposits add 3 a month; trade partners sell surplus food.'),
-        h('h3', { style: 'margin-top:10px' }, 'Manpower'),
-        row('Military reserve', `${fmt(reserveCap(sim, pid))} men`),
-        row('Serving (incl. training)', `${fmt(menServing(sim, pid))} men`),
-        row('Pool available', `${fmt(n.manpower)} / ${fmt(poolCap(sim, pid))}`),
-        row('Recovery', `${fmt(manpowerRegen(sim, pid))} / month`),
-        h('p', { class: 'small muted' }, 'The pool can never exceed the reserve minus men already serving. Casualties are permanent and reduce population.'),
-      ),
-      h(
-        'div',
-        { class: 'card' },
-        h('h3', null, 'Administration'),
-        row('Frontier load', `${load.toFixed(1)} (sum of missing integration)`),
-        row('Administrative capacity', cap.toFixed(1)),
-        bar(load, Math.max(cap, load), load > cap ? 'bad' : 'good', 'Frontier load'),
-        overextension(sim, pid) > 0
-          ? h('p', { class: 'bad small' }, `Overextended ${Math.round(overextension(sim, pid) * 100)}%: integration slows, unrest and research penalties apply.`)
-          : h('p', { class: 'small muted' }, 'Conquered and settled provinces add frontier load until integrated. Charters, railways, garrisons and the Frontier Settlement focus speed integration.'),
-        h('h3', { style: 'margin-top:10px' }, 'Research funding'),
-        funding,
-        h('p', { class: 'small muted' }, `Research: ${researchRate(sim, pid).toFixed(2)} points/month. Funding costs a share of gross income (${fmt(grossIncome(l), 1)}).`),
-      ),
-    ),
-    h('h3', { style: 'margin-top:14px' }, 'Provinces'),
-    h(
-      'table',
-      { class: 'data' },
-      h('thead', null, h('tr', null, ['Province', 'Dev', 'Rail', 'Fort', 'Factories', 'Deposit', 'Integration', 'Unrest', 'Crowns/mo', 'Project'].map((t) => h('th', null, t)))),
-      h(
-        'tbody',
-        null,
-        provs.map((p) => {
-          const s = sim.state.provinces[p];
-          const tr = h(
-            'tr',
-            { class: 'clickable' },
-            h('td', null, provName(sim, p), s.controller !== pid ? h('span', { class: 'tag bad' }, 'occupied') : null, s.revoltUntil > sim.state.tick ? h('span', { class: 'tag bad' }, 'revolt') : null),
-            h('td', null, String(s.dev)),
-            h('td', null, String(s.infra)),
-            h('td', null, String(s.fort)),
-            h('td', null, String(s.factories)),
-            h('td', null, sim.world.prov[p].resource ? RESOURCE_INFO[sim.world.prov[p].resource!].label : '—'),
-            h('td', { class: s.integration < 40 ? 'bad' : s.integration < 75 ? 'warn' : '' }, String(Math.floor(s.integration))),
-            h('td', { class: s.unrest >= 60 ? 'bad' : '' }, String(Math.round(s.unrest))),
-            h('td', null, fmt(provinceCrowns(sim, p), 1)),
-            h('td', null, s.project ? `${PROJECT_LABELS[s.project.kind]} ${s.project.progress}/${s.project.total}` : '—'),
-          );
-          tr.addEventListener('click', () => {
-            app.closeLedger();
-            app.selectProvince(p, true);
-          });
-          return tr;
-        }),
-      ),
-    ),
-  );
-}
+// Realm & Budget: src/ui/ledgers/realm.ts
 
 // Industry & Trade: src/ui/ledgers/industry.ts
 
@@ -403,135 +295,11 @@ function militaryLedger(app: App): HTMLElement {
 
 // ───────────────────────────── Research ─────────────────────────────────────
 
-function researchLedger(app: App): HTMLElement {
-  const sim = app.sim!;
-  const pid = app.player;
-  if (!pid) return noRealm();
-  const n = sim.state.nations[pid];
-  const rate = researchRate(sim, pid);
-  const cur = n.research.current ? TECHS[n.research.current] : null;
-  const year = dateOf(sim).year;
-  const branches = (Object.keys(BRANCHES) as Branch[]).filter((b) => TECH_LIST.some((t) => t.branch === b));
-  const card = (id: string) => {
-    const t = TECHS[id];
-    const done = n.research.done.includes(t.id);
-    const current = n.research.current === t.id;
-    const prob = researchProblem(sim, pid, t.id);
-    const locked = !done && t.requires.some((r) => !n.research.done.includes(r));
-    const early = yearsEarly(sim, t.id);
-    const cost = techCost(sim, t.id);
-    const when = done ? null : early > 10 ? h('span', { class: 'tag bad' }, `from ${earliestYear(t.id)}`) : early > 0 ? h('span', { class: 'tag warn', title: `Researching before ${t.year} costs ${Math.round(early * 15)}% more.` }, `${early} yr early +${Math.round(early * 15)}%`) : null;
-    return h(
-      'div',
-      { class: `card ${done ? 'done' : ''} ${current ? 'current' : ''} ${locked ? 'locked' : ''}`, style: 'margin:6px 0' },
-      h('h4', null, t.name, ' ', h('span', { class: 'tag' }, `${t.year} · ${cost} pts`), ' ', when),
-      t.unlocks ? h('p', { class: 'small good' }, `Unlocks ${forceLabel(t.unlocks).toLowerCase()}.`) : null,
-      h('p', { class: 'small' }, describeEffects(t.effects).join(' · ')),
-      h('p', { class: 'small muted' }, t.description),
-      t.requires.length ? h('p', { class: 'small muted' }, `Requires ${t.requires.map((r) => TECHS[r].name).join(', ')}`) : null,
-      done
-        ? h('span', { class: 'tag good' }, 'Researched')
-        : current
-          ? h('div', null, bar(n.research.progress, cost, 'info'), h('span', { class: 'small' }, `${Math.floor(n.research.progress)}/${cost} · ~${Math.max(0, Math.ceil((cost - n.research.progress) / Math.max(0.1, rate)))} months`))
-          : action('Research this', `~${Math.ceil(cost / Math.max(0.1, rate))} months at the current rate`, () => app.do({ type: 'research', tech: t.id }), prob),
-    );
-  };
-  const eraBlock = (era: Era) => {
-    const techs = TECH_LIST.filter((t) => t.era === era);
-    const doneCount = techs.filter((t) => n.research.done.includes(t.id)).length;
-    const nextEra = (ERAS as Record<number, { year: number }>)[era + 1];
-    const open = doneCount < techs.length && year >= ERAS[era].year - 12 && (!nextEra || year < nextEra.year + 10);
-    return h(
-      'details',
-      { class: 'section', open: open ? true : null },
-      h('summary', { class: 'eyebrow' }, `Era ${['I', 'II', 'III', 'IV', 'V'][era - 1]} · ${ERAS[era].name} (from ${ERAS[era].year}) — ${doneCount}/${techs.length} researched`),
-      h(
-        'div',
-        { class: 'cols' },
-        branches.map((b) => {
-          const list = techs.filter((t) => t.branch === b);
-          return list.length ? h('div', { class: 'tech-col' }, h('h4', null, BRANCHES[b].name), list.map((t) => card(t.id))) : null;
-        }),
-      ),
-    );
-  };
-  return h(
-    'div',
-    null,
-    h('p', null, `Research rate: `, h('b', null, `${rate.toFixed(2)} points/month`), ` — from integrated development, funding (Realm ledger) and modifiers. `, cur ? `Researching ${cur.name}.` : h('span', { class: 'warn' }, 'Nothing selected: up to 60 points are banked.')),
-    h('p', { class: 'small muted' }, `Every technology has a horizon year. Researching it earlier costs 15% more per year early, and no technology can be finished more than 10 years before its horizon. Progress is kept when switching. ${n.research.done.length} of ${TECH_LIST.length} researched.`),
-    ([1, 2, 3, 4, 5] as Era[]).map(eraBlock),
-  );
-}
+// Research: src/ui/ledgers/research.ts
 
 // ───────────────────────────── National focus ───────────────────────────────
 
-function focusLedger(app: App): HTMLElement {
-  const sim = app.sim!;
-  const pid = app.player;
-  if (!pid) return noRealm();
-  const n = sim.state.nations[pid];
-  const tree = focusTree(sim, pid);
-  const cur = n.focus.current ? getFocus(sim, pid, n.focus.current) : null;
-  const card = (d: FocusDef) => {
-    const status = focusStatus(sim, pid, d.id);
-    const prob = focusProblem(sim, pid, d.id);
-    const effects = describeEffects(d.effects);
-    const reward = describeReward(sim, d);
-    const req = [
-      ...d.requires.map((r) => getFocus(sim, pid, r)?.name ?? r),
-      ...(d.requiresAny?.length ? [d.requiresAny.map((r) => getFocus(sim, pid, r)?.name ?? r).join(' or ')] : []),
-    ];
-    const start = () => {
-      const go = () => app.do({ type: 'focus', focus: d.id });
-      if (cur && n.focus.progress > 0) confirmDialog(app, `Switch to ${d.name}?`, `${n.focus.progress} month${n.focus.progress === 1 ? '' : 's'} of work on ${cur.name} will be lost.`, go);
-      else go();
-    };
-    return h(
-      'div',
-      { class: `card focus-card ${status}`, 'data-focus': d.id },
-      h('h4', null, d.name, ' ', h('span', { class: 'tag' }, `${d.months} months`), d.year && status !== 'done' ? h('span', { class: `tag ${dateOf(sim).year < d.year ? 'warn' : ''}` }, `from ${d.year}`) : null),
-      effects.length ? h('p', { class: 'small' }, effects.join(' · ')) : null,
-      reward.length ? h('p', { class: 'small good' }, `On completion: ${reward.join('; ')}.`) : null,
-      d.claimsOnly ? h('p', { class: 'small warn' }, 'While held, wars may be declared only over claims.') : null,
-      h('p', { class: 'small muted' }, d.description),
-      req.length ? h('p', { class: 'small muted' }, `Requires ${req.join(', ')}`) : null,
-      d.excludes?.length ? h('p', { class: 'small muted' }, `Excludes ${d.excludes.map((x) => getFocus(sim, pid, x)?.name ?? x).join(', ')}`) : null,
-      d.provinces?.length ? button('Show on map', () => app.highlightProvinces(d.provinces!), { cls: 'small quiet', icon: 'target' }) : null,
-      status === 'done'
-        ? h('span', { class: 'tag good' }, 'Completed')
-        : status === 'current'
-          ? h('div', null, bar(n.focus.progress, d.months, 'info', 'Focus progress'), h('span', { class: 'small' }, `${n.focus.progress}/${d.months} months`))
-          : status === 'excluded'
-            ? h('span', { class: 'tag bad' }, 'Excluded by an earlier choice')
-            : action('Make this our focus', cur ? `Replaces ${cur.name}${n.focus.progress ? ` (${n.focus.progress} months of work lost)` : ''}` : `${d.months} months`, start, prob),
-    );
-  };
-  const branches = Object.keys(FOCUS_BRANCHES) as FocusBranch[];
-  return h(
-    'div',
-    null,
-    h(
-      'p',
-      null,
-      cur ? h('span', null, 'National focus: ', h('b', null, cur.name), ` — ${n.focus.progress}/${cur.months} months, done in ${focusMonthsLeft(sim, pid)}.`) : h('span', { class: 'warn' }, 'No national focus: choose one below. A month without a focus is a month lost.'),
-    ),
-    h('p', { class: 'small muted' }, `The realm works on one focus at a time; each one finished is permanent. Some exclude others, some wait for a year or need a coast. Switching loses the work done on the current focus. ${n.focus.done.length} of ${tree.length} completed.`),
-    branches.map((b) => {
-      const list = tree.filter((d) => d.branch === b).sort((x, y) => x.row - y.row || x.col - y.col);
-      if (!list.length) return null;
-      const done = list.filter((d) => n.focus.done.includes(d.id)).length;
-      const open = b === 'national' || list.some((d) => focusStatus(sim, pid, d.id) === 'available' || focusStatus(sim, pid, d.id) === 'current');
-      return h(
-        'details',
-        { class: 'section', open: open ? true : null, 'data-branch': b },
-        h('summary', { class: 'eyebrow' }, `${FOCUS_BRANCHES[b].name} — ${done}/${list.length} completed`),
-        h('p', { class: 'small muted' }, FOCUS_BRANCHES[b].blurb),
-        h('div', { class: 'focus-grid' }, list.map((d) => h('div', { style: `grid-column:${d.col + 1};grid-row:${d.row + 1}` }, card(d)))),
-      );
-    }),
-  );
-}
+// National Focus: src/ui/ledgers/focus.ts
 
 // ───────────────────────────── Diplomacy ────────────────────────────────────
 
@@ -1134,184 +902,7 @@ function peaceBuilder(app: App, w: War): HTMLElement {
 // ───────────────────────────── Victory ──────────────────────────────────────
 
 /** How to break the rival furthest along a path (shown only when one is holding it). */
-function counterplay(app: App, k: 'territorial' | 'economic' | 'diplomatic'): HTMLElement | null {
-  const sim = app.sim!;
-  const rival = aliveNations(sim)
-    .filter((n) => n !== app.player)
-    .map((n) => ({ n, p: victoryProgress(sim, n)[k] }))
-    .filter((x) => x.p.met && x.p.streak > 0)
-    .sort((a, b) => b.p.streak - a.p.streak)[0];
-  if (!rival) return null;
-  const name = nationName(sim, rival.n);
-  let text: string;
-  if (k === 'territorial') {
-    const regions = dominatedRegions(sim, rival.n).map((r) => sim.world.scenario.regions.find((x) => x.id === r)?.name ?? r);
-    text = `${name} dominates ${regions.join(', ')}. Occupying or taking land there, or cutting their share of all provinces, breaks the condition.`;
-  } else if (k === 'economic') {
-    text = `Occupying any one province of ${name} in a war, driving their unrest above ${C.victory.economicUnrest}, or pushing them into debt breaks the condition.`;
-  } else {
-    const parts = Object.entries(influenceByPartner(sim, rival.n)).map(([n, v]) => `${nationName(sim, n)} ${v}`);
-    text = `${name}'s influence: ${parts.join(', ')} (needs ${influenceNeeded(sim, rival.n)}). Ending your own treaties with them, or turning a partner's opinion of them below ${C.victory.diplomaticOpinion}, breaks it; so would an offensive war of theirs.`;
-  }
-  return h('p', { class: 'small warn', style: 'margin-top:6px' }, `How to stop ${name}: ${text} A month in which the condition fails pauses their timer; every further month in a row costs them 6 months of progress.`);
-}
+// Victory: src/ui/ledgers/victory.ts
 
-function victoryLedger(app: App): HTMLElement {
-  const sim = app.sim!;
-  const me = app.player;
-  const scores = allScores(sim);
-  const alive = aliveNations(sim);
-  const paths = ['territorial', 'economic', 'diplomatic'] as const;
-  const desc: Record<(typeof paths)[number], string> = {
-    territorial: `Own and control ≥75% of the provinces in ${victoryRules(sim).territorialRegions} regions and ≥${Math.round(victoryRules(sim).territorialShare * 100)}% of all provinces, then hold it for ${VICTORY_MONTHS.territorial} months.`,
-    economic: `Integrated development (dev of provinces at integration ≥75) of ≥${Math.round(victoryRules(sim).economicShare * 100)}% of the world's, with average unrest ≤${C.victory.economicUnrest}, no debt or bankruptcy and none of your land occupied — for ${VICTORY_MONTHS.economic} months.`,
-    diplomatic: `Influence over partners whose opinion of you is ≥${C.victory.diplomaticOpinion}: an alliance at least ${C.victory.diplomaticTreatyAge / 12} years old or a realm in your sphere 2, your guarantee (a year old) 1, plus a trade agreement at least ${C.victory.diplomaticTreatyAge / 12} years old 1 — ${victoryRules(sim).diplomaticInfluencePerRealm} per other surviving realm; trust ≥${C.victory.diplomaticTrust}; no offensive war — for ${VICTORY_MONTHS.diplomatic} months.`,
-  };
-  // one evaluation per realm serves all three path cards
-  const progress = new Map(alive.map((n) => [n, victoryProgress(sim, n)]));
-  const mine = me ? (progress.get(me) ?? victoryProgress(sim, me)) : null;
-  const infl = me ? influenceByPartner(sim, me) : {};
-  return h(
-    'div',
-    null,
-    h('p', null, `The campaign ends in ${dateOf(sim, endTick(sim)).short}. A timer pauses the first month its condition fails, then loses ${C.victory.streakDecay} months for every further month in a row — unless the realm is within ${Math.round((1 - C.victory.nearMiss) * 100)}% of the main measure with every other condition met, when it stays paused. Every realm, AI or not, can win.`),
-    h(
-      'div',
-      { class: 'cols' },
-      paths.map((k) =>
-        h(
-          'div',
-          { class: 'card' },
-          h('h3', null, VICTORY_LABELS[k]),
-          h('p', { class: 'small muted' }, desc[k]),
-          mine ? h('div', null, ...mine[k].lines.map((l) => h('p', { class: 'small' }, l)), row('Held', `${mine[k].streak}/${mine[k].required} months${mine[k].near ? ' · paused, just short' : ''}`), bar(mine[k].streak, mine[k].required, mine[k].met ? 'good' : 'warn')) : null,
-          k === 'diplomatic' && me && Object.keys(infl).length ? h('p', { class: 'small muted' }, `Partners: ${Object.entries(infl).map(([n, v]) => `${nationName(sim, n)} ${v}`).join(', ')} (need ${influenceNeeded(sim, me)}, have ${influence(sim, me)})`) : null,
-          h('h4', { style: 'margin-top:8px' }, 'Leaders'),
-          ...alive
-            .map((n) => ({ n, p: progress.get(n)![k] }))
-            .sort((a, b) => b.p.streak - a.p.streak || b.p.progress - a.p.progress)
-            .slice(0, 4)
-            .map(({ n, p }) => row(h('span', null, shield(app, n), ' ', nationName(sim, n)), `${Math.round(p.progress * 100)}%${p.streak ? ` · held ${p.streak} mo` : ''}`)),
-          counterplay(app, k),
-        ),
-      ),
-    ),
-    h('h3', { style: 'margin-top:14px' }, 'Campaign score'),
-    h('p', { class: 'small muted' }, `${SCORE_FORMULA} Used to break simultaneous wins and to decide the result at the campaign limit.`),
-    h(
-      'table',
-      { class: 'data' },
-      h('thead', null, h('tr', null, h('th', null, 'Realm'), h('th', null, 'Provinces'), h('th', null, 'Score'))),
-      h(
-        'tbody',
-        null,
-        sim.world.nationIds
-          .slice()
-          .sort((a, b) => scores[b] - scores[a])
-          .map((n) => h('tr', null, h('td', null, shield(app, n), ' ', nationName(sim, n), sim.state.nations[n].alive ? '' : ' ✝'), h('td', null, String(ownedProvinces(sim, n).length)), h('td', null, fmt(scores[n], 1)))),
-      ),
-    ),
-  );
-}
-
-// ───────────────────────────── Log & diagnostics ────────────────────────────
-
-function logLedger(app: App): HTMLElement {
-  const sim = app.sim!;
-  const me = app.player;
-  const f = app.ui.logFilter;
-  const filterBtn = (id: typeof f, label: string) =>
-    button(label, () => {
-      app.ui.logFilter = id;
-      renderLedger(app);
-    }, { cls: `small ${f === id ? 'active' : ''}` });
-  let notes = sim.state.notifications.filter((n) => n.nation === me || n.nation === null);
-  if (f === 'urgent') notes = notes.filter((n) => n.priority === 'urgent');
-  const reports = sim.state.reports.filter((r) => !me || r.attackerNations.includes(me) || r.defenderNations.includes(me)).slice(-30).reverse();
-  const bugReport = () => {
-    const st = sim.state;
-    const build = `${typeof __APP_VERSION__ === 'string' ? __APP_VERSION__ : 'dev'} (${import.meta.env?.MODE ?? 'unknown'})`;
-    const report = diagnosticBundle(sim, { build, userAgent: navigator.userAgent });
-    downloadText(`crown-and-frontier-bug-${st.settings.seed}-${st.tick}.json`, JSON.stringify(report, null, 1));
-  };
-  return h(
-    'div',
-    null,
-    h('div', { class: 'row' }, filterBtn('all', 'All'), filterBtn('urgent', 'Urgent'), filterBtn('battles', 'Battle reports'), h('span', { class: 'grow' }), button('Export bug report', bugReport, { cls: 'small', title: 'Seed, settings, your command log and AI diagnostics for reproducing a problem' })),
-    f === 'battles'
-      ? h(
-          'div',
-          null,
-          reports.length
-            ? reports.map((r) =>
-                h(
-                  'div',
-                  { class: 'card', style: 'margin:6px 0' },
-                  h('h4', null, `Battle of ${provName(sim, r.province)} — ${dateOf(sim, r.tick).short}`),
-                  h('p', { class: 'small' }, r.outcome),
-                  row('Attackers', `${r.attackerNations.map((n) => nationName(sim, n)).join(', ')}: ${men(r.attStartMen)} (lost ${men(r.attLosses)})`),
-                  row('Defenders', `${r.defenderNations.map((n) => nationName(sim, n)).join(', ')}: ${men(r.defStartMen)} (lost ${men(r.defLosses)})`),
-                  r.factors.length ? h('ul', { class: 'reasons' }, r.factors.map((x) => h('li', null, x))) : null,
-                ),
-              )
-            : h('p', { class: 'muted' }, 'No battles yet.'),
-        )
-      : h(
-          'div',
-          null,
-          notes
-            .slice(-200)
-            .reverse()
-            .map((n) => {
-              const d = h('div', { class: `kv ${n.priority === 'urgent' ? 'bad' : n.priority === 'low' ? 'muted' : ''}`, style: n.province ? 'cursor:pointer' : '' }, h('span', { class: 'k nowrap' }, dateOf(sim, n.tick).short), h('span', { class: 'v', style: 'text-align:left;flex:1;margin-left:10px' }, n.text));
-              if (n.province) d.addEventListener('click', () => {
-                app.closeLedger();
-                app.selectProvince(n.province!, true);
-              });
-              return d;
-            }),
-        ),
-  );
-}
-
-// ───────────────────────────── Help ─────────────────────────────────────────
-
-function helpLedger(app: App): HTMLElement {
-  void app;
-  const sec = (t: string, ...ps: string[]) => h('div', { class: 'card' }, h('h3', null, t), ...ps.map((p) => h('p', { class: 'small' }, p)));
-  return h(
-    'div',
-    { class: 'cols' },
-    sec('Controls', 'Click / tap: select a province or army. Drag: pan. Wheel / pinch: zoom. Right-click, long-press, or “Set destination” (G): move the selected army.', 'Space: pause. 1–4: speed. B, I, M, T, P, D, W, V, L, H: ledgers. Shift+1…9: map modes (political, terrain, supply, economy, frontier, diplomacy, military, resources, sea control); O cycles them. N: next army. Home: capital. Esc: close / deselect.'),
-    sec('The loop', 'Read the world → choose a priority → commit crowns, materiel, resources and men → watch the consequences → adapt. Orders persist until completed or invalidated. The game is paused whenever a decision needs you (configurable in Settings).'),
-    sec('Frontier integration', 'Every province has integration 0–100. Low integration means little tax, few recruits, no development, no supply source and more unrest. New conquests start at 10 (25 with a claim), settled land at 20. Roads, garrisons, claims, charters and the Frontier Settlement focus speed it up; too much raw frontier at once overextends your administration.'),
-    sec('Economy', 'Crowns come from development and population (scaled by integration and unrest), from trade and from surplus manufactured goods; armies, forts, envoys and research funding cost upkeep. Food feeds armies on supply lines. Deposits yield coal, iron, oil, rubber and nitrates; factories burn coal to make materiel, which equips and reinforces regiments. Trade agreements move surplus resources to partners who need them at fixed prices. Running short of a resource has a named effect shown on the Industry ledger (I). The manpower pool refills from the military reserve, which men under arms already use.'),
-    sec('War', 'Declare war with a claim (no trust cost) or a conquest goal (costs trust, alarms neighbours). Battles: terrain, forts, entrenchment, supply, composition, morale and technology decide; forecasts show three outcomes. Winning a battle does not take land — standing in a province besieges it. Peace uses war score; every choice shows whether the enemy would accept and why.'),
-    sec(
-      'Navy and air',
-      'The seas are divided into zones. Fleets sail between zones (select one, then right-click a zone, or press G). Ships are built in ports; each port level is a slipway. Hostile fleets meeting in a zone fight: guns hit surface ships, submarines torpedo big ships and only torpedo boats and cruisers can hunt them, carriers strike from the air.',
-      'Enemy warships that outgun ours in a zone close the straits it commands to our armies and supply. Where every zone on a coast holds enemy warships, that coast is blockaded: it loses a quarter of its crowns and its sea trade.',
-      'Transports carry two regiments each: select an army on a coast with a fleet offshore and choose “Ship by sea”. Troops landing on an enemy coast fight at a disadvantage that week.',
-      'With Aviation, build airfields and raise air wings. Missions: superiority (fighters), ground support, interdiction of enemy supply and movement, strategic bombing of factories, and reconnaissance. Whoever holds 1.5× the enemy’s air power over a province holds the sky there.',
-    ),
-    sec('Diplomacy', 'Envoys raise opinion. Pacts forbid war; trade agreements exchange surplus resources and earn commerce; alliances are defensive calls to arms. Proposals show the other side’s reasoning before you send them. Rapid conquest raises alarm, and so does a visible bid for territorial or economic victory; alarmed neighbours form coalitions. A bid for diplomatic leadership instead makes rivals wary (lower opinion) and may cost you their trade.'),
-    sec(
-      'Peace settlements',
-      'A war leader can end a war for everyone in it with a settlement (Wars & Peace → Peace conference). Each demand is paid by a realm on the losing side to one on the winning side: a province, crowns, reparations (10–30% of income for five years), disarmament (half the army for five years, no battleships or carriers), renouncing claims (and no war on the receiver for ten years), or entering the receiver’s sphere.',
-      'Every demand has a cost in war-score points; the other leader accepts when the war has gone badly enough for it, weighing demands on its allies at 60%. If it refuses, the conference shows the part it would accept. Offered a settlement yourself, untick demands to send a counter-offer.',
-      'The winners’ contribution — battles won, casualties inflicted, ships sunk, enemy land held — sets each one’s fair share of the spoils. An ally given less than half its share resents its leader; a claim handed to someone else is resented too. A side that holds a war score of 90 for a year dictates a settlement.',
-    ),
-    sec(
-      'Influence, guarantees, loans and trade blocs',
-      'Influence (0–100) is what you hold over another realm. Envoys, trade agreements (for the larger economy), loans, guarantees, alliances (for the stronger partner) and leading their trade bloc build it each month; it fades slowly, and fast in war. A smaller realm over which you hold 40 influence, and 1.25× any rival’s, is in your sphere: it thinks better of you, will not ally or join a coalition against you, and you defend it when it is attacked. Each realm in your sphere counts 2 toward Diplomatic Leadership.',
-      'A guarantee of independence calls you to arms when that realm is attacked; refusing ends it and costs trust. Focuses add guarantees. A loan (at least 50 crowns) is repaid over two years with 20% interest and buys influence; war repudiates it.',
-      'A trade bloc is founded with a trade partner and led by its founder (up to six members). Members buy from each other 20% cheaper, earn 50% more commerce from each other, and share the crowns blockades cost any member.',
-    ),
-    sec(
-      'National focus',
-      'The Focus ledger (P) holds your realm’s tree: a national branch made for it from the map (claims on neighbouring regions, its home region, its deposits, its coast, and an ambition that follows its temperament), and generic branches for industry, the army, sea and air, diplomacy and the state. Work on one focus at a time; a finished focus is permanent, and some exclude others. Switching loses the work done.',
-    ),
-    sec('Saves', 'The game autosaves every few months (Settings) and when the tab is hidden. Saves live in this browser only: they do not sync across devices or sites and can be erased by private browsing or managed-device policies. Use Menu → Export to keep a copy, and Import to restore it.'),
-    sec('Fog of war', 'All information is public for everyone — AI realms see exactly what you see and follow the same rules, costs and formulas.'),
-  );
-}
+// Chronicle: src/ui/ledgers/chronicle.ts
+// How to Play: src/ui/ledgers/help.ts
