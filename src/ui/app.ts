@@ -14,6 +14,7 @@ import type { AirMission, Army, Command, CommandResult, Demand, DemandKind, Nati
 import { Sound } from './audio';
 import { h, setChildren } from './dom';
 import { fontsReady } from './fonts';
+import { spritesReady } from './map/sprites';
 import { weeks } from './format';
 import { icon } from './icons';
 import type { MapGeometry } from './map/geometry';
@@ -218,7 +219,7 @@ export class App {
     await this.store.init();
     progress(70, 'Inking the maps…');
     await this.maps.init().catch(() => undefined);
-    await fontsReady;
+    await Promise.all([fontsReady, spritesReady]);
     progress(95, 'Unrolling the atlas…');
     this.showMenu();
     progress(100, 'Ready');
@@ -227,6 +228,7 @@ export class App {
   // ───────────────────────────── Screens ────────────────────────────────────
 
   showScreen(el: HTMLElement): void {
+    this.hideHover();
     this.hideScreen();
     this.screenEl = el;
     this.root.appendChild(el);
@@ -268,7 +270,7 @@ export class App {
   async startGame(sim: Sim, tutorial = false): Promise<void> {
     const token = ++this.starting;
     const geometry = await loadGeometry(sim.state.scenarioId);
-    await fontsReady;
+    await Promise.all([fontsReady, spritesReady]);
     if (token !== this.starting) return;
     this.teardownGame();
     this.sim = sim;
@@ -498,7 +500,18 @@ export class App {
       },
       now,
     );
+    // the political legend lists the realms on screen: rebuild it once the view settles
+    if (this.mode === 'political' && this.ui.legendOpen && !this.wantsFrame) {
+      const cam = this.renderer.camera;
+      const key = `${Math.round(cam.offX / 40)}|${Math.round(cam.offY / 40)}|${cam.zoom.toFixed(3)}|${sim.state.rev}`;
+      if (key !== this.legendKey) {
+        this.legendKey = key;
+        renderModes(this);
+      }
+    }
   }
+
+  private legendKey = '';
 
   /** A select/input inside a panel has focus: rebuilding would close or reset it. */
   private editingForm(): boolean {
@@ -970,6 +983,7 @@ export class App {
   // ───────────────────────────── Drawer, dock, toasts ───────────────────────
 
   openLedger(tab: LedgerTab): void {
+    this.hideHover();
     this.ui.ledgerTab = tab;
     this.drawerEl.classList.remove('closed');
     // switching from a ledger that chose the map mode to one that does not want it puts the
@@ -989,7 +1003,7 @@ export class App {
     this.updateInsets();
     this.refresh();
     this.tutorial?.update();
-    (this.drawerEl.querySelector('.tab.active') as HTMLElement | null)?.focus({ preventScroll: true });
+    (this.drawerEl.querySelector('#ledger-title') as HTMLElement | null)?.focus({ preventScroll: true });
   }
 
   closeLedger(): void {
@@ -1020,6 +1034,7 @@ export class App {
   }
 
   openMenu(): void {
+    this.hideHover();
     openMenuDialog(this);
   }
 
@@ -1176,7 +1191,7 @@ export class App {
 
   private showLoadError(msg: string): void {
     // no game DOM yet: a minimal layer over the current screen
-    const layer = h('div', { class: 'modal-layer' });
+    const layer = h('div', { class: 'modal-layer app-layer' });
     const ok = h('button', { class: 'btn primary', type: 'button' }, 'Close');
     ok.addEventListener('click', () => layer.remove());
     layer.appendChild(h('div', { class: 'modal narrow', role: 'dialog', 'aria-modal': 'true' }, h('header', null, h('h2', null, 'Cannot load this save')), h('div', { class: 'body' }, h('p', null, msg)), h('footer', null, ok)));
@@ -1284,8 +1299,30 @@ export class App {
     });
   }
 
+  /** Hide the map's hover card and highlight (a panel now covers the pointer, or the map lost it). */
+  hideHover(): void {
+    if (!this.tipEl) return;
+    this.hoverPos = null;
+    if (this.hoverProvince) this.mapDirty = true;
+    this.hoverProvince = null;
+    this.tipEl.classList.add('hidden');
+  }
+
+  /** Whether a screen point (stage coordinates) lies under an open panel, where the map takes no input. */
+  private underPanel(x: number, y: number): boolean {
+    const s = this.stageEl.getBoundingClientRect();
+    for (const el of [this.drawerEl, this.inspectorEl, this.railEl, this.dockEl, this.tutorialEl]) {
+      if (!el || el.classList.contains('closed') || el.classList.contains('hidden')) continue;
+      for (const r of el === this.dockEl ? [...el.children].map((c) => c.getBoundingClientRect()) : [el.getBoundingClientRect()]) {
+        if (r.width && x + s.left >= r.left && x + s.left <= r.right && y + s.top >= r.top && y + s.top <= r.bottom) return true;
+      }
+    }
+    return false;
+  }
+
   private hover(x: number, y: number): void {
     if (!this.renderer || !this.sim) return;
+    if (this.underPanel(x, y)) return this.hideHover();
     this.hoverPos = { x, y };
     const armyId = this.renderer.armyAt(x, y);
     const pid = this.renderer.provinceAt(x, y);

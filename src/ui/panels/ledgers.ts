@@ -73,6 +73,7 @@ import { downloadText } from '../storage';
 import { confirmDialog } from './dialogs';
 import { section, shield } from './common';
 import { icon } from '../icons';
+import { emblem, type EmblemName } from '../emblems';
 
 export type LedgerTab = 'realm' | 'industry' | 'military' | 'research' | 'focus' | 'diplomacy' | 'wars' | 'victory' | 'log' | 'help';
 
@@ -89,25 +90,43 @@ const TITLES: Record<LedgerTab, string> = {
   help: 'How to Play',
 };
 
+/** Each ledger's section motif (the pack's menu emblems), shown once in its header. */
+const EMBLEMS: Record<LedgerTab, EmblemName> = {
+  realm: 'realm-budget',
+  industry: 'industry-trade',
+  military: 'military',
+  research: 'research',
+  focus: 'national-focus',
+  diplomacy: 'diplomacy',
+  wars: 'wars-peace',
+  victory: 'victory',
+  log: 'chronicle',
+  help: 'help',
+};
+
+/**
+ * The open ledger. The rail is the one way between ledgers, so the drawer has
+ * no second row of global tabs: a slate header names the task, and the ivory
+ * register below holds it.
+ */
 export function renderLedger(app: App): void {
   const tab = app.ui.ledgerTab;
   if (!tab || !app.sim) return;
   rebuild(app.drawerEl, () => {
-    const tabs = h(
-      'div',
-      { class: 'tabs', role: 'tablist' },
-      (Object.keys(TITLES) as LedgerTab[]).map((t) => {
-        const b = h('button', { class: `tab ${t === tab ? 'active' : ''}`, type: 'button', role: 'tab', 'aria-selected': t === tab ? 'true' : 'false', 'data-fk': `tab-${t}` }, TITLES[t]);
-        b.addEventListener('click', () => app.openLedger(t));
-        return b;
-      }),
-    );
     const close = h('button', { class: 'btn quiet icon', type: 'button', 'aria-label': 'Close ledger (Esc)', 'data-fk': 'drawer-close' }, icon('close'));
     close.addEventListener('click', () => app.closeLedger());
     const content = BODIES[tab](app);
-    setChildren(app.drawerEl, h('header', null, h('h2', null, TITLES[tab]), close), tabs, h('div', { class: 'body scroll', 'data-sk': `ledger-${tab}`, role: 'tabpanel' }, content));
+    app.drawerEl.classList.toggle('wide', WIDE.has(tab));
+    setChildren(
+      app.drawerEl,
+      h('header', null, emblem(EMBLEMS[tab], 40), h('h2', { tabindex: '-1', id: 'ledger-title' }, TITLES[tab]), close),
+      h('div', { class: 'body scroll', 'data-sk': `ledger-${tab}`, role: 'region', 'aria-labelledby': 'ledger-title' }, content),
+    );
   });
 }
+
+/** Ledgers that need a wide workspace (trees and negotiations). */
+const WIDE = new Set<LedgerTab>();
 
 const BODIES: Record<LedgerTab, (app: App) => HTMLElement> = {
   realm: realmLedger,
