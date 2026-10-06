@@ -25,7 +25,8 @@
     "rulecheck": "tsx tools/rulecheck.ts",
     "fuzz": "tsx tools/fuzz.ts",
     "genmaps": "tsx tools/genmaps.ts",
-    "genbaltic": "tsx tools/genbaltic.ts"
+    "genbaltic": "tsx tools/genbaltic.ts",
+    "atlas:assets": "tsx tools/atlas-assets.ts"
   },
   "devDependencies": {
     "@types/d3-delaunay": "^6.0.4",
