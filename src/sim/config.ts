@@ -525,10 +525,40 @@ export const C = {
     opinion: 10,
   },
 
+  /** trade contracts (format 5): every good that changes hands moves under one */
+  trade: {
+    /** units a month a single contract may carry */
+    minQty: 1,
+    maxQty: 40,
+    /** contract prices, as multiples of the list price */
+    priceMin: 0.7,
+    priceMax: 1.6,
+    /** lengths of term on offer, in months */
+    terms: [6, 12, 24] as readonly number[],
+    /** contracts one realm may hold at once (as buyer and seller together) */
+    maxContracts: 10,
+    /** months from shipment to delivery by sea (overland: 0) */
+    seaLag: 1,
+    /** ending a contract early: the canceller pays this many months of its value */
+    cancelFeeMonths: 1,
+    cancelTrust: 3,
+    cancelOpinion: -10,
+    /** consecutive settlements short (seller) or unable to pay (buyer) that end a contract */
+    missLimit: 2,
+    defaultTrust: 5,
+    defaultOpinion: -15,
+    /** a completed contract leaves goodwill on both sides */
+    keptOpinion: 4,
+    /** dependence: a partner supplying this share of a resource is a reason for closer ties */
+    dependence: 0.25,
+    /** AI: months of forecast looked ahead when deciding to buy */
+    lookahead: 6,
+  },
+
   bloc: {
     cost: 50,
     maxMembers: 6,
-    buyDiscount: 0.2, // members buy from members this much cheaper
+    buyDiscount: 0.2, // the contract price members offer each other, below list
     commerceBonus: 0.5, // commerce from a trade agreement inside the bloc
     opinion: 5,
   },
@@ -615,4 +645,4 @@ export const C = {
  * guarantees, influence, loans and trade blocs. Older saves are migrated
  * (src/sim/migrate.ts).
  */
-export const SCHEMA_VERSION = 4;
+export const SCHEMA_VERSION = 5;

@@ -54,6 +54,7 @@ import {
   warsOf,
   type Sim,
 } from './state';
+import { endContractsByWar } from './trade';
 import type { NationId, PeaceTerms, ProvinceId, War, WarGoal } from './types';
 
 // ───────────────────────────── Goals & declaration ──────────────────────────
@@ -187,12 +188,14 @@ export function canJoin(sim: Sim, nid: NationId, w: War, side: 'attacker' | 'def
 
 /**
  * Two realms going to war: loans and reparations between them are repudiated,
+ * their trade contracts end (goods under way return to the seller),
  * a guarantee between them ends (breaking it costs the guarantor trust), the
  * attacker leaves a trade bloc they share, and influence over each other halves.
  */
 export function breakTies(sim: Sim, a: NationId, b: NationId): void {
   const st = sim.state;
   repudiate(sim, a, b);
+  endContractsByWar(sim, a, b);
   for (const g of st.guarantees.filter((g) => (g.by === a && g.of === b) || (g.by === b && g.of === a))) {
     endGuarantee(sim, g.by, g.of, true);
     st.nations[g.by].trust = Math.max(0, st.nations[g.by].trust - C.guarantee.trustLoss);

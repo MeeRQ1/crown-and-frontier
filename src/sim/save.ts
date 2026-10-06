@@ -9,7 +9,8 @@
 // changed since (another revision), the save loads only when the provinces and
 // realms are the same, with a notice; otherwise it is refused.
 
-import { SCHEMA_VERSION } from './config';
+import { RESOURCE_INFO, SCHEMA_VERSION } from './config';
+import { convertLegacyTrade } from './trade';
 import { checkInvariants } from './invariants';
 import { addForceDefaults, MigrationError, migrateSave, type RawSave } from './migrate';
 import { startingFleets } from './naval';
@@ -168,6 +169,18 @@ export function readSave(text: string): LoadedSave {
   if (raw.pendingFleets) {
     delete raw.pendingFleets;
     startingFleets(sim);
+  }
+  if (raw.pendingContracts) {
+    delete raw.pendingContracts;
+    const made = convertLegacyTrade(sim);
+    const player = st.settings.playerNation;
+    const mine = made.filter((c) => c.seller === player || c.buyer === player);
+    notices.push(
+      `This campaign was saved before trade contracts (save format 4) and was converted to format 5. Goods no longer move between trade partners by themselves: ` +
+        `the ${made.length} exchange${made.length === 1 ? '' : 's'} running when it was saved became 12-month contracts at list price` +
+        (mine.length ? `, ${mine.length} of them ours (${mine.map((c) => `${c.seller === player ? 'selling' : 'buying'} ${c.qty} ${RESOURCE_INFO[c.res].label.toLowerCase()} a month`).join(', ')})` : '') +
+        `. Industry & Trade shows them, with what each realm can offer.`,
+    );
   }
   const problems = checkInvariants(sim);
   if (problems.length) throw new SaveError(`The save is inconsistent: ${problems.slice(0, 3).join('; ')}.`);

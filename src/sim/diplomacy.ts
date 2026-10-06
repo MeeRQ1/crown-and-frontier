@@ -9,6 +9,7 @@ import { PERSONALITIES } from './data/personalities';
 import { claimsOnlyFocus } from './focus';
 import { sameBloc, sphereOf } from './influence';
 import { tradeValue } from './economy';
+import { endContractsBetween } from './trade';
 import { nationStrength } from './military';
 import { nationMods } from './modifiers';
 import {
@@ -51,6 +52,8 @@ export const MEMORY_LABELS: Record<string, string> = {
   loan: 'Lent us money',
   spoils: 'Took more than their share of the spoils',
   settlement: 'Dictated a harsh peace to us',
+  brokeContract: 'Broke a trade contract with us',
+  keptContract: 'Honoured a trade contract with us',
 };
 
 export const TREATY_LABELS: Record<TreatyType, string> = {
@@ -329,6 +332,8 @@ export function cancelTreatyProblem(sim: Sim, nid: NationId, other: NationId, ty
 
 export function cancelTreaty(sim: Sim, nid: NationId, other: NationId, type: TreatyType): void {
   const st = sim.state;
+  // contracts are signed under the trade agreement: ending it ends them, at the canceller's cost
+  if (type === 'trade') endContractsBetween(sim, nid, other);
   removeTreaty(sim, type, nid, other);
   const n = st.nations[nid];
   if (type === 'trade') addMemory(sim, other, nid, 'betrayal', -15, 0.5);

@@ -90,6 +90,10 @@ export interface UsageReport {
   };
   /** realm-months in another realm's sphere (at month ends) */
   inSphereMonths?: number;
+  /** atlas update: trade contracts — realm-months holding one, contracts in force (summed over months), totals at the end */
+  contractRealmMonths?: number;
+  contractMonths?: number;
+  contracts?: { signed: number; kept: number; defaulted: number; cancelled: number; units: number; holders: number; realms: number };
   /** the closest any realm came to each victory path: peak condition progress (0–1) and peak timer share */
   victoryPeaks?: Record<VictoryPath, { progress: number; timer: number; who: string }>;
 }
@@ -164,6 +168,13 @@ export class UsageTracker {
     let inSphere = 0;
     for (const n of this.living()) if (sphereOf(this.sim, n.id)) inSphere++;
     this.r.inSphereMonths = (this.r.inSphereMonths ?? 0) + inSphere;
+    const holders = new Set<string>();
+    for (const c of st.contracts ?? []) {
+      holders.add(c.seller);
+      holders.add(c.buyer);
+    }
+    this.r.contractRealmMonths = (this.r.contractRealmMonths ?? 0) + this.living().filter((n) => holders.has(n.id)).length;
+    this.r.contractMonths = (this.r.contractMonths ?? 0) + (st.contracts?.length ?? 0);
     // once a year: how close each realm is to each victory path
     if (st.tick % 48 === 0) {
       const peaks = (this.r.victoryPeaks ??= { territorial: { progress: 0, timer: 0, who: '' }, economic: { progress: 0, timer: 0, who: '' }, diplomatic: { progress: 0, timer: 0, who: '' } });
@@ -235,7 +246,7 @@ export class UsageTracker {
     const all = sim.world.nationIds.map((nid) => sim.state.nations[nid]);
     const demands: Record<string, number> = {};
     for (const n of all) for (const [k, v] of Object.entries(n.stats.demands ?? {})) demands[k] = (demands[k] ?? 0) + (v ?? 0);
-    const sum = (k: 'settlementsImposed' | 'settlementsShared' | 'guaranteesGiven' | 'guaranteeCalls' | 'loansGiven' | 'loanCrowns' | 'blocMonths' | 'sphereMonths') => all.reduce((s, n) => s + (n.stats[k] ?? 0), 0);
+    const sum = (k: 'settlementsImposed' | 'settlementsShared' | 'guaranteesGiven' | 'guaranteeCalls' | 'loansGiven' | 'loanCrowns' | 'blocMonths' | 'sphereMonths' | 'contractsSigned' | 'contractsKept' | 'contractsDefaulted' | 'contractsCancelled' | 'contractUnits') => all.reduce((s, n) => s + (n.stats[k] ?? 0), 0);
     this.r.diplomacy = {
       settlements: sum('settlementsImposed'),
       settlementsShared: sum('settlementsShared'),
@@ -250,6 +261,16 @@ export class UsageTracker {
       lenders: all.filter((n) => n.stats.loansGiven > 0).length,
       blocMembers: all.filter((n) => n.stats.blocMonths > 0).length,
       sphereLeaders: all.filter((n) => n.stats.sphereMonths > 0).length,
+      realms: all.length,
+    };
+    this.r.contracts = {
+      // each contract counts once per party in the statistics
+      signed: sum('contractsSigned') / 2,
+      kept: sum('contractsKept') / 2,
+      defaulted: sum('contractsDefaulted'),
+      cancelled: sum('contractsCancelled'),
+      units: sum('contractUnits'),
+      holders: all.filter((n) => (n.stats.contractsSigned ?? 0) > 0).length,
       realms: all.length,
     };
     let done = 0;
@@ -330,6 +351,16 @@ function peakLines(runs: UsageReport[]): string[] {
 }
 
 /** Stage E: peace settlements, guarantees, loans, blocs, spheres and focus. */
+function contractLines(runs: UsageReport[]): string[] {
+  const c = runs.map((u) => u.contracts).filter((x): x is NonNullable<UsageReport['contracts']> => !!x);
+  if (!c.length) return [];
+  const realmMonths = runs.reduce((s, u) => s + u.realmMonths, 0);
+  const tot = (k: keyof (typeof c)[number]) => c.reduce((s, x) => s + x[k], 0);
+  return [
+    `- Trade contracts: ${(tot('signed') / c.length).toFixed(1)} signed per run (${tot('holders')} of ${tot('realms')} realms signed at least one); realms held one in ${((runs.reduce((s, u) => s + (u.contractRealmMonths ?? 0), 0) / Math.max(1, realmMonths)) * 100).toFixed(1)}% of realm-months, ${(runs.reduce((s, u) => s + (u.contractMonths ?? 0), 0) / Math.max(1, runs.reduce((s, u) => s + u.realmMonths, 0)) ).toFixed(2)} contracts in force per realm-month; per run ${(tot('kept') / c.length).toFixed(1)} ran their term, ${(tot('defaulted') / c.length).toFixed(1)} ended in default, ${(tot('cancelled') / c.length).toFixed(1)} were cancelled; ${Math.round(tot('units') / c.length)} units shipped per run.`,
+  ];
+}
+
 function diplomacyLines(runs: UsageReport[]): string[] {
   const d = runs.map((u) => u.diplomacy).filter((x): x is NonNullable<UsageReport['diplomacy']> => !!x);
   const f = runs.map((u) => u.focus).filter((x): x is NonNullable<UsageReport['focus']> => !!x);
@@ -344,6 +375,7 @@ function diplomacyLines(runs: UsageReport[]): string[] {
   const lines = [
     `- Peace settlements per run: ${per('settlements')} (${tot('settlementsShared')} of ${tot('settlements')} shared among several winners); demands won: ${dl}.`,
     `- Guarantees given per run ${per('guaranteesGiven')} (${tot('guarantors')} of ${realms} realms gave one), honoured by joining a war ${tot('guaranteeCalls')} times; loans per run ${per('loansGiven')} (${tot('lenders')} lenders, ${Math.round(tot('loanCrowns') / d.length)} crowns lent per run).`,
+    ...contractLines(runs),
     `- Trade blocs: ${tot('blocMembers')} of ${realms} realms were members (${(tot('blocRealmMonths') / Math.max(1, realmMonths) * 100).toFixed(1)}% of realm-months); spheres: ${tot('sphereLeaders')} realms led one, and realms spent ${(runs.reduce((s, u) => s + (u.inSphereMonths ?? 0), 0) / Math.max(1, realmMonths) * 100).toFixed(1)}% of realm-months in another's sphere.`,
   ];
   if (f.length) {

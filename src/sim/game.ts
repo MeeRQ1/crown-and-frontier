@@ -74,12 +74,14 @@ export function createGame(opts: NewGameOptions = {}): Sim {
     guarantees: [],
     loans: [],
     blocs: [],
+    contracts: [],
+    shipments: [],
     reparations: [],
     disarmaments: [],
     proposals: [],
     reports: [],
     notifications: [],
-    counters: { army: 0, battle: 0, war: 0, treaty: 0, note: 0, proposal: 0, event: 0, regiment: 0, coalition: 0, fleet: 0, ship: 0, wing: 0, loan: 0, bloc: 0 },
+    counters: { army: 0, battle: 0, war: 0, treaty: 0, note: 0, proposal: 0, event: 0, regiment: 0, coalition: 0, fleet: 0, ship: 0, wing: 0, loan: 0, bloc: 0, contract: 0 },
     result: null,
     continueAfterResult: false,
     diagnostics: [],
@@ -213,7 +215,12 @@ export function createGame(opts: NewGameOptions = {}): Sim {
 
 /** Diplomacy and focus counters of a realm's statistics (all zero). */
 export function emptyDiplomacyStats() {
-  return { focusesDone: 0, settlementsImposed: 0, demandsWon: 0, guaranteesGiven: 0, guaranteeCalls: 0, loansGiven: 0, loanCrowns: 0, blocMonths: 0, sphereMonths: 0, settlementsShared: 0, demands: {} };
+  return { focusesDone: 0, settlementsImposed: 0, demandsWon: 0, guaranteesGiven: 0, guaranteeCalls: 0, loansGiven: 0, loanCrowns: 0, blocMonths: 0, sphereMonths: 0, settlementsShared: 0, demands: {}, ...emptyTradeStats() };
+}
+
+/** Trade-contract counters of a realm's statistics (format 5). */
+export function emptyTradeStats() {
+  return { contractsSigned: 0, contractsKept: 0, contractsDefaulted: 0, contractsCancelled: 0, contractUnits: 0 };
 }
 
 /** Navy and air counters of a realm's statistics (all zero). */

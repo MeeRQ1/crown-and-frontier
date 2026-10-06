@@ -637,7 +637,13 @@ canvas.map.dragging { cursor: grabbing; }
 .drawer > .tabs, .drawer > .subtabs { padding: 0 var(--s4); background: var(--cf-ivory-inset); flex: none; }
 .drawer > .body { flex: 1; min-height: 0; padding: var(--s5) var(--s6) var(--s8); background: var(--cf-ivory); }
 .drawer > .body > p.lead, .lead { font-size: var(--fs-md); color: var(--text-2); margin: 0 0 var(--s5); max-width: 46em; }
-.drawer.wide { --drawer-w: min(calc(980px * var(--scale)), calc(100vw - var(--rail-w) - 120px)); }
+.stage.wide-ledger { --drawer-w: max(min(calc(640px * var(--scale)), calc(100vw - var(--rail-w) - 24px)), min(calc(980px * var(--scale)), calc(100vw - var(--rail-w) - 380px))); }
+/* a wide ledger leaves little map: the minimap gives way to the legend */
+.stage.wide-ledger .drawer:not(.closed) ~ .navcl .minimap { display: none; }
+/* a decision waiting stays over the map, not over an open ledger */
+@media (min-width: 761px) {
+  .drawer:not(.closed) ~ .dock { left: calc(var(--rail-w) + var(--drawer-w) + (100% - var(--rail-w) - var(--drawer-w)) / 2); width: min(calc(580px * var(--scale)), calc(100% - var(--rail-w) - var(--drawer-w) - 32px)); }
+}
 
 /* inspector (selection card, right): slate head, ivory body */
 .inspector {
@@ -1188,3 +1194,59 @@ dl.keys dd { margin: 0; color: var(--text-2); }
 /* inline link-style buttons (zone and fleet references inside cards) */
 .linkish { background: none; border: 0; padding: 0; font: inherit; color: var(--info); text-decoration: underline; text-underline-offset: 2px; cursor: pointer; }
 .linkish:hover { color: var(--text); }
+
+/* ── Industry & Trade ────────────────────────────────────────────────────── */
+.strip { display: grid; grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); border: 1px solid var(--line); background: var(--bg-raised); margin-bottom: var(--s5); }
+.strip > div { padding: var(--s3) var(--s4); border-right: 1px solid var(--line-soft); display: flex; flex-direction: column; min-width: 0; }
+.strip > div:last-child { border-right: 0; }
+.strip .k { font-family: var(--heading); font-size: var(--fs-xs); font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase; color: var(--text-2); }
+.strip b { font-variant-numeric: tabular-nums lining-nums; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.register.commodity td { padding-top: 3px; padding-bottom: 3px; vertical-align: middle; }
+.register.commodity td.r > div { white-space: nowrap; }
+.register.commodity tr.selected td { background: var(--selected); }
+.register.commodity tr.selected td:first-child { box-shadow: inset 3px 0 0 var(--cf-brass); }
+.register.commodity tr:focus-visible { outline: 2px solid var(--focus); outline-offset: -2px; }
+.good-cell { display: flex; align-items: center; gap: var(--s4); }
+.good-cell > span { display: flex; flex-direction: column; line-height: 1.15; }
+.res-art { flex: none; display: block; }
+.stockbar { position: relative; display: flex; height: 6px; margin-top: 3px; background: var(--bg-inset); border: 1px solid var(--line); min-width: 90px; }
+.stockbar .free { background: var(--cf-route); }
+.stockbar .reserved { background: repeating-linear-gradient(135deg, var(--cf-brass-ink) 0 2px, var(--cf-brass) 2px 4px); }
+.stockbar .keep { position: absolute; top: -3px; bottom: -3px; width: 1px; background: var(--text); }
+.workspace { margin-top: var(--s6); padding: var(--s5) var(--s6) var(--s6); background: var(--bg-raised); border: 1px solid var(--line); border-top: 3px solid var(--cf-slate); }
+.workspace h4 { margin: var(--s6) 0 var(--s3); }
+.ws-head { display: flex; gap: var(--s5); align-items: flex-start; }
+.ws-head h3 { margin: 0 0 2px; font-size: var(--fs-xl); }
+.forecast-fig { margin: var(--s5) 0 0; }
+.forecast-fig svg { display: block; width: 100%; height: 120px; background: var(--bg); border: 1px solid var(--line-soft); }
+.forecast-fig .fc-cap { stroke: var(--text-2); stroke-width: 1; stroke-dasharray: 2 3; }
+.forecast-fig .fc-keep { stroke: var(--cf-brass-ink); stroke-width: 1; stroke-dasharray: 5 3; }
+.forecast-fig .fc-short { fill: rgba(156, 59, 51, 0.16); }
+.forecast-fig .fc-base { fill: none; stroke: var(--cf-route); stroke-width: 2; }
+.forecast-fig .fc-base.dim { stroke: var(--text-2); stroke-dasharray: 4 3; stroke-width: 1.5; }
+.forecast-fig .fc-alt { fill: none; stroke: var(--cf-route); stroke-width: 2.4; }
+.forecast-fig .fc-ax { font: 600 11px var(--sans); fill: var(--text-2); font-variant-numeric: tabular-nums; }
+.fc-legend { display: flex; flex-wrap: wrap; gap: 4px 14px; margin-top: 4px; color: var(--text-2); }
+.fc-key::before { content: ''; display: inline-block; width: 16px; height: 0; margin-right: 5px; vertical-align: middle; border-top: 2px solid var(--cf-route); }
+.fc-key.base::before { border-top-color: var(--text-2); border-top-style: dashed; }
+.fc-key.keep::before { border-top: 1px dashed var(--cf-brass-ink); }
+.fc-key.cap::before { border-top: 1px dotted var(--text-2); }
+.fc-key.short::before { height: 10px; border: 0; background: rgba(156, 59, 51, 0.25); width: 10px; }
+.forecast-fig figcaption { margin-top: 4px; }
+.acceptance { margin: var(--s4) 0; }
+.acceptance > summary { cursor: pointer; font-weight: 600; font-size: var(--fs-sm); }
+.acceptance.good > summary { color: var(--good); }
+.acceptance.bad > summary { color: var(--bad); }
+.draft { margin-top: var(--s6); padding: var(--s5); border: 1px solid var(--cf-brass-ink); background: var(--cf-ivory-raised); box-shadow: inset 4px 0 0 var(--cf-brass); }
+.draft h4 { margin-top: 0; }
+.draft-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: var(--s5); margin-bottom: var(--s5); }
+.draft-grid input[type='number'] { width: 5em; text-align: right; font-variant-numeric: tabular-nums; }
+.draft-grid input[type='range'] { width: 100%; }
+.draft-grid output { font-size: var(--fs-sm); font-variant-numeric: tabular-nums; color: var(--text-2); }
+ul.plain { list-style: none; padding: 0; margin: var(--s2) 0; }
+ul.plain li { padding: 3px 0; border-bottom: 1px solid var(--line-soft); }
+.rules { margin-top: var(--s6); }
+@media (max-width: 760px) {
+  .register.commodity th:nth-child(n + 3):nth-child(-n + 7), .register.commodity td:nth-child(n + 3):nth-child(-n + 7) { display: none; }
+  .workspace { padding: var(--s4); }
+}

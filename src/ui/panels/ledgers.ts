@@ -1,66 +1,22 @@
 // Modal ledgers opened from the navigation bar.
 
-import { C, forceLabel, RESOURCE_INFO, STRATEGIC, UNITS, UNIT_TYPES } from '../../sim/config';
+import { C, forceLabel, RESOURCE_INFO, UNITS, UNIT_TYPES } from '../../sim/config';
 import { navyAirSection } from './sea';
-import { activeProjects, buildSlots, PROJECT_LABELS } from '../../sim/construction';
+import { PROJECT_LABELS } from '../../sim/construction';
 import { PERSONALITIES } from '../../sim/data/personalities';
 import { FOCUS_BRANCHES, type FocusBranch, type FocusDef } from '../../sim/data/focus';
 import { describeReward, focusMonthsLeft, focusProblem, focusStatus, focusTree, getFocus } from '../../sim/focus';
 import { BRANCHES, ERAS, TECH_LIST, TECHS, type Branch, type Era } from '../../sim/data/techs';
-import {
-  claimsOn,
-  coalitionAgainst,
-  envoyProblem,
-  envoySlots,
-  evaluateTreaty,
-  joinCoalitionProblem,
-  opinion,
-  opinionParts,
-  TREATY_LABELS,
-  treatyProblem,
-} from '../../sim/diplomacy';
-import { debtStage, effectiveFactories, factoryCount, grossIncome, manpowerRegen, materielCap, menServing, poolCap, provinceCrowns, provinceDeposit, reserveCap, resourceCap, resourcePlan, shortageEffect, stockpileCap, tradeFlows } from '../../sim/economy';
+import { claimsOn, coalitionAgainst, envoyProblem, envoySlots, evaluateTreaty, joinCoalitionProblem, opinion, opinionParts, TREATY_LABELS, treatyProblem } from '../../sim/diplomacy';
+import { debtStage, grossIncome, manpowerRegen, menServing, poolCap, provinceCrowns, reserveCap, stockpileCap } from '../../sim/economy';
 import { checkCommand } from '../../sim/commands';
-import {
-  armyCap,
-  blocOf,
-  evaluateBloc,
-  evaluateLoan,
-  foundBlocProblem,
-  guaranteeProblem,
-  guaranteesBy,
-  guaranteeSlots,
-  guarantorsOf,
-  influenceGain,
-  influenceOver,
-  inviteProblem,
-  joinProblem,
-  loanProblem,
-  sphereMembers,
-  sphereOf,
-} from '../../sim/influence';
+import { armyCap, blocOf, evaluateBloc, evaluateLoan, foundBlocProblem, guaranteeProblem, guaranteesBy, guaranteeSlots, guarantorsOf, influenceGain, influenceOver, inviteProblem, joinProblem, loanProblem, sphereMembers, sphereOf } from '../../sim/influence';
 import { adminCapacity, frontierLoad, overextension } from '../../sim/integration';
 import { maxMorale, nationStrength, unitUnlocked } from '../../sim/military';
 import { describeEffects } from '../../sim/modifiers';
 import { earliestYear, researchProblem, researchRate, techCost, yearsEarly } from '../../sim/progression';
 import { diagnosticBundle } from '../../sim/diagnostics';
-import {
-  aliveNations,
-  alliesOf,
-  armiesOf,
-  atWar,
-  dateOf,
-  endTick,
-  hasTreaty,
-  menOf,
-  nationName,
-  ownedProvinces,
-  provName,
-  sideOf,
-  treatyPartners,
-  truceUntil,
-  warsOf,
-} from '../../sim/state';
+import { aliveNations, alliesOf, armiesOf, atWar, dateOf, endTick, hasTreaty, menOf, nationName, ownedProvinces, provName, sideOf, truceUntil, warsOf } from '../../sim/state';
 import { armySupplyInfo } from '../../sim/supply';
 import type { Army, Demand, DemandKind, NationId, PeaceTerms, StrategicResource, TreatyType, War } from '../../sim/types';
 import { buildSettlement, contributionShares, counterOffer, DEMAND_LABELS, demandCost, describeDemand, evaluateSettlement, settlementCost } from '../../sim/settlement';
@@ -74,6 +30,7 @@ import { confirmDialog } from './dialogs';
 import { section, shield } from './common';
 import { icon } from '../icons';
 import { emblem, type EmblemName } from '../emblems';
+import { industryLedger as industryLedgerNew } from '../ledgers/industry';
 
 export type LedgerTab = 'realm' | 'industry' | 'military' | 'research' | 'focus' | 'diplomacy' | 'wars' | 'victory' | 'log' | 'help';
 
@@ -116,7 +73,7 @@ export function renderLedger(app: App): void {
     const close = h('button', { class: 'btn quiet icon', type: 'button', 'aria-label': 'Close ledger (Esc)', 'data-fk': 'drawer-close' }, icon('close'));
     close.addEventListener('click', () => app.closeLedger());
     const content = BODIES[tab](app);
-    app.drawerEl.classList.toggle('wide', WIDE.has(tab));
+    app.stageEl.classList.toggle('wide-ledger', WIDE.has(tab));
     setChildren(
       app.drawerEl,
       h('header', null, emblem(EMBLEMS[tab], 40), h('h2', { tabindex: '-1', id: 'ledger-title' }, TITLES[tab]), close),
@@ -126,11 +83,11 @@ export function renderLedger(app: App): void {
 }
 
 /** Ledgers that need a wide workspace (trees and negotiations). */
-const WIDE = new Set<LedgerTab>();
+const WIDE = new Set<LedgerTab>(['industry']);
 
 const BODIES: Record<LedgerTab, (app: App) => HTMLElement> = {
   realm: realmLedger,
-  industry: industryLedger,
+  industry: industryLedgerNew,
   military: militaryLedger,
   research: researchLedger,
   focus: focusLedger,
@@ -254,128 +211,7 @@ function realmLedger(app: App): HTMLElement {
   );
 }
 
-// ───────────────────────────── Industry & trade ─────────────────────────────
-
-function industryLedger(app: App): HTMLElement {
-  const sim = app.sim!;
-  const pid = app.player;
-  if (!pid) return noRealm();
-  const n = sim.state.nations[pid];
-  const l = n.lastMonth;
-  const plan = resourcePlan(sim, pid);
-  const rcap = resourceCap(sim, pid);
-  const fac = factoryCount(sim, pid);
-  const mcap = materielCap(sim, pid);
-  const trade = tradeFlows(sim).filter((t) => t.from === pid || t.to === pid);
-  const resRows = STRATEGIC.map((r) => {
-    const f = l.resources[r];
-    const short = n.shortages.includes(r);
-    const net = f.produced + f.imported - f.exported - f.used;
-    return h(
-      'tr',
-      null,
-      h('td', null, h('span', { title: RESOURCE_INFO[r].use }, RESOURCE_INFO[r].label), short ? h('span', { class: 'tag bad', title: shortageEffect(r) }, 'short') : null),
-      h('td', null, `${fmt(n.stock[r])} / ${fmt(rcap)}`),
-      h('td', null, fmt(f.produced, 1)),
-      h('td', null, fmt(plan.need[r], 1)),
-      h('td', null, f.imported ? `+${fmt(f.imported, 1)}` : '—'),
-      h('td', null, f.exported ? `−${fmt(f.exported, 1)}` : '—'),
-      h('td', { class: net >= 0 ? 'good' : 'bad' }, signed(net, 1)),
-    );
-  });
-  const deposits = ownedProvinces(sim, pid)
-    .map((p) => ({ p, d: provinceDeposit(sim, p) }))
-    .filter((x): x is { p: string; d: NonNullable<ReturnType<typeof provinceDeposit>> } => !!x.d)
-    .sort((a, b) => b.d.amount - a.d.amount || (a.p < b.p ? -1 : 1));
-  const factoryProvs = ownedProvinces(sim, pid)
-    .filter((p) => sim.state.provinces[p].factories > 0)
-    .sort((a, b) => sim.state.provinces[b].factories - sim.state.provinces[a].factories || (a < b ? -1 : 1));
-  const goto = (p: string) => () => {
-    app.closeLedger();
-    app.selectProvince(p, true);
-  };
-  return h(
-    'div',
-    null,
-    h(
-      'div',
-      { class: 'cols' },
-      h(
-        'div',
-        { class: 'card' },
-        h('h3', null, 'Industry'),
-        row('Factories', `${fac} (${fmt(effectiveFactories(sim, pid), 1)} effective)`),
-        row('Industrial capacity', fmt(l.industry, 1)),
-        row('Coal for factories', `${fmt(plan.factoryCoal, 1)} / month`),
-        row('Materiel', `${fmt(n.materiel)} / ${fmt(mcap)}`),
-        bar(n.materiel, mcap, 'info', 'Materiel'),
-        row('Added last month', `+${fmt(l.materielIn, 1)}${l.income['Manufactured goods'] ? ' (stockpile full)' : ''}`),
-        l.income['Manufactured goods'] ? row('Surplus sold as goods', `${fmt(l.income['Manufactured goods'], 1)} crowns`) : null,
-        h('p', { class: 'small muted' }, `Each factory makes ${C.industry.materielPerIC} materiel a month at full coal and integration; workshops add a little everywhere. Materiel equips new regiments and replaces losses; a full stockpile's output is sold as goods. Build factories from a province card (${activeProjects(sim, pid).length} of ${buildSlots(sim, pid)} builders busy).`),
-      ),
-      h(
-        'div',
-        { class: 'card' },
-        h('h3', null, 'Trade'),
-        trade.length
-          ? h(
-              'table',
-              { class: 'data' },
-              h('thead', null, h('tr', null, ['Partner', 'Goods', 'Amount', 'Crowns'].map((t) => h('th', null, t)))),
-              h(
-                'tbody',
-                null,
-                trade.map((t) => {
-                  const sell = t.from === pid;
-                  const other = sell ? t.to : t.from;
-                  return h('tr', null, h('td', null, nationName(sim, other)), h('td', null, `${sell ? 'Sell' : 'Buy'} ${RESOURCE_INFO[t.res].label.toLowerCase()}`), h('td', null, fmt(t.amount, 1)), h('td', { class: sell ? 'good' : 'bad' }, signed(sell ? t.amount * t.price : -t.amount * t.price, 1)));
-                }),
-              ),
-            )
-          : h('p', { class: 'muted small' }, 'No goods change hands this month.'),
-        row('Trade agreements', String(treatyPartners(sim, 'trade', pid).length)),
-        h('p', { class: 'small muted' }, `A trade agreement moves resources each month from one partner's surplus (above ${Math.round(C.resources.keepShare * 100)}% of its stockpile cap after its own use) to the other's need, at fixed prices: ${(['food', ...STRATEGIC] as const).map((r) => `${RESOURCE_INFO[r].label.toLowerCase()} ${RESOURCE_INFO[r].price}`).join(', ')} crowns. Each agreement also brings ${C.economy.tradeCommerce} crown of commerce. A realm in debt does not buy.`),
-      ),
-    ),
-    h('h3', { style: 'margin-top:14px' }, 'Strategic resources'),
-    h(
-      'table',
-      { class: 'data' },
-      h('thead', null, h('tr', null, ['Resource', 'Stock', 'Mined', 'Needed', 'Bought', 'Sold', 'Net'].map((t) => h('th', null, t)))),
-      h('tbody', null, resRows),
-    ),
-    n.shortages.length ? h('ul', { class: 'reasons' }, n.shortages.map((r) => h('li', { class: 'bad' }, `${RESOURCE_INFO[r].label}: ${shortageEffect(r)}`))) : null,
-    h('p', { class: 'small muted' }, 'Coal fuels factories; iron builds artillery, armour, factories, forts and railways; oil fuels armour; rubber builds armour; nitrates make shells for artillery in war. Shortages are announced and never stop the game: they weaken what needs the resource until trade, conquest or research (chemistry, synthetic fuel and rubber) fills the gap.'),
-    h(
-      'div',
-      { class: 'cols', style: 'margin-top:10px' },
-      h(
-        'div',
-        { class: 'card' },
-        h('h4', null, 'Deposits'),
-        deposits.length
-          ? deposits.map(({ p, d }) => {
-              const b = h('button', { class: 'btn quiet small', type: 'button', style: 'width:100%;justify-content:space-between' }, h('span', null, provName(sim, p)), h('span', { class: 'faint' }, `${RESOURCE_INFO[d.res].label} ${fmt(d.amount, 1)}/mo`));
-              b.addEventListener('click', goto(p));
-              return b;
-            })
-          : h('p', { class: 'muted small' }, 'No mines or wells of our own.'),
-      ),
-      h(
-        'div',
-        { class: 'card' },
-        h('h4', null, 'Factory towns'),
-        factoryProvs.length
-          ? factoryProvs.map((p) => {
-              const b = h('button', { class: 'btn quiet small', type: 'button', style: 'width:100%;justify-content:space-between' }, h('span', null, provName(sim, p)), h('span', { class: 'faint' }, `${sim.state.provinces[p].factories} factor${sim.state.provinces[p].factories === 1 ? 'y' : 'ies'}`));
-              b.addEventListener('click', goto(p));
-              return b;
-            })
-          : h('p', { class: 'muted small' }, 'No factories yet.'),
-      ),
-    ),
-  );
-}
+// Industry & Trade: src/ui/ledgers/industry.ts
 
 // ───────────────────────────── Military ─────────────────────────────────────
 

@@ -10,7 +10,7 @@ import { readSave, SaveError, serialize } from '../sim/save';
 import { atWar, dateOf, months, ownedProvinces, provName, type Sim } from '../sim/state';
 import { isOver, step } from '../sim/tick';
 import { fleetEta, fleetsIn, fleetSummary, pathToCoast, transportFor, zonePath } from '../sim/naval';
-import type { AirMission, Army, Command, CommandResult, Demand, DemandKind, NationId, ProvinceId } from '../sim/types';
+import type { AirMission, Army, Command, CommandResult, ContractTerms, Demand, DemandKind, NationId, ProvinceId, Tradeable } from '../sim/types';
 import { Sound } from './audio';
 import { h, setChildren } from './dom';
 import { fontsReady } from './fonts';
@@ -59,6 +59,9 @@ export interface UIState {
   groupOrders: boolean;
   /** legend panel open (starts closed on phones, where it would cover the map) */
   legendOpen: boolean;
+  /** Industry & Trade: the good in the workspace, and a contract being drafted */
+  tradeGood: Tradeable | null;
+  tradeDraft: ContractTerms | null;
 }
 
 const RAIL: Array<{ tab: LedgerTab; label: string; icon: Parameters<typeof icon>[0]; key: string; desk?: boolean }> = [
@@ -191,7 +194,7 @@ export class App {
   }
 
   private freshUI(): UIState {
-    return { peace: null, settle: {}, counter: null, split: {}, ledgerTab: null, diploTarget: null, logFilter: 'all', inspectorPeek: false, presentationOpen: false, dockOpen: false, dockItem: null, attentionOpen: false, groupOrders: false, legendOpen: this.settings?.showLegend ?? true };
+    return { peace: null, settle: {}, counter: null, split: {}, ledgerTab: null, diploTarget: null, logFilter: 'all', inspectorPeek: false, presentationOpen: false, dockOpen: false, dockItem: null, attentionOpen: false, groupOrders: false, legendOpen: this.settings?.showLegend ?? true, tradeGood: null, tradeDraft: null };
   }
 
   get player(): NationId | null {
@@ -497,6 +500,7 @@ export class App {
         selectedWing: this.selectedWing,
         fleetPreview,
         fleetPreviewLabel,
+        tradeRoutes: this.ui.ledgerTab === 'industry' && this.player ? this.tradeRoutes(sim, this.player) : null,
       },
       now,
     );
@@ -512,6 +516,19 @@ export class App {
   }
 
   private legendKey = '';
+
+  /** Our contracts as routes between the two capitals (the chosen good only, when one is chosen). */
+  private tradeRoutes(sim: Sim, pid: NationId): Array<{ from: ProvinceId; to: ProvinceId; sea: boolean }> {
+    const out: Array<{ from: ProvinceId; to: ProvinceId; sea: boolean }> = [];
+    for (const c of sim.state.contracts) {
+      if (c.seller !== pid && c.buyer !== pid) continue;
+      if (this.ui.tradeGood && c.res !== this.ui.tradeGood) continue;
+      const a = sim.state.nations[c.seller].capital;
+      const b = sim.state.nations[c.buyer].capital;
+      if (a && b) out.push({ from: a, to: b, sea: c.lag > 0 });
+    }
+    return out;
+  }
 
   /** A select/input inside a panel has focus: rebuilding would close or reset it. */
   private editingForm(): boolean {
@@ -1009,6 +1026,7 @@ export class App {
   closeLedger(): void {
     this.ui.ledgerTab = null;
     this.drawerEl.classList.add('closed');
+    this.stageEl.classList.remove('wide-ledger');
     setChildren(this.drawerEl);
     this.focusNation = null;
     const lm = this.ledgerMode;
