@@ -263,7 +263,7 @@ async function seaAirFlow(browser: Browser, base: string): Promise<void> {
   await page.keyboard.press('m');
   await page.waitForTimeout(250);
   const ledger = await page.locator('.drawer:not(.closed)').innerText().catch(() => '');
-  const blockTile = /Blockades\s*[1-9]\d* \/ 0/i.test(ledger) && /We blockade: [^\n]*Westmere/.test(ledger);
+  const blockTile = /Blockades\s*[1-9]\d* held · 0 on us/i.test(ledger) && /We blockade: [^\n]*Westmere/.test(ledger);
   await page.keyboard.press('Escape');
   record(
     'Blockade: clicking the sea shows the blockaded coast, the fleet card says Blockading, the Military ledger counts it',

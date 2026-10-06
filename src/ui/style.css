@@ -480,7 +480,7 @@ input[type='checkbox'] { accent-color: var(--cf-brass-ink); width: 1.15em; heigh
 }
 .hud-realm:hover { background: var(--hover); }
 .hud-realm .nm { font-family: var(--heading); font-size: var(--fs-lg); color: var(--text); white-space: nowrap; font-weight: 600; letter-spacing: 0.05em; text-transform: uppercase; line-height: 1.05; }
-.hud-realm .title { font-size: var(--fs-xs); color: var(--text-2); letter-spacing: 0.04em; font-weight: 600; }
+.hud-realm .title { font-size: var(--fs-xs); color: var(--text-2); letter-spacing: 0.04em; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 11em; }
 .hud-res { display: flex; align-items: stretch; min-width: 0; overflow-x: auto; scrollbar-width: none; }
 .hud-res::-webkit-scrollbar { display: none; }
 .res {
@@ -1410,3 +1410,25 @@ kbd { display: inline-block; min-width: 1.5em; padding: 0 5px; border: 1px solid
 .battle-item h5 { margin: var(--s3) 0 2px; font-family: var(--heading); font-size: var(--fs-xs); text-transform: uppercase; letter-spacing: 0.08em; color: var(--text-2); }
 .utility-row { display: flex; align-items: center; gap: var(--s4); justify-content: space-between; margin-top: var(--s6); padding-top: var(--s4); border-top: 1px solid var(--line-soft); }
 .utility-row p { margin: 0; }
+
+/* Diplomacy: the selected realm's briefing */
+.register.briefing { margin: 0 0 var(--s4); border-top: 1px solid var(--line); }
+.register.briefing th { width: 34%; padding: 6px; text-align: left; font-family: var(--body); font-size: var(--fs-sm); font-weight: 500; letter-spacing: 0; text-transform: none; color: var(--text-2); border-bottom: 1px solid var(--line-soft); }
+.register.briefing td.r { width: 1%; padding-right: var(--s4); font-weight: 700; font-size: var(--fs-md); }
+.register.briefing td.small { color: var(--text-2); }
+ul.notes li.warn { color: var(--warn); }
+
+/* Wars & Peace: each war as a campaign briefing */
+.war-brief { margin: 0 0 var(--s6); border: 1px solid var(--line); border-top: 3px solid var(--line); background: var(--bg-raised); }
+.war-brief.mine { border-top-color: var(--bad); }
+.war-brief h4 { margin: var(--s4) 0 var(--s2); font-family: var(--heading); font-size: var(--fs-xs); letter-spacing: 0.08em; text-transform: uppercase; color: var(--text-2); }
+.war-brief .register.compact td { padding: 3px 4px; }
+.side-list { display: inline-flex; flex-wrap: wrap; gap: 4px 10px; }
+.goal-list { list-style: none; margin: 0 0 var(--s3); padding: 0; display: flex; flex-direction: column; gap: 2px; font-size: var(--fs-sm); }
+.war-tools { padding: 0 var(--s5) var(--s5); }
+
+/* Military: regiment types as one comparable register */
+.table-scroll { overflow-x: auto; }
+.register.unit-table td { vertical-align: top; }
+.register.unit-table tr.locked td { color: var(--text-2); }
+.army-row .ar-st .tag { margin-left: 6px; padding: 0 4px; font-size: var(--fs-xs); }

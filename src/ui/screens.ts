@@ -407,15 +407,23 @@ export function renderLoad(app: App): HTMLElement {
               button('', () => confirmDialog(app, 'Delete this save?', `${m ? `${m.nationName}, ${m.date}` : s.key} will be removed from this browser. This cannot be undone.`, () => void app.store.remove(s.key).then(refresh), 'Delete'), { cls: 'icon quiet', icon: 'close', title: 'Delete this save' }),
             );
           })
-        : h('div', { class: 'callout info' }, icon('info'), 'No saves in this browser yet. Campaigns autosave every few months, and when the tab is hidden.'),
+        : h(
+            'div',
+            { class: 'empty-state' },
+            icon('save'),
+            h('p', null, h('b', null, 'No saves in this browser yet.')),
+            h('p', { class: 'small' }, 'Campaigns save themselves every few months and whenever the tab is hidden. A save exported from another browser or device can be imported here.'),
+            h('div', { class: 'row', style: 'gap:8px;justify-content:center' }, button('Start a new campaign', () => app.showScreen(renderNewGame(app)), { cls: 'primary', icon: 'flag' }), button('Import a save file', importSave, { icon: 'upload' })),
+          ),
     );
   };
-  void refresh();
-  const imp = button('Import a save file', async () => {
+  const importSave = async () => {
     const text = await pickFile('.json,application/json');
     if (text === '__too_big__') return dialog(app, 'File too large', [h('p', null, 'That file is too large to be a save.')]);
     if (text) app.loadText(text);
-  }, { icon: 'upload' });
+  };
+  void refresh();
+  const imp = button('Import a save file', importSave, { icon: 'upload' });
   return h(
     'div',
     { class: 'screen', role: 'main' },
