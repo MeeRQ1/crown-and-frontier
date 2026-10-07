@@ -497,6 +497,33 @@ async function mapEditorFlow(browser: Browser, base: string): Promise<void> {
   await page.waitForTimeout(500);
   const playing = await page.evaluate(() => (window as any).cnf.sim.state.scenarioId);
   record('Map library: a map made in the editor starts a campaign', playing === made.id && (await canvasDrawn(page)), `campaign on ${playing}`);
+  // ── round trip: play a few weeks, save, take the map out of the library, reload the page, load the save
+  const savedTick = await page.evaluate(async () => {
+    const app = (window as any).cnf;
+    app.setSpeed(4);
+    for (let i = 0; i < 80 && app.sim.state.tick < 5; i++) {
+      document.querySelectorAll<HTMLButtonElement>('.modal-layer:not(.hidden) footer button').forEach((b) => b.click());
+      if (app.speed === 0) app.setSpeed(4);
+      await new Promise((r) => setTimeout(r, 100));
+    }
+    app.setSpeed(0);
+    await app.save('slot-3');
+    return app.sim.state.tick as number;
+  });
+  await page.evaluate(async (id) => (window as any).cnf.maps.remove(id), made.id);
+  await page.reload();
+  await page.waitForSelector('.screen .menu-list button');
+  const inLibrary = await page.evaluate((id) => (window as any).cnf.maps.has(id), made.id);
+  await page.getByRole('button', { name: /Load or import/ }).click();
+  await page.locator('.save-card', { hasText: 'Slot 3' }).getByRole('button', { name: 'Load' }).click();
+  await page.waitForSelector('canvas.map');
+  await page.waitForTimeout(500);
+  const reloaded = await page.evaluate(() => ({ map: (window as any).cnf.sim.state.scenarioId as string, tick: (window as any).cnf.sim.state.tick as number }));
+  record(
+    'Map round trip: export → import → setup → play → save → reload loads the campaign on its map, even with the map gone from the library',
+    savedTick >= 5 && !inLibrary && reloaded.map === made.id && reloaded.tick === savedTick && (await canvasDrawn(page)),
+    `saved at week ${savedTick}; library ${inLibrary ? 'still has' : 'no longer has'} the map; loaded ${reloaded.map} at week ${reloaded.tick}`,
+  );
   await page.close();
 
   // ── edit a copy of a built-in map
