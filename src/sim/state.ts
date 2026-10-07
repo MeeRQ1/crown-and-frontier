@@ -1,7 +1,7 @@
 // Core state access helpers shared by all simulation modules.
 
 import { C } from './config';
-import { armiesIn, armiesOfNation, controlledBy, hostilePair, memoize, ownedBy, sameSidePair, treatyPair } from './index';
+import { armiesIn, armiesOfNation, bumpGeo, controlledBy, hostilePair, memoGeo, ownedBy, sameSidePair, treatyPair } from './index';
 import type {
   Army,
   ArmyId,
@@ -166,9 +166,13 @@ export function isFriendly(sim: Sim, a: NationId, b: NationId | null): boolean {
   return treatyPair(sim, 'alliance', a, b) || sameSidePair(sim, a, b);
 }
 
-/** Marks derived caches (supply network etc.) stale after a control/diplomatic change. */
-export function bump(sim: Sim): void {
+/**
+ * Marks derived caches (supply network etc.) stale after a control/diplomatic change.
+ * 'terms': a treaty that changes no border, route or side (see geoRev).
+ */
+export function bump(sim: Sim, scope: 'all' | 'terms' = 'all'): void {
   sim.state.rev++;
+  if (scope === 'all') bumpGeo(sim);
 }
 
 /** May armies of `nid` enter a province controlled by `ctrl` (owned by `owner`)? */
@@ -213,17 +217,32 @@ export function borders(sim: Sim, a: NationId, b: NationId): boolean {
 /** Shortest hop distance between any province of a and any of b (Infinity if none). */
 export function nationDistance(sim: Sim, a: NationId, b: NationId): number {
   // depends only on ownership: remembered for the week and revision
-  return memoize(sim, 'nationDistance', `${a}|${b}`, () => {
-    const pa = ownedBy(sim, a);
-    const pb = ownedBy(sim, b);
+  return memoGeo(sim, 'nationDistance', `${a}|${b}`, () => {
+    // the smallest hop from any province of a to any of b: a's distance field read at b's provinces
+    const field = realmField(sim, a);
+    const ix = sim.world.provIndex;
     let best = Infinity;
-    for (const x of pa) {
-      for (const y of pb) {
-        const d = sim.world.hop(x, y);
-        if (d !== undefined && d < best) best = d;
-      }
+    for (const y of ownedBy(sim, b)) {
+      const d = field[ix.get(y)!];
+      if (d !== 0xffff && d < best) best = d;
     }
     return best;
+  });
+}
+
+/**
+ * Hops from a realm's nearest province to every province (provIds order; 0xffff
+ * unreachable): the element-wise minimum of the hop matrix rows of its provinces.
+ */
+function realmField(sim: Sim, nid: NationId): Uint16Array {
+  return memoGeo(sim, 'realmField', nid, () => {
+    const n = sim.world.provIds.length;
+    const f = new Uint16Array(n).fill(0xffff);
+    for (const x of ownedBy(sim, nid)) {
+      const row = sim.world.hopRow(x)!;
+      for (let j = 0; j < n; j++) if (row[j] < f[j]) f[j] = row[j];
+    }
+    return f;
   });
 }
 

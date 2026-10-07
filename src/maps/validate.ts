@@ -32,9 +32,9 @@ export interface MapCheck {
 export const MAP_LIMITS = {
   bytes: 8 * 1024 * 1024,
   provinces: 1500,
-  nations: 32,
-  regions: 300,
-  edges: 30000,
+  nations: 64,
+  regions: 600,
+  edges: 60000,
   points: 600000,
   labels: 400,
   waste: 4000,
@@ -581,14 +581,30 @@ export function validateMapPackage(pkg: MapPackage): MapCheck {
     } else warn('geometry', 'The sea zones have no drawing; fleets will be drawn at their coasts.');
   }
 
-  // strategic accessibility: one connected world
+  // strategic accessibility: every landmass reachable over land and straits, or
+  // by sea (a coast on a sea zone, where fleets can land troops); land with
+  // neither cannot be reached at all
   if (pkg.provinces.length >= 2) {
-    const seen = new Set<string>([pkg.provinces[0].id]);
-    const q = [pkg.provinces[0].id];
-    for (let i = 0; i < q.length; i++) for (const nb of provById.get(q[i])?.neighbors ?? []) if (provById.has(nb) && !seen.has(nb)) (seen.add(nb), q.push(nb));
-    if (seen.size < pkg.provinces.length) {
-      const cut = pkg.provinces.filter((p) => !seen.has(p.id));
-      err('connectivity', `${cut.length} province(s) cannot be reached from the rest of the map (${cut.slice(0, 5).map((p) => p.name || p.id).join(', ')}${cut.length > 5 ? ', …' : ''}). Add a land border or a strait.`, cut[0].id);
+    const comp = new Map<string, number>();
+    const parts: string[][] = [];
+    for (const p of pkg.provinces) {
+      if (comp.has(p.id)) continue;
+      const k = parts.length;
+      const q = [p.id];
+      comp.set(p.id, k);
+      for (let i = 0; i < q.length; i++) for (const nb of provById.get(q[i])?.neighbors ?? []) if (provById.has(nb) && !comp.has(nb)) (comp.set(nb, k), q.push(nb));
+      parts.push(q);
+    }
+    if (parts.length > 1) {
+      parts.sort((a, b) => b.length - a.length);
+      const name = (ids: string[]) => `${ids.slice(0, 5).map((id) => provById.get(id)?.name || id).join(', ')}${ids.length > 5 ? ', …' : ''}`;
+      const cut = parts.slice(1).filter((ids) => !ids.some((id) => coastal.has(id)));
+      if (cut.length) {
+        const ids = cut.flat();
+        err('connectivity', `${ids.length} province(s) cannot be reached from the rest of the map, by land or by sea (${name(ids)}). Add a land border or a strait, or give them a coast on a sea zone.`, ids[0]);
+      }
+      const bySea = parts.slice(1).filter((ids) => ids.some((id) => coastal.has(id)));
+      if (bySea.length) warn('connectivity', `${bySea.length} landmass(es) are reached only by sea (${name(bySea.map((ids) => ids[0]))}): armies cross to them aboard transports.`, bySea[0][0]);
     }
   }
   // starting viability: every realm can reach someone to deal with

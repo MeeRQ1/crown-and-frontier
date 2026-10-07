@@ -12,14 +12,16 @@
 //            run at 30% + 70% x the share of coal available. Materiel += IC * 4 + workshops (0.15 per
 //            integrated dev) up to the cap; output beyond the cap is sold as
 //            manufactured goods (0.35 crowns each).
-// Trade:     each trade agreement moves resources each month from a partner's
-//            surplus (above 40% of its cap after its own use) to the other's need
-//            (below 40%), at a fixed price per unit; plus 1 crown of commerce each.
-//            Enemy blockades shrink sea trade by the blockaded share of each coast
-//            (realms with a land border trade overland); a blockaded province
-//            loses a quarter of its crowns. Inside a trade bloc, members buy from
-//            members 20% cheaper, earn 50% more commerce from each other, and
-//            share blockade losses by the size of their taxes.
+// Trade:     goods move only under trade contracts (trade.ts): quantity, price
+//            and term agreed, the seller's contracted quantity shipped before its
+//            own use, delivered overland the same month or by sea a month later,
+//            paid on delivery. Each trade agreement also brings 1 crown of
+//            commerce. Enemy blockades hold back the blockaded share of sea
+//            shipments (realms with a land border trade overland); a blockaded
+//            province loses a quarter of its crowns. Inside a trade bloc, members
+//            offer each other contracts 20% below list price, earn 50% more
+//            commerce from each other, and share blockade losses by the size of
+//            their taxes.
 // Credit:    loan instalments and reparations (a share of the payer's gross
 //            income last month) are paid with the monthly settlement.
 // Navy/air:  ships and air wings cost upkeep; ships burn coal (oil after Oil-Fired
@@ -29,12 +31,13 @@
 
 import { airFuel, airUpkeep, bombingLoss } from './air';
 import { C, RESOURCE_INFO, STRATEGIC, TERRAIN, UNITS } from './config';
-import { armiesOfNation, memoize, ownedBy } from './index';
+import { armiesOfNation, memoGeo, memoize, memoWeek, ownedBy } from './index';
 import { nationMods, type Mods } from './modifiers';
 import { fleetFuel, fleetUpkeep, provinceBlockaded, tradeOpen } from './naval';
 import { blocSolidarity, loanInstalment, sameBloc } from './influence';
 import { armiesOf, clamp, controlledProvinces, enemiesOf, months, notify, ownedProvinces, treatyPartners, type Sim } from './state';
-import { armySupplyInfo } from './supply';
+import { supplyConnected } from './supply';
+import { contractPlan, planAmount, settleContracts, type ContractPlan } from './trade';
 import type { MonthlyLedger, NationId, ProvinceId, ResourceFlow, StrategicResource, UnitType } from './types';
 
 export function integrationFactor(i: number): number {
@@ -176,7 +179,7 @@ export interface ResourcePlan {
 }
 
 export function resourcePlan(sim: Sim, nid: NationId): ResourcePlan {
-  return memoize(sim, 'resourcePlan', nid, () => {
+  return memoGeo(sim, 'resourcePlan', nid, () => {
     const produced = { coal: 0, iron: 0, oil: 0, rubber: 0, nitrates: 0 } as Record<StrategicResource, number>;
     const need = { coal: 0, iron: 0, oil: 0, rubber: 0, nitrates: 0 } as Record<StrategicResource, number>;
     for (const pid of ownedBy(sim, nid)) {
@@ -216,6 +219,21 @@ export function resourcePlan(sim: Sim, nid: NationId): ResourcePlan {
   });
 }
 
+/** Food a realm's provinces produce this month, and what its armies on supply lines eat. */
+export function foodBalance(sim: Sim, nid: NationId): { produced: number; eaten: number } {
+  return memoGeo(sim, 'foodBalance', nid, () => {
+    let sup = 0;
+    for (const pid of ownedProvinces(sim, nid)) sup += provinceSupplies(sim, pid);
+    let eaten = 0;
+    for (const a of armiesOf(sim, nid)) {
+      let use = 0;
+      for (const r of a.regiments) use += UNITS[r.type].supplyUse * (0.5 + 0.5 * (r.men / C.regimentSize));
+      if (supplyConnected(sim, a.nation, a.location)) eaten += use;
+    }
+    return { produced: sup * Math.max(0, 1 + nationMods(sim, nid).supplyProd), eaten };
+  });
+}
+
 // ───────────────────────────── Trade ────────────────────────────────────────
 
 export interface TradeLine {
@@ -248,12 +266,13 @@ function tradeBalance(sim: Sim, nid: NationId): { surplus: Record<string, number
 }
 
 /**
- * This month's resource trade over every trade agreement: from each partner's
- * surplus to the other's need, agreement by agreement in order (the same result
- * whichever realm asks). A realm in debt does not buy.
+ * Where trade would help this month: each trade agreement's partners matched
+ * surplus (above 40% of the cap after own use) to need (below 40%), agreement
+ * by agreement. This was the automatic trade of save formats 1–4; it now only
+ * converts those saves' running exchanges into contracts (migration).
  */
-export function tradeFlows(sim: Sim): TradeLine[] {
-  return memoize(sim, 'tradeFlows', '', () => {
+export function surplusMatches(sim: Sim): TradeLine[] {
+  return memoize(sim, 'surplusMatches', '', () => {
     const st = sim.state;
     const bal = new Map<NationId, ReturnType<typeof tradeBalance>>();
     const get = (nid: NationId) => {
@@ -293,9 +312,9 @@ export function tradeFlows(sim: Sim): TradeLine[] {
  * (sales, the value of what it can buy, and commerce), for treaty evaluation.
  */
 export function tradeValue(sim: Sim, nid: NationId, partner: NationId): number {
-  // an estimate for treaty decisions: balances are cached for the phase (read-only here)
-  const A = memoize(sim, 'tradeBalance', nid, () => tradeBalance(sim, nid));
-  const B = memoize(sim, 'tradeBalance', partner, () => tradeBalance(sim, partner));
+  // an estimate for treaty decisions: each realm's balance is worked out once a week
+  const A = memoWeek(sim, 'tradeBalance', nid, () => tradeBalance(sim, nid));
+  const B = memoWeek(sim, 'tradeBalance', partner, () => tradeBalance(sim, partner));
   let v = C.economy.tradeCommerce * Math.max(0, 1 + nationMods(sim, nid).trade);
   for (const res of ['food', ...STRATEGIC]) {
     const sell = Math.max(0, Math.min(A.surplus[res] - A.keep[res], B.keep[res] - B.surplus[res]));
@@ -353,10 +372,10 @@ export function researchFundingCost(gross: number, level: 0 | 1 | 2 | 3): number
 
 /**
  * Computes (without applying) the monthly budget for a nation: crowns, food,
- * strategic resources, industry and materiel. `trade` defaults to this month's
- * trade over all agreements.
+ * strategic resources, industry and materiel, with this settlement's contract
+ * shipments and deliveries.
  */
-export function computeLedger(sim: Sim, nid: NationId, trade: TradeLine[] = tradeFlows(sim)): MonthlyLedger {
+export function computeLedger(sim: Sim, nid: NationId, contracts: ContractPlan = contractPlan(sim)): MonthlyLedger {
   const n = sim.state.nations[nid];
   const mods = nationMods(sim, nid);
   const income: Record<string, number> = {};
@@ -384,30 +403,21 @@ export function computeLedger(sim: Sim, nid: NationId, trade: TradeLine[] = trad
   }
   if (contributions) income['War contributions'] = contributions;
 
-  // resources and trade
+  // resources and trade: shipments leave first (reserved stock), deliveries arrive
   const plan = resourcePlan(sim, nid);
   const resources = emptyFlows();
-  let sales = 0;
-  let purchases = 0;
-  let foodIn = 0;
-  let foodOut = 0;
-  for (const line of trade) {
-    if (line.from !== nid && line.to !== nid) continue;
-    const value = line.amount * line.price;
-    if (line.from === nid) {
-      sales += value;
-      if (line.res === 'food') foodOut += line.amount;
-      else resources[line.res].exported += line.amount;
-    } else {
-      purchases += sameBloc(sim, line.from, nid) ? value * (1 - C.bloc.buyDiscount) : value;
-      if (line.res === 'food') foodIn += line.amount;
-      else resources[line.res].imported += line.amount;
-    }
+  for (const r of STRATEGIC) {
+    resources[r].exported = planAmount(contracts.out, nid, r);
+    resources[r].imported = planAmount(contracts.in, nid, r);
   }
+  const foodOut = planAmount(contracts.out, nid, 'food');
+  const foodIn = planAmount(contracts.in, nid, 'food');
+  const sales = contracts.sales.get(nid) ?? 0;
+  const purchases = contracts.purchases.get(nid) ?? 0;
   let pacts = 0;
   for (const o of treatyPartners(sim, 'trade', nid)) pacts += tradeOpen(sim, nid, o) * (sameBloc(sim, nid, o) ? 1 + C.bloc.commerceBonus : 1);
   if (pacts) income['Commerce'] = pacts * C.economy.tradeCommerce * Math.max(0, 1 + mods.trade);
-  if (sales) income['Resource sales'] = sales;
+  if (sales) income['Contract sales'] = sales;
   // credit: loans repaid to us, reparations paid to us
   let repaid = 0;
   let owed = 0;
@@ -452,8 +462,7 @@ export function computeLedger(sim: Sim, nid: NationId, trade: TradeLine[] = trad
       upkeep += regimentUpkeep(sim, nid, r.type, r.men);
       use += UNITS[r.type].supplyUse * (0.5 + 0.5 * (r.men / C.regimentSize));
     }
-    const info = armySupplyInfo(sim, a, true);
-    if (info.connected) supUse += use;
+    if (supplyConnected(sim, a.nation, a.location)) supUse += use;
     else foraging += use;
   }
   expenses['Army upkeep'] = upkeep;
@@ -472,16 +481,17 @@ export function computeLedger(sim: Sim, nid: NationId, trade: TradeLine[] = trad
   const funding = researchFundingCost(gross, n.research.funding);
   if (funding) expenses['Research funding'] = funding;
 
-  if (purchases) expenses['Resource purchases'] = purchases;
+  if (purchases) expenses['Contract purchases'] = purchases;
   if (owed) expenses['Loan repayments'] = owed;
   if (repOut) expenses['Reparations'] = repOut;
 
   if (n.treasury < 0) expenses['Debt interest'] = -n.treasury * C.economy.interestRate;
 
   suppliesIn['Provinces'] = sup * Math.max(0, 1 + mods.supplyProd);
-  if (foodIn) suppliesIn['Imports'] = foodIn;
+  if (foodIn) suppliesIn['Contract deliveries'] = foodIn;
+  // contracted food leaves first; the armies eat what remains
+  if (foodOut) suppliesOut['Contract shipments'] = foodOut;
   suppliesOut['Armies'] = supUse;
-  if (foodOut) suppliesOut['Exports'] = foodOut;
   if (foraging) suppliesOut['(Foraging, not drawn)'] = 0;
 
   const totalIn = gross;
@@ -530,8 +540,8 @@ export function debtStage(sim: Sim, nid: NationId): DebtStage {
 /** Monthly settlement for all living nations. */
 export function monthlyEconomy(sim: Sim): void {
   const st = sim.state;
-  // one set of trade flows and ledgers for everyone, from the state at the start of the settlement
-  const trade = tradeFlows(sim);
+  // one contract plan and set of ledgers for everyone, from the state at the start of the settlement
+  const trade = contractPlan(sim);
   const ledgers = new Map<NationId, MonthlyLedger>();
   const plans = new Map<NationId, ResourcePlan>();
   for (const nid of sim.world.nationIds) {
@@ -552,13 +562,16 @@ export function monthlyEconomy(sim: Sim): void {
       n.supplies = 0;
       notify(sim, nid, 'urgent', 'supplies', 'Food stockpile exhausted: armies on supply lines go hungry until production recovers.');
     }
+    if (n.supplies > cap) ledger.foodWasted = n.supplies - cap;
     n.supplies = Math.min(n.supplies, cap);
     // strategic resources and industry
     const rcap = resourceCap(sim, nid);
     const short: typeof n.shortages = [];
     for (const r of STRATEGIC) {
       const f = ledger.resources[r];
-      n.stock[r] = clamp(n.stock[r] + f.produced + f.imported - f.exported - f.used, 0, rcap);
+      const after = n.stock[r] + f.produced + f.imported - f.exported - f.used;
+      if (after > rcap) f.wasted = after - rcap;
+      n.stock[r] = clamp(after, 0, rcap);
       // a realm is short when it covers less than 95% of what it needs
       if (f.used < plan.need[r] * 0.95 - 1e-6) short.push(r);
     }
@@ -589,6 +602,7 @@ export function monthlyEconomy(sim: Sim): void {
       if (monthsLeft <= 3) notify(sim, nid, 'urgent', 'debt', `Bankruptcy in about ${Math.max(1, Math.floor(monthsLeft))} month${Math.max(1, Math.floor(monthsLeft)) === 1 ? '' : 's'} at the current deficit. Disband regiments, cancel envoys or lower research funding.`);
     }
   }
+  settleContracts(sim, trade);
   const paid = st.loans.filter((l) => l.remaining <= 0.01);
   if (paid.length) {
     st.loans = st.loans.filter((l) => l.remaining > 0.01);

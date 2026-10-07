@@ -16,6 +16,8 @@ export type WingId = string;
 export type Terrain = 'plains' | 'forest' | 'hills' | 'mountains' | 'marsh' | 'steppe';
 /** Strategic resources mined or grown in provinces; food is the realm's provisions stockpile. */
 export type StrategicResource = 'coal' | 'iron' | 'oil' | 'rubber' | 'nitrates';
+/** What trade contracts can carry: the five strategic resources and food. */
+export type Tradeable = StrategicResource | 'food';
 export type ResourceKind = 'food' | StrategicResource;
 /** A province's deposit (one at most). */
 export type Resource = ResourceKind | null;
@@ -167,6 +169,10 @@ export interface World {
    * compact all-pairs matrix built once per map.
    */
   hop(a: ProvinceId, b: ProvinceId): number | undefined;
+  /** a province's row of the hop matrix, in provIds order (0xffff: unreachable); shared, do not modify */
+  hopRow(a: ProvinceId): Uint16Array | undefined;
+  /** a province's position in provIds */
+  provIndex: ReadonlyMap<ProvinceId, number>;
 }
 
 // ───────────────────────────── Dynamic state ────────────────────────────────
@@ -430,7 +436,7 @@ export interface PeaceTerms {
   mode: 'demand' | 'concede' | 'white';
 }
 
-export type ProposalKind = 'nap' | 'trade' | 'alliance' | 'peace' | 'callToArms' | 'settlement' | 'loan' | 'blocInvite' | 'blocJoin';
+export type ProposalKind = 'nap' | 'trade' | 'alliance' | 'peace' | 'callToArms' | 'settlement' | 'loan' | 'blocInvite' | 'blocJoin' | 'contract';
 
 /**
  * One demand of a peace settlement: what a realm on the losing side gives to a
@@ -522,6 +528,55 @@ export interface Proposal {
   amount?: number;
   /** a trade bloc's id */
   bloc?: string;
+  /** a trade contract's terms */
+  contract?: ContractTerms;
+}
+
+/** The terms of a trade contract, as proposed (format 5). */
+export interface ContractTerms {
+  seller: NationId;
+  buyer: NationId;
+  res: Tradeable;
+  /** units shipped each month */
+  qty: number;
+  /** crowns per unit, fixed for the whole term */
+  price: number;
+  /** length of the term in months */
+  months: number;
+}
+
+/**
+ * A signed contract. Each monthly settlement the seller ships `qty` before its
+ * own use (the reserved stock); goods reach the buyer after `lag` months (0
+ * overland, within the same settlement) and are paid for on delivery.
+ */
+export interface TradeContract extends ContractTerms {
+  id: string;
+  /** tick it was signed */
+  start: number;
+  /** first settlement tick with no more shipments (the term is over) */
+  until: number;
+  /** months from shipment to delivery */
+  lag: number;
+  /** units shipped so far */
+  shipped: number;
+  /** consecutive settlements the seller shipped short of the terms (two end the contract) */
+  sellerMisses: number;
+  /** consecutive settlements the buyer could not pay (two end the contract) */
+  buyerMisses: number;
+}
+
+/** Goods under way: shipped at one settlement, delivered and paid for at `arrives`. */
+export interface Shipment {
+  id: string;
+  contract: string;
+  seller: NationId;
+  buyer: NationId;
+  res: Tradeable;
+  qty: number;
+  price: number;
+  sent: number;
+  arrives: number;
 }
 
 export interface Modifier {
@@ -623,6 +678,12 @@ export interface NationStats {
   settlementsShared: number;
   /** demands received, by kind */
   demands: Partial<Record<DemandKind, number>>;
+  /** trade contracts (format 5): signed (as either party), run to term, ended by our default or cancellation, units we shipped */
+  contractsSigned: number;
+  contractsKept: number;
+  contractsDefaulted: number;
+  contractsCancelled: number;
+  contractUnits: number;
 }
 
 export interface NationState {
@@ -682,6 +743,8 @@ export interface MonthlyLedger {
   industry: number;
   /** materiel added to the stockpile this month */
   materielIn: number;
+  /** food lost above the stockpile cap (format 5) */
+  foodWasted?: number;
 }
 
 export interface ResourceFlow {
@@ -689,6 +752,8 @@ export interface ResourceFlow {
   used: number;
   imported: number;
   exported: number;
+  /** delivered or produced beyond the stockpile cap, and lost (format 5) */
+  wasted?: number;
 }
 
 export interface Notification {
@@ -771,12 +836,15 @@ export interface GameState {
   guarantees: Guarantee[];
   loans: Loan[];
   blocs: TradeBloc[];
+  /** trade contracts in force, and goods under way (format 5) */
+  contracts: TradeContract[];
+  shipments: Shipment[];
   reparations: Reparation[];
   disarmaments: Disarmament[];
   proposals: Proposal[];
   reports: BattleReport[];
   notifications: Notification[];
-  counters: { army: number; battle: number; war: number; treaty: number; note: number; proposal: number; event: number; regiment: number; coalition: number; fleet: number; ship: number; wing: number; loan: number; bloc: number };
+  counters: { army: number; battle: number; war: number; treaty: number; note: number; proposal: number; event: number; regiment: number; coalition: number; fleet: number; ship: number; wing: number; loan: number; bloc: number; contract: number };
   result: GameResult | null;
   continueAfterResult: boolean;
   diagnostics: AIDiagnostic[];
@@ -834,6 +902,10 @@ export type Command =
   | { type: 'inviteBloc'; nation: NationId; target: NationId }
   | { type: 'joinBloc'; nation: NationId; bloc: string }
   | { type: 'leaveBloc'; nation: NationId }
+  /** propose a trade contract (the realm is its seller or its buyer): an AI partner answers at once, a player gets a proposal */
+  | { type: 'offerContract'; nation: NationId; terms: ContractTerms }
+  /** end a contract before its term: the canceller pays the other party a fee */
+  | { type: 'cancelContract'; nation: NationId; contract: string }
   | { type: 'eventChoice'; nation: NationId; instance: string; choice: number }
   | { type: 'joinCoalition'; nation: NationId; target: NationId }
   | { type: 'leaveCoalition'; nation: NationId; target: NationId }

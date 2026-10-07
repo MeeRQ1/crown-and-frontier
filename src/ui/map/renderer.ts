@@ -1,24 +1,29 @@
-// The strategic map. Layers, bottom to top:
+// The strategic map, drawn as an ivory war atlas. Layers, bottom to top:
 //   base geography (cached tiles) → mode washes → occupation hatching →
-//   province and realm borders → straits and roads → highlights → routes →
-//   markers (capitals, sieges, battles, armies) → lettering.
-// Lettering and markers are placed in screen space, by zoom tier, with
-// collision checks so nothing overlaps.
+//   province and realm borders, rivers → straits and railways → highlights →
+//   routes → markers (battles, sites, counters, fleets, air wings) → lettering.
+// Strokes and markers are sized in screen pixels (map-rendering.json). Every
+// counter, marker and name is placed through one screen-space collision
+// registry, in the pack's order of priority: unit counters, the selected
+// province, capitals, geographic features, realms, then province names. What
+// cannot be placed is hidden; full names stay in the inspector.
 
 import { activeMission } from '../../sim/air';
 import { SHIPS, TERRAIN } from '../../sim/config';
+import { entrenchBonus } from '../../sim/combat';
 import { maxMorale } from '../../sim/military';
 import { fleetsIn, subPower, surfacePower } from '../../sim/naval';
 import { moveCost } from '../../sim/movement';
 import { memoEpochNow } from '../../sim/index';
 import { atWar, isFriendly, menOf, type Sim } from '../../sim/state';
-import type { Army, Fleet, NationId, ProvinceId } from '../../sim/types';
+import type { Army, Fleet, NationId, ProvinceId, UnitType } from '../../sim/types';
+import { HEADING, SANS } from '../fonts';
 import { drawShield } from '../heraldry';
-import { iconPath } from '../icons';
 import { BaseMap, PALETTE, type TerrainDetail } from './basemap';
 import { Camera } from './camera';
 import { geoIndex, pairKey, type GeoIndex, type MapGeometry, type ProvGeo } from './geometry';
-import { buildContext, fillFor, type MapMode } from './modes';
+import { buildContext, fillFor, realmFill, realmInk, realmWash, type MapMode } from './modes';
+import { LANDMARK_BOUNDS, landmark, sprite } from './sprites';
 
 export interface Presentation {
   labels: 'few' | 'normal' | 'many';
@@ -43,7 +48,7 @@ export interface RenderState {
   reducedMotion: boolean;
   player: NationId | null;
   presentation: Presentation;
-  /** draw a gold outline around this realm (campaign setup) */
+  /** draw a brass outline around this realm (campaign setup) */
   outlineRealm?: NationId | null;
   /** navy and air selections */
   selectedFleet?: string | null;
@@ -52,6 +57,8 @@ export interface RenderState {
   /** route preview for the selected fleet (sea zones) */
   fleetPreview?: string[] | null;
   fleetPreviewLabel?: string | null;
+  /** trade deliveries to draw (Industry & Trade open): [from province, to province] */
+  tradeRoutes?: Array<{ from: ProvinceId; to: ProvinceId; sea: boolean }> | null;
 }
 
 export interface Marker {
@@ -91,6 +98,77 @@ interface RealmLabel {
 
 export type Tier = 'far' | 'medium' | 'close';
 
+// ── the atlas palette (design/tokens.json and design/map-rendering.json) ──
+const INK = '#253332';
+const IVORY = '#eee7d7';
+const IVORY_RAISED = '#f5efe2';
+const SLATE = '#384342';
+const BRASS = '#c2ab72';
+const BRASS_INK = '#665322';
+const DANGER = '#9c3b33';
+const POSITIVE = '#406448';
+const WARNING = '#70531f';
+const ROUTE = '#365c70';
+const MUTED = '#59645d';
+const LINE = {
+  province: { stroke: '#787e6d', px: 0.65, opacity: 0.65 },
+  realm: { stroke: '#53604f', px: 2.0 },
+  selected: { stroke: BRASS_INK, px: 2.8, under: IVORY_RAISED, underPx: 4.8 },
+  armyOrder: { stroke: DANGER, px: 2.5, under: IVORY_RAISED, underPx: 4.5 },
+  trade: { stroke: ROUTE, px: 2.0, dash: [6, 4] },
+  road: { stroke: '#77816d', px: 0.8, opacity: 0.55 },
+  river: { stroke: '#7ca1a7', px: 1.3, opacity: 0.95 },
+};
+const SEA_INK = '#4d6d73';
+const RANGE_INK = '#5f5f50';
+
+/** The branch symbol for an army: its most numerous regiment type. */
+const BRANCH: Record<UnitType, string> = { infantry: 'infantry', cavalry: 'cavalry', artillery: 'artillery', engineers: 'support', armour: 'armor' };
+function branchOf(a: Army): string {
+  const n = new Map<UnitType, number>();
+  for (const r of a.regiments) n.set(r.type, (n.get(r.type) ?? 0) + 1);
+  let best: UnitType = 'infantry';
+  let bn = 0;
+  for (const [t, c] of n) if (c > bn || (c === bn && t === 'infantry')) (best = t), (bn = c);
+  return BRANCH[best];
+}
+
+/** One screen-space collision registry: everything placed this frame. */
+class Registry {
+  private rects: Rect[] = [];
+  private boxes: OBox[] = [];
+  /** names and markers left out this frame for lack of room (for checks) */
+  skipped = 0;
+  clear(): void {
+    this.rects = [];
+    this.boxes = [];
+    this.skipped = 0;
+  }
+  add(r: Rect): void {
+    this.rects.push(r);
+  }
+  addBox(b: OBox): void {
+    this.boxes.push(b);
+  }
+  hits(r: Rect): boolean {
+    for (const q of this.rects) if (r.x < q.x + q.w && r.x + r.w > q.x && r.y < q.y + q.h && r.y + r.h > q.y) return true;
+    if (this.boxes.length) {
+      const b = orientedBox(r.x + r.w / 2, r.y + r.h / 2, r.w, r.h, 0);
+      for (const q of this.boxes) if (boxesOverlap(b, q)) return true;
+    }
+    return false;
+  }
+  hitsBox(b: OBox, extra: Rect[] = []): boolean {
+    for (const q of this.rects) if (boxesOverlap(b, orientedBox(q.x + q.w / 2, q.y + q.h / 2, q.w, q.h, 0))) return true;
+    for (const q of extra) if (boxesOverlap(b, orientedBox(q.x + q.w / 2, q.y + q.h / 2, q.w, q.h, 0))) return true;
+    for (const q of this.boxes) if (boxesOverlap(b, q)) return true;
+    return false;
+  }
+  get count(): number {
+    return this.rects.length + this.boxes.length;
+  }
+}
+
 export class MapRenderer {
   readonly canvas: HTMLCanvasElement;
   readonly ctx: CanvasRenderingContext2D;
@@ -100,18 +178,19 @@ export class MapRenderer {
   markers: Marker[] = [];
   fleetMarkers: Array<{ fleet: string; x: number; y: number; w: number; h: number }> = [];
   battleMarkers: Array<{ battle: string; province: ProvinceId; x: number; y: number; r: number }> = [];
+  /** what the last frame placed (names and markers) and left out: for browser checks */
+  readonly placed = new Registry();
   dpr = 1;
   width = 0;
   height = 0;
+  /** called when lazily loaded art (landmarks) arrives */
+  onArt: (() => void) | null = null;
   private realmKey = '';
   private realms = new Map<NationId, RealmShape>();
   /** realm lettering frames, reused while a realm's territory is unchanged */
   private labelCache = new Map<NationId, { sig: string; label: RealmShape['label'] }>();
   private riverPath: Path2D | null = null;
   private patternCache = new Map<string, CanvasPattern | null>();
-  private placed: Rect[] = [];
-  /** rotated lettering already drawn this frame (geographic and realm names) */
-  private blocked: OBox[] = [];
   private pending = false;
 
   constructor(canvas: HTMLCanvasElement, geometry: MapGeometry, terrainOf: (id: string) => string) {
@@ -146,6 +225,7 @@ export class MapRenderer {
     this.camera.setViewport(w, h);
   }
 
+  /** World (far), regional (medium) and local (close) views, by projected province size. */
   tier(): Tier {
     const px = this.camera.provincePx;
     return px < 48 ? 'far' : px < 135 ? 'medium' : 'close';
@@ -195,10 +275,8 @@ export class MapRenderer {
     const animating = cam.update(now);
     const ctx = this.ctx;
     const dpr = this.dpr;
-    const W = this.width;
-    const H = this.height;
     this.base.setDetail(rs.presentation.terrain);
-    const complete = this.base.draw(ctx, cam.zoom, cam.offX, cam.offY, W, H, dpr, animating ? 6 : 12);
+    const complete = this.base.draw(ctx, cam.zoom, cam.offX, cam.offY, this.width, this.height, dpr, animating ? 6 : 12);
     this.pending = !complete;
 
     const z = cam.zoom;
@@ -229,29 +307,20 @@ export class MapRenderer {
     } else this.paintRealmLayers(ctx, sim, rs, tier, px, view, visible, { wash: true, lines: true, washComposite: 'multiply' }, mctx);
     if (rs.outlineRealm) {
       const r = this.realms.get(rs.outlineRealm);
-      if (r) {
-        ctx.save();
-        ctx.strokeStyle = 'rgba(20, 16, 12, 0.7)';
-        ctx.lineWidth = 5 * px;
-        ctx.stroke(r.outline);
-        ctx.strokeStyle = '#f2d48a';
-        ctx.lineWidth = 2.6 * px;
-        ctx.stroke(r.outline);
-        ctx.restore();
-      }
+      if (r) this.understroked(r.outline, BRASS_INK, 2.8 * px, IVORY_RAISED, 5 * px);
     }
 
-    // 4. sea zones, straits and fords, roads
+    // 4. sea zones, straits and fords, railways
     this.drawSeaZones(sim, rs, tier, px);
-    this.drawStraits(sim, px, tier);
+    this.drawStraits(px);
     if (tier === 'close' || rs.mode === 'supply') this.drawRoads(sim, px, visible);
 
     // 5. highlights
     if (rs.highlight?.length) {
       ctx.save();
       ctx.setLineDash([6 * px, 4 * px]);
-      ctx.strokeStyle = '#f2d48a';
-      ctx.lineWidth = 2.4 * px;
+      ctx.strokeStyle = BRASS_INK;
+      ctx.lineWidth = 2.2 * px;
       for (const id of rs.highlight) {
         const p = this.geo.provs.get(id);
         if (p) ctx.stroke(p.path);
@@ -260,7 +329,7 @@ export class MapRenderer {
     }
     if (rs.mode === 'military' && mctx.fronts?.size) {
       ctx.save();
-      ctx.strokeStyle = 'rgba(157, 47, 34, 0.9)';
+      ctx.strokeStyle = DANGER;
       ctx.lineWidth = 2.2 * px;
       for (const id of mctx.fronts) {
         for (const e of this.geo.edgesOf.get(id) ?? []) {
@@ -276,10 +345,10 @@ export class MapRenderer {
       const p = this.geo.provs.get(rs.hoverProvince);
       if (p) {
         ctx.save();
-        ctx.fillStyle = 'rgba(255, 250, 235, 0.16)';
+        ctx.fillStyle = 'rgba(245, 239, 226, 0.28)';
         ctx.fill(p.path);
-        ctx.strokeStyle = 'rgba(255, 248, 225, 0.85)';
-        ctx.lineWidth = 1.6 * px;
+        ctx.strokeStyle = 'rgba(37, 51, 50, 0.55)';
+        ctx.lineWidth = 1.2 * px;
         ctx.stroke(p.path);
         ctx.restore();
       }
@@ -289,20 +358,15 @@ export class MapRenderer {
       if (p) {
         ctx.save();
         ctx.clip(p.path);
-        ctx.strokeStyle = 'rgba(242, 212, 138, 0.55)';
-        ctx.lineWidth = 9 * px;
-        ctx.stroke(p.path);
+        ctx.fillStyle = 'rgba(194, 171, 114, 0.16)';
+        ctx.fill(p.path);
         ctx.restore();
-        ctx.strokeStyle = '#f2d48a';
-        ctx.lineWidth = 2.6 * px;
-        ctx.stroke(p.path);
-        ctx.strokeStyle = 'rgba(30, 24, 16, 0.8)';
-        ctx.lineWidth = 0.9 * px;
-        ctx.stroke(p.path);
+        this.understroked(p.path, LINE.selected.stroke, LINE.selected.px * px, LINE.selected.under, LINE.selected.underPx * px);
       }
     }
 
     // 6. routes (world space, constant screen width)
+    if (rs.tradeRoutes?.length) this.drawTradeRoutes(rs.tradeRoutes, px);
     const armies = Object.values(sim.state.armies);
     const pos = new Map<string, { x: number; y: number }>();
     for (const a of armies) pos.set(a.id, this.armyPos(sim, a));
@@ -312,45 +376,60 @@ export class MapRenderer {
       const hostile = rs.player ? atWar(sim, rs.player, a.nation) : false;
       if (!mine && !hostile) continue;
       if (tier === 'far' && !hostile) continue;
-      this.drawRoute(pos.get(a.id)!, a.path, mine ? 'rgba(240, 226, 190, 0.75)' : 'rgba(214, 72, 52, 0.9)', px, true, a.retreating ? 0.5 : 1);
+      // our orders in brick red; enemy marches in ink, both dashed when not selected
+      this.drawRoute(pos.get(a.id)!, a.path, mine ? DANGER : INK, px, true, a.retreating ? 0.6 : 0.8);
     }
     this.drawFleetRoutes(sim, rs, tier, px);
     this.drawAirMissions(sim, rs, tier, px);
     const sel = rs.selectedArmy ? sim.state.armies[rs.selectedArmy] : undefined;
-    if (sel?.path.length) this.drawRoute(pos.get(sel.id)!, sel.path, '#f2d48a', px, false, 1.35);
-    if (sel && rs.previewPath?.length) this.drawRoute(pos.get(sel.id)!, rs.previewPath, rs.previewBad ? 'rgba(230, 110, 90, 0.95)' : 'rgba(255, 244, 214, 0.95)', px, true, 1.2);
+    if (sel?.path.length) this.drawRoute(pos.get(sel.id)!, sel.path, LINE.armyOrder.stroke, px, false, 1);
+    if (sel && rs.previewPath?.length) this.drawRoute(pos.get(sel.id)!, rs.previewPath, rs.previewBad ? MUTED : LINE.armyOrder.stroke, px, true, 1);
 
-    // screen-space layers
+    // screen-space layers, all through one collision registry
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-    this.placed = [];
-    this.blocked = [];
+    this.placed.clear();
     this.markers = [];
     this.fleetMarkers = [];
     this.battleMarkers = [];
     const t = now / 1000;
     this.drawBattles(sim, rs, t);
-    this.drawSites(sim, rs, tier, visible);
     this.drawArmies(sim, rs, tier, pos);
     this.drawFleets(sim, rs, tier);
     this.drawWings(sim, rs, tier);
-    this.drawZoneNames(sim, rs, tier);
     const fsel = rs.selectedFleet ? sim.state.fleets[rs.selectedFleet] : undefined;
     if (fsel && rs.fleetPreview?.length && rs.fleetPreviewLabel) {
       const end = this.zoneCenter(rs.fleetPreview[rs.fleetPreview.length - 1]);
       const s = cam.toScreen(end.x, end.y);
-      this.pill(s.x, s.y - 34, rs.fleetPreviewLabel, '#1a242f', '#f6e7c1');
+      this.pill(s.x, s.y - 34, rs.fleetPreviewLabel, false);
     }
     if (sel && rs.previewPath?.length && rs.previewLabel) {
       const end = this.provinceCenter(rs.previewPath[rs.previewPath.length - 1]);
       const s = cam.toScreen(end.x, end.y);
-      this.pill(s.x, s.y - 30, rs.previewLabel, rs.previewBad ? '#8f2e1d' : '#1a242f', rs.previewBad ? '#ffd9d0' : '#f6e7c1');
+      this.pill(s.x, s.y - 30, rs.previewLabel, !!rs.previewBad);
     } else if (sel?.path.length) {
       const end = this.provinceCenter(sel.path[sel.path.length - 1]);
       const s = cam.toScreen(end.x, end.y);
       this.flag(s.x, s.y);
     }
+    this.drawSites(sim, rs, tier, visible);
+    this.drawZoneNames(rs, tier);
     this.drawLabels(sim, rs, tier, visible);
     return animating || this.pending || (!rs.reducedMotion && Object.keys(sim.state.battles).length > 0);
+  }
+
+  /** A line over a lighter understroke (selection, order routes), both in world units. */
+  private understroked(path: Path2D, color: string, w: number, under: string, underW: number): void {
+    const ctx = this.ctx;
+    ctx.save();
+    ctx.lineJoin = 'round';
+    ctx.lineCap = 'round';
+    ctx.strokeStyle = under;
+    ctx.lineWidth = underW;
+    ctx.stroke(path);
+    ctx.strokeStyle = color;
+    ctx.lineWidth = w;
+    ctx.stroke(path);
+    ctx.restore();
   }
 
   // ───────────────────────────── caches ───────────────────────────────────
@@ -564,7 +643,7 @@ export class MapRenderer {
     return this.farCache;
   }
 
-  /** Mode washes, occupation hatching, borders, realm ribbons and rivers. */
+  /** Mode washes, occupation hatching, borders, realm edges and rivers. */
   private paintRealmLayers(
     ctx: CanvasRenderingContext2D,
     sim: Sim,
@@ -609,13 +688,13 @@ export class MapRenderer {
       // one pattern pixel = one CSS pixel, anchored to the map
       pat.setTransform(new DOMMatrix([px, 0, 0, px, 0, 0]));
       ctx.save();
-      ctx.globalAlpha = 0.75;
+      ctx.globalAlpha = 0.7;
       ctx.fillStyle = pat;
       ctx.fill(this.geo.provs.get(hch.id)!.path);
       ctx.restore();
     }
 
-    // 3. province borders (fine), then realm borders with inner ribbons
+    // 3. province borders (fine, solid), then realm borders
     const bstyle = rs.presentation.borders;
     if (tier !== 'far') {
       const thin = new Path2D();
@@ -627,21 +706,25 @@ export class MapRenderer {
         if (oa !== ob) continue;
         thin.addPath(e.path);
       }
-      ctx.strokeStyle = 'rgba(52, 44, 34, 0.55)';
-      ctx.lineWidth = (tier === 'close' ? 1.1 : 0.8) * px;
-      ctx.setLineDash([3 * px, 2.5 * px]);
-      ctx.stroke(thin);
-      ctx.setLineDash([]);
-    }
-    const ribbonW = (bstyle === 'strong' ? 11 : bstyle === 'subtle' ? 5 : 8) * px * (tier === 'far' ? 0.8 : 1);
-    for (const [nid, rsh] of this.realms) {
       ctx.save();
-      ctx.clip(rsh.union);
-      ctx.globalAlpha = rs.mode === 'political' ? 0.55 : 0.32;
-      ctx.strokeStyle = sim.world.nationDefs[nid].color;
-      ctx.lineWidth = ribbonW * 2;
-      ctx.stroke(rsh.border);
+      ctx.globalAlpha = LINE.province.opacity * (bstyle === 'subtle' ? 0.75 : 1);
+      ctx.strokeStyle = LINE.province.stroke;
+      ctx.lineWidth = LINE.province.px * (tier === 'close' ? 1.3 : 1) * px;
+      ctx.stroke(thin);
       ctx.restore();
+    }
+    // a narrow inner edge in each realm's own hue: identity does not rest on the wash alone
+    if (rs.mode === 'political' || rs.mode === 'diplomacy') {
+      const edgeW = (bstyle === 'strong' ? 6 : bstyle === 'subtle' ? 3 : 4.5) * px;
+      for (const [nid, rsh] of this.realms) {
+        ctx.save();
+        ctx.clip(rsh.union);
+        ctx.globalAlpha = rs.mode === 'political' ? 0.5 : 0.3;
+        ctx.strokeStyle = realmFill(sim.world.nationDefs[nid].color);
+        ctx.lineWidth = edgeW * 2;
+        ctx.stroke(rsh.border);
+        ctx.restore();
+      }
     }
     // rivers: strategic lines (attackers crossing one fight at a disadvantage)
     if (this.geo.riverEdges.length) {
@@ -652,18 +735,16 @@ export class MapRenderer {
       ctx.save();
       ctx.lineCap = 'round';
       ctx.lineJoin = 'round';
-      ctx.strokeStyle = 'rgba(232, 240, 238, 0.55)';
-      ctx.lineWidth = (tier === 'far' ? 3.6 : 4.6) * px;
-      ctx.stroke(this.riverPath);
-      ctx.strokeStyle = '#3d7391';
-      ctx.lineWidth = (tier === 'far' ? 1.9 : tier === 'medium' ? 2.4 : 2.8) * px;
+      ctx.globalAlpha = LINE.river.opacity;
+      ctx.strokeStyle = LINE.river.stroke;
+      ctx.lineWidth = LINE.river.px * (tier === 'close' ? 1.5 : 1) * px;
       ctx.stroke(this.riverPath);
       ctx.restore();
     }
     const realmBorder = new Path2D();
     for (const rsh of this.realms.values()) realmBorder.addPath(rsh.border);
-    ctx.strokeStyle = 'rgba(33, 27, 21, 0.92)';
-    ctx.lineWidth = (bstyle === 'strong' ? 2.6 : bstyle === 'subtle' ? 1.3 : 1.9) * px;
+    ctx.strokeStyle = LINE.realm.stroke;
+    ctx.lineWidth = LINE.realm.px * (bstyle === 'strong' ? 1.35 : bstyle === 'subtle' ? 0.7 : 1) * px;
     ctx.lineJoin = 'round';
     ctx.stroke(realmBorder);
   }
@@ -676,7 +757,7 @@ export class MapRenderer {
     const g = c.getContext('2d');
     if (!g) return null;
     g.strokeStyle = color;
-    g.lineWidth = 2.4;
+    g.lineWidth = 1.6;
     g.lineCap = 'square';
     g.beginPath();
     g.moveTo(-2, 12);
@@ -693,36 +774,37 @@ export class MapRenderer {
 
   // ───────────────────────────── world-space extras ───────────────────────
 
-  private drawStraits(sim: Sim, px: number, tier: Tier): void {
+  /** Strait crossings: a dashed ink ferry line. */
+  private drawStraits(px: number): void {
     const ctx = this.ctx;
+    ctx.save();
+    ctx.lineCap = 'round';
     for (const [a, b] of this.geo.straits) {
       const pa = this.provinceCenter(a);
       const pb = this.provinceCenter(b);
-      ctx.save();
-      ctx.lineCap = 'round';
-      ctx.strokeStyle = 'rgba(20, 38, 46, 0.55)';
-      ctx.lineWidth = 4.2 * px;
       ctx.beginPath();
       ctx.moveTo(pa.x, pa.y);
       ctx.lineTo(pb.x, pb.y);
+      ctx.strokeStyle = 'rgba(245, 239, 226, 0.85)';
+      ctx.lineWidth = 3.4 * px;
+      ctx.setLineDash([]);
       ctx.stroke();
-      ctx.setLineDash([5 * px, 5 * px]);
-      ctx.strokeStyle = '#f1e7cc';
-      ctx.lineWidth = 2 * px;
+      ctx.setLineDash([4 * px, 3 * px]);
+      ctx.strokeStyle = SEA_INK;
+      ctx.lineWidth = 1.4 * px;
       ctx.stroke();
-      ctx.restore();
-      if (tier === 'close') {
-        void sim;
-      }
     }
+    ctx.restore();
   }
 
+  /** Railways (infrastructure): fine lines, heavier for higher levels, dashed at level 1. */
   private drawRoads(sim: Sim, px: number, visible: Array<{ id: string }>): void {
     const ctx = this.ctx;
     const st = sim.state;
     const vis = new Set(visible.map((v) => v.id));
     ctx.save();
     ctx.lineCap = 'round';
+    ctx.strokeStyle = LINE.road.stroke;
     for (const id of vis) {
       const inf = st.provinces[id].infra;
       if (!inf) continue;
@@ -732,17 +814,29 @@ export class MapRenderer {
         const lvl = Math.min(inf, st.provinces[n].infra);
         if (!lvl || sim.world.straitSet.has(pairKey(id, n))) continue;
         const pb = this.provinceCenter(n);
-        ctx.strokeStyle = 'rgba(245, 236, 214, 0.85)';
-        ctx.lineWidth = (1.6 + lvl * 1.2) * px;
+        ctx.globalAlpha = LINE.road.opacity + lvl * 0.12;
+        ctx.lineWidth = (LINE.road.px + (lvl - 1) * 0.5) * px;
+        ctx.setLineDash(lvl >= 2 ? [] : [5 * px, 3 * px]);
         ctx.beginPath();
         ctx.moveTo(pa.x, pa.y);
         ctx.lineTo(pb.x, pb.y);
         ctx.stroke();
-        ctx.strokeStyle = 'rgba(122, 86, 52, 0.95)';
-        ctx.lineWidth = (0.7 + lvl * 0.7) * px;
-        ctx.setLineDash(lvl >= 2 ? [] : [5 * px, 3 * px]);
-        ctx.stroke();
-        ctx.setLineDash([]);
+        if (lvl >= 3) {
+          // cross-ties on main lines
+          const len = Math.hypot(pb.x - pa.x, pb.y - pa.y);
+          const ux = (pb.x - pa.x) / len;
+          const uy = (pb.y - pa.y) / len;
+          ctx.setLineDash([]);
+          ctx.lineWidth = 0.8 * px;
+          ctx.beginPath();
+          for (let d = 6 * px; d < len - 6 * px; d += 9 * px) {
+            const cx = pa.x + ux * d;
+            const cy = pa.y + uy * d;
+            ctx.moveTo(cx - uy * 2.5 * px, cy + ux * 2.5 * px);
+            ctx.lineTo(cx + uy * 2.5 * px, cy - ux * 2.5 * px);
+          }
+          ctx.stroke();
+        }
       }
     }
     ctx.restore();
@@ -763,38 +857,71 @@ export class MapRenderer {
     ctx.save();
     ctx.lineCap = 'round';
     ctx.lineJoin = 'round';
-    ctx.strokeStyle = 'rgba(18, 14, 10, 0.55)';
-    ctx.lineWidth = (4.6 * weight) * px;
+    ctx.strokeStyle = LINE.armyOrder.under;
+    ctx.lineWidth = LINE.armyOrder.underPx * weight * px;
     ctx.stroke(line);
     ctx.strokeStyle = color;
-    ctx.lineWidth = 2.4 * weight * px;
+    ctx.lineWidth = LINE.armyOrder.px * weight * px;
     if (dashed) ctx.setLineDash([7 * px, 5 * px]);
     ctx.stroke(line);
     ctx.setLineDash([]);
-    // arrowhead
-    const prev = pts.length > 2 ? { x: (pts[pts.length - 2].x + last.x) / 2, y: (pts[pts.length - 2].y + last.y) / 2 } : pts[0];
+    this.arrowHead(pts.length > 2 ? { x: (pts[pts.length - 2].x + last.x) / 2, y: (pts[pts.length - 2].y + last.y) / 2 } : pts[0], last, color, 9 * weight * px, px);
+    ctx.restore();
+  }
+
+  private arrowHead(prev: { x: number; y: number }, last: { x: number; y: number }, color: string, s: number, px: number): void {
+    const ctx = this.ctx;
     const ang = Math.atan2(last.y - prev.y, last.x - prev.x);
-    const s = 9 * weight * px;
+    ctx.save();
     ctx.translate(last.x, last.y);
     ctx.rotate(ang);
     ctx.beginPath();
     ctx.moveTo(s * 0.4, 0);
-    ctx.lineTo(-s, -s * 0.72);
+    ctx.lineTo(-s, -s * 0.66);
     ctx.lineTo(-s * 0.6, 0);
-    ctx.lineTo(-s, s * 0.72);
+    ctx.lineTo(-s, s * 0.66);
     ctx.closePath();
     ctx.fillStyle = color;
-    ctx.strokeStyle = 'rgba(18, 14, 10, 0.7)';
+    ctx.strokeStyle = IVORY_RAISED;
     ctx.lineWidth = 1.2 * px;
-    ctx.fill();
     ctx.stroke();
+    ctx.fill();
     ctx.restore();
   }
 
-  /** Army position, gliding between provinces as it marches. */
+  /** Trade deliveries: dashed blue-grey lines with a direction marker at the midpoint. */
+  private drawTradeRoutes(routes: Array<{ from: ProvinceId; to: ProvinceId; sea: boolean }>, px: number): void {
+    const ctx = this.ctx;
+    ctx.save();
+    ctx.lineCap = 'round';
+    for (const r of routes) {
+      const a = this.provinceCenter(r.from);
+      const b = this.provinceCenter(r.to);
+      const mx = (a.x + b.x) / 2;
+      const my = (a.y + b.y) / 2 - Math.hypot(b.x - a.x, b.y - a.y) * 0.12;
+      const path = new Path2D();
+      path.moveTo(a.x, a.y);
+      path.quadraticCurveTo(mx, my, b.x, b.y);
+      ctx.strokeStyle = 'rgba(245, 239, 226, 0.8)';
+      ctx.lineWidth = (LINE.trade.px + 2) * px;
+      ctx.setLineDash([]);
+      ctx.stroke(path);
+      ctx.strokeStyle = LINE.trade.stroke;
+      ctx.lineWidth = LINE.trade.px * px;
+      ctx.setLineDash(LINE.trade.dash.map((d) => d * px));
+      ctx.stroke(path);
+      // direction: an arrowhead at the curve's midpoint
+      const qx = 0.25 * a.x + 0.5 * mx + 0.25 * b.x;
+      const qy = 0.25 * a.y + 0.5 * my + 0.25 * b.y;
+      ctx.setLineDash([]);
+      this.arrowHead({ x: qx - (b.x - a.x) * 0.05, y: qy - (b.y - a.y) * 0.05 }, { x: qx, y: qy }, LINE.trade.stroke, 8 * px, px);
+    }
+    ctx.restore();
+  }
+
   // ───────────────────────────── sea and air ──────────────────────────────
 
-  /** Zone borders (world space); in the military mode, who holds each zone. */
+  /** Zone borders (world space); in the military and sea modes, who holds each zone. */
   private drawSeaZones(sim: Sim, rs: RenderState, tier: Tier, px: number): void {
     const geo = this.geo;
     if (!geo.zoneIds.length) return;
@@ -816,8 +943,8 @@ export class MapRenderer {
         // a light wash in the realm's colour: the water must still read as water (the zone
         // paths are unions of cells, so they are filled, never stroked)
         ctx.save();
-        ctx.globalAlpha = 0.24;
-        ctx.fillStyle = sim.world.nationDefs[best]?.color ?? '#5d79a8';
+        ctx.globalAlpha = 0.45;
+        ctx.fillStyle = realmFill(sim.world.nationDefs[best]?.color ?? '#5d79a8');
         ctx.fill(path);
         ctx.restore();
       }
@@ -835,8 +962,8 @@ export class MapRenderer {
         const path = geo.zonePath(z);
         if (!path) continue;
         ctx.save();
-        ctx.globalAlpha = 0.28;
-        ctx.fillStyle = theirs <= 0 ? '#3f7fb8' : ours <= 0 ? '#b8452f' : ours >= theirs ? '#5d79a8' : '#a25a3c';
+        ctx.globalAlpha = 0.3;
+        ctx.fillStyle = theirs <= 0 ? ROUTE : ours <= 0 ? DANGER : ours >= theirs ? '#5f7f8c' : '#8a5a50';
         ctx.fill(path);
         ctx.restore();
       }
@@ -845,17 +972,17 @@ export class MapRenderer {
       const path = geo.zonePath(rs.selectedZone);
       if (path) {
         ctx.save();
-        ctx.globalAlpha = 0.2;
-        ctx.fillStyle = '#f2d48a';
+        ctx.globalAlpha = 0.28;
+        ctx.fillStyle = BRASS;
         ctx.fill(path);
         ctx.restore();
       }
     }
     ctx.restore();
     ctx.save();
-    ctx.strokeStyle = tier === 'far' ? 'rgba(214, 230, 236, 0.22)' : 'rgba(214, 230, 236, 0.4)';
-    ctx.lineWidth = (tier === 'far' ? 1 : 1.3) * px;
-    ctx.setLineDash([7 * px, 6 * px]);
+    ctx.strokeStyle = tier === 'far' ? 'rgba(77, 109, 115, 0.22)' : 'rgba(77, 109, 115, 0.38)';
+    ctx.lineWidth = (tier === 'far' ? 0.8 : 1) * px;
+    ctx.setLineDash([6 * px, 5 * px]);
     ctx.stroke(geo.zoneBorders);
     ctx.restore();
   }
@@ -872,8 +999,8 @@ export class MapRenderer {
   private seaRoute(from: { x: number; y: number }, zones: string[], color: string, px: number, dashed: boolean, weight: number): void {
     const ctx = this.ctx;
     ctx.save();
-    ctx.strokeStyle = 'rgba(12, 16, 20, 0.55)';
-    ctx.lineWidth = (3.6 * weight + 2) * px;
+    ctx.strokeStyle = 'rgba(245, 239, 226, 0.75)';
+    ctx.lineWidth = (2.4 * weight + 2) * px;
     ctx.lineCap = 'round';
     ctx.lineJoin = 'round';
     const path = new Path2D();
@@ -884,7 +1011,7 @@ export class MapRenderer {
     }
     ctx.stroke(path);
     ctx.strokeStyle = color;
-    ctx.lineWidth = 2.4 * weight * px;
+    ctx.lineWidth = 2.2 * weight * px;
     if (dashed) ctx.setLineDash([8 * px, 6 * px]);
     ctx.stroke(path);
     ctx.restore();
@@ -898,18 +1025,18 @@ export class MapRenderer {
       const hostile = me ? atWar(sim, me, f.nation) : false;
       if (!mine && !hostile) continue;
       if (tier === 'far' && !hostile) continue;
-      this.seaRoute(this.fleetPos(f), f.path, mine ? 'rgba(190, 220, 240, 0.75)' : 'rgba(214, 72, 52, 0.85)', px, true, 0.9);
+      this.seaRoute(this.fleetPos(f), f.path, mine ? ROUTE : INK, px, true, 0.9);
     }
     const sel = rs.selectedFleet ? sim.state.fleets[rs.selectedFleet] : undefined;
-    if (sel?.path.length) this.seaRoute(this.fleetPos(sel), sel.path, '#f2d48a', px, false, 1.2);
-    if (sel && rs.fleetPreview?.length) this.seaRoute(this.fleetPos(sel), rs.fleetPreview, 'rgba(255, 244, 214, 0.95)', px, true, 1.1);
+    if (sel?.path.length) this.seaRoute(this.fleetPos(sel), sel.path, ROUTE, px, false, 1.2);
+    if (sel && rs.fleetPreview?.length) this.seaRoute(this.fleetPos(sel), rs.fleetPreview, BRASS_INK, px, true, 1.1);
     // the beach a fleet with troops is heading for
     if (sel?.landing) {
       const p = this.geo.provs.get(sel.landing);
       if (p) {
         this.ctx.save();
         this.ctx.setLineDash([5 * px, 4 * px]);
-        this.ctx.strokeStyle = '#f2d48a';
+        this.ctx.strokeStyle = BRASS_INK;
         this.ctx.lineWidth = 2.2 * px;
         this.ctx.stroke(p.path);
         this.ctx.restore();
@@ -933,8 +1060,8 @@ export class MapRenderer {
       const mx = (a.x + b.x) / 2;
       const my = (a.y + b.y) / 2 - Math.hypot(b.x - a.x, b.y - a.y) * 0.18;
       ctx.save();
-      ctx.strokeStyle = selected ? '#f2d48a' : mine ? 'rgba(200, 225, 245, 0.7)' : 'rgba(214, 72, 52, 0.75)';
-      ctx.lineWidth = (selected ? 2.2 : 1.5) * px;
+      ctx.strokeStyle = selected ? BRASS_INK : mine ? ROUTE : DANGER;
+      ctx.lineWidth = (selected ? 2 : 1.4) * px;
       ctx.setLineDash([3 * px, 4 * px]);
       ctx.beginPath();
       ctx.moveTo(a.x, a.y);
@@ -944,7 +1071,7 @@ export class MapRenderer {
         // the mission area: the target and its neighbours (bombing: the target)
         const area = w.mission === 'bombing' ? [w.target] : [w.target, ...sim.world.prov[w.target].neighbors];
         ctx.setLineDash([]);
-        ctx.fillStyle = 'rgba(242, 212, 138, 0.12)';
+        ctx.fillStyle = 'rgba(194, 171, 114, 0.16)';
         for (const id of area) {
           const p = this.geo.provs.get(id);
           if (p) ctx.fill(p.path);
@@ -971,57 +1098,35 @@ export class MapRenderer {
       list.sort((a, b) => (a.nation === me ? -1 : 0) - (b.nation === me ? -1 : 0) || (a.id < b.id ? -1 : 1));
       const base = this.fleetPos(list[0]);
       const s = cam.toScreen(base.x, base.y);
-      if (s.x < -60 || s.y < -60 || s.x > this.width + 60 || s.y > this.height + 60) continue;
-      const H = tier === 'far' ? 18 : 22;
-      const widths = list.map((f) => (tier === 'far' ? 30 : 38) + String(f.ships.length).length * 7 + (f.cargo.length ? 12 : 0));
-      const total = widths.reduce((x, y) => x + y + 3, -3);
+      if (s.x < -80 || s.y < -80 || s.x > this.width + 80 || s.y > this.height + 80) continue;
+      const kind = this.counterKind(tier);
+      const dims = list.map((f) => this.counterSize(kind, String(f.ships.length)));
+      const total = dims.reduce((x, d) => x + d.w + 3, -3);
       let x = s.x - total / 2;
-      const y = s.y - H / 2;
       list.forEach((f, i) => {
-        this.fleetMarker(sim, f, x, y, widths[i], H, f.id === rs.selectedFleet, me);
-        this.fleetMarkers.push({ fleet: f.id, x, y, w: widths[i], h: H });
-        this.place({ x, y, w: widths[i], h: H });
-        x += widths[i] + 3;
+        const { w, h } = dims[i];
+        const y = s.y - h / 2;
+        // bars: average hull condition, and the share of ships fit to fight (hull at least half)
+        const hp = f.ships.reduce((a, sh) => a + sh.hp, 0) / Math.max(1, f.ships.length) / 100;
+        const fit = f.ships.filter((sh) => sh.hp >= 50).length / Math.max(1, f.ships.length);
+        this.counter(sim, {
+          kind,
+          nation: f.nation,
+          x,
+          y,
+          symbol: 'naval',
+          count: String(f.ships.length),
+          detail: `${f.ships.length} ship${f.ships.length === 1 ? '' : 's'}${f.cargo.length ? ` · ${f.cargo.length} army` : ''}`,
+          bars: [hp, fit],
+          status: f.cargo.length ? 'moving' : null,
+          relation: this.relation(sim, f.nation, me),
+          selected: f.id === rs.selectedFleet,
+        });
+        this.fleetMarkers.push({ fleet: f.id, x, y, w, h });
+        this.placed.add({ x, y, w, h });
+        x += w + 3;
       });
     }
-  }
-
-  private fleetMarker(sim: Sim, f: Fleet, x: number, y: number, w: number, h: number, selected: boolean, me: NationId | null): void {
-    const ctx = this.ctx;
-    const def = sim.world.nationDefs[f.nation];
-    const mine = f.nation === me;
-    const hostile = me ? atWar(sim, me, f.nation) : false;
-    ctx.save();
-    ctx.shadowColor = selected ? 'rgba(242, 212, 138, 0.9)' : 'rgba(0,0,0,0.45)';
-    ctx.shadowBlur = selected ? 10 : 4;
-    ctx.fillStyle = '#121a22';
-    ctx.beginPath();
-    ctx.roundRect(x, y, w, h, h / 2);
-    ctx.fill();
-    ctx.shadowColor = 'transparent';
-    ctx.fillStyle = def.color;
-    ctx.beginPath();
-    ctx.roundRect(x + 1.5, y + 1.5, h - 3, h - 3, (h - 3) / 2);
-    ctx.fill();
-    ctx.strokeStyle = selected ? '#f2d48a' : hostile ? '#ff6a52' : mine ? 'rgba(242, 212, 138, 0.85)' : 'rgba(150, 175, 195, 0.6)';
-    ctx.lineWidth = selected ? 2.2 : 1.5;
-    ctx.beginPath();
-    ctx.roundRect(x + 0.5, y + 0.5, w - 1, h - 1, h / 2);
-    ctx.stroke();
-    this.icon('ship', x + h / 2, y + h / 2, h - 7, '#fffaf0', 2);
-    ctx.fillStyle = '#e8f1f6';
-    ctx.font = `700 ${h > 20 ? 12.5 : 11}px 'Source Sans 3 Variable', sans-serif`;
-    ctx.textAlign = 'left';
-    ctx.textBaseline = 'middle';
-    ctx.fillText(String(f.ships.length), x + h + 2, y + h / 2 + 0.5);
-    if (f.cargo.length) this.icon('army', x + w - 10, y + h / 2, 11, '#f2d48a', 2);
-    // condition bar
-    const hp = f.ships.reduce((a, s) => a + s.hp, 0) / Math.max(1, f.ships.length) / 100;
-    ctx.fillStyle = 'rgba(12, 14, 16, 0.85)';
-    ctx.fillRect(x + h / 2, y + h + 1, w - h, 3);
-    ctx.fillStyle = hp > 0.6 ? '#74c07a' : hp > 0.3 ? '#e3ab3f' : '#e5604c';
-    ctx.fillRect(x + h / 2, y + h + 1, (w - h) * hp, 3);
-    ctx.restore();
     void SHIPS;
   }
 
@@ -1038,62 +1143,46 @@ export class MapRenderer {
       if (w.id === rs.selectedWing) cur.sel = true;
       at.set(w.base, cur);
     }
-    const ctx = this.ctx;
     for (const [pid, v] of at) {
       const c = this.provinceCenter(pid);
       const s = this.camera.toScreen(c.x, c.y);
-      const x = s.x + 14;
-      const y = s.y + 4;
-      if (x < -30 || y < -30 || x > this.width + 30 || y > this.height + 30) continue;
-      const w = 32;
-      const hgt = 18;
-      ctx.save();
-      ctx.fillStyle = 'rgba(18, 26, 34, 0.92)';
-      ctx.strokeStyle = v.sel ? '#f2d48a' : v.nation === me ? 'rgba(242, 212, 138, 0.8)' : '#ff6a52';
-      ctx.lineWidth = v.sel ? 2 : 1.2;
-      ctx.beginPath();
-      ctx.roundRect(x, y, w, hgt, 5);
-      ctx.fill();
-      ctx.stroke();
-      this.icon('plane', x + 9, y + hgt / 2, 12, sim.world.nationDefs[v.nation].color, 2.2);
-      ctx.fillStyle = '#e8f1f6';
-      ctx.font = `700 11px 'Source Sans 3 Variable', sans-serif`;
-      ctx.textAlign = 'left';
-      ctx.textBaseline = 'middle';
-      ctx.fillText(String(v.n), x + 18, y + hgt / 2 + 0.5);
-      ctx.restore();
-      this.place({ x, y, w, h: hgt });
+      const kind = 'pill';
+      const { w, h } = this.counterSize(kind, String(v.n));
+      const x = s.x + 16;
+      const y = s.y + 2;
+      if (x < -40 || y < -40 || x > this.width + 40 || y > this.height + 40) continue;
+      this.counter(sim, { kind, nation: v.nation, x, y, symbol: 'air', count: String(v.n), detail: '', bars: null, status: null, relation: this.relation(sim, v.nation, me), selected: v.sel });
+      this.placed.add({ x, y, w, h });
     }
   }
 
-  /** Zone names on open water (the map's printed sea names are not repeated). */
-  private drawZoneNames(sim: Sim, rs: RenderState, tier: Tier): void {
+  /** Sea-zone names on open water (the map's printed sea names are not repeated). */
+  private drawZoneNames(rs: RenderState, tier: Tier): void {
     if (tier === 'far' || rs.presentation.labels === 'few') return;
     const printed = new Set(this.geo.labels.filter((l) => l.kind === 'sea').map((l) => l.name));
     const ctx = this.ctx;
+    const size = tier === 'close' ? 13 : 12;
     ctx.save();
-    ctx.font = `italic 500 ${tier === 'close' ? 13 : 11.5}px 'Alegreya Variable', serif`;
+    ctx.font = `500 ${size}px ${HEADING}`;
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
     for (const z of this.geo.zoneIds) {
-      const name = this.geo.zoneNames.get(z) ?? z;
-      if (printed.has(name) && z !== rs.selectedZone) continue;
+      const name = (this.geo.zoneNames.get(z) ?? z).toUpperCase();
+      if (printed.has(this.geo.zoneNames.get(z) ?? z) && z !== rs.selectedZone) continue;
       const a = this.zoneCenter(z);
       const s = this.camera.toScreen(a.x, a.y);
-      const y = s.y + 24;
-      const wd = ctx.measureText(name).width + 6;
+      const y = s.y + 26;
+      const wd = ctx.measureText(name).width + name.length * 1.2 + 6;
       const r = { x: s.x - wd / 2, y: y - 8, w: wd, h: 16 };
       if (r.x < 0 || r.y < 0 || r.x + r.w > this.width || r.y + r.h > this.height) continue;
-      if (z !== rs.selectedZone && this.overlaps(r)) continue;
-      ctx.fillStyle = z === rs.selectedZone ? '#f2d48a' : 'rgba(214, 230, 236, 0.75)';
-      ctx.strokeStyle = 'rgba(14, 26, 34, 0.7)';
-      ctx.lineWidth = 3;
-      ctx.strokeText(name, s.x, y);
-      ctx.fillText(name, s.x, y);
-      this.place(r);
+      if (z !== rs.selectedZone && this.placed.hits(r)) {
+        this.placed.skipped++;
+        continue;
+      }
+      this.letter(name, s.x, y, 0, { font: `500 ${size}px ${HEADING}`, spacing: 1.2, fill: z === rs.selectedZone ? BRASS_INK : SEA_INK, halo: 'rgba(182, 207, 209, 0.7)', haloW: 3 });
+      this.placed.add(r);
     }
     ctx.restore();
-    void sim;
   }
 
   armyPos(sim: Sim, a: Army): { x: number; y: number } {
@@ -1107,26 +1196,6 @@ export class MapRenderer {
 
   // ───────────────────────────── screen-space layers ──────────────────────
 
-  private overlaps(r: Rect): boolean {
-    for (const q of this.placed) if (r.x < q.x + q.w && r.x + r.w > q.x && r.y < q.y + q.h && r.y + r.h > q.y) return true;
-    if (this.blocked.length) {
-      const b = orientedBox(r.x + r.w / 2, r.y + r.h / 2, r.w, r.h, 0);
-      for (const q of this.blocked) if (boxesOverlap(b, q)) return true;
-    }
-    return false;
-  }
-
-  /** Whether a rotated box collides with markers, placed names or other lettering. */
-  private overlapsBox(b: OBox, extra: Rect[] = []): boolean {
-    for (const q of [...this.placed, ...extra]) if (boxesOverlap(b, orientedBox(q.x + q.w / 2, q.y + q.h / 2, q.w, q.h, 0))) return true;
-    for (const q of this.blocked) if (boxesOverlap(b, q)) return true;
-    return false;
-  }
-
-  private place(r: Rect): void {
-    this.placed.push(r);
-  }
-
   private drawBattles(sim: Sim, rs: RenderState, t: number): void {
     const ctx = this.ctx;
     const cam = this.camera;
@@ -1135,118 +1204,290 @@ export class MapRenderer {
       const s = cam.toScreen(c.x, c.y);
       if (s.x < -40 || s.y < -40 || s.x > this.width + 40 || s.y > this.height + 40) continue;
       const ours = rs.player && (b.attackerNations.includes(rs.player) || b.defenderNations.includes(rs.player));
-      const r = ours ? 15 : 12;
+      const r = ours ? 14 : 11;
       if (!rs.reducedMotion) {
         const ph = (t * 1.2) % 1;
         ctx.save();
-        ctx.globalAlpha = 0.55 * (1 - ph);
-        ctx.strokeStyle = '#e5604c';
-        ctx.lineWidth = 2.5;
+        ctx.globalAlpha = 0.6 * (1 - ph);
+        ctx.strokeStyle = DANGER;
+        ctx.lineWidth = 2;
         ctx.beginPath();
-        ctx.arc(s.x, s.y, r + ph * 16, 0, Math.PI * 2);
+        ctx.arc(s.x, s.y, r + ph * 14, 0, Math.PI * 2);
         ctx.stroke();
         ctx.restore();
       }
       ctx.save();
-      ctx.fillStyle = ours ? '#8f2e1d' : '#5a2a22';
-      ctx.strokeStyle = '#f7e2c8';
-      ctx.lineWidth = 1.6;
+      ctx.fillStyle = ours ? DANGER : '#7a4a44';
+      ctx.strokeStyle = IVORY_RAISED;
+      ctx.lineWidth = 1.5;
       ctx.beginPath();
       ctx.arc(s.x, s.y, r, 0, Math.PI * 2);
       ctx.fill();
       ctx.stroke();
-      this.icon('battle', s.x, s.y, r * 1.25, '#fff2e0', 2);
+      const eng = sprite('counters/status/engaged', r * 1.3, r * 1.3, this.dpr, IVORY_RAISED);
+      if (eng) ctx.drawImage(eng, s.x - r * 0.65, s.y - r * 0.65, r * 1.3, r * 1.3);
       ctx.restore();
       this.battleMarkers.push({ battle: b.id, province: b.province, x: s.x, y: s.y, r });
-      this.place({ x: s.x - r, y: s.y - r, w: r * 2, h: r * 2 });
+      this.placed.add({ x: s.x - r, y: s.y - r, w: r * 2, h: r * 2 });
     }
   }
 
-  /** Capitals, forts and sieges. */
+  /**
+   * Point markers, in priority order: sieges, capitals, then (local view) forts,
+   * ports, factories and airfields; at the closest zoom a landmark illustration
+   * replaces the marker where the place really has that building.
+   */
   private drawSites(sim: Sim, rs: RenderState, tier: Tier, visible: Array<{ id: string }>): void {
     const st = sim.state;
     const cam = this.camera;
     const ctx = this.ctx;
+    const dpr = this.dpr;
     const capitals = new Set<string>();
     for (const n of Object.values(st.nations)) if (n.alive && n.capital) capitals.add(n.capital);
+    const local = cam.provincePx >= 230;
+    const items: Array<{ id: string; pri: number }> = [];
     for (const v of visible) {
       const p = st.provinces[v.id];
+      const siege = p.siege && p.siege.progress > 0;
       const isCap = capitals.has(v.id);
-      const siege = p.siege && p.siege.progress > 0 ? p.siege : null;
-      if (!isCap && !siege && !(tier === 'close' && p.fort > 0)) continue;
-      const g = this.geo.provs.get(v.id)!;
+      if (siege) items.push({ id: v.id, pri: 0 });
+      else if (isCap) items.push({ id: v.id, pri: 1 });
+      else if (tier === 'close' && (p.fort > 0 || p.port > 0 || p.factories > 1 || p.airfield > 0)) items.push({ id: v.id, pri: 2 });
+    }
+    items.sort((a, b) => a.pri - b.pri || (a.id < b.id ? -1 : 1));
+    for (const { id } of items) {
+      const p = st.provinces[id];
+      const g = this.geo.provs.get(id)!;
       const s = cam.toScreen(g.lx, g.ly);
-      if (s.x < -30 || s.y < -30 || s.x > this.width + 30 || s.y > this.height + 30) continue;
-      const y = s.y + (tier === 'far' ? 0 : 13);
+      if (s.x < -60 || s.y < -60 || s.x > this.width + 60 || s.y > this.height + 60) continue;
+      const y = s.y + (tier === 'far' ? 0 : 14);
+      const siege = p.siege && p.siege.progress > 0 ? p.siege : null;
       if (siege) {
         const col = sim.world.nationDefs[siege.nation]?.color ?? '#999';
         ctx.save();
-        ctx.fillStyle = 'rgba(20, 24, 30, 0.88)';
+        ctx.fillStyle = IVORY_RAISED;
+        ctx.strokeStyle = SLATE;
+        ctx.lineWidth = 1.5;
         ctx.beginPath();
         ctx.arc(s.x, y, 11, 0, Math.PI * 2);
         ctx.fill();
-        ctx.strokeStyle = 'rgba(255,255,255,0.18)';
-        ctx.lineWidth = 3;
         ctx.stroke();
-        ctx.strokeStyle = col;
+        ctx.strokeStyle = realmInk(col);
         ctx.lineWidth = 3;
         ctx.beginPath();
         ctx.arc(s.x, y, 11, -Math.PI / 2, -Math.PI / 2 + (Math.PI * 2 * siege.progress) / 100);
         ctx.stroke();
-        this.icon('fort', s.x, y, 13, '#f1e7cc', 1.6);
+        const f = sprite('markers/fort', 14, 14, dpr);
+        if (f) ctx.drawImage(f, s.x - 7, y - 7, 14, 14);
         ctx.restore();
-        this.place({ x: s.x - 12, y: y - 12, w: 24, h: 24 });
+        this.placed.add({ x: s.x - 12, y: y - 12, w: 24, h: 24 });
         continue;
       }
-      if (isCap) {
-        const owner = p.owner ? sim.world.nationDefs[p.owner] : null;
-        if (tier === 'far') {
-          ctx.save();
-          ctx.fillStyle = '#1b1712';
-          ctx.beginPath();
-          ctx.arc(s.x, y, 5.5, 0, Math.PI * 2);
-          ctx.fill();
-          ctx.fillStyle = '#f2d48a';
-          ctx.beginPath();
-          ctx.arc(s.x, y, 3, 0, Math.PI * 2);
-          ctx.fill();
-          ctx.restore();
-          this.place({ x: s.x - 6, y: y - 6, w: 12, h: 12 });
-        } else {
-          ctx.save();
-          ctx.fillStyle = owner?.color ?? '#555';
-          ctx.strokeStyle = '#1b1712';
-          ctx.lineWidth = 1.5;
-          ctx.beginPath();
-          ctx.arc(s.x, y, 10, 0, Math.PI * 2);
-          ctx.fill();
-          ctx.stroke();
-          ctx.strokeStyle = '#f2d48a';
-          ctx.lineWidth = 1.2;
-          ctx.beginPath();
-          ctx.arc(s.x, y, 12.5, 0, Math.PI * 2);
-          ctx.stroke();
-          this.icon('capital', s.x, y, 13, '#fff8e8', 1.7);
-          ctx.restore();
-          this.place({ x: s.x - 13, y: y - 13, w: 26, h: 26 });
+      if (capitals.has(id)) {
+        const size = tier === 'far' ? 13 : 22;
+        const r: Rect = { x: s.x - size / 2, y: y - size / 2, w: size, h: size };
+        if (tier !== 'far' && this.placed.hits(r)) {
+          this.placed.skipped++;
+          continue;
         }
+        const m = sprite('markers/capital', size, size, dpr);
+        if (m) ctx.drawImage(m, r.x, r.y, size, size);
+        this.placed.add(r);
         continue;
       }
-      // fort (close zoom)
-      ctx.save();
-      ctx.fillStyle = 'rgba(28, 24, 18, 0.82)';
-      ctx.beginPath();
-      ctx.roundRect(s.x - 9, y - 9, 18, 18, 4);
-      ctx.fill();
-      this.icon('fort', s.x, y, 12, '#f1e7cc', 1.6);
-      for (let i = 0; i < p.fort; i++) {
-        ctx.fillStyle = '#f2d48a';
-        ctx.fillRect(s.x - 7 + i * 5, y + 11, 4, 3);
+      // local view: the place's most significant building
+      const kind = p.fort >= 2 && sim.world.provZones[id] ? 'coastal-fort' : p.port >= 2 ? 'harbor' : p.factories >= 3 ? 'industrial-works' : null;
+      if (local && kind) {
+        const w = Math.min(128, Math.max(64, cam.provincePx * 0.38));
+        const [bx0, by0, bx1, by1] = LANDMARK_BOUNDS[kind];
+        const h = (w * (by1 - by0) * 1024) / ((bx1 - bx0) * 1536);
+        const r: Rect = { x: s.x - w / 2, y: y - h * 0.15, w, h };
+        if (!this.placed.hits(r)) {
+          const img = landmark(kind, () => this.onArt?.());
+          if (img) {
+            ctx.drawImage(img, bx0 * img.width, by0 * img.height, (bx1 - bx0) * img.width, (by1 - by0) * img.height, r.x, r.y, w, h);
+            this.placed.add(r);
+            continue;
+          }
+        }
       }
-      ctx.restore();
-      this.place({ x: s.x - 10, y: y - 10, w: 20, h: 26 });
+      const marker = p.fort > 0 ? 'fort' : p.port > 0 ? 'port' : p.factories > 1 ? 'factory' : 'airfield';
+      const r: Rect = { x: s.x - 10, y: y - 10, w: 20, h: 20 };
+      if (this.placed.hits(r)) {
+        this.placed.skipped++;
+        continue;
+      }
+      const m = sprite(`markers/${marker}`, 20, 20, dpr);
+      if (m) ctx.drawImage(m, r.x, r.y, 20, 20);
+      if (marker === 'fort' && p.fort > 1) {
+        ctx.fillStyle = BRASS_INK;
+        for (let i = 0; i < p.fort; i++) ctx.fillRect(s.x - 7 + i * 5, y + 11, 4, 3);
+      }
+      this.placed.add({ x: r.x, y: r.y, w: 20, h: 24 });
     }
     void rs;
+  }
+
+  private relation(sim: Sim, nid: NationId, me: NationId | null): 'own' | 'allied' | 'hostile' | 'other' {
+    if (nid === me) return 'own';
+    if (!me) return 'other';
+    if (atWar(sim, me, nid)) return 'hostile';
+    if (isFriendly(sim, me, nid)) return 'allied';
+    return 'other';
+  }
+
+  /**
+   * Counters by projected province size: round tokens at world view, small pills
+   * when provinces are still small, the pack's compact frame regionally and its
+   * standard frame (with readiness bars) up close.
+   */
+  private counterKind(tier: Tier): 'pill' | 'compact' | 'standard' {
+    const ppx = this.camera.provincePx;
+    if (tier === 'far' || ppx < 88) return 'pill';
+    return ppx >= 190 ? 'standard' : 'compact';
+  }
+
+  private counterSize(kind: 'pill' | 'compact' | 'standard', count: string): { w: number; h: number } {
+    if (kind === 'standard') return { w: 96, h: 64 };
+    if (kind === 'compact') return { w: 56 + 8 + count.length * 7, h: 36 };
+    return { w: 26 + count.length * 7, h: 20 };
+  }
+
+  /**
+   * One counter, drawn from the pack's empty chrome plus live layers: identity
+   * (the realm's shield on its muted colour), the branch symbol, the strength,
+   * readiness bars (standard frame) and one status symbol outside the right edge.
+   */
+  private counter(
+    sim: Sim,
+    o: {
+      kind: 'pill' | 'compact' | 'standard';
+      nation: NationId;
+      x: number;
+      y: number;
+      symbol: string;
+      count: string;
+      detail: string;
+      bars: [number, number] | null;
+      status: string | null;
+      relation: 'own' | 'allied' | 'hostile' | 'other';
+      selected: boolean;
+      group?: number | null;
+      dim?: boolean;
+    },
+  ): void {
+    const ctx = this.ctx;
+    const dpr = this.dpr;
+    const def = sim.world.nationDefs[o.nation];
+    const edge = o.selected ? BRASS : o.relation === 'hostile' ? '#8d3932' : o.relation === 'allied' ? '#456f77' : '#303b3b';
+    const { w, h } = this.counterSize(o.kind, o.count);
+    ctx.save();
+    if (o.kind === 'pill') {
+      ctx.fillStyle = IVORY;
+      ctx.strokeStyle = edge;
+      ctx.lineWidth = o.selected ? 2.4 : o.relation === 'own' || o.relation === 'hostile' ? 1.8 : 1.2;
+      ctx.beginPath();
+      ctx.rect(o.x + 0.5, o.y + 0.5, w - 1, h - 1);
+      ctx.fill();
+      ctx.stroke();
+      ctx.fillStyle = realmFill(def.color);
+      ctx.fillRect(o.x + 2, o.y + 2, 14, h - 4);
+      const sym = sprite(`counters/symbols/${o.symbol}`, 12, 12, dpr, INK);
+      if (sym) ctx.drawImage(sym, o.x + 3, o.y + (h - 12) / 2, 12, 12);
+      ctx.fillStyle = INK;
+      ctx.font = `600 12px ${SANS}`;
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillText(o.count, o.x + 16 + (w - 16) / 2, o.y + h / 2 + 0.5);
+    } else if (o.kind === 'compact') {
+      const fw = 56;
+      const frame = sprite('counters/frames/compact', fw, 36, dpr);
+      if (frame) ctx.drawImage(frame, o.x, o.y, fw, 36);
+      ctx.fillStyle = realmFill(def.color);
+      ctx.fillRect(o.x + 2, o.y + 2, 15, 32);
+      drawShield(ctx, def, o.x + 3, o.y + 8, 13);
+      const sym = sprite(`counters/symbols/${o.symbol}`, 20, 20, dpr, INK);
+      if (sym) ctx.drawImage(sym, o.x + 26, o.y + 8, 20, 20);
+      // the strength in a tab on the frame's right edge (a recorded deviation: the
+      // pack's compact frame has no numbers, but the count is what the player reads)
+      const tw = w - fw;
+      ctx.fillStyle = SLATE;
+      ctx.fillRect(o.x + fw - 1, o.y + 9, tw + 1, 18);
+      ctx.fillStyle = IVORY;
+      ctx.font = `600 12px ${SANS}`;
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillText(o.count, o.x + fw + tw / 2, o.y + 18.5);
+      ctx.strokeStyle = edge;
+      ctx.lineWidth = 2;
+      ctx.strokeRect(o.x + 1, o.y + 1, fw - 2, 34);
+      if (o.selected) {
+        ctx.strokeStyle = BRASS;
+        ctx.lineWidth = 3;
+        ctx.strokeRect(o.x - 1.5, o.y - 1.5, fw + 3, 39);
+      }
+    } else {
+      const variant = o.dim ? 'disabled' : o.selected ? 'selected' : o.relation === 'hostile' ? 'hostile' : o.relation === 'allied' ? 'allied' : 'standard';
+      const frame = sprite(`counters/frames/${variant}`, 96, 64, dpr);
+      if (frame) ctx.drawImage(frame, o.x, o.y, 96, 64);
+      // identity slot (3,3) 20×14: the realm's muted colour with its shield
+      ctx.fillStyle = realmFill(def.color);
+      ctx.fillRect(o.x + 3, o.y + 3, 20, 14);
+      drawShield(ctx, def, o.x + 8, o.y + 3.5, 10);
+      // branch symbol (41,6) 24×24
+      const sym = sprite(`counters/symbols/${o.symbol}`, 24, 24, dpr, INK);
+      if (sym) ctx.drawImage(sym, o.x + 41, o.y + 6, 24, 24);
+      // strength (28,30) 64×14
+      ctx.fillStyle = INK;
+      ctx.font = `600 13px ${SANS}`;
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillText(o.detail || o.count, o.x + 28 + 32, o.y + 37.5);
+      // readiness bars (4,51) 88×7, two separated by 4 px
+      if (o.bars) {
+        o.bars.forEach((v, i) => {
+          const bx = o.x + 4 + i * 46;
+          ctx.fillStyle = '#e0d9c7';
+          ctx.fillRect(bx, o.y + 51, 42, 7);
+          const f = Math.max(0, Math.min(1, v));
+          ctx.fillStyle = f > 0.5 ? POSITIVE : f > 0.25 ? WARNING : DANGER;
+          ctx.fillRect(bx, o.y + 51, 42 * f, 7);
+          ctx.strokeStyle = INK;
+          ctx.lineWidth = 1;
+          ctx.strokeRect(bx + 0.5, o.y + 51.5, 41, 6);
+        });
+      }
+    }
+    // status outside the right edge (16×16)
+    if (o.status && o.kind !== 'pill') {
+      const sx = o.x + w + 2;
+      const sy = o.y + 2;
+      ctx.fillStyle = IVORY_RAISED;
+      ctx.strokeStyle = o.status === 'low-supply' ? DANGER : SLATE;
+      ctx.lineWidth = 1;
+      ctx.fillRect(sx, sy, 16, 16);
+      ctx.strokeRect(sx + 0.5, sy + 0.5, 15, 15);
+      const st = sprite(`counters/status/${o.status}`, 14, 14, dpr, o.status === 'low-supply' ? DANGER : INK);
+      if (st) ctx.drawImage(st, sx + 1, sy + 1, 14, 14);
+    }
+    // army group number: a small brass tab on the top-left corner
+    if (o.group) {
+      ctx.fillStyle = BRASS;
+      ctx.strokeStyle = BRASS_INK;
+      ctx.lineWidth = 1;
+      ctx.fillRect(o.x - 5, o.y - 6, 12, 12);
+      ctx.strokeRect(o.x - 4.5, o.y - 5.5, 11, 11);
+      ctx.fillStyle = INK;
+      ctx.font = `700 9px ${SANS}`;
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillText(String(o.group), o.x + 1, o.y + 0.5);
+    }
+    if (o.dim && o.kind !== 'standard') {
+      ctx.fillStyle = 'rgba(224, 220, 207, 0.55)';
+      ctx.fillRect(o.x, o.y, w, h);
+    }
+    ctx.restore();
   }
 
   private drawArmies(sim: Sim, rs: RenderState, tier: Tier, pos: Map<string, { x: number; y: number }>): void {
@@ -1267,7 +1508,7 @@ export class MapRenderer {
       if (a.embarked || !relevant(a)) continue;
       const p = pos.get(a.id)!;
       const s = cam.toScreen(p.x, p.y);
-      if (s.x < -60 || s.y < -60 || s.x > this.width + 60 || s.y > this.height + 60) continue;
+      if (s.x < -100 || s.y < -80 || s.x > this.width + 100 || s.y > this.height + 80) continue;
       const k = tier === 'far' ? `${a.location}|${a.nation}` : a.path.length && a.progress > 0 ? `m${a.id}` : a.location;
       (stacks.get(k) ?? stacks.set(k, []).get(k)!).push(a);
     }
@@ -1286,16 +1527,38 @@ export class MapRenderer {
         this.farMarker(sim, a, s.x, s.y - 8, regs, list.some((x) => x.id === rs.selectedArmy), me);
         continue;
       }
-      const H = 22;
-      const widths = list.map((a) => 30 + String(a.regiments.length).length * 7);
-      const total = widths.reduce((x, y) => x + y + 3, -3);
+      const kind = this.counterKind(tier);
+      const dims = list.map((a) => this.counterSize(kind, String(a.regiments.length)));
+      const total = dims.reduce((x, d) => x + d.w + 4, -4);
       let x = s.x - total / 2;
-      const y = s.y - H - 8;
+      const hMax = Math.max(...dims.map((d) => d.h));
+      const y = s.y - hMax - 8;
       list.forEach((a, i) => {
-        this.armyMarker(sim, a, x, y, widths[i], H, a.id === rs.selectedArmy, me);
-        this.markers.push({ army: a.id, x, y, w: widths[i], h: H + 5 });
-        this.place({ x, y, w: widths[i], h: H + 5 });
-        x += widths[i] + 3;
+        const { w, h } = dims[i];
+        const mine = a.nation === me;
+        const mm = maxMorale(sim, a.nation);
+        const engineers = a.regiments.some((r) => r.type === 'engineers');
+        const status = a.battle ? 'engaged' : mine && a.supply < 0.5 ? 'low-supply' : a.path.length ? 'moving' : entrenchBonus(sim, a.nation, a.stationary, engineers) > 0 ? 'entrenched' : null;
+        this.counter(sim, {
+          kind,
+          nation: a.nation,
+          x,
+          y: y + (hMax - h),
+          symbol: branchOf(a),
+          count: String(a.regiments.length),
+          detail: `${a.regiments.length} · ${(menOf(a) / 1000).toFixed(1)}k`,
+          bars: [a.morale / Math.max(0.01, mm), mine ? a.supply : 1],
+          status,
+          relation: this.relation(sim, a.nation, me),
+          selected: a.id === rs.selectedArmy,
+          group: mine ? a.group : null,
+          dim: a.retreating,
+        });
+        // the status symbol widens the hit and collision box
+        const ww = w + (status && kind !== 'pill' ? 18 : 0);
+        this.markers.push({ army: a.id, x, y: y + (hMax - h), w: ww, h });
+        this.placed.add({ x, y: y + (hMax - h), w: ww, h });
+        x += w + 4;
       });
     }
   }
@@ -1303,158 +1566,66 @@ export class MapRenderer {
   private farMarker(sim: Sim, a: Army, x: number, y: number, regs: number, selected: boolean, me: NationId | null): void {
     const ctx = this.ctx;
     const def = sim.world.nationDefs[a.nation];
-    const hostile = me ? atWar(sim, me, a.nation) : false;
+    const rel = this.relation(sim, a.nation, me);
     const r = 8 + Math.min(5, Math.sqrt(regs));
     ctx.save();
     if (selected) {
-      ctx.fillStyle = 'rgba(242, 212, 138, 0.45)';
+      ctx.strokeStyle = BRASS;
+      ctx.lineWidth = 3;
       ctx.beginPath();
-      ctx.arc(x, y, r + 5, 0, Math.PI * 2);
-      ctx.fill();
+      ctx.arc(x, y, r + 3.5, 0, Math.PI * 2);
+      ctx.stroke();
     }
-    ctx.fillStyle = def.color;
-    ctx.strokeStyle = hostile ? '#e5604c' : a.nation === me ? '#f2d48a' : '#161a1f';
-    ctx.lineWidth = hostile || a.nation === me ? 2.2 : 1.4;
+    ctx.fillStyle = realmFill(def.color);
+    ctx.strokeStyle = rel === 'hostile' ? DANGER : rel === 'own' ? INK : '#5f6a62';
+    ctx.lineWidth = rel === 'hostile' || rel === 'own' ? 2 : 1.2;
     ctx.beginPath();
     ctx.arc(x, y, r, 0, Math.PI * 2);
     ctx.fill();
     ctx.stroke();
-    ctx.fillStyle = '#fff';
-    ctx.font = `700 ${regs > 9 ? 10 : 11}px 'Source Sans 3 Variable', sans-serif`;
+    ctx.fillStyle = INK;
+    ctx.font = `700 ${regs > 9 ? 10 : 11}px ${SANS}`;
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
     ctx.fillText(String(regs), x, y + 0.5);
     ctx.restore();
     this.markers.push({ army: a.id, x: x - r, y: y - r, w: r * 2, h: r * 2 });
-    this.place({ x: x - r, y: y - r, w: r * 2, h: r * 2 });
+    this.placed.add({ x: x - r, y: y - r, w: r * 2, h: r * 2 });
   }
 
-  private armyMarker(sim: Sim, a: Army, x: number, y: number, w: number, h: number, selected: boolean, me: NationId | null): void {
-    const ctx = this.ctx;
-    const def = sim.world.nationDefs[a.nation];
-    const mine = a.nation === me;
-    const hostile = me ? atWar(sim, me, a.nation) : false;
-    ctx.save();
-    if (selected) {
-      ctx.shadowColor = 'rgba(242, 212, 138, 0.9)';
-      ctx.shadowBlur = 10;
-    } else {
-      ctx.shadowColor = 'rgba(0,0,0,0.45)';
-      ctx.shadowBlur = 4;
-      ctx.shadowOffsetY = 1;
-    }
-    // banner body
-    ctx.fillStyle = '#161b21';
-    ctx.beginPath();
-    ctx.roundRect(x, y, w, h, 4);
-    ctx.fill();
-    ctx.shadowColor = 'transparent';
-    ctx.fillStyle = def.color;
-    ctx.beginPath();
-    ctx.roundRect(x + 1.5, y + 1.5, w - 3, h - 3, 3);
-    ctx.fill();
-    // darken for text contrast
-    ctx.fillStyle = 'rgba(0,0,0,0.28)';
-    ctx.fillRect(x + 16, y + 1.5, w - 17.5, h - 3);
-    ctx.strokeStyle = selected ? '#f2d48a' : hostile ? '#ff6a52' : mine ? 'rgba(242, 212, 138, 0.8)' : 'rgba(10,12,14,0.9)';
-    ctx.lineWidth = selected ? 2.2 : hostile || mine ? 1.6 : 1;
-    ctx.beginPath();
-    ctx.roundRect(x + 0.5, y + 0.5, w - 1, h - 1, 4);
-    ctx.stroke();
-    drawShield(ctx, def, x + 3.5, y + 3, 10.5);
-    ctx.fillStyle = '#fffaf0';
-    ctx.font = `700 12.5px 'Source Sans 3 Variable', sans-serif`;
-    ctx.textAlign = 'center';
-    ctx.textBaseline = 'middle';
-    ctx.fillText(String(a.regiments.length), x + 16 + (w - 17) / 2, y + h / 2 + 0.5);
-    // morale bar
-    const mm = maxMorale(sim, a.nation);
-    const m = Math.max(0, Math.min(1, a.morale / mm));
-    ctx.fillStyle = 'rgba(12, 14, 16, 0.85)';
-    ctx.fillRect(x + 2, y + h + 1, w - 4, 3.5);
-    ctx.fillStyle = m > 0.5 ? '#74c07a' : m > 0.25 ? '#e3ab3f' : '#e5604c';
-    ctx.fillRect(x + 2, y + h + 1, (w - 4) * m, 3.5);
-    // supply warning
-    if (mine && a.supply < 0.8) {
-      const col = a.supply < 0.4 ? '#e5604c' : '#e3ab3f';
-      ctx.fillStyle = col;
-      ctx.beginPath();
-      ctx.arc(x + w, y, 5.5, 0, Math.PI * 2);
-      ctx.fill();
-      ctx.fillStyle = '#1b1712';
-      ctx.font = `800 9px 'Source Sans 3 Variable', sans-serif`;
-      ctx.fillText('!', x + w, y + 0.5);
-    }
-    // group number: a small tab on the top-left corner of our own markers
-    if (mine && a.group) {
-      ctx.fillStyle = '#f2d48a';
-      ctx.beginPath();
-      ctx.roundRect(x - 4, y - 5, 11, 11, 3);
-      ctx.fill();
-      ctx.fillStyle = '#1b1712';
-      ctx.font = `800 9px 'Source Sans 3 Variable', sans-serif`;
-      ctx.fillText(String(a.group), x + 1.5, y + 0.8);
-    }
-    if (a.retreating) {
-      ctx.fillStyle = 'rgba(12,14,16,0.6)';
-      ctx.beginPath();
-      ctx.roundRect(x, y, w, h, 4);
-      ctx.fill();
-    }
-    ctx.restore();
-    void menOf;
-  }
-
-  private icon(name: Parameters<typeof iconPath>[0], x: number, y: number, size: number, color: string, stroke = 1.8): void {
+  /** A route label: slate with ivory text (a muted ink one when the order is refused). */
+  private pill(x: number, y: number, text: string, bad: boolean): void {
     const ctx = this.ctx;
     ctx.save();
-    ctx.translate(x - size / 2, y - size / 2);
-    ctx.scale(size / 24, size / 24);
-    ctx.strokeStyle = color;
-    ctx.lineWidth = (stroke * 24) / size;
-    ctx.lineCap = 'round';
-    ctx.lineJoin = 'round';
-    ctx.stroke(iconPath(name));
-    ctx.restore();
-  }
-
-  private pill(x: number, y: number, text: string, bg: string, fg: string): void {
-    const ctx = this.ctx;
-    ctx.save();
-    ctx.font = `700 12.5px 'Source Sans 3 Variable', sans-serif`;
+    ctx.font = `600 13px ${SANS}`;
     const w = ctx.measureText(text).width + 16;
-    ctx.fillStyle = bg;
-    ctx.strokeStyle = 'rgba(242, 212, 138, 0.7)';
+    ctx.fillStyle = bad ? IVORY_RAISED : SLATE;
+    ctx.strokeStyle = bad ? DANGER : '#303b3b';
     ctx.lineWidth = 1;
-    ctx.beginPath();
-    ctx.roundRect(x - w / 2, y - 11, w, 22, 11);
-    ctx.fill();
-    ctx.stroke();
-    ctx.fillStyle = fg;
+    ctx.fillRect(x - w / 2, y - 11, w, 22);
+    ctx.strokeRect(x - w / 2 + 0.5, y - 10.5, w - 1, 21);
+    ctx.fillStyle = bad ? DANGER : IVORY;
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
     ctx.fillText(text, x, y + 0.5);
     ctx.restore();
-    this.place({ x: x - w / 2, y: y - 11, w, h: 22 });
+    this.placed.add({ x: x - w / 2, y: y - 11, w, h: 22 });
   }
 
+  /** The destination flag of the selected army's order. */
   private flag(x: number, y: number): void {
     const ctx = this.ctx;
     ctx.save();
     ctx.translate(x, y);
-    ctx.fillStyle = 'rgba(0,0,0,0.35)';
-    ctx.beginPath();
-    ctx.ellipse(0, 0, 6, 2.5, 0, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.strokeStyle = '#1b1712';
-    ctx.lineWidth = 2;
+    ctx.strokeStyle = INK;
+    ctx.lineWidth = 1.8;
     ctx.beginPath();
     ctx.moveTo(0, 0);
     ctx.lineTo(0, -22);
     ctx.stroke();
-    ctx.fillStyle = '#f2d48a';
-    ctx.strokeStyle = '#1b1712';
-    ctx.lineWidth = 1.2;
+    ctx.fillStyle = DANGER;
+    ctx.strokeStyle = IVORY_RAISED;
+    ctx.lineWidth = 1;
     ctx.beginPath();
     ctx.moveTo(0, -22);
     ctx.lineTo(13, -18);
@@ -1463,6 +1634,7 @@ export class MapRenderer {
     ctx.fill();
     ctx.stroke();
     ctx.restore();
+    this.placed.add({ x: x - 2, y: y - 23, w: 16, h: 24 });
   }
 
   // ───────────────────────────── lettering ────────────────────────────────
@@ -1474,44 +1646,51 @@ export class MapRenderer {
     const ppx = cam.provincePx;
     const density = rs.presentation.labels;
     const st = sim.state;
-    // No two names overlap at rest. Order of precedence: markers (already placed),
-    // capital names, geographic names, realm names, other province names.
+    // No two names overlap. Order of precedence: counters and markers (already
+    // placed), the selected province, capitals, geographic names, realm names,
+    // other province names.
     const caps = new Set<string>();
     for (const n of Object.values(st.nations)) if (n.alive && n.capital) caps.add(n.capital);
     const nameFrame = (v: { id: string; lx: number; ly: number; lr: number }) => {
       const cap = caps.has(v.id);
       const name = sim.world.prov[v.id].name;
-      const size = Math.max(11, Math.min(tier === 'close' ? 17 : 14.5, v.lr * z * 0.34)) + (cap ? 1 : 0);
+      const size = Math.round(Math.max(12, Math.min(tier === 'close' ? 16 : 14, v.lr * z * 0.3)) + (cap ? 1 : 0));
       const s = cam.toScreen(v.lx, v.ly);
-      const font = cap ? `700 ${size}px 'Alegreya SC', 'Alegreya Variable', serif` : `500 ${size}px 'Alegreya Variable', serif`;
+      const font = `${cap ? 700 : 500} ${size}px ${SANS}`;
       ctx.font = font;
-      const w = ctx.measureText(name).width + (cap ? name.length * 0.8 : 0);
-      const y = s.y + (cap ? 37 : 5);
+      const w = ctx.measureText(name).width;
+      const y = s.y + (cap ? 34 : 4);
       const r: Rect = { x: s.x - w / 2 - 2, y: y - size * 0.62, w: w + 4, h: size * 1.2 };
       return { name, size, font, w, x: s.x, y, r, cap };
     };
-    const capFrames = tier === 'far' ? [] : visible.filter((v) => caps.has(v.id)).map((v) => ({ v, f: nameFrame(v) }));
-    const capRects = capFrames.map((c) => c.f.r);
+    const selFrame = rs.selectedProvince && tier !== 'far' ? visible.find((v) => v.id === rs.selectedProvince) : undefined;
+    const reserved = (tier === 'far' ? [] : visible.filter((v) => caps.has(v.id) || v.id === rs.selectedProvince)).map((v) => ({ v, f: nameFrame(v) }));
+    const reservedRects = reserved.map((c) => c.f.r);
 
     // geographic names: seas, ranges, lakes
     for (const l of this.geo.labels) {
       if (l.kind === 'region') continue;
       const s = cam.toScreen(l.x, l.y);
       if (s.x < -200 || s.y < -60 || s.x > this.width + 200 || s.y > this.height + 60) continue;
-      const size = Math.max(10, Math.min(l.kind === 'sea' ? 30 : 17, (l.size ?? 40) * z));
-      if (size < 10.5 || (l.kind !== 'sea' && tier === 'far' && size < 12)) continue;
       const water = l.kind === 'sea' || l.kind === 'lake';
+      const size = Math.max(11, Math.min(water ? 26 : 16, (l.size ?? 40) * z * 0.9));
+      if (size < 11.5 || (!water && tier === 'far' && size < 13)) continue;
       const text = l.name.toUpperCase();
-      ctx.font = `italic 500 ${size}px 'Alegreya Variable', serif`;
-      const box = orientedBox(s.x, s.y, ctx.measureText(text).width + size * (water ? 0.3 : 0.18) * (text.length - 1) + 4, size * 1.1, l.angle ?? 0);
-      if (this.overlapsBox(box, capRects)) continue;
-      this.blocked.push(box);
+      const spacing = size * (water ? 0.22 : 0.14);
+      const font = `500 ${size}px ${HEADING}`;
+      ctx.font = font;
+      const box = orientedBox(s.x, s.y, ctx.measureText(text).width + spacing * (text.length - 1) + 4, size * 1.1, l.angle ?? 0);
+      if (this.placed.hitsBox(box, reservedRects)) {
+        this.placed.skipped++;
+        continue;
+      }
+      this.placed.addBox(box);
       this.letter(text, s.x, s.y, l.angle ?? 0, {
-        font: `italic 500 ${size}px 'Alegreya Variable', serif`,
-        spacing: size * (water ? 0.3 : 0.18),
-        fill: water ? 'rgba(214, 231, 236, 0.82)' : 'rgba(84, 66, 46, 0.85)',
-        halo: water ? 'rgba(30, 60, 74, 0.5)' : 'rgba(240, 232, 212, 0.75)',
-        haloW: water ? 2 : 3,
+        font,
+        spacing,
+        fill: water ? SEA_INK : RANGE_INK,
+        halo: water ? 'rgba(182, 207, 209, 0.6)' : 'rgba(245, 239, 226, 0.75)',
+        haloW: water ? 2.5 : 3,
       });
     }
 
@@ -1519,15 +1698,15 @@ export class MapRenderer {
     // as province names take over, and province names give way to them while they show.
     const fade = ppx < 78 ? 1 : 1 - (ppx - 78) / 30;
     if (fade > 0.25) {
-      const alpha = fade * (rs.mode === 'political' || rs.mode === 'diplomacy' ? 0.92 : 0.6);
+      const alpha = fade * (rs.mode === 'political' || rs.mode === 'diplomacy' ? 0.9 : 0.62);
       const items: Array<{ nid: NationId; name: string; base: number; size: number; lab: RealmLabel }> = [];
-      ctx.font = `700 100px 'Alegreya SC', 'Alegreya Variable', serif`;
-      const fitSize = (lab: RealmLabel, base: number) => Math.min(((lab.len * z) / base) * 100, lab.wid * z * 0.42, 50);
+      ctx.font = `600 100px ${HEADING}`;
+      const fitSize = (lab: RealmLabel, base: number) => Math.min(((lab.len * z) / base) * 100, lab.wid * z * 0.5, 46);
       for (const [nid, rsh] of this.realms) {
         const lab = rsh.label;
         if (!lab) continue;
         const name = sim.world.nationDefs[nid].short.toUpperCase();
-        const base = ctx.measureText(name).width + name.length * 22;
+        const base = ctx.measureText(name).width + name.length * 18;
         items.push({ nid, name, base, size: fitSize(lab, base), lab });
       }
       items.sort((a, b) => b.size - a.size);
@@ -1537,60 +1716,62 @@ export class MapRenderer {
         for (const lab of [it.lab, ...it.lab.alts]) {
           const s = cam.toScreen(lab.x, lab.y);
           let size = lab === it.lab ? it.size : fitSize(lab, it.base);
-          for (let tries = 0; tries < 3 && size >= 11 && !placed; tries++, size *= 0.85) {
-            ctx.font = `700 ${size}px 'Alegreya SC', 'Alegreya Variable', serif`;
-            const w = ctx.measureText(it.name).width + size * 0.22 * (it.name.length - 1);
+          for (let tries = 0; tries < 3 && size >= 12 && !placed; tries++, size *= 0.85) {
+            ctx.font = `600 ${size}px ${HEADING}`;
+            const w = ctx.measureText(it.name).width + size * 0.18 * (it.name.length - 1);
             const box = orientedBox(s.x, s.y, w + 4, size * 0.9, lab.angle);
-            if (!this.overlapsBox(box, capRects)) placed = { lab, size, s, box };
+            if (!this.placed.hitsBox(box, reservedRects)) placed = { lab, size, s, box };
           }
           if (placed) break;
         }
-        if (!placed) continue;
-        this.blocked.push(placed.box);
+        if (!placed) {
+          this.placed.skipped++;
+          continue;
+        }
+        this.placed.addBox(placed.box);
         const { lab, size, s } = placed;
         const def = sim.world.nationDefs[it.nid];
         ctx.save();
         ctx.globalAlpha = alpha;
         this.letter(it.name, s.x, s.y, lab.angle, {
-          font: `700 ${size}px 'Alegreya SC', 'Alegreya Variable', serif`,
-          spacing: size * 0.22,
-          fill: shade(def.color, -0.55),
-          halo: 'rgba(244, 236, 216, 0.55)',
-          haloW: Math.max(2, size * 0.09),
+          font: `600 ${size}px ${HEADING}`,
+          spacing: size * 0.18,
+          fill: realmInk(def.color),
+          halo: 'rgba(245, 239, 226, 0.5)',
+          haloW: Math.max(2, size * 0.08),
           bend: lab.bend,
         });
         ctx.restore();
       }
     }
 
-    // province names
+    // province names: the selected one and capitals first, then the rest by importance
     if (tier !== 'far') {
       const minR = density === 'many' ? 13 : density === 'few' ? 26 : 18;
       const cands = visible
-        .map((v) => ({ v, cap: caps.has(v.id), pri: (caps.has(v.id) ? 1e6 : 0) + st.provinces[v.id].dev * 1000 + v.area / 100 }))
-        .filter((c) => c.cap || c.v.lr * z > minR)
+        .map((v) => ({ v, cap: caps.has(v.id), sel: v.id === rs.selectedProvince, pri: (v.id === rs.selectedProvince ? 2e6 : 0) + (caps.has(v.id) ? 1e6 : 0) + st.provinces[v.id].dev * 1000 + v.area / 100 }))
+        .filter((c) => c.cap || c.sel || c.v.lr * z > minR)
         .sort((a, b) => b.pri - a.pri);
       for (const c of cands) {
-        const { name, size, font, w, y, r } = c.cap ? capFrames.find((q) => q.v.id === c.v.id)!.f : nameFrame(c.v);
-        const s = { x: r.x + r.w / 2 };
-        // capitals are always named; other names give way to markers, lettering and each other
-        if (!c.cap && this.overlaps(r)) continue;
-        if (!c.cap && w > c.v.lr * z * 2.9) continue;
-        this.place(r);
-        this.letter(name, s.x, y, 0, { font, spacing: c.cap ? 0.8 : 0, fill: '#2a241c', halo: 'rgba(246, 239, 222, 0.88)', haloW: 3 });
-        if (tier === 'close' && rs.mode === 'economy') {
-          const dv = `dev ${st.provinces[c.v.id].dev}`;
-          this.letter(dv, s.x, y + size * 0.95, 0, { font: `600 11px 'Source Sans 3 Variable', sans-serif`, spacing: 0, fill: '#4a3a26', halo: 'rgba(246,239,222,0.8)', haloW: 2.5 });
+        const { name, size, font, w, y, r } = c.cap || c.sel ? reserved.find((q) => q.v.id === c.v.id)!.f : nameFrame(c.v);
+        const sx = r.x + r.w / 2;
+        // the selected province and capitals are always named; other names give way
+        if (!c.cap && !c.sel && (this.placed.hits(r) || w > c.v.lr * z * 2.9)) {
+          this.placed.skipped++;
+          continue;
         }
+        this.placed.add(r);
+        this.letter(name, sx, y, 0, { font, spacing: 0, fill: c.sel ? BRASS_INK : INK, halo: 'rgba(245, 239, 226, 0.9)', haloW: 3 });
+        const note = (text: string) => this.letter(text, sx, y + size * 0.95, 0, { font: `600 12px ${SANS}`, spacing: 0, fill: MUTED, halo: 'rgba(245, 239, 226, 0.85)', haloW: 2.5 });
+        if (tier === 'close' && rs.mode === 'economy') note(`dev ${st.provinces[c.v.id].dev}`);
         if (tier === 'close' && rs.mode === 'terrain') {
           const t = sim.world.prov[c.v.id].terrain;
-          this.letter(`${t} · move ${moveCostLabel(t)}`, s.x, y + size * 0.95, 0, { font: `600 11px 'Source Sans 3 Variable', sans-serif`, spacing: 0, fill: '#4a3a26', halo: 'rgba(246,239,222,0.8)', haloW: 2.5 });
+          note(`${t} · move ${moveCostLabel(t)}`);
         }
-        if (tier === 'close' && rs.mode === 'frontier' && st.provinces[c.v.id].owner) {
-          this.letter(`${Math.floor(st.provinces[c.v.id].integration)}`, s.x, y + size * 0.95, 0, { font: `700 11px 'Source Sans 3 Variable', sans-serif`, spacing: 0, fill: '#3a2e20', halo: 'rgba(246,239,222,0.8)', haloW: 2.5 });
-        }
+        if (tier === 'close' && rs.mode === 'frontier' && st.provinces[c.v.id].owner) note(`${Math.floor(st.provinces[c.v.id].integration)}`);
       }
     }
+    void selFrame;
   }
 
   /** Spaced (optionally arched) lettering with a halo. */
@@ -1683,8 +1864,8 @@ export class MapRenderer {
       const o = ownerOf(p.id);
       if (!o) continue;
       const hl = opts.highlight;
-      ctx.globalAlpha = hl ? (o === hl ? 0.72 : 0.28) : 0.5;
-      ctx.fillStyle = colorOf(o);
+      ctx.globalAlpha = hl && o !== hl ? 0.55 : 1;
+      ctx.fillStyle = realmWash(colorOf(o));
       ctx.fill(p.path);
     }
     ctx.restore();
@@ -1694,7 +1875,7 @@ export class MapRenderer {
       if (e.coast) continue;
       if (ownerOf(e.a) !== ownerOf(e.b)) border.addPath(e.path);
     }
-    ctx.strokeStyle = 'rgba(33, 27, 21, 0.85)';
+    ctx.strokeStyle = LINE.realm.stroke;
     ctx.lineWidth = 1.4 / z;
     ctx.stroke(border);
     if (opts.highlight) {
@@ -1704,13 +1885,17 @@ export class MapRenderer {
         const ob = e.coast ? null : ownerOf(e.b);
         if ((oa === opts.highlight) !== (ob === opts.highlight)) hp.addPath(e.path);
       }
-      ctx.strokeStyle = '#f2d48a';
+      ctx.lineJoin = 'round';
+      ctx.strokeStyle = IVORY_RAISED;
+      ctx.lineWidth = 4.8 / z;
+      ctx.stroke(hp);
+      ctx.strokeStyle = BRASS_INK;
       ctx.lineWidth = 2.6 / z;
       ctx.stroke(hp);
     }
     ctx.setTransform(1, 0, 0, 1, 0, 0);
     if (opts.dim) {
-      ctx.fillStyle = 'rgba(12, 17, 22, 0.25)';
+      ctx.fillStyle = 'rgba(56, 67, 66, 0.12)';
       ctx.fillRect(0, 0, canvas.width, canvas.height);
     }
   }

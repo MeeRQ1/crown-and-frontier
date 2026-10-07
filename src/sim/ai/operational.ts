@@ -27,6 +27,7 @@ import { supplyAt, supplyDistances } from '../supply';
 import type { Army, NationId, ProvinceId, UnitType } from '../types';
 import { diffOf, hostileArmiesAt, issue, pathVia, reachFrom, sumStrength, threatAround, type Reach } from './common';
 import { navalOps } from './navy';
+import { memoize } from '../index';
 
 function regimentsByType(sim: Sim, nid: NationId): Record<UnitType, number> {
   const out: Record<UnitType, number> = { infantry: 0, cavalry: 0, artillery: 0, engineers: 0, armour: 0 };
@@ -36,12 +37,27 @@ function regimentsByType(sim: Sim, nid: NationId): Record<UnitType, number> {
 }
 
 function hopsToEnemy(sim: Sim, nid: NationId, pid: ProvinceId): number {
-  let best = 99;
-  for (const q of sim.world.provIds) {
-    const c = sim.state.provinces[q].controller;
-    if (c && atWar(sim, nid, c)) best = Math.min(best, sim.world.hop(pid, q) ?? 99);
-  }
-  return best;
+  const d = enemyField(sim, nid)[sim.world.provIndex.get(pid)!];
+  return d === 0xffff ? 99 : Math.min(99, d);
+}
+
+/**
+ * Hops from every province to the nearest province held by an enemy (provIds
+ * order; 0xffff none): the element-wise minimum of the enemy provinces' rows of
+ * the hop matrix, worked out once per week and revision instead of per site.
+ */
+function enemyField(sim: Sim, nid: NationId): Uint16Array {
+  return memoize(sim, 'enemyField', nid, () => {
+    const n = sim.world.provIds.length;
+    const f = new Uint16Array(n).fill(0xffff);
+    for (const q of sim.world.provIds) {
+      const c = sim.state.provinces[q].controller;
+      if (!c || !atWar(sim, nid, c)) continue;
+      const row = sim.world.hopRow(q)!;
+      for (let j = 0; j < n; j++) if (row[j] < f[j]) f[j] = row[j];
+    }
+    return f;
+  });
 }
 
 function recruitSite(sim: Sim, nid: NationId, unit: UnitType): ProvinceId | null {
@@ -238,7 +254,7 @@ function peaceOps(sim: Sim, nid: NationId, armies: Army[]): void {
 
 // ───────────────────────────── War-time operations ──────────────────────────
 
-interface Objective {
+export interface Objective {
   pid: ProvinceId;
   kind: 'defend' | 'liberate' | 'attack';
   value: number;
@@ -250,7 +266,7 @@ function fortNeed(fort: number): number {
   return fort > 0 ? C.siege.minRegimentsPerLevel * fort * 1.0 : 0.6;
 }
 
-function warObjectives(sim: Sim, nid: NationId): Objective[] {
+export function warObjectives(sim: Sim, nid: NationId): Objective[] {
   const st = sim.state;
   const n = st.nations[nid];
   const d = diffOf(sim);
@@ -393,9 +409,44 @@ function warOps(sim: Sim, nid: NationId, armies: Army[]): void {
       moveTo(sim, a, best.post);
       continue;
     }
+    // no front of ours to cover (an ally's war, or the enemy is far off): march
+    // to the war rather than wait at the rally point, stopping at the last
+    // friendly province before enemy land, where supply still reaches
+    const stage = fit(a) ? stagingFor(sim, nid, a.location, r, objs) : null;
+    if (stage) {
+      a.task = `advance:${stage}`;
+      moveTo(sim, a, stage, a.location !== stage && a.path[a.path.length - 1] !== stage ? `${a.name} marches to the front at ${provName(sim, stage)}` : undefined);
+      continue;
+    }
     a.task = 'reserve';
     if (rally && a.location !== rally) moveTo(sim, a, rally);
   }
+}
+
+/**
+ * Where an army with no objective of its own should stand to join the war: on
+ * the way to the nearest attack objective it can reach, the last province held
+ * by us or a friend before enemy land. Null when no objective can be reached
+ * (overseas, or every route is barred) or the army already stands there.
+ */
+export function stagingFor(sim: Sim, nid: NationId, from: ProvinceId, r: Reach, objs: Objective[]): ProvinceId | null {
+  const st = sim.state;
+  let target: ProvinceId | null = null;
+  let best = Infinity;
+  for (const o of objs) {
+    if (o.kind !== 'attack') continue;
+    const d = r.dist[o.pid];
+    if (d !== undefined && d < best) (best = d), (target = o.pid);
+  }
+  if (!target || best > C.ai.advanceRange) return null;
+  const path = pathVia(r, from, target) ?? [];
+  let stage: ProvinceId = from;
+  for (const p of path) {
+    const c = st.provinces[p].controller;
+    if (c && atWar(sim, nid, c)) break;
+    if (c && isFriendly(sim, nid, c)) stage = p;
+  }
+  return stage === from ? null : stage;
 }
 
 /**

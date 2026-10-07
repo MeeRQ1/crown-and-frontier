@@ -1,19 +1,21 @@
-// Bundled typefaces (SIL Open Font License 1.1; see THIRD_PARTY_NOTICES.md).
-// Only the Latin subsets ship. Map lettering is drawn on a canvas, so the
-// renderer waits for `fontsReady` before placing labels.
+// Bundled typefaces from the atlas pack (SIL Open Font License 1.1; the notices
+// ship in licenses/ and THIRD_PARTY_NOTICES.md): Barlow Condensed for short
+// headings and map lettering, Source Sans 3 for the interface, with tabular
+// figures. Map lettering is drawn on a canvas, so the renderer waits for
+// `fontsReady` before placing labels.
 
-import alegreya from '@fontsource-variable/alegreya/files/alegreya-latin-wght-normal.woff2?url';
-import alegreyaItalic from '@fontsource-variable/alegreya/files/alegreya-latin-wght-italic.woff2?url';
-import alegreyaSc500 from '@fontsource/alegreya-sc/files/alegreya-sc-latin-500-normal.woff2?url';
-import alegreyaSc700 from '@fontsource/alegreya-sc/files/alegreya-sc-latin-700-normal.woff2?url';
-import sourceSans from '@fontsource-variable/source-sans-3/files/source-sans-3-latin-wght-normal.woff2?url';
+import barlow500 from '../assets/fonts/BarlowCondensed-Medium.woff2?url';
+import barlow600 from '../assets/fonts/BarlowCondensed-SemiBold.woff2?url';
+import sourceSans from '../assets/fonts/SourceSans3-Variable.woff2?url';
+
+/** CSS font stacks, shared by the stylesheet and the canvas renderers. */
+export const HEADING = "'Barlow Condensed', 'Arial Narrow', sans-serif";
+export const SANS = "'Source Sans 3', system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif";
 
 const faces: Array<[string, string, FontFaceDescriptors]> = [
-  ['Alegreya Variable', alegreya, { weight: '400 900', style: 'normal', display: 'swap' }],
-  ['Alegreya Variable', alegreyaItalic, { weight: '400 900', style: 'italic', display: 'swap' }],
-  ['Alegreya SC', alegreyaSc500, { weight: '500', style: 'normal', display: 'swap' }],
-  ['Alegreya SC', alegreyaSc700, { weight: '700', style: 'normal', display: 'swap' }],
-  ['Source Sans 3 Variable', sourceSans, { weight: '200 900', style: 'normal', display: 'swap' }],
+  ['Barlow Condensed', barlow500, { weight: '500', style: 'normal', display: 'swap' }],
+  ['Barlow Condensed', barlow600, { weight: '600', style: 'normal', display: 'swap' }],
+  ['Source Sans 3', sourceSans, { weight: '200 900', style: 'normal', display: 'swap' }],
 ];
 
 function load(): Promise<void> {

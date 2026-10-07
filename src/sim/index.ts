@@ -217,6 +217,54 @@ export function memoize<T>(sim: Sim, table: string, key: string, compute: () => 
   return v;
 }
 
+const geoGen = new WeakMap<object, number>();
+const geoMemo = new WeakMap<object, { tick: number; geo: number; epoch: number; tables: Map<string, Map<string, unknown>> }>();
+
+/**
+ * The revision of what borders, routes and sides depend on: ownership and control,
+ * wars and alliances, forts and railways. Every bump moves it except treaty terms
+ * that change none of these (trade agreements, non-aggression pacts).
+ */
+export function geoRev(sim: Sim): number {
+  return geoGen.get(sim.state) ?? 0;
+}
+
+export function bumpGeo(sim: Sim): void {
+  geoGen.set(sim.state, (geoGen.get(sim.state) ?? 0) + 1);
+}
+
+/** Like memoize, but kept across revisions that leave geography alone (see geoRev). */
+export function memoGeo<T>(sim: Sim, table: string, key: string, compute: () => T): T {
+  const st = sim.state;
+  const geo = geoGen.get(st) ?? 0;
+  let m = geoMemo.get(st);
+  if (!m || m.tick !== st.tick || m.geo !== geo || m.epoch !== memoEpoch) geoMemo.set(st, (m = { tick: st.tick, geo, epoch: memoEpoch, tables: new Map() }));
+  let t = m.tables.get(table);
+  if (!t) m.tables.set(table, (t = new Map()));
+  if (t.has(key)) return t.get(key) as T;
+  const v = compute();
+  t.set(key, v);
+  return v;
+}
+
+/**
+ * Like memoize, but kept for the whole week: for AI heuristics (threat, the value
+ * of a trade agreement) that may lag the commands issued earlier the same week.
+ * Never use it for anything a rule depends on.
+ */
+const weekMemo = new WeakMap<object, { tick: number; epoch: number; tables: Map<string, Map<string, unknown>> }>();
+export function memoWeek<T>(sim: Sim, table: string, key: string, compute: () => T): T {
+  const st = sim.state;
+  let m = weekMemo.get(st);
+  if (!m || m.tick !== st.tick || m.epoch !== memoEpoch) weekMemo.set(st, (m = { tick: st.tick, epoch: memoEpoch, tables: new Map() }));
+  let t = m.tables.get(table);
+  if (!t) m.tables.set(table, (t = new Map()));
+  if (t.has(key)) return t.get(key) as T;
+  const v = compute();
+  t.set(key, v);
+  return v;
+}
+
 /**
  * Consistency check for tests and AI campaigns: every index that is current for
  * its key must match a fresh scan. A mismatch means some code changed armies,

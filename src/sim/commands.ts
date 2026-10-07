@@ -2,7 +2,7 @@
 // checkCommand() never mutates state; applyCommand() validates first and
 // leaves state untouched when it fails (returning a player-readable reason).
 
-import { buildWingProblem, cancelWing, inRange, missionProblem, MISSION_LABELS, rebaseProblem, startWing } from './air';
+import { buildWingProblem, cancelWing, inRange, missionProblem, MISSION_LABELS, rebaseProblem, startWing, touchWings } from './air';
 import { C, SHIPS, WINGS } from './config';
 import { nextMemoEpoch } from './index';
 import { buildProblem, cancelProblem, cancelProject, startProject } from './construction';
@@ -62,6 +62,7 @@ import {
 } from './influence';
 import { applySettlement, counterOffer, evaluateSettlement, settlementProblem } from './settlement';
 import { researchProblem } from './progression';
+import { cancelContract, cancelContractProblem, cleanTerms, contractProblem, offerContract, signContract } from './trade';
 import { serialize } from './save';
 import { nationName, notify, type Sim } from './state';
 import type { Command, CommandResult } from './types';
@@ -213,6 +214,10 @@ export function checkCommand(sim: Sim, cmd: Command): string | null {
       return joinProblem(sim, cmd.nation, cmd.bloc);
     case 'leaveBloc':
       return st.blocs.some((b) => b.members.includes(cmd.nation)) ? null : 'We are not in a trade bloc.';
+    case 'offerContract':
+      return contractProblem(sim, cmd.nation, cleanTerms(cmd.terms));
+    case 'cancelContract':
+      return cancelContractProblem(sim, cmd.nation, cmd.contract);
     case 'eventChoice': {
       const pe = n.pendingEvents.find((e) => e.id === cmd.instance);
       if (!pe) return 'That event has already been resolved.';
@@ -358,6 +363,7 @@ function execute(sim: Sim, cmd: Command): CommandResult {
       const w = st.wings[cmd.wing];
       w.mission = cmd.mission;
       w.target = cmd.mission === 'idle' ? null : cmd.target;
+      touchWings(sim);
       return { ok: true };
     }
     case 'rebaseWing': {
@@ -367,10 +373,12 @@ function execute(sim: Sim, cmd: Command): CommandResult {
         w.mission = 'idle';
         w.target = null;
       }
+      touchWings(sim);
       return { ok: true };
     }
     case 'disbandWing':
       delete st.wings[cmd.wing];
+      touchWings(sim);
       return { ok: true, message: 'Air wing disbanded.' };
     case 'cancelBuild':
       cancelProject(sim, cmd.province);
@@ -481,6 +489,10 @@ function execute(sim: Sim, cmd: Command): CommandResult {
     case 'leaveBloc':
       leaveBloc(sim, cmd.nation);
       return { ok: true };
+    case 'offerContract':
+      return offerContract(sim, cmd.nation, cmd.terms);
+    case 'cancelContract':
+      return cancelContract(sim, cmd.nation, cmd.contract);
     case 'respond': {
       const p = st.proposals.find((x) => x.id === cmd.proposal)!;
       st.proposals = st.proposals.filter((x) => x.id !== p.id);
@@ -527,6 +539,13 @@ function execute(sim: Sim, cmd: Command): CommandResult {
         if (prob && !prob.startsWith('Our request')) return { ok: false, reason: `The offer is no longer valid: ${prob}` };
         addToBloc(sim, p.bloc!, joiner);
         return { ok: true, message: 'Welcome to the trade bloc.' };
+      }
+      if (p.kind === 'contract') {
+        const prob = contractProblem(sim, p.from, p.contract!);
+        if (prob) return { ok: false, reason: `The offer is no longer valid: ${prob}` };
+        signContract(sim, p.contract!);
+        notify(sim, p.from, 'normal', 'contract', `${nationName(sim, cmd.nation)} accepted our contract.`);
+        return { ok: true, message: 'Contract signed.' };
       }
       if (p.kind === 'peace') {
         const prob = peaceProblem(sim, p.from, p.war!, cmd.nation, p.terms!);

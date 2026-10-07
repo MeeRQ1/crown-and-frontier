@@ -22,7 +22,8 @@ import { C } from './config';
 import { opinion, worldDev } from './diplomacy';
 import { sphereMembers } from './influence';
 import { ownedProvinces, aliveNations, months, notify, nationName, endTick, dateOf, type Sim, warsOf } from './state';
-import type { NationId, VictoryPath } from './types';
+import type { NationId, Treaty, VictoryPath } from './types';
+import { memoize } from './index';
 
 /**
  * Victory thresholds for the map being played: the defaults in config,
@@ -55,6 +56,16 @@ export interface PathProgress {
   streak: number;
   required: number;
   lines: string[];
+  /** each condition of the path as a raw measure against its threshold; the first is the main measure */
+  conditions: VictoryCondition[];
+}
+
+export interface VictoryCondition {
+  label: string;
+  /** the realm's value now, and the threshold, in words */
+  have: string;
+  need: string;
+  ok: boolean;
 }
 
 export interface VictoryProgress {
@@ -87,6 +98,16 @@ export function establishedPartners(sim: Sim, nid: NationId): NationId[] {
   return Object.keys(influenceByPartner(sim, nid)).sort();
 }
 
+/** The treaties a realm is party to (indexed once per week and revision). */
+function treatiesOf(sim: Sim, nid: NationId): readonly Treaty[] {
+  const by = memoize(sim, 'treatiesByRealm', '', () => {
+    const m = new Map<NationId, Treaty[]>();
+    for (const t of sim.state.treaties) for (const x of [t.a, t.b]) (m.get(x) ?? m.set(x, []).get(x)!).push(t);
+    return m;
+  });
+  return by.get(nid) ?? [];
+}
+
 /**
  * Influence per partner: its strongest bond (an established alliance or our
  * sphere 2, our guarantee 1) plus an established trade agreement (1).
@@ -97,8 +118,8 @@ export function influenceByPartner(sim: Sim, nid: NationId): Record<NationId, nu
   const trade: Record<NationId, number> = {};
   const ok = (other: NationId) => opinion(sim, other, nid) >= C.victory.diplomaticOpinion;
   const old = (since: number, m: number) => st.tick - since >= months(m);
-  for (const t of st.treaties) {
-    if (t.type === 'nap' || (t.a !== nid && t.b !== nid) || !old(t.since, C.victory.diplomaticTreatyAge)) continue;
+  for (const t of treatiesOf(sim, nid)) {
+    if (t.type === 'nap' || !old(t.since, C.victory.diplomaticTreatyAge)) continue;
     const other = t.a === nid ? t.b : t.a;
     if (t.type === 'alliance') bond[other] = 2;
     else trade[other] = 1;
@@ -140,6 +161,10 @@ export function victoryProgress(sim: Sim, nid: NationId): VictoryProgress {
       `Regions dominated: ${regions.length}/${victoryRules(sim).territorialRegions} (own ≥75% of a region)`,
       `Provinces held: ${held}/${total} (${Math.round(share * 100)}% of ${Math.round(victoryRules(sim).territorialShare * 100)}% needed)`,
     ],
+    conditions: [
+      { label: 'Regions dominated (own and control ≥75%)', have: `${regions.length}`, need: `${victoryRules(sim).territorialRegions}`, ok: regions.length >= victoryRules(sim).territorialRegions },
+      { label: 'Provinces held, of all on the map', have: `${held} (${Math.round(share * 100)}%)`, need: `${Math.ceil(total * victoryRules(sim).territorialShare)} (${Math.round(victoryRules(sim).territorialShare * 100)}%)`, ok: share >= victoryRules(sim).territorialShare },
+    ],
   };
 
   const idev = integratedDev(sim, nid);
@@ -167,6 +192,12 @@ export function victoryProgress(sim: Sim, nid: NationId): VictoryProgress {
       `Integrated development: ${idev}/${Math.ceil(wdev * victoryRules(sim).economicShare)} (${Math.round(devShareV * 100)}% of the world, ${Math.round(victoryRules(sim).economicShare * 100)}% needed)`,
       `Average unrest ${Math.round(unrest)} (max ${C.victory.economicUnrest})${n.treasury < 0 ? ' · treasury in debt' : ''}${bankrupt ? ' · bankrupt' : ''}${occupied ? ' · land under occupation' : ''}`,
     ],
+    conditions: [
+      { label: 'Integrated development, of the world’s', have: `${idev} (${Math.round(devShareV * 100)}%)`, need: `${Math.ceil(wdev * victoryRules(sim).economicShare)} (${Math.round(victoryRules(sim).economicShare * 100)}%)`, ok: devShareV >= victoryRules(sim).economicShare },
+      { label: 'Average unrest', have: `${Math.round(unrest)}`, need: `at most ${C.victory.economicUnrest}`, ok: unrest <= C.victory.economicUnrest },
+      { label: 'Treasury out of debt, not bankrupt', have: bankrupt ? 'bankrupt' : n.treasury < 0 ? 'in debt' : 'solvent', need: 'solvent', ok: n.treasury >= 0 && !bankrupt },
+      { label: 'None of our land occupied', have: occupied ? 'occupied' : 'none', need: 'none', ok: !occupied },
+    ],
   };
 
   const need = influenceNeeded(sim, nid);
@@ -183,8 +214,36 @@ export function victoryProgress(sim: Sim, nid: NationId): VictoryProgress {
       `Influence: ${infl}/${need} (per partner at opinion ≥ ${C.victory.diplomaticOpinion}: alliance after ${C.victory.diplomaticTreatyAge / 12} years or our sphere 2, our guarantee 1; plus trade after ${C.victory.diplomaticTreatyAge / 12} years 1)`,
       `Trust ${Math.round(n.trust)} (need ${C.victory.diplomaticTrust})${offensive ? ' · fighting an offensive war' : ''}`,
     ],
+    conditions: [
+      { label: 'Influence over friendly partners', have: `${infl}`, need: `${need}`, ok: infl >= need },
+      { label: 'Trust', have: `${Math.round(n.trust)}`, need: `${C.victory.diplomaticTrust}`, ok: n.trust >= C.victory.diplomaticTrust },
+      { label: 'No offensive war', have: offensive ? 'attacking' : 'none', need: 'none', ok: !offensive },
+    ],
   };
   return { territorial, economic, diplomatic };
+}
+
+export type TimerTrend = 'won' | 'advancing' | 'paused' | 'near' | 'falling' | 'idle';
+
+/**
+ * What next month's settlement does to a path's timer, by the rule
+ * monthlyVictory applies: +1 while the condition holds; the first month it
+ * fails the timer pauses; each further month in a row it loses
+ * C.victory.streakDecay months, unless the realm is within reach (near), when
+ * it stays paused.
+ */
+export function timerOutlook(sim: Sim, nid: NationId, k: VictoryPath, p: PathProgress): { trend: TimerTrend; text: string } {
+  const n = sim.state.nations[nid];
+  const missed = n.victoryMissed?.[k] ?? 0;
+  if (p.streak >= p.required) return { trend: 'won', text: 'Held for the full time.' };
+  if (p.met) {
+    const left = p.required - p.streak;
+    return { trend: 'advancing', text: `Advancing: every condition holds. ${left} more month${left === 1 ? '' : 's'} held in a row wins.` };
+  }
+  if (p.streak === 0) return { trend: 'idle', text: 'Not started: the timer runs only while every condition holds.' };
+  if (p.near) return { trend: 'near', text: `Paused, not falling: just short of the main measure with everything else met. ${p.streak} months are kept while it stays this close.` };
+  if (missed + 1 < 2) return { trend: 'paused', text: `Paused: a condition failed this month. If it still fails next month, ${Math.min(p.streak, C.victory.streakDecay)} of the ${p.streak} months held are lost.` };
+  return { trend: 'falling', text: `Falling: a condition has failed ${missed} month${missed === 1 ? '' : 's'} in a row; each further month costs ${Math.min(p.streak, C.victory.streakDecay)} months held.` };
 }
 
 /** Disclosed campaign score used for simultaneous wins and the campaign limit. */

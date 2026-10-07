@@ -135,6 +135,10 @@ export function buildWorld(s: ScenarioDef): World {
     const v = matrix[i * n + j];
     return v === UNREACHED ? undefined : v;
   };
+  const hopRow = (a: ProvinceId): Uint16Array | undefined => {
+    const i = index.get(a);
+    return i === undefined ? undefined : matrix.subarray(i * n, (i + 1) * n);
+  };
   // sea zones: coasts by province, strait control, and zone-to-zone hops
   const zones: World['zones'] = {};
   const zoneIds = (s.seaZones ?? []).map((z) => z.id);
@@ -168,7 +172,7 @@ export function buildWorld(s: ScenarioDef): World {
     const v = zMatrix[i * zn + j];
     return v === UNREACHED ? undefined : v;
   };
-  return { scenario: s, prov, provIds, nationDefs, nationIds: s.nations.map((n) => n.id), regionProvinces, straitSet, straitEnds, riverSet, hop, zones, zoneIds, provZones, straitZone, zoneHop };
+  return { scenario: s, prov, provIds, nationDefs, nationIds: s.nations.map((n) => n.id), regionProvinces, straitSet, straitEnds, riverSet, hop, hopRow, provIndex: index, zones, zoneIds, provZones, straitZone, zoneHop };
 }
 
 export function getWorld(scenarioId: string): World {

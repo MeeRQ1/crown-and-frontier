@@ -14,7 +14,7 @@ import type { NationDef, Personality, ProvinceDef, Resource, Terrain } from '../
 import { SEA, sizeFor, type MapEdge, type MapPackage } from './format';
 import { loopsFromEdges } from './rings';
 import { campaignYearsFor, researchCostFor, scaledVictory } from './rules';
-import { addSeaZones } from './validate';
+import { addSeaZones, MAP_LIMITS } from './validate';
 
 export interface EditResult {
   ok: boolean;
@@ -238,7 +238,7 @@ export function addRealm(pkg: MapPackage, realmName: string, capital: string): E
   if (!nm) return refuse('A realm needs a name.');
   const p = pkg.provinces.find((x) => x.id === capital);
   if (!p) return refuse('Choose a province for the capital.');
-  if (pkg.nations.length >= 32) return refuse('A map may have at most 32 realms.');
+  if (pkg.nations.length >= MAP_LIMITS.nations) return refuse(`A map may have at most ${MAP_LIMITS.nations} realms.`);
   const taken = new Set<string>([...pkg.nations.map((n) => n.id), ...pkg.provinces.map((x) => x.id), ...pkg.regions.map((r) => r.id)]);
   const id = freeId(nm, taken);
   const used = new Set(pkg.nations.map((n) => n.color.toLowerCase()));
@@ -298,7 +298,7 @@ export function removeRealm(pkg: MapPackage, nid: string): EditResult {
 export function addRegion(pkg: MapPackage, regionName: string): EditResult & { id?: string } {
   const nm = regionName.trim().slice(0, 60);
   if (!nm) return refuse('A region needs a name.');
-  if (pkg.regions.length >= 300) return refuse('A map may have at most 300 regions.');
+  if (pkg.regions.length >= MAP_LIMITS.regions) return refuse(`A map may have at most ${MAP_LIMITS.regions} regions.`);
   const taken = new Set<string>([...pkg.regions.map((r) => r.id), ...pkg.provinces.map((x) => x.id), ...pkg.nations.map((n) => n.id)]);
   let id = '';
   for (let k = pkg.regions.length; !id || taken.has(id); k++) id = `r${k}`;

@@ -1,32 +1,37 @@
-// The static geography layer: sea, coasts, parchment land, terrain art,
-// mountain ranges, lakes and rivers. It never changes during a campaign, so it
-// is rendered once into cached tiles (plus a whole-world overview used while
-// tiles are still being drawn) and composited under the political layers.
+// The static geography layer: blue-grey sea with engraved water lines, the
+// ivory land with a light paper grain, terrain drawn in the atlas pack's motif
+// construction (fir clusters, hill arcs, ridge triangles, reeds, field grids),
+// mountain ranges, lakes and rivers. It never changes during a campaign, so it is
+// rendered once into cached tiles (plus a whole-world overview used while tiles
+// are still being drawn) and composited under the political layers.
 
 import type { GeoIndex, Glyph } from './geometry';
+import { spriteImage } from './sprites';
 
 export type TerrainDetail = 'full' | 'reduced' | 'off';
 
+/** Colours from the pack's design tokens and map-rendering rules. */
 export const PALETTE = {
-  seaDeep: '#2c5163',
-  seaMid: '#3b6778',
-  seaShallow: '#50808f',
-  waterLine: '#86aab5',
-  lake: '#4f7f8f',
-  river: '#44778c',
-  paper: '#ece3cc',
-  paperShade: '#ddd1b3',
-  ink: '#352f27',
-  coastInk: '#2a3a40',
-  peakBase: '#b9aa8a',
-  beyond: '#76807d',
+  seaDeep: '#9fbcc1',
+  seaMid: '#a9c5ca',
+  seaShallow: '#b6cfd1',
+  waterLine: '#7f9fa4',
+  lake: '#adc8cc',
+  river: '#7ca1a7',
+  paper: '#eee7d7',
+  paperShade: '#e0d9c7',
+  ink: '#59645d',
+  coastInk: '#6d8987',
+  coastUnder: '#e8d7aa',
+  peakBase: '#ddd5c1',
+  beyond: '#d3d0c3',
   terrainTint: {
-    plains: '#ede4c8',
-    steppe: '#e9dcae',
-    forest: '#d7dcb6',
-    hills: '#e3d4ae',
-    marsh: '#d2d8c2',
-    mountains: '#d8ccb2',
+    plains: '#eee7d7',
+    steppe: '#ece3cb',
+    forest: '#e4e4cf',
+    hills: '#e9e0cc',
+    marsh: '#e1e5d9',
+    mountains: '#e4dccc',
   } as Record<string, string>,
 };
 
@@ -35,39 +40,6 @@ const TILE = 256;
 interface Tile {
   canvas: HTMLCanvasElement;
   used: number;
-}
-
-let grain: HTMLCanvasElement | null = null;
-function grainCanvas(): HTMLCanvasElement {
-  if (grain) return grain;
-  const c = document.createElement('canvas');
-  c.width = 128;
-  c.height = 128;
-  const g = c.getContext('2d')!;
-  const img = g.createImageData(128, 128);
-  let s = 12345;
-  const r = () => ((s = (s * 1103515245 + 12345) & 0x7fffffff) / 0x7fffffff);
-  for (let i = 0; i < img.data.length; i += 4) {
-    const v = 150 + r() * 105;
-    img.data[i] = v;
-    img.data[i + 1] = v * 0.96;
-    img.data[i + 2] = v * 0.88;
-    img.data[i + 3] = 255;
-  }
-  g.putImageData(img, 0, 0);
-  // a few soft fibres
-  g.globalAlpha = 0.08;
-  g.strokeStyle = '#6b5a3e';
-  for (let i = 0; i < 26; i++) {
-    g.beginPath();
-    const x = r() * 128;
-    const y = r() * 128;
-    g.moveTo(x, y);
-    g.quadraticCurveTo(x + r() * 20 - 10, y + r() * 20 - 10, x + r() * 40 - 20, y + r() * 40 - 20);
-    g.stroke();
-  }
-  grain = c;
-  return c;
 }
 
 export class BaseMap {
@@ -212,15 +184,15 @@ export class BaseMap {
     for (const p of provs) land.addPath(p.path);
     for (const o of peaks) land.addPath(o.w.path);
 
-    // sea with shallows fading from the coast
+    // sea: blue-grey, lighter over the shallows, with a faint printed texture
     g.fillStyle = PALETTE.seaDeep;
     g.fillRect(rx0, ry0, rx1 - rx0, ry1 - ry0);
     g.lineJoin = 'round';
     g.lineCap = 'round';
     const shallows: Array<[number, string, number]> = [
-      [150 * S, PALETTE.seaMid, 0.45],
-      [90 * S, PALETTE.seaMid, 0.55],
-      [48 * S, PALETTE.seaShallow, 0.55],
+      [150 * S, PALETTE.seaMid, 0.55],
+      [90 * S, PALETTE.seaMid, 0.7],
+      [44 * S, PALETTE.seaShallow, 0.8],
     ];
     for (const [w, col, a] of shallows) {
       g.globalAlpha = a;
@@ -229,17 +201,18 @@ export class BaseMap {
       g.stroke(coast);
     }
     g.globalAlpha = 1;
-    // engraved water lines (rings at fixed distances from the shore)
+    this.texture(g, 'textures/sea-tile', 0.3, px, rect);
+    // engraved water lines: thin rings at fixed distances from the shore
     if (ppw * S > 0.06) {
       for (const d of [34, 22, 12]) {
         const dd = d * S;
         g.strokeStyle = PALETTE.waterLine;
-        g.globalAlpha = 0.5 - d / 120;
+        g.globalAlpha = 0.42 - d / 140;
         g.lineWidth = dd * 2;
         g.stroke(coast);
         g.globalAlpha = 1;
         g.strokeStyle = d === 34 ? PALETTE.seaMid : PALETTE.seaShallow;
-        g.lineWidth = Math.max(0, dd * 2 - Math.max(1.1 * px, 1.4 * S));
+        g.lineWidth = Math.max(0, dd * 2 - Math.max(0.9 * px, 1.1 * S));
         g.stroke(coast);
       }
       g.globalAlpha = 1;
@@ -253,10 +226,9 @@ export class BaseMap {
       g.fillStyle = PALETTE.beyond;
       g.fill(bp);
     }
-    // land
+    // ivory land, faint terrain tints by province (one fill per tint: no seams)
     g.fillStyle = PALETTE.paper;
     g.fill(land);
-    // faint terrain tints by province (one fill per tint: no seams between cells)
     const tints = new Map<string, Path2D>();
     for (const p of provs) {
       const tint = PALETTE.terrainTint[this.terrainOf(p.id)];
@@ -272,17 +244,16 @@ export class BaseMap {
     for (const { w } of peaks) range.addPath(w.path);
     g.fillStyle = PALETTE.peakBase;
     g.fill(range);
-    // paper grain over land
-    const pat = g.createPattern(grainCanvas(), 'repeat');
-    if (pat) {
-      pat.setTransform(new DOMMatrix([px, 0, 0, px, 0, 0]));
-      g.save();
-      g.globalCompositeOperation = 'multiply';
-      g.globalAlpha = 0.16;
-      g.fillStyle = pat;
-      g.fill(land);
-      g.restore();
-    }
+    // paper grain over land, light
+    g.save();
+    g.clip(land);
+    this.texture(g, 'textures/paper-tile', 0.25, px, rect);
+    // the coast's warm understroke on the land side
+    g.strokeStyle = PALETTE.coastUnder;
+    g.lineWidth = Math.max(3 * px, 3 * S);
+    g.stroke(coast);
+    g.restore();
+
     // lakes: one body of water, with water lines along the real shore only
     const lakes = new Path2D();
     let anyLake = false;
@@ -298,210 +269,174 @@ export class BaseMap {
         g.save();
         g.clip(lakes);
         g.strokeStyle = PALETTE.waterLine;
-        g.globalAlpha = 0.45;
+        g.globalAlpha = 0.35;
         g.lineWidth = 16 * S;
         g.stroke(shore);
         g.strokeStyle = PALETTE.lake;
         g.globalAlpha = 1;
-        g.lineWidth = 16 * S - Math.max(1.1 * px, 1.4 * S);
+        g.lineWidth = 16 * S - Math.max(0.9 * px, 1.1 * S);
         g.stroke(shore);
         g.restore();
       }
     }
 
-    // terrain art
+    // terrain motifs: sparse, deterministic, from each province's real terrain
     const glyphPx = ppw * geo.provScale; // province size in pixels at this level
     if (this.detail !== 'off' && glyphPx > 26) {
       const reduced = this.detail === 'reduced';
       for (const p of provs) {
         const t = this.terrainOf(p.id);
-        if (t === 'plains' && (reduced || glyphPx < 120)) continue;
+        if (t === 'plains' && (reduced || glyphPx < 150)) continue;
         if (reduced && (t === 'steppe' || t === 'marsh')) continue;
         const gl = geo.glyphs(p.id, t);
-        const step = glyphPx < 60 ? 3 : glyphPx < 100 ? 2 : 1;
-        drawGlyphs(g, t, gl, step * (reduced ? 2 : 1), px);
+        const step = (glyphPx < 60 ? 4 : glyphPx < 100 ? 3 : 2) * (reduced ? 2 : 1);
+        drawMotifs(g, t, gl, step, px);
       }
     }
     // ranges are drawn at every level: they are strategic barriers
     if (this.detail !== 'off') {
-      for (const { i } of peaks) drawGlyphs(g, 'range', geo.peakGlyphs(i), glyphPx < 40 ? 2 : 1, px);
+      for (const { i } of peaks) drawMotifs(g, 'range', geo.peakGlyphs(i), glyphPx < 40 ? 3 : 2, px);
     }
 
     // rivers (wider downstream)
     if (geo.riverEdges.length) {
       g.strokeStyle = PALETTE.river;
+      g.globalAlpha = 0.95;
       for (const e of geo.riverEdges) {
         if (!inRect(e.bbox)) continue;
-        g.lineWidth = Math.max(1.1 * px, (2.2 + e.river * 2.2) * S);
+        g.lineWidth = Math.max(1.3 * px, (1.6 + e.river * 1.6) * S);
         g.stroke(e.path);
       }
+      g.globalAlpha = 1;
     }
 
-    // inked shoreline
+    // the coastline: one fine blue-grey line
     g.strokeStyle = PALETTE.coastInk;
-    g.globalAlpha = 0.85;
-    g.lineWidth = Math.max(1 * px, 1.8 * S);
+    g.lineWidth = Math.max(1 * px, 1.2 * S);
     g.stroke(coast);
-    g.lineWidth = Math.max(0.8 * px, 1.2 * S);
+    g.lineWidth = Math.max(0.8 * px, 0.9 * S);
     g.stroke(shore);
-    g.globalAlpha = 1;
+  }
+
+  /** A pack surface texture over the current clip, one texture pixel per device pixel. */
+  private texture(g: CanvasRenderingContext2D, name: string, alpha: number, px: number, rect: [number, number, number, number]): void {
+    const img = spriteImage(name);
+    if (!img) return;
+    const pat = g.createPattern(img, 'repeat');
+    if (!pat) return;
+    pat.setTransform(new DOMMatrix([px, 0, 0, px, 0, 0]));
+    g.save();
+    g.globalAlpha = alpha;
+    g.globalCompositeOperation = 'multiply';
+    g.fillStyle = pat;
+    g.fillRect(rect[0], rect[1], rect[2] - rect[0], rect[3] - rect[1]);
+    g.restore();
   }
 }
 
-/** Terrain symbols in the manner of an engraved atlas. */
-function drawGlyphs(g: CanvasRenderingContext2D, terrain: string, list: Glyph[], step: number, px: number): void {
-  const ink = PALETTE.ink;
+// ── terrain motifs, in the construction of the pack's terrain/*.svg ──
+
+const FIR = new Path2D('M0-14l-6 9h3l-7 10h8v5h4V5h8L3-5h3z');
+const PEAK = new Path2D('M-17 12L0-20l20 32z');
+const PEAK_HATCH = new Path2D('M0-20l-4 15 6 5-1 12m-5-17-8 13m11-12 9 12m-5-14 7 14');
+const HILL = new Path2D('M-22 6q15-31 34 0M-7 14q14-8 25 0');
+const REEDS = new Path2D('M-14 8h23M-6 5v-18m0 9-6-5m6 0 5-8M6 8v-14m0 6 5-7');
+const FIELD = new Path2D('M-19 1l20-9 18 11-20 8zM-14 3l19-9M-9 5l19-8M-6-4l18 10');
+const TUFT = new Path2D('M0 0l-4-8M0 0l0.5-9M0 0l4.5-7');
+
+/** Draw one motif per `step` glyphs (glyphs are scattered and sorted by y, so the pattern never rows up). */
+function drawMotifs(g: CanvasRenderingContext2D, terrain: string, list: Glyph[], step: number, px: number): void {
+  const at = (q: Glyph, unit: number, draw: () => void) => {
+    g.save();
+    g.translate(q.x, q.y);
+    const k = (q.s * unit) / 40;
+    g.scale(k, k);
+    g.lineWidth = Math.max(px / k, 1.1);
+    draw();
+    g.restore();
+  };
   g.lineCap = 'round';
   g.lineJoin = 'round';
+  const pick = (i: number, q: Glyph) => i % step === 0 || (step > 1 && q.v > 0.93);
   if (terrain === 'forest') {
-    // canopy dots with a shadow, drawn in two passes for speed
-    g.fillStyle = 'rgba(66, 86, 52, 0.16)';
-    g.beginPath();
-    for (let i = 0; i < list.length; i += step) {
+    for (let i = 0; i < list.length; i++) {
       const q = list[i];
-      g.moveTo(q.x + q.s * 0.62, q.y + q.s * 0.12);
-      g.arc(q.x + q.s * 0.12, q.y + q.s * 0.12, q.s * 0.5, 0, Math.PI * 2);
+      if (!pick(i, q)) continue;
+      at(q, 1.5 + q.v * 0.4, () => {
+        g.fillStyle = '#68775e';
+        g.strokeStyle = '#455b4d';
+        for (const [dx, dy, k] of q.v > 0.5 ? [[-7, 2, 0.8], [6, -2, 1], [14, 5, 0.85]] : [[-4, 0, 0.9], [8, 3, 0.8]]) {
+          g.save();
+          g.translate(dx, dy);
+          g.scale(k, k);
+          g.fill(FIR);
+          g.lineWidth /= k;
+          g.stroke(FIR);
+          g.restore();
+        }
+      });
     }
-    g.fill();
-    g.fillStyle = 'rgba(116, 142, 88, 0.42)';
-    g.strokeStyle = 'rgba(52, 60, 40, 0.34)';
-    g.lineWidth = Math.max(0.7 * px, list[0]?.s * 0.08 || 0);
-    g.beginPath();
-    for (let i = 0; i < list.length; i += step) {
-      const q = list[i];
-      g.moveTo(q.x + q.s * 0.5, q.y);
-      g.arc(q.x, q.y, q.s * 0.5, 0, Math.PI * 2);
-    }
-    g.fill();
-    g.stroke();
     return;
   }
   if (terrain === 'hills') {
-    g.strokeStyle = ink;
-    g.globalAlpha = 0.5;
-    g.lineWidth = Math.max(0.8 * px, (list[0]?.s ?? 0) * 0.08);
-    g.beginPath();
-    for (let i = 0; i < list.length; i += step) {
+    g.strokeStyle = '#8a8b72';
+    for (let i = 0; i < list.length; i++) {
       const q = list[i];
-      const w = q.s * (0.8 + q.v * 0.4);
-      g.moveTo(q.x - w * 0.5, q.y + w * 0.12);
-      g.quadraticCurveTo(q.x - w * 0.1, q.y - w * 0.42, q.x + w * 0.5, q.y + w * 0.12);
-      // shading strokes on the lee side
-      g.moveTo(q.x + w * 0.12, q.y - w * 0.08);
-      g.lineTo(q.x + w * 0.2, q.y + w * 0.08);
-      g.moveTo(q.x + w * 0.28, q.y - w * 0.01);
-      g.lineTo(q.x + w * 0.34, q.y + w * 0.1);
+      if (!pick(i, q)) continue;
+      at(q, 1.2 + q.v * 0.4, () => g.stroke(HILL));
     }
-    g.stroke();
-    g.globalAlpha = 1;
     return;
   }
   if (terrain === 'mountains' || terrain === 'range') {
-    const shadow = terrain === 'range' ? 'rgba(112, 96, 74, 0.62)' : 'rgba(118, 104, 84, 0.45)';
-    const lw = Math.max(0.8 * px, (list[0]?.s ?? 0) * 0.055);
-    for (let i = 0; i < list.length; i += step) {
+    const dense = terrain === 'range';
+    for (let i = 0; i < list.length; i++) {
       const q = list[i];
-      const w = q.s * (0.85 + q.v * 0.35);
-      const apx = q.x + (q.v - 0.5) * w * 0.25;
-      const apy = q.y - w * 0.55;
-      const lx = q.x - w * 0.55;
-      const rx = q.x + w * 0.55;
-      const by = q.y + w * 0.3;
-      // lit face
-      g.fillStyle = terrain === 'range' ? '#e2d4b4' : '#e9dec3';
-      g.beginPath();
-      g.moveTo(lx, by);
-      g.lineTo(apx, apy);
-      g.lineTo(rx, by);
-      g.closePath();
-      g.fill();
-      // shadowed face
-      g.fillStyle = shadow;
-      g.beginPath();
-      g.moveTo(apx, apy);
-      g.lineTo(rx, by);
-      g.lineTo(q.x + w * 0.08, by);
-      g.closePath();
-      g.fill();
-      // ridge line
-      g.strokeStyle = 'rgba(58, 50, 40, 0.72)';
-      g.lineWidth = lw;
-      g.beginPath();
-      g.moveTo(lx, by);
-      g.lineTo(apx, apy);
-      g.lineTo(rx, by);
-      g.stroke();
-      if (terrain === 'range' && q.v > 0.82) {
-        // snow on the higher peaks
-        g.fillStyle = 'rgba(250, 248, 240, 0.8)';
-        g.beginPath();
-        g.moveTo(apx, apy);
-        g.lineTo(apx - w * 0.14, apy + w * 0.22);
-        g.lineTo(apx + w * 0.02, apy + w * 0.16);
-        g.lineTo(apx + w * 0.16, apy + w * 0.24);
-        g.closePath();
-        g.fill();
-      }
+      if (!dense && !pick(i, q)) continue;
+      if (dense && i % step !== 0) continue;
+      at(q, (dense ? 1.05 : 1.15) + q.v * 0.3, () => {
+        g.fillStyle = '#d9d0ba';
+        g.strokeStyle = dense ? '#86857a' : '#7b7b6b';
+        g.fill(PEAK);
+        g.stroke(PEAK);
+        g.strokeStyle = '#92907b';
+        g.lineWidth *= 0.8;
+        g.stroke(PEAK_HATCH);
+      });
     }
     return;
   }
   if (terrain === 'marsh') {
-    g.strokeStyle = 'rgba(58, 84, 88, 0.55)';
-    g.lineWidth = Math.max(0.7 * px, (list[0]?.s ?? 0) * 0.07);
-    g.beginPath();
-    for (let i = 0; i < list.length; i += step) {
+    g.strokeStyle = '#68867f';
+    for (let i = 0; i < list.length; i++) {
       const q = list[i];
-      const w = q.s;
-      g.moveTo(q.x - w * 0.5, q.y);
-      g.lineTo(q.x + w * 0.5, q.y);
-      g.moveTo(q.x - w * 0.3, q.y + w * 0.22);
-      g.lineTo(q.x + w * 0.25, q.y + w * 0.22);
-      // reeds
-      g.moveTo(q.x - w * 0.1, q.y);
-      g.lineTo(q.x - w * 0.16, q.y - w * 0.38);
-      g.moveTo(q.x + w * 0.02, q.y);
-      g.lineTo(q.x + w * 0.04, q.y - w * 0.46);
-      g.moveTo(q.x + w * 0.14, q.y);
-      g.lineTo(q.x + w * 0.22, q.y - w * 0.34);
+      if (!pick(i, q)) continue;
+      at(q, 1.1 + q.v * 0.3, () => g.stroke(REEDS));
     }
-    g.stroke();
     return;
   }
   if (terrain === 'steppe') {
-    g.strokeStyle = 'rgba(120, 104, 60, 0.5)';
-    g.lineWidth = Math.max(0.7 * px, (list[0]?.s ?? 0) * 0.07);
-    g.beginPath();
-    for (let i = 0; i < list.length; i += step) {
+    g.strokeStyle = '#a4976a';
+    for (let i = 0; i < list.length; i++) {
       const q = list[i];
-      const w = q.s;
-      g.moveTo(q.x, q.y);
-      g.lineTo(q.x - w * 0.22, q.y - w * 0.42);
-      g.moveTo(q.x, q.y);
-      g.lineTo(q.x + w * 0.02, q.y - w * 0.5);
-      g.moveTo(q.x, q.y);
-      g.lineTo(q.x + w * 0.24, q.y - w * 0.4);
+      if (!pick(i, q)) continue;
+      at(q, 1.3, () => {
+        g.stroke(TUFT);
+        g.save();
+        g.translate(9, 4);
+        g.stroke(TUFT);
+        g.restore();
+      });
     }
-    g.stroke();
     return;
   }
   if (terrain === 'plains') {
-    // furrowed fields, faint
-    g.strokeStyle = 'rgba(120, 104, 70, 0.22)';
-    g.lineWidth = Math.max(0.6 * px, (list[0]?.s ?? 0) * 0.05);
-    g.beginPath();
-    for (let i = 0; i < list.length; i += step) {
+    g.strokeStyle = '#819074';
+    g.globalAlpha = 0.7;
+    for (let i = 0; i < list.length; i++) {
       const q = list[i];
-      const w = q.s;
-      const a = q.v * Math.PI;
-      const dx = Math.cos(a) * w * 0.5;
-      const dy = Math.sin(a) * w * 0.5;
-      for (let k = -1; k <= 1; k++) {
-        const ox = -Math.sin(a) * k * w * 0.18;
-        const oy = Math.cos(a) * k * w * 0.18;
-        g.moveTo(q.x - dx + ox, q.y - dy + oy);
-        g.lineTo(q.x + dx + ox, q.y + dy + oy);
-      }
+      if (i % (step * 2) !== 0) continue;
+      at(q, 1.3, () => g.stroke(FIELD));
     }
-    g.stroke();
+    g.globalAlpha = 1;
   }
 }

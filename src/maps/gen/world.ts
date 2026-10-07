@@ -18,7 +18,8 @@
 
 import type { NationDef, ProvinceDef, RegionDef, Terrain } from '../../sim/types';
 import { industrialDeposit, type LegacyResource } from '../deposits';
-import type { MapEdge, MapLabelDef } from '../format';
+import { NON_PROVINCE_SIDES, type MapEdge, type MapLabelDef } from '../format';
+import { loopsFromEdges, type EdgeLike } from '../rings';
 import { buildMap, fillSea, hashStr, MinHeap, mulberry, pointInPoly, polylineDist, segIntersect, type BuiltMap, type Kind, type Pt, type Seed } from './core';
 
 export interface Anchor {
@@ -65,6 +66,13 @@ export interface IslandSpec {
   region: string;
   owner: string | null;
   count: number;
+  /**
+   * A landmass divided among regions like the mainland (a continent on a world
+   * map): its regions' anchors seed it, mountain ranges cut it, and `region`,
+   * `owner` and `count` are not used. It gets no automatic straits; link it
+   * with `straitLinks`.
+   */
+  regional?: boolean;
 }
 export interface RangeSpec {
   name: string;
@@ -123,8 +131,22 @@ export interface WorldSpec {
    * towns in them); null leaves it to the culture lists in `names`.
    */
   placeName?: (p: { x: number; y: number; region: string; owner: string | null }, used: Set<string>) => string | null;
+  /** shore cells joined to their province only at a corner go to a neighbour too (a province is then always one piece) */
+  onePiece?: boolean;
+  /** per region, a number added to the seed its provinces are placed from (a retry after a bad placement) */
+  reseed?: Record<string, number>;
   /** open-sea seed spacing (default 96) */
   seaSpacing?: number;
+  /**
+   * The land raster on this spec's grid, precomputed (a real map rasterises its
+   * coastline once): -1 sea, -2 lake, 0 mainland, k island k-1. Replaces the
+   * polygon tests, which a world-sized coastline makes far too slow.
+   */
+  cells?: Int16Array;
+  /** authored straits: the provinces nearest to each end are linked */
+  straitLinks?: Array<{ name: string; a: Pt; b: Pt }>;
+  /** no automatic island strait is longer than this (between province centres); an island beyond it is reached by sea */
+  straitMax?: number;
 }
 
 export interface WorldResult {
@@ -149,6 +171,9 @@ export interface WorldResult {
 export class WorldError extends Error {}
 
 /** Generates a world from its spec. `log` receives progress lines. */
+/** Land borders shorter than this are drawn as a corner and are not routes. */
+const MIN_BORDER = 14;
+
 export function generateWorld(S: WorldSpec, log: (line: string) => void = () => {}): WorldResult {
   const K = S.scale;
   const G = S.grid ?? 14;
@@ -181,28 +206,42 @@ export function generateWorld(S: WorldSpec, log: (line: string) => void = () => 
   });
   const lands: Pt[][] = [S.mainland, ...S.islands.map((i) => i.poly)];
 
+  /** a landmass divided among regions: the mainland, and islands marked regional */
+  const regional = (v: number) => v === 0 || (v > 0 && !!S.islands[v - 1]?.regional);
   /** -1 sea, -2 lake, -3 mountain wall, else land polygon index (0 = mainland) */
   const cell = new Int16Array(NX * NY).fill(-1);
+  if (S.cells) {
+    if (S.cells.length !== NX * NY) fail(`the land raster has ${S.cells.length} cells; the grid has ${NX * NY}`);
+    cell.set(S.cells);
+  }
+  /** the raster before mountain walls: land, lake or sea at a point */
+  const base = S.cells ? Int16Array.from(S.cells) : null;
   for (let j = 0; j < NY; j++) {
     for (let i = 0; i < NX; i++) {
       const x = cx(i);
       const y = cy(j);
       let v = -1;
-      for (let k = 0; k < lands.length; k++) if (pointInPoly(x, y, lands[k])) v = k;
-      if (v >= 0 && lakePolys.some((p) => pointInPoly(x, y, p))) v = -2;
-      if (v === 0 && S.ranges.some((r) => polylineDist([x, y], r.pts) < r.half)) v = -3;
+      if (S.cells) v = cell[j * NX + i];
+      else {
+        for (let k = 0; k < lands.length; k++) if (pointInPoly(x, y, lands[k])) v = k;
+        if (v >= 0 && lakePolys.some((p) => pointInPoly(x, y, p))) v = -2;
+      }
+      if (regional(v) && S.ranges.some((r) => polylineDist([x, y], r.pts) < r.half)) v = -3;
       cell[j * NX + i] = v;
     }
   }
+  /** inside the land outlines (lakes included): the raster when given, else the polygons */
+  const inLand = (x: number, y: number) => (base ? base[idx(x, y)] !== -1 : lands.some((l) => pointInPoly(x, y, l)));
   const idx = (x: number, y: number) => {
     const i = Math.max(0, Math.min(NX - 1, Math.floor((x - B.minX) / G)));
     const j = Math.max(0, Math.min(NY - 1, Math.floor((y - B.minY) / G)));
     return j * NX + i;
   };
-  /** nearest cell with the given land index (spiral search) */
+  /** nearest cell with the given land index (spiral search); -1 means any landmass divided among regions */
   function nearestCell(x: number, y: number, land: number): number {
+    const ok = (v: number) => (land === -1 ? regional(v) : v === land);
     const c0 = idx(x, y);
-    if (cell[c0] === land) return c0;
+    if (ok(cell[c0])) return c0;
     const i0 = c0 % NX;
     const j0 = Math.floor(c0 / NX);
     for (let r = 1; r < 40; r++) {
@@ -213,7 +252,7 @@ export function generateWorld(S: WorldSpec, log: (line: string) => void = () => 
           if (i < 0 || j < 0 || i >= NX || j >= NY) continue;
           if (Math.max(Math.abs(i - i0), Math.abs(j - j0)) !== r) continue;
           const c = j * NX + i;
-          if (cell[c] !== land) continue;
+          if (!ok(cell[c])) continue;
           const d = Math.hypot(cx(i) - x, cy(j) - y);
           if (d < bd) (bd = d), (best = c);
         }
@@ -239,15 +278,16 @@ export function generateWorld(S: WorldSpec, log: (line: string) => void = () => 
     const dist = new Float64Array(NX * NY).fill(Infinity);
     const heap = new MinHeap<number>();
     const label = new Int32Array(NX * NY).fill(-1); // region*64 + owner
+    const anyRegional = S.islands.some((i) => i.regional);
     const seedLabel = (x: number, y: number, r: number, o: string | null) => {
-      const c = nearestCell(x, y, 0);
+      const c = nearestCell(x, y, anyRegional ? -1 : 0);
       dist[c] = 0;
       label[c] = r * 64 + ownerIdx(o);
       heap.push(0, c);
     };
     REG.forEach((r, ri) => r.anchors.forEach((a) => seedLabel(a.x, a.y, ri, a.owner)));
     // a fixed province on an island (an island realm's capital) does not seed the mainland
-    for (const f of S.fixed) if (!f.pass && !(cell[idx(f.x, f.y)] > 0)) seedLabel(f.x, f.y, regIdx.get(f.region)!, f.owner);
+    for (const f of S.fixed) if (!f.pass && (!(cell[idx(f.x, f.y)] > 0) || regional(cell[idx(f.x, f.y)]))) seedLabel(f.x, f.y, regIdx.get(f.region)!, f.owner);
     const done = new Uint8Array(NX * NY);
     const steps: Array<[number, number, number]> = [
       [1, 0, 1], [-1, 0, 1], [0, 1, 1], [0, -1, 1], [1, 1, Math.SQRT2], [1, -1, Math.SQRT2], [-1, 1, Math.SQRT2], [-1, -1, Math.SQRT2],
@@ -267,7 +307,7 @@ export function generateWorld(S: WorldSpec, log: (line: string) => void = () => 
         const nj = j + dj;
         if (ni < 0 || nj < 0 || ni >= NX || nj >= NY) continue;
         const n = nj * NX + ni;
-        if (done[n] || cell[n] !== 0) continue;
+        if (done[n] || cell[n] !== cell[c]) continue;
         const nd = d + len * G * w;
         if (nd < dist[n]) {
           dist[n] = nd;
@@ -278,6 +318,7 @@ export function generateWorld(S: WorldSpec, log: (line: string) => void = () => 
     }
     // islands take their region wholesale
     S.islands.forEach((isl, k) => {
+      if (isl.regional) return;
       for (let c = 0; c < cell.length; c++) {
         if (cell[c] === k + 1) {
           cellReg[c] = regIdx.get(isl.region)!;
@@ -285,7 +326,7 @@ export function generateWorld(S: WorldSpec, log: (line: string) => void = () => 
         }
       }
     });
-    for (let c = 0; c < cell.length; c++) if (cell[c] === 0 && cellReg[c] < 0) warnings.push(`unreached land cell at ${cx(c % NX)},${cy(Math.floor(c / NX))}`);
+    for (let c = 0; c < cell.length; c++) if (regional(cell[c]) && cellReg[c] < 0) warnings.push(`unreached land cell at ${cx(c % NX)},${cy(Math.floor(c / NX))}`);
   }
 
   // ───────────────────────────── 3. provinces ────────────────────────────────
@@ -297,11 +338,33 @@ export function generateWorld(S: WorldSpec, log: (line: string) => void = () => 
     region: string;
     owner: string | null;
     fixed: FixedProv | null;
+    /** a small island taken whole (not a landmass divided among regions) */
     island: IslandSpec | null;
+    /** the landmass it stands on: 0 mainland, k+1 island k */
+    land: number;
   }
   const provs: Prov[] = [];
+  /** the landmass at a point, or the nearest one when the point falls in the sea */
+  const landAt = (x: number, y: number) => {
+    const v = cell[idx(x, y)];
+    if (v >= 0) return v;
+    let best = 0;
+    let bd = Infinity;
+    for (let r = 1; r < 12 && bd === Infinity; r++)
+      for (const [di, dj] of [[r, 0], [-r, 0], [0, r], [0, -r], [r, r], [-r, -r], [r, -r], [-r, r]]) {
+        const w = cell[idx(x + di * G, y + dj * G)];
+        if (w >= 0 && r < bd) (bd = r), (best = w);
+      }
+    return best;
+  };
   // a fixed province standing on an island (an island realm's capital) belongs to that island
-  for (const f of S.fixed) provs.push({ tmp: `f_${f.id}`, x: f.x, y: f.y, region: f.region, owner: f.owner, fixed: f, island: cell[idx(f.x, f.y)] > 0 ? S.islands[cell[idx(f.x, f.y)] - 1] ?? null : null });
+  for (const f of S.fixed) {
+    const v = cell[idx(f.x, f.y)];
+    const island = v > 0 && !regional(v) ? S.islands[v - 1] ?? null : null;
+    // without landmasses divided among regions every other province is on the mainland (land 0)
+    const land = island ? v : !S.islands.some((i) => i.regional) ? 0 : v >= 0 ? v : landAt(f.x, f.y);
+    provs.push({ tmp: `f_${f.id}`, x: f.x, y: f.y, region: f.region, owner: f.owner, fixed: f, island, land });
+  }
 
   function kmeans(cells: number[], k: number, pinned: Pt[], seed: number): Array<{ x: number; y: number; own: number }> {
     const rnd = mulberry(seed);
@@ -367,23 +430,36 @@ export function generateWorld(S: WorldSpec, log: (line: string) => void = () => 
   for (const r of REG) {
     const ri = regIdx.get(r.id)!;
     const cells: number[] = [];
-    for (let c = 0; c < cell.length; c++) if (cell[c] === 0 && cellReg[c] === ri) cells.push(c);
+    for (let c = 0; c < cell.length; c++) if (regional(cell[c]) && cellReg[c] === ri) cells.push(c);
     const fixedHere = S.fixed.filter((f) => f.region === r.id);
-    const islandHere = S.islands.filter((i) => i.region === r.id).reduce((a, i) => a + i.count, 0);
+    const islandHere = S.islands.filter((i) => i.region === r.id && !i.regional).reduce((a, i) => a + i.count, 0);
     const pinned = fixedHere.filter((f) => !f.pass).map((f) => [f.x, f.y] as Pt);
     const k = r.count - fixedHere.length - islandHere;
     if (k < 0) fail(`${r.id}: count too small`);
     if (!k) continue;
     if (!cells.length) fail(`${r.id}: region has no land`);
-    kmeans(cells, k, pinned, hashStr(r.id)).forEach((c, n) => provs.push({ tmp: `g_${r.id}_${n}`, x: c.x, y: c.y, region: r.id, owner: owners[c.own], fixed: null, island: null }));
+    const placed = kmeans(cells, k, pinned, hashStr(r.id));
+    // a retry nudges the region's provinces off the placement that failed
+    const again = S.reseed?.[r.id] ?? 0;
+    if (again) {
+      const rnd = mulberry(hashStr(`${r.id}:again:${again}`));
+      const mine = new Set(cells);
+      for (const c of placed) {
+        const x = c.x + (rnd() * 2 - 1) * 9 * again;
+        const y = c.y + (rnd() * 2 - 1) * 9 * again;
+        if (mine.has(idx(x, y))) (c.x = x), (c.y = y);
+      }
+    }
+    placed.forEach((c, n) => provs.push({ tmp: `g_${r.id}_${n}`, x: c.x, y: c.y, region: r.id, owner: owners[c.own], fixed: null, island: null, land: Math.max(0, cell[idx(c.x, c.y)]) }));
   }
   S.islands.forEach((isl, k) => {
+    if (isl.regional) return;
     const cells: number[] = [];
     for (let c = 0; c < cell.length; c++) if (cell[c] === k + 1) cells.push(c);
     if (!cells.length) fail(`island ${isl.name} has no land`);
     // fixed provinces standing on the island (an island realm's capital) keep their place
     const pinned = S.fixed.filter((f) => !f.pass && cell[idx(f.x, f.y)] === k + 1).map((f) => [f.x, f.y] as Pt);
-    kmeans(cells, isl.count, pinned, hashStr(isl.name)).forEach((c, n) => provs.push({ tmp: `i_${k}_${n}`, x: c.x, y: c.y, region: isl.region, owner: isl.owner, fixed: null, island: isl }));
+    kmeans(cells, isl.count, pinned, hashStr(isl.name)).forEach((c, n) => provs.push({ tmp: `i_${k}_${n}`, x: c.x, y: c.y, region: isl.region, owner: isl.owner, fixed: null, island: isl, land: k + 1 }));
   });
 
   // ───────────────────────────── 4. seeds ────────────────────────────────────
@@ -406,7 +482,7 @@ export function generateWorld(S: WorldSpec, log: (line: string) => void = () => 
           const x = a[0] + (b[0] - a[0]) * f + nx * j;
           const y = a[1] + (b[1] - a[1]) * f + ny * j;
           if (passes.some((p) => Math.hypot(p.x - x, p.y - y) < 82)) continue;
-          if (!pointInPoly(x, y, S.mainland)) continue;
+          if (base ? !regional(base[idx(x, y)]) : !pointInPoly(x, y, S.mainland) && !S.islands.some((i) => i.regional && pointInPoly(x, y, i.poly))) continue;
           out.push({ kind: 'peak', id: `~peak${n++}`, x, y });
         }
       }
@@ -469,8 +545,8 @@ export function generateWorld(S: WorldSpec, log: (line: string) => void = () => 
           for (const sgn of [1, -1]) {
             const x = px + nx * 36 * sgn;
             const y = py + ny * 36 * sgn;
-            if (lands.some((l) => pointInPoly(x, y, l))) continue;
             if (x < B.minX || y < B.minY || x > B.maxX || y > B.maxY) continue;
+            if (inLand(x, y)) continue;
             if (offCells.has(idx(x, y))) continue;
             out.push({ kind: 'sea', id: `~coast${n++}`, x, y });
           }
@@ -483,7 +559,7 @@ export function generateWorld(S: WorldSpec, log: (line: string) => void = () => 
   // ───────────────────────────── 5. build ────────────────────────────────────
 
   /** land component of each province: 0 mainland, k+1 island k */
-  const compOf = (p: Prov) => (p.island ? S.islands.indexOf(p.island) + 1 : 0);
+  const compOf = (p: Prov) => p.land;
 
   const byTmpLocal = (t: string) => provs.find((p) => p.tmp === t);
   function computeStraits(): Array<[string, string]> {
@@ -495,11 +571,16 @@ export function generateWorld(S: WorldSpec, log: (line: string) => void = () => 
       key.add(k);
       out.push([a.tmp, b.tmp]);
     };
+    const cap = S.straitMax ?? Infinity;
     S.islands.forEach((isl, k) => {
+      if (isl.regional) return;
       const mine = provs.filter((p) => compOf(p) === k + 1);
       const others = provs.filter((p) => compOf(p) !== k + 1);
       const pairs: Array<{ a: Prov; b: Prov; d: number }> = [];
-      for (const a of mine) for (const b of others) pairs.push({ a, b, d: Math.hypot(a.x - b.x, a.y - b.y) });
+      for (const a of mine) for (const b of others) {
+        const d = Math.hypot(a.x - b.x, a.y - b.y);
+        if (d <= cap) pairs.push({ a, b, d });
+      }
       pairs.sort((x, y) => x.d - y.d || (x.b.tmp < y.b.tmp ? -1 : 1));
       const best = pairs[0];
       if (!best) return;
@@ -530,6 +611,14 @@ export function generateWorld(S: WorldSpec, log: (line: string) => void = () => 
         if (third) add(third.a, third.b);
       }
     });
+    // authored straits: the provinces nearest each end, on different landmasses or across water
+    for (const l of S.straitLinks ?? []) {
+      const near = (pt: Pt, not?: Prov) => provs.filter((p) => p !== not && !p.fixed?.pass).sort((x, y) => Math.hypot(x.x - pt[0], x.y - pt[1]) - Math.hypot(y.x - pt[0], y.y - pt[1]) || (x.tmp < y.tmp ? -1 : 1))[0];
+      const a = near(l.a);
+      const b = near(l.b, a);
+      if (!a || !b) warnings.push(`strait ${l.name}: no province near its ends`);
+      else add(a, b);
+    }
     return out;
   }
 
@@ -599,7 +688,7 @@ export function generateWorld(S: WorldSpec, log: (line: string) => void = () => 
         const q = [k];
         for (let h = 0; h < q.length; h++) for (const { j } of adj.get(q[h]) ?? []) if (own.has(j) && !reached.has(j)) (reached.add(j), q.push(j));
         for (const i of own) {
-          if (reached.has(i)) continue;
+          if (reached.has(i) || detached.has(i)) continue;
           const votes = new Map<string, number>();
           for (const { j, len } of adj.get(i) ?? []) {
             const id = idOf(j);
@@ -615,6 +704,49 @@ export function generateWorld(S: WorldSpec, log: (line: string) => void = () => 
     return moved;
   }
   const shore = S.coastSeeds ? shoreSeeds() : [];
+  /** shore cells moved off a piece held at a corner: reattachment leaves them where they went */
+  const detached = new Map<number, number>();
+
+  /**
+   * A piece of a province held on only at a corner (a border shorter than the
+   * minimum is drawn as a point) is a second loop in its outline: its shore
+   * cells go to the neighbour that borders the piece most.
+   */
+  function detachPieces(Mb: BuiltMap): number {
+    const first = provs.length;
+    const byProv = new Map<string, EdgeLike[]>();
+    for (const e of Mb.edges) for (const s of [e.a, e.b]) (byProv.get(s) ?? byProv.set(s, []).get(s)!).push(e);
+    let moved = 0;
+    for (const p of provs) {
+      const { loops } = loopsFromEdges(p.tmp, byProv.get(p.tmp) ?? []);
+      if (loops.length < 2) continue;
+      const outer = loops.reduce((a, b) => (b.area > a.area ? b : a));
+      for (const l of loops) {
+        if (l === outer || l.sides.every((x) => (NON_PROVINCE_SIDES as readonly string[]).includes(x))) continue;
+        const ring: Pt[] = [];
+        const onRing = new Set<string>();
+        for (let k = 0; k < l.ring.length; k += 2) ring.push([l.ring[k], l.ring[k + 1]]), onRing.add(`${l.ring[k]},${l.ring[k + 1]}`);
+        // the neighbour with the longest drawn border along the piece takes it
+        const len = new Map<string, number>();
+        for (const e of byProv.get(p.tmp) ?? []) {
+          const o = e.a === p.tmp ? e.b : e.a;
+          if ((NON_PROVINCE_SIDES as readonly string[]).includes(o) || !onRing.has(`${e.pts[0]},${e.pts[1]}`)) continue;
+          let d = 0;
+          for (let k = 2; k < e.pts.length; k += 2) d += Math.hypot(e.pts[k] - e.pts[k - 2], e.pts[k + 1] - e.pts[k - 1]);
+          len.set(o, (len.get(o) ?? 0) + d);
+        }
+        const to = [...len].sort((a, b) => b[1] - a[1] || (a[0] < b[0] ? -1 : 1))[0]?.[0];
+        if (!to) continue;
+        for (let i = first; i < first + shore.length; i++) {
+          if (shore[i - first].id !== p.tmp) continue;
+          const sd = Mb.seeds[i];
+          // a cell is moved off a corner at most twice: no passing back and forth
+          if ((detached.get(i) ?? 0) < 2 && pointInPoly(sd.x, sd.y, ring)) (shore[i - first].id = to), detached.set(i, (detached.get(i) ?? 0) + 1), moved++;
+        }
+      }
+    }
+    return moved;
+  }
 
   function makeSeeds(extraPeaks: Pt[]): Seed[] {
     const seeds: Seed[] = [];
@@ -622,7 +754,7 @@ export function generateWorld(S: WorldSpec, log: (line: string) => void = () => 
     seeds.push(...shore);
     seeds.push(...peakSeeds(extraPeaks), ...lakeSeeds(), ...coastGuards());
     (S.offmap ?? []).forEach(([x, y], k) => seeds.push({ kind: 'edge', id: `~edge${k}`, x, y }));
-    fillSea(seeds, B, lands, { spacing: S.seaSpacing ?? 96, clearance: 120, seaGap: 58, seed: 4321 });
+    fillSea(seeds, B, base ? inLand : lands, { spacing: S.seaSpacing ?? 96, clearance: 120, seaGap: 58, seed: 4321 });
     return seeds.map((s) => ({ ...s, x: s.x * K, y: s.y * K }));
   }
 
@@ -635,7 +767,7 @@ export function generateWorld(S: WorldSpec, log: (line: string) => void = () => 
   const extraPeaks: Pt[] = [];
   for (let round = 0; round < 8; round++) {
     // a real coastline's lakes and the land beyond its frame come out as one outline per body
-    built = buildMap(makeSeeds(extraPeaks), scaledBounds, straitsTmp, { minBorder: 14, noiseMin: 9.5, ...(S.coastSeeds ? { mergeWaste: ['lake', 'edge'] as Kind[] } : {}) });
+    built = buildMap(makeSeeds(extraPeaks), scaledBounds, straitsTmp, { minBorder: MIN_BORDER, noiseMin: 9.5, ...(S.coastSeeds ? { mergeWaste: ['lake', 'edge'] as Kind[] } : {}) });
     // borders that leak through a ridge get another peak where they cross it
     let leaks = 0;
     for (const [a, ns] of Object.entries(built.neighbors)) {
@@ -657,7 +789,7 @@ export function generateWorld(S: WorldSpec, log: (line: string) => void = () => 
         }
       }
     }
-    const moved = S.coastSeeds ? reattachShore(built) : 0;
+    const moved = S.coastSeeds ? reattachShore(built) + (S.onePiece ? detachPieces(built) : 0) : 0;
     if (moved) log(`round ${round}: ${moved} shore cell(s) cut off from their province reattached`);
     if (!leaks && !moved) break;
     if (leaks) log(`round ${round}: ${leaks} border(s) crossed a ridge; closing them`);

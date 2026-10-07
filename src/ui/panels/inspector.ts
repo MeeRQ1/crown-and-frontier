@@ -16,6 +16,7 @@ import { armiesAt, atWar, menOf, nationName, provName } from '../../sim/state';
 import { armySupplyInfo, provinceSupplyCapacity } from '../../sim/supply';
 import type { Army, ProjectKind, ProvinceId, StrategicResource, UnitType } from '../../sim/types';
 import type { App } from '../app';
+import { orderStatus, readiness } from '../../sim/readiness';
 import { action, bar, button, h, rebuild, row, setChildren } from '../dom';
 import { fmt, men, plural, signed, weeks } from '../format';
 import { icon, type IconName } from '../icons';
@@ -291,17 +292,7 @@ function armyRow(app: App, a: Army): HTMLElement {
 // ───────────────────────────── Army ─────────────────────────────────────────
 
 export function armyStatus(app: App, a: Army): string {
-  const sim = app.sim!;
-  const st = sim.state;
-  if (a.embarked) {
-    const f = st.fleets[a.embarked];
-    return f?.landing ? `At sea aboard ${f.name}, bound for ${provName(sim, f.landing)}` : `At sea aboard ${f?.name ?? 'a fleet'}`;
-  }
-  if (a.battle) return `In battle at ${provName(sim, a.location)}`;
-  if (a.retreating) return `Retreating to ${provName(sim, a.path[0])}`;
-  if (a.path.length) return `Marching to ${provName(sim, a.path[a.path.length - 1])} · ${weeks(etaWeeks(sim, a, a.path, a.progress))}`;
-  if (st.provinces[a.location].siege?.nation === a.nation) return `Besieging ${provName(sim, a.location)}`;
-  return `Holding ${provName(sim, a.location)}`;
+  return orderStatus(app.sim!, a).text;
 }
 
 function armyCard(app: App, a: Army): HTMLElement[] {
@@ -355,6 +346,8 @@ function armyCard(app: App, a: Army): HTMLElement[] {
       tile('Supply', `${Math.round(sup.level * 100)}%`, sup.connected ? `line ${sup.distance.toFixed(1)}/${sup.range}` : 'cut: foraging', 'Supply level here: capacity versus the regiments drawing on it, and whether a supply line reaches.'),
     ),
   );
+  const os = orderStatus(sim, a);
+  if (os.reasons.length) body.appendChild(h('div', { class: `callout ${os.state === 'pinned' || os.state === 'blocked' ? 'warn' : 'info'} small`, 'data-sk': 'order-status' }, icon(os.state === 'pinned' || os.state === 'blocked' ? 'alert' : 'info'), h('div', null, ...os.reasons.map((r) => h('div', null, r)))));
   if (mine) body.appendChild(ordersSection(app, a));
   if (a.battle && st.battles[a.battle]) body.appendChild(battleSection(app, a.battle));
   else if (a.path.length && !a.retreating) {
@@ -392,6 +385,8 @@ function armyCard(app: App, a: Army): HTMLElement[] {
       if (ours.length) body.appendChild(section(`If our ${ours.length > 1 ? `${ours.length} adjacent armies attack` : 'adjacent army attacks'}`, forecastView(forecastBattle(sim, a.location, ours, armiesAt(sim, a.location).filter((x) => atWar(sim, me, x.nation))))));
     }
   }
+  const notes = readiness(sim, a);
+  if (notes.length) body.appendChild(section('Readiness here', h('ul', { class: 'notes', 'data-sk': 'readiness' }, notes.map((n) => h('li', { class: n.tone }, n.text)))));
   body.appendChild(
     section(
       'Supply',

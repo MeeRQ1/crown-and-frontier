@@ -10,7 +10,7 @@ import { TECH_LIST } from '../data/techs';
 import { activeProjects, buildProblem, buildSlots, projectCost } from '../construction';
 import { addMemory, claimsOn, coalitionAgainst, envoySlots, evaluateTreaty, fabricateProblem, memoriesOf, opinion, sharedThreat, treatyProblem } from '../diplomacy';
 import { factoryCount, grossIncome, materielCap, poolCap, reserveCap, resourcePlan, totalDev, tradeValue } from '../economy';
-import { memoize } from '../index';
+import { memoWeek } from '../index';
 import { overextension } from '../integration';
 import { nationPotential, nationStrength } from '../military';
 import { nationMods } from '../modifiers';
@@ -44,6 +44,8 @@ import { canJoin, evaluatePeace, goalOptions, provinceCost, scoreFor, termsCost 
 import { buildSettlement, counterOffer, describeDemand, evaluateSettlement, settlementCost } from '../settlement';
 import { aiRand, diffOf, issue } from './common';
 import { coastalShare, navalStrategy, planInvasion } from './navy';
+import { aiTrade } from './trade';
+import { dependenceOn } from '../trade';
 import {
   blocOf,
   foundBlocProblem,
@@ -73,7 +75,8 @@ function regimentCount(sim: Sim, nid: NationId): number {
 }
 
 export function isThreatened(sim: Sim, nid: NationId): NationId | null {
-  return memoize(sim, 'isThreatened', nid, () => threatOf(sim, nid));
+  // a heuristic over every realm: assessed once a week, not after every command
+  return memoWeek(sim, 'isThreatened', nid, () => threatOf(sim, nid));
 }
 
 function threatOf(sim: Sim, nid: NationId): NationId | null {
@@ -319,7 +322,7 @@ function wantsTreaty(sim: Sim, nid: NationId, other: NationId, type: TreatyType)
   const n = st.nations[nid];
   const p = pers(sim, nid);
   if (n.ai.warPlan?.target === other) return false;
-  if (type === 'trade') return p.treaty.trade >= 0.6 && tradeValue(sim, nid, other) > 1.5;
+  if (type === 'trade') return p.treaty.trade >= 0.6 && memoWeek(sim, 'tradeValue', `${nid}|${other}`, () => tradeValue(sim, nid, other)) > 1.5;
   if (type === 'alliance') {
     if (alliesOf(sim, nid).length >= 3) return false;
     if (nationDistance(sim, nid, other) > 2) return false;
@@ -424,7 +427,7 @@ function influencePolicy(sim: Sim, nid: NationId): void {
   // a guarantee for a smaller neighbour that a realm we fear threatens
   if (st.tick - last('guarantee') >= months(12) && guaranteesBy(sim, nid).length < guaranteeSlots(sim, nid)) {
     const cands = others
-      .filter((o) => !guaranteeProblem(sim, nid, o) && n.ai.warPlan?.target !== o && !claimsOn(sim, nid, o).length && nationDistance(sim, nid, o) <= 2)
+      .filter((o) => nationDistance(sim, nid, o) <= 2 && n.ai.warPlan?.target !== o && !guaranteeProblem(sim, nid, o) && !claimsOn(sim, nid, o).length)
       .map((o) => {
         let v = 0;
         if (nationStrength(sim, o) <= mine * 0.6) v += 1;
@@ -448,7 +451,7 @@ function influencePolicy(sim: Sim, nid: NationId): void {
   if (st.tick - last('loan') >= months(12) && n.treasury > 150 && n.treasury > gross * 4) {
     const sphereMinded = n.ai.goal.victory === 'diplomatic' || p.id === 'diplomat' || p.id === 'commercial';
     const cands = others
-      .filter((o) => !atWar(sim, nid, o) && n.ai.warPlan?.target !== o && opinion(sim, o, nid) >= -10 && nationDistance(sim, nid, o) <= 3)
+      .filter((o) => nationDistance(sim, nid, o) <= 3 && !atWar(sim, nid, o) && n.ai.warPlan?.target !== o && opinion(sim, o, nid) >= -10)
       .map((o) => {
         const on = st.nations[o];
         let v = 0;
@@ -647,6 +650,12 @@ export function warCandidates(sim: Sim, nid: NationId): { cands: WarCandidate[];
     if (warsOf(sim, t).some((w) => w.defenders.includes(t)) && p.id !== 'opportunist') {
       value *= 0.5;
       notes.push('already beset');
+    }
+    // war ends our contracts with them: a realm that depends on their goods thinks twice
+    const dep = dependenceOn(sim, nid, t);
+    if (dep && dep.share >= C.trade.dependence) {
+      value *= Math.max(0.3, 1 - dep.share);
+      notes.push(`we depend on their ${dep.res}`);
     }
     const reachable = goal.provinces.filter((pid) => dist[pid] <= range).length;
     if (!reachable) continue;
@@ -920,6 +929,7 @@ export function strategic(sim: Sim, nid: NationId): void {
   navalStrategy(sim, nid, treasuryReserve(sim, nid));
   planInvasion(sim, nid);
   diplomacy(sim, nid);
+  aiTrade(sim, nid);
   considerWar(sim, nid);
   // rivals close to victory make everyone nervous
   const rival = rivalLeader(sim, nid);
