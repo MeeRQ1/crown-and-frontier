@@ -33,7 +33,7 @@ import { Minimap, renderModes, renderNavCluster } from './panels/mapui';
 import { openMenuDialog, renderEndScreen, renderMenu, screenCleanup } from './screens';
 import { loadSettings, saveSettings, type UISettings } from './settings';
 import { MapLibrary } from './maplib';
-import { downloadText, SaveStore } from './storage';
+import { downloadText, SaveStore, slotLabel } from './storage';
 import { Tutorial } from './tutorial';
 
 type DistOmit<T, K extends keyof T> = T extends unknown ? Omit<T, K> : never;
@@ -1170,8 +1170,9 @@ export class App {
   async save(slot: string): Promise<boolean> {
     if (!this.sim) return false;
     try {
-      await this.store.put(slot, serialize(this.sim));
-      this.toast(`Saved (${slot}).`, 'good');
+      const replaced = await this.store.putKeepingPrevious(slot, serialize(this.sim));
+      const label = slotLabel(slot);
+      this.toast(replaced ? `Saved to ${label}. The save it replaced is kept on the Load screen.` : `Saved to ${label}.`, 'good');
       return true;
     } catch (e) {
       this.toast((e as Error).message, 'fail');

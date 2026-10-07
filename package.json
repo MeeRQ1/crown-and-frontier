@@ -26,6 +26,7 @@
     "fuzz": "tsx tools/fuzz.ts",
     "genmaps": "tsx tools/genmaps.ts",
     "genbaltic": "tsx tools/genbaltic.ts",
+    "genreal": "node --max-old-space-size=8192 --import tsx tools/genreal.ts",
     "atlas:assets": "tsx tools/atlas-assets.ts"
   },
   "devDependencies": {

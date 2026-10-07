@@ -23,14 +23,14 @@ import { loadGeometry } from './map/maps';
 import { MapRenderer } from './map/renderer';
 import { confirmDialog, dialog } from './panels/dialogs';
 import { DEFAULT_SETTINGS, type UISettings } from './settings';
-import { downloadText, pickFile } from './storage';
+import { downloadText, pickFile, slotLabel } from './storage';
 
 /** Cleanup hooks for screens that own animation or observers. */
 export const screenCleanup = new WeakMap<HTMLElement, () => void>();
 
 const LEDE = 'A young crown on a divided continent. Every province beyond your heartland is raw frontier: little tax, few recruits, restless people, until you bind it to the crown. Settle, trade or conquer, and hold what you take.';
 
-const MAP_KIND: Record<string, string> = { small: 'Quick campaign', standard: 'Standard campaign', large: 'Grand campaign', huge: 'Grand campaign' };
+const MAP_KIND: Record<string, string> = { small: 'Quick campaign', standard: 'Standard campaign', large: 'Grand campaign', huge: 'World campaign' };
 
 /** Title, kind and campaign lengths (with their calendar years) from the map's own rules. */
 function mapInfo(id: string): { title: string; kind: string; startYear: number; lengths: Array<[number, string]>; defaultYears: number } {
@@ -396,7 +396,7 @@ export function renderLoad(app: App): HTMLElement {
                 { class: 'grow' },
                 h('div', { class: 'sv-t' }, m ? m.nationName : s.key),
                 h('div', { class: 'sv-s' }, m ? `${m.mapName ?? (isBuiltinMap(m.scenario) ? mapInfo(m.scenario).title : m.scenario)} · ${m.date} · saved ${new Date(m.savedAt).toLocaleString()}` : 'Unreadable save'),
-                h('div', { class: 'sv-k' }, s.key.startsWith('autosave') ? 'Autosave' : s.key.replace('slot-', 'Slot ')),
+                h('div', { class: 'sv-k' }, slotLabel(s.key)),
                 why ? h('div', { class: 'small bad' }, why) : null,
                 !why && s.schema !== null && s.schema < SCHEMA_VERSION
                   ? h('div', { class: 'small muted' }, `Made by an earlier version (save format ${s.schema}). It is converted to the current rules when loaded, and you are told what changed; export it first to keep the original.`)
@@ -583,10 +583,19 @@ export function openMenuDialog(app: App): void {
       await app.save(key);
       close();
     }, { icon: 'save' });
+  // what each slot holds: saving replaces it, and the replaced save stays on the Load screen
+  const holds = h('div', { class: 'small muted', style: 'margin-top:6px' });
+  void app.store.list().then((slots) => {
+    const used = ['slot-1', 'slot-2', 'slot-3'].map((k) => slots.find((x) => x.key === k)).filter((x): x is NonNullable<typeof x> => !!x?.meta);
+    holds.textContent = used.length
+      ? `${used.map((x) => `${slotLabel(x.key)}: ${x.meta!.nationName}, ${x.meta!.date}`).join(' · ')}. Saving into a used slot keeps the save it replaces on the Load screen.`
+      : 'All three slots are free.';
+  });
   const body = [
     h('p', { class: 'small muted' }, `${st.playerNation ? sim.world.nationDefs[st.playerNation].name : 'Observer'} · ${mapInfo(sim.state.scenarioId).title} · ${dateOf(sim).label} · seed ${st.seed} · ${DIFFICULTY[st.difficulty].label}${st.aiIncomeBonus ? ` · AI income +${Math.round(st.aiIncomeBonus * 100)}%` : ''}`),
     h('div', { class: 'eyebrow', style: 'margin-top:10px' }, 'Save'),
     h('div', { class: 'actions' }, slot('slot-1', 'Slot 1'), slot('slot-2', 'Slot 2'), slot('slot-3', 'Slot 3')),
+    holds,
     h('div', { class: 'eyebrow', style: 'margin-top:14px' }, 'Files and options'),
     h(
       'div',
