@@ -458,6 +458,9 @@ export class App {
       }
     }
     if (this.acc > 3) this.acc = 0;
+    // the map moved under a still pointer (centring on a selection, a wheel step, the
+    // keyboard): the hover card describes what is under the pointer now
+    if (this.hoverPos && !this.pointers.size && this.viewKey() !== this.hoverView) this.hover(this.hoverPos.x, this.hoverPos.y);
     if (this.mapDirty || this.renderer.camera.animating || this.wantsFrame) {
       this.mapDirty = false;
       this.drawMap(t);
@@ -1384,10 +1387,19 @@ export class App {
     return false;
   }
 
+  /** The camera when the hover card was last worked out. */
+  private hoverView = '';
+
+  private viewKey(): string {
+    const c = this.renderer!.camera;
+    return `${c.zoom}|${c.offX}|${c.offY}`;
+  }
+
   private hover(x: number, y: number): void {
     if (!this.renderer || !this.sim) return;
     if (this.underPanel(x, y)) return this.hideHover();
     this.hoverPos = { x, y };
+    this.hoverView = this.viewKey();
     const armyId = this.renderer.armyAt(x, y);
     const pid = this.renderer.provinceAt(x, y);
     if (pid !== this.hoverProvince) {

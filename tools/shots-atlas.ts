@@ -344,9 +344,16 @@ async function run(page: Page, origin: string, p: string): Promise<void> {
       await page.waitForTimeout(1200);
     });
     await step(page, `${p}-${b}-${map}-regional`, async () => {
-      await cnf(page, (app) => app.selectProvince(app.sim.state.nations[app.player].capital, true));
-      await page.mouse.move(683, 400);
-      for (let i = 0; i < 3; i++) await page.mouse.wheel(0, -240);
+      // the capital selected, at regional zoom, in the part of the map the inspector leaves free
+      await cnf(page, (app) => {
+        const cap = app.sim.state.nations[app.player].capital;
+        app.selectProvince(cap, true);
+        const cam = app.renderer.camera;
+        const c = app.renderer.provinceCenter(cap);
+        cam.centerOn(c.x, c.y, cam.zoomForProvincePx(80), false);
+        app.mapDirty = true;
+      });
+      await page.mouse.move(300, 200);
       await page.waitForTimeout(1200);
     });
   }
@@ -360,20 +367,29 @@ async function run(page: Page, origin: string, p: string): Promise<void> {
     await page.waitForFunction(() => (window as any).cnf.sim?.state.tick === 280 && !!(window as any).cnf.renderer, null, { timeout: 60000 });
     await cnf(page, (app) => {
       app.setSpeed(0);
-      // the attacker's army deepest in enemy land, among the most crowded provinces
+      // the busiest front: the army with the most enemy armies within one province of it
       const st = app.sim.state;
-      const counts: Record<string, number> = {};
-      for (const a of Object.values(st.armies) as any[]) counts[a.location] = (counts[a.location] ?? 0) + 1;
-      const inWar = (Object.values(st.armies) as any[]).filter((a) => {
-        const c = st.provinces[a.location].controller;
-        return c && c !== a.nation && Object.values(st.wars).some((w: any) => (w.attackers.includes(a.nation) && w.defenders.includes(c)) || (w.defenders.includes(a.nation) && w.attackers.includes(c)));
-      });
-      inWar.sort((x, y) => (counts[y.location] ?? 0) - (counts[x.location] ?? 0) || (x.id < y.id ? -1 : 1));
-      if (inWar[0]) app.selectArmy(inWar[0].id, true);
+      const w = app.sim.world;
+      const armies = Object.values(st.armies) as any[];
+      const wars = Object.values(st.wars) as any[];
+      let best: any = null;
+      let bestN = -1;
+      for (const a of armies) {
+        const near = new Set([a.location, ...w.prov[a.location].neighbors]);
+        let n = 0;
+        for (const o of armies) if (near.has(o.location) && wars.some((x) => (x.attackers.includes(a.nation) && x.defenders.includes(o.nation)) || (x.defenders.includes(a.nation) && x.attackers.includes(o.nation)))) n++;
+        if (n > bestN || (n === bestN && a.id < best.id)) [best, bestN] = [a, n];
+      }
+      if (best) {
+        app.selectArmy(best.id, true);
+        const cam = app.renderer.camera;
+        const c = app.renderer.provinceCenter(best.location);
+        cam.centerOn(c.x, c.y, cam.zoomForProvincePx(70), false);
+      }
+      app.mapDirty = true;
       app.refresh();
     });
-    await page.mouse.move(683, 400);
-    for (let i = 0; i < 2; i++) await page.mouse.wheel(0, -240);
+    await page.mouse.move(300, 200);
     await page.waitForTimeout(1500);
   });
 }

@@ -1711,16 +1711,31 @@ export class MapRenderer {
       }
       items.sort((a, b) => b.size - a.size);
       for (const it of alpha > 0.02 ? items : []) {
-        // try the best frame, shrinking a little, then the alternatives
+        // a moved name must still lie on its own realm: its middle and both ends
+        const ownAt = (x: number, y: number) => {
+          const w = cam.toWorld(x, y);
+          const id = this.geo.provinceAt(w.x, w.y);
+          return !!id && st.provinces[id].owner === it.nid;
+        };
+        // try the best frame, shrinking a little, then moved across its line, then the alternatives
         let placed: { lab: RealmLabel; size: number; s: { x: number; y: number }; box: OBox } | null = null;
         for (const lab of [it.lab, ...it.lab.alts]) {
-          const s = cam.toScreen(lab.x, lab.y);
+          const at = cam.toScreen(lab.x, lab.y);
+          const ca = Math.cos(lab.angle);
+          const sa = Math.sin(lab.angle);
           let size = lab === it.lab ? it.size : fitSize(lab, it.base);
           for (let tries = 0; tries < 3 && size >= 12 && !placed; tries++, size *= 0.85) {
             ctx.font = `600 ${size}px ${HEADING}`;
             const w = ctx.measureText(it.name).width + size * 0.18 * (it.name.length - 1);
-            const box = orientedBox(s.x, s.y, w + 4, size * 0.9, lab.angle);
-            if (!this.placed.hitsBox(box, reservedRects)) placed = { lab, size, s, box };
+            for (const k of [0, 1, -1, 2, -2]) {
+              const s = { x: at.x - sa * k * size * 1.1, y: at.y + ca * k * size * 1.1 };
+              if (k && !(ownAt(s.x, s.y) && ownAt(s.x - (ca * w) / 2, s.y - (sa * w) / 2) && ownAt(s.x + (ca * w) / 2, s.y + (sa * w) / 2))) continue;
+              const box = orientedBox(s.x, s.y, w + 4, size * 0.9, lab.angle);
+              if (!this.placed.hitsBox(box, reservedRects)) {
+                placed = { lab, size, s, box };
+                break;
+              }
+            }
           }
           if (placed) break;
         }
