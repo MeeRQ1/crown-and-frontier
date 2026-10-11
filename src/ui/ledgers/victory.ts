@@ -28,7 +28,7 @@ function rules(app: App, k: VictoryPath): string {
   const r = victoryRules(sim);
   if (k === 'territorial') return `A region is dominated when we own and control at least 75% of its provinces. Provinces held means owned and controlled; occupied land does not count.`;
   if (k === 'economic') return `Integrated development counts the development of provinces at integration 75 or more. Average unrest is weighted by development and must stay at or below ${C.victory.economicUnrest}.`;
-  return `Each partner whose opinion of us is at least ${C.victory.diplomaticOpinion} gives influence: an alliance at least ${C.victory.diplomaticTreatyAge / 12} years old, or a realm in our sphere, 2; our guarantee a year old, 1; and a trade agreement at least ${C.victory.diplomaticTreatyAge / 12} years old, 1 more. We need ${r.diplomaticInfluencePerRealm} per other surviving realm, and trust of ${C.victory.diplomaticTrust}.`;
+  return `Each partner whose opinion of us is at least ${C.victory.diplomaticOpinion} gives influence: an alliance at least ${C.victory.diplomaticTreatyAge / 12} years old, or a realm in our sphere, 2; our guarantee a year old, 1; and a trade agreement at least ${C.victory.diplomaticTreatyAge / 12} years old with a contract in force under it, 1 more. We need ${r.diplomaticInfluencePerRealm} per other surviving realm, and trust of ${C.victory.diplomaticTrust}.`;
 }
 
 function counterplay(app: App, k: VictoryPath, progress: Map<NationId, ReturnType<typeof victoryProgress>>): HTMLElement | null {

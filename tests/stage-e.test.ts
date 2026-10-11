@@ -16,6 +16,7 @@ import { BUILTIN_MAPS } from '../src/maps/builtin';
 import { applySettlement, buildSettlement, contributionShares, counterOffer, demandCost, evaluateSettlement, settlementCost } from '../src/sim/settlement';
 import { months } from '../src/sim/state';
 import { step } from '../src/sim/tick';
+import { signContract } from '../src/sim/trade';
 import { influenceByPartner } from '../src/sim/victory';
 import { declareWar, goalOptions } from '../src/sim/war';
 import { addArmy, lineGame } from './helpers';
@@ -325,9 +326,13 @@ describe('guarantees, influence, loans and trade blocs', () => {
     addMemory(sim, 'b', 'a', 'envoy', 80, 0);
     sim.state.tick += months(40);
     sim.state.rev++;
-    const by = influenceByPartner(sim, 'a');
-    // c: alliance or sphere (2, not 4) + trade 1; b: guarantee 1
-    expect(by.c).toBe(3);
-    expect(by.b).toBe(1);
+    // c: alliance or sphere (2, not 4); the trade agreement adds nothing while no goods move under it
+    expect(influenceByPartner(sim, 'a').c).toBe(2);
+    // b: guarantee 1
+    expect(influenceByPartner(sim, 'a').b).toBe(1);
+    // a contract in force under the agreement makes it count: trade 1 more
+    signContract(sim, { seller: 'c', buyer: 'a', res: 'food', qty: 1, price: 1, months: 12 }, true);
+    sim.state.rev++;
+    expect(influenceByPartner(sim, 'a').c).toBe(3);
   });
 });

@@ -110,7 +110,10 @@ function treatiesOf(sim: Sim, nid: NationId): readonly Treaty[] {
 
 /**
  * Influence per partner: its strongest bond (an established alliance or our
- * sphere 2, our guarantee 1) plus an established trade agreement (1).
+ * sphere 2, our guarantee 1) plus an established trade agreement under which
+ * goods move (a contract in force between us, 1). A trade agreement alone is only
+ * the framework for contracts and costs nothing, so the AI signs it with nearly
+ * everyone; counting it alone let a two-province realm lead the World.
  */
 export function influenceByPartner(sim: Sim, nid: NationId): Record<NationId, number> {
   const st = sim.state;
@@ -118,11 +121,16 @@ export function influenceByPartner(sim: Sim, nid: NationId): Record<NationId, nu
   const trade: Record<NationId, number> = {};
   const ok = (other: NationId) => opinion(sim, other, nid) >= C.victory.diplomaticOpinion;
   const old = (since: number, m: number) => st.tick - since >= months(m);
+  const trading = new Set<NationId>();
+  for (const c of st.contracts) {
+    if (c.seller === nid) trading.add(c.buyer);
+    else if (c.buyer === nid) trading.add(c.seller);
+  }
   for (const t of treatiesOf(sim, nid)) {
     if (t.type === 'nap' || !old(t.since, C.victory.diplomaticTreatyAge)) continue;
     const other = t.a === nid ? t.b : t.a;
     if (t.type === 'alliance') bond[other] = 2;
-    else trade[other] = 1;
+    else if (trading.has(other)) trade[other] = 1;
   }
   for (const m of sphereMembers(sim, nid)) bond[m] = Math.max(bond[m] ?? 0, C.influence.victory);
   for (const g of st.guarantees) if (g.by === nid && old(g.since, 12)) bond[g.of] = Math.max(bond[g.of] ?? 0, 1);
@@ -211,7 +219,7 @@ export function victoryProgress(sim: Sim, nid: NationId): VictoryProgress {
     streak: n.victoryStreak.diplomatic,
     required: C.victory.diplomaticMonths,
     lines: [
-      `Influence: ${infl}/${need} (per partner at opinion ≥ ${C.victory.diplomaticOpinion}: alliance after ${C.victory.diplomaticTreatyAge / 12} years or our sphere 2, our guarantee 1; plus trade after ${C.victory.diplomaticTreatyAge / 12} years 1)`,
+      `Influence: ${infl}/${need} (per partner at opinion ≥ ${C.victory.diplomaticOpinion}: alliance after ${C.victory.diplomaticTreatyAge / 12} years or our sphere 2, our guarantee 1; plus trade after ${C.victory.diplomaticTreatyAge / 12} years with a contract in force 1)`,
       `Trust ${Math.round(n.trust)} (need ${C.victory.diplomaticTrust})${offensive ? ' · fighting an offensive war' : ''}`,
     ],
     conditions: [
