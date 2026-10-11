@@ -706,7 +706,7 @@ async function diplomacyFlow(browser: Browser, base: string): Promise<void> {
   if (good) {
     const before = await state<number>(`st.contracts.filter((c) => c.buyer === 'aur' && c.res === '${good}').length`);
     await press('[data-sk="trade-workspace"] [data-fk^="buy-"]:not([disabled])');
-    const draft = (await page.locator('[data-sk="contract-draft"]').textContent()) ?? '';
+    const draft = (await page.locator('[data-sk="contract-draft"]').innerText()) ?? '';
     await press('[data-fk="draft-send"]');
     const after = await state<number>(`st.contracts.filter((c) => c.buyer === 'aur' && c.res === '${good}').length`);
     const listed = (await page.locator('[data-sk="contracts"] tbody tr').count()) > 0;
