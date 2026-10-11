@@ -7,7 +7,7 @@ import { PERSONALITIES } from '../sim/data/personalities';
 import { TECHS } from '../sim/data/techs';
 import { computeLedger, grossIncome, reserveCap, totalDev } from '../sim/economy';
 import { SCHEMA_VERSION } from '../sim/config';
-import { dateOf, nationName, ownedProvinces, type Sim } from '../sim/state';
+import { dateOf, nationName, ownedProvinces, treatyPartners, type Sim } from '../sim/state';
 import type { Difficulty, NationId } from '../sim/types';
 import { VICTORY_LABELS } from '../sim/victory';
 import { DEFAULT_SCENARIO, getWorld, isBuiltinMap, mapScenarioPart, scenarioIds } from '../sim/world';
@@ -283,7 +283,11 @@ export function renderNewGame(app: App, initialMap: string = DEFAULT_SCENARIO): 
     const sim = startOf(map);
     const d = w.nationDefs[nation];
     const f = startFacts(sim, nation);
-    const nb = f.neighbours.map((o) => h('span', { class: 'nb' }, shieldSvg(w.nationDefs[o]), w.nationDefs[o].short));
+    const realms = (ids: NationId[]) => ids.map((o) => h('span', { class: 'nb' }, shieldSvg(w.nationDefs[o]), w.nationDefs[o].short));
+    const nb = realms(f.neighbours);
+    // the treaties a historical map starts with
+    const allies = treatyPartners(sim, 'alliance', nation);
+    const pacts = treatyPartners(sim, 'nap', nation);
     const fact = (ic: IconName, label: string, value: Child) => h('div', { class: 'fact' }, icon(ic), h('span', { class: 'k' }, label), h('span', { class: 'v' }, value));
     setChildren(
       sheet,
@@ -309,6 +313,8 @@ export function renderNewGame(app: App, initialMap: string = DEFAULT_SCENARIO): 
         f.rivers ? fact('supply', 'River borders', `${f.rivers} (defenders +20% against crossings)`) : null,
         fact('claim', 'Claims on others', f.claims ? `${f.claims} province${f.claims === 1 ? '' : 's'}` : 'none'),
         fact('alert', 'Own land claimed by others', f.claimed ? `${f.claimed} province${f.claimed === 1 ? '' : 's'}` : 'none'),
+        allies.length ? fact('alliance', `Allied with ${allies.length} realm${allies.length === 1 ? '' : 's'}`, h('span', { class: 'nbs' }, realms(allies))) : null,
+        pacts.length ? fact('pact', `Non-aggression pact${pacts.length === 1 ? '' : 's'}`, h('span', { class: 'nbs' }, realms(pacts))) : null,
       ),
     );
     const attribution = mapScenarioPart(map)?.meta.attribution ?? [];
