@@ -19,6 +19,7 @@ import { bump, type Sim } from '../src/sim/state';
 import { runTicks, step } from '../src/sim/tick';
 import type { ShipType } from '../src/sim/types';
 import { declareWar } from '../src/sim/war';
+import { isBeachhead, supplyConnected } from '../src/sim/supply';
 import { addArmy, seaGame } from './helpers';
 
 function fleet(sim: Sim, nid: string, zone: string, types: ShipType[], home: string | null = null) {
@@ -107,6 +108,16 @@ describe('shipyards and fleets', () => {
     expect(f.zone).toBe('zw');
     expect(f.ships.map((s) => s.type)).toEqual(['cruiser']);
     expect(a.stats.shipsBuilt).toBe(1);
+  });
+
+  it('merging keeps the fleet the order was given from, whatever the fleets are numbered', () => {
+    const sim = seaGame();
+    const fs = Array.from({ length: 11 }, () => fleet(sim, 'a', 'zw', ['transport']));
+    const home = fs[5]; // its id sorts after the later ones' ("f6" > "f10")
+    const ids = [home.id, ...fs.filter((f) => f !== home).map((f) => f.id)];
+    expect(applyCommand(sim, { type: 'mergeFleets', nation: 'a', fleets: ids })).toEqual({ ok: true, message: `Merged into ${home.name}.` });
+    expect(Object.values(sim.state.fleets).map((f) => f.id)).toEqual([home.id]);
+    expect(home.ships.length).toBe(11);
   });
 
   it('fleets sail between zones at their speed', () => {
@@ -232,6 +243,37 @@ describe('armies by sea', () => {
     const beach = Object.values(sim.state.battles).find((b) => b.province === 'b2');
     const factors = beach?.factors ?? sim.state.reports.find((r) => !r.sea && r.province === 'b2')?.factors ?? [];
     expect(factors.some((x) => /Landing from the sea/.test(x))).toBe(true);
+    expect(checkInvariants(sim)).toEqual([]);
+  });
+
+  it('a coast we hold with our fleet offshore is a beachhead: supply comes in by sea', () => {
+    const sim = seaGame();
+    declareWar(sim, 'a', 'b', { type: 'conquest', provinces: ['b2'] });
+    // a has landed in b2, beyond b1, which b still holds: no supply line by land
+    sim.state.provinces.b2.controller = 'a';
+    addArmy(sim, 'a', 'b2', { infantry: 3 });
+    fresh(sim);
+    expect(isBeachhead(sim, 'b2')).toBe(false);
+    expect(supplyConnected(sim, 'a', 'b2')).toBe(false);
+    // our transports stay off the beach
+    const tr = fleet(sim, 'a', 'ze', ['transport']);
+    fresh(sim);
+    expect(isBeachhead(sim, 'b2')).toBe(true);
+    expect(supplyConnected(sim, 'a', 'b2')).toBe(true);
+    expect(supplyConnected(sim, 'a', 'b1')).toBe(true); // one step inland, into enemy land
+    // a fleet only passing through brings nothing
+    tr.path = ['zm'];
+    fresh(sim);
+    expect(isBeachhead(sim, 'b2')).toBe(false);
+    tr.path = [];
+    // enemy warships that outgun ours close the beach
+    fleet(sim, 'b', 'ze', ['cruiser']);
+    fresh(sim);
+    expect(isBeachhead(sim, 'b2')).toBe(false);
+    expect(supplyConnected(sim, 'a', 'b2')).toBe(false);
+    fleet(sim, 'a', 'ze', ['capital']);
+    fresh(sim);
+    expect(isBeachhead(sim, 'b2')).toBe(true);
     expect(checkInvariants(sim)).toEqual([]);
   });
 

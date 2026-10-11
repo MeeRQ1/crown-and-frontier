@@ -158,6 +158,19 @@ export class SaveStore {
     return out;
   }
 
+  /**
+   * Writes a manual save. A different save already in the slot is not lost: it is
+   * kept under `prev-<slot>` (one generation) and listed on the Load screen.
+   * Returns whether a save was replaced.
+   */
+  async putKeepingPrevious(key: string, text: string): Promise<boolean> {
+    const prev = await this.get(key);
+    const replaced = !!prev && prev !== text;
+    if (replaced) await this.put(`prev-${key}`, prev!);
+    await this.put(key, text);
+    return replaced;
+  }
+
   /** Writes an autosave into the older of two rotating slots. */
   async autosave(text: string): Promise<string> {
     const slots = await this.list();
@@ -212,4 +225,11 @@ export function pickFile(accept: string): Promise<string | null> {
     };
     input.click();
   });
+}
+
+/** A storage key as players see it: "Slot 1", "Autosave", "Slot 1 (the save it replaced)". */
+export function slotLabel(key: string): string {
+  if (key.startsWith('autosave')) return 'Autosave';
+  if (key.startsWith('prev-')) return `${slotLabel(key.slice(5))} (the save it replaced)`;
+  return key.replace('slot-', 'Slot ');
 }

@@ -1,11 +1,79 @@
 # Status
 
-Last updated at **Stage F of the strategic depth expansion** (save format 4, map format 3).
-Stages A–F are done in this branch, with the known limitations listed below; nothing in
-the brief has been dropped ([docs/expansion/PLAN.md](docs/expansion/PLAN.md), requirement
-ledger). The branch is a draft pull request and has not been merged or published. The
-rest of this file below the expansion section describes the redesign release (0.2.0) and
-is kept for its evidence. Where a stage changed a fact, it is corrected in place.
+Last updated at the **Atlas & Strategy Refinement update** (save format 5, map format 3),
+which follows Stages A–F of the strategic depth expansion in the same draft pull request.
+The branch has not been merged or published. The atlas section below is current; the
+sections after it describe the expansion (Stages A–F) and the redesign release (0.2.0) and
+are kept for their evidence. Where a later change altered a fact, it is corrected in place.
+
+## Atlas & Strategy Refinement update
+
+The brief asked for an ivory atlas in slate command furniture, every surface redesigned
+with a screen inventory, deeper trade first and then warfare, diplomacy, research and focus
+and AI, three new maps (a huge Earth, a large Europe and a large original world), better map
+making, before/after profiling under the same declared conditions, and verification by AI
+batches, human-style play, screenshots and documentation, in one unmerged pull request.
+
+**Status key:** ✅ done and exercised · 🟡 done, with a known gap stated · ⏸ not done.
+
+| Requirement | Status | What was built | Evidence |
+|---|---|---|---|
+| Ivory atlas in slate furniture | ✅ | Self-hosted Barlow Condensed and Source Sans 3; tokens from the pack; ivory land and blue-grey water with muted washes, inked borders, terrain motifs, counters and landmarks; one label and marker collision registry; opaque ivory registers in slate frames | 60 before and 68 after screenshots (`docs/screenshots/atlas/`) |
+| Every surface redesigned, with a screen inventory | ✅ | Menus, setup, map library and editor, HUD, inspectors, every ledger, dialogs, decision cards, map modes and legends | [docs/atlas/SCREENS.md](docs/atlas/SCREENS.md): patterns, states, screenshots and the browser checks for each |
+| Trade, first | ✅ | Contracts (good, quantity, price, term) under trade agreements; reserved stock; delivery overland or by sea; blockades, defaults and cancellations; six-month forecasts with stated assumptions; the AI uses the player's commands (save format 5) | unit tests (accounting, exploits); browser check of a contract; in the AI batches realms hold a contract in 50–85% of realm-months |
+| Warfare | ✅ | Order status with its reason; readiness where the army stands (frontage, flanking, terrain, supply, condition); incoming-attack forecast; **beachheads**: a coast held with our fleet offshore supplies troops landed overseas; the reason an army cannot ship by sea, shown on the panel | unit tests (beachhead supply); the Italy session ([SESSIONS.md](docs/atlas/SESSIONS.md)) |
+| Diplomacy | ✅ | Economic dependence as a stated reason; trade ties in the briefing; Europe and the World start with the alliances, ententes and claims of 1914; diplomatic leadership counts trade only where goods move | unit tests (treaties at the start, influence); AI batches before and after the influence change |
+| Research and focus | ✅ | Plans with dependency connectors and an inspector; research cost on the generated maps calibrated to the hand-made maps' pace (40 months per technology at the start); national focus names of 1914 for the great powers | browser checks; a pace test on every map; AI batches (72–77% of the tree by the end of the 1914 maps) |
+| AI | 🟡 | The same contract commands as the player; armies without an objective sent to the war; guarantees only of a realm no stronger; diagnostics for idle armies, pointless wars and idle treasuries | 102 AI campaigns ([reports/ai/](reports/ai/)). Gap: invasions stay within eight sea zones of a port; on the new maps every campaign ends on score with the largest starting realm ahead |
+| Huge Earth, larger than the Middle Sea | ✅ | *The World, 1914*: 1,225 provinces, 57 realms, 388 regions, 165 sea zones (the Middle Sea has 548 provinces) | [docs/atlas/MAPS.md](docs/atlas/MAPS.md), `reports/maps/earth-map.md` |
+| Large Europe | ✅ | *Europe, 1914*: 686 provinces, 23 realms | `reports/maps/europe-map.md` |
+| Large original world | ✅ | *Hesperia, 1890*: 754 provinces, 22 realms, three unclaimed frontiers, authored geography | `reports/maps/hesperia-map.md` |
+| Framing, licensed geography, attribution, identities | ✅ | Natural Earth (public domain), pinned by SHA-256; borders of 1914 approximated and said to be; names and colours of the period, simplified arms; Hesperia wholly invented | MAPS.md, THIRD_PARTY_NOTICES.md, the credit in the library, setup and menu |
+| Map making: editor round trip, validation, documented format | ✅ | One package format for every map (now with optional treaties at the start); validator with codes and places; editor export → import → setup → play → save → reload, even with the map gone from the library | browser check *Map round trip*; MAPS.md (format, pipeline, authoring) |
+| Before/after profiling under the same conditions; targets set after profiling | ✅ | `main` and the branch measured one after the other on one machine; targets set from the audit's measurements; achieved counts documented | MAPS.md *Performance on the large maps*; `reports/perf/atlas-final-*` |
+| AI batches across seeds and difficulties | ✅ | 102 campaigns on all nine maps, seeds 1–8, easy/normal/hard on Europe and Aldmere, hard on the World and Hesperia | [reports/ai/README.md](reports/ai/README.md) |
+| Human-style play | ✅ | Italy in Europe 1914 (1914–1918) and Japan on the World; earlier, Italy before the 1914 diplomacy | [docs/atlas/SESSIONS.md](docs/atlas/SESSIONS.md): 9 findings fixed, 7 left open |
+| Before/after screenshots and documentation | ✅ | README, DESIGN, STATUS, THIRD_PARTY_NOTICES, docs/atlas (AUDIT, SCREENS, MAPS, SESSIONS), reports | this file |
+| One pull request, unmerged and unpublished | ✅ | draft pull request MeeRQ1/crown-and-frontier#4 | — |
+
+**Constraints kept:** no espionage, political simulation, monetisation, multiplayer or
+character mechanics, and no navy or aviation added for the art's sake (beachheads are a
+supply rule for the existing navy); the game is still a static browser build with no
+backend; saves are never discarded or read under the wrong map (a save of a changed map
+is converted with a notice naming both editions, or refused with the reason when its
+provinces differ, and stays exportable).
+
+### Evidence
+
+| Kind | Result |
+|---|---|
+| Unit tests | 236 passing (21 files), among them every built-in campaign starting playable, the 1914 treaties and claims, research pace on every map, beachhead supply, fleet merging and influence |
+| Browser check | `npm run verify:web`: 67 of 67 in headless Chromium 141, including a trade contract, the map round trip, saves and imports |
+| AI batches | 102 campaigns at fdb4506, no invariant failures ([reports/ai/](reports/ai/)) |
+| Performance | `main` vs the branch on one machine: the Reach 3.8–4.0 → 3.5–3.6 ms a week, Aldmere 9.4–10.1 → 7.7–8.6, the Middle Sea 16.4–16.7 → 12.0–12.4; Europe 37–40, Hesperia 23–25, the World 138–139 ms (166 ms budget) ([MAPS.md](docs/atlas/MAPS.md)) |
+| Screenshots | 60 before, 68 after, 11 from the sessions |
+| External players | **None.** No one but me has played this update. |
+
+### Known gaps
+
+- **Score endings on the new maps.** No realm completes a victory within 30 years of AI
+  play on the World, Europe or Hesperia; Britain, Russia and Varenne lead on score. The
+  diplomatic conditions are met but never held for the full 60 months.
+- **Switzerland** falls in most Europe and World campaigns (11 of 16 and 6 of 10).
+- **The World's clock** runs at about three quarters of the fastest speed in peacetime and
+  a quarter in a world war; slices keep the controls responsive, but one slice can take up
+  to about 400 ms.
+- **Overseas war.** Beachheads supply landed troops, but the AI plans only short invasions,
+  and gathering a fleet is manual (ships launched at different ports form separate
+  squadrons).
+- **The demand model is coarse:** shortages that drive trade are rarer than they should be
+  on the historical maps.
+- **Approximations:** the borders of 1914 follow present-day divisions; the World drops
+  small islands and the far Arctic; open-ocean sea zones have stepped edges.
+- **Browsers:** only headless Chromium was run; no Firefox, Safari or real touch device.
+- **Drawing cost:** the atlas look adds 150–180 ms to page load and raises the 95th
+  percentile of map-mode drawing; frames at the fastest speed are unchanged on the
+  hand-made maps.
 
 ## Expansion progress
 

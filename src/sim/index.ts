@@ -176,6 +176,11 @@ export function treatyPair(sim: Sim, type: TreatyType, a: NationId, b: NationId)
   return a !== b && (relBits(sim, a, b) & TREATY_BIT[type]) !== 0;
 }
 
+/** Is `b` an enemy, an ally or on `a`'s side of a war (so `a`'s armies may enter land `b` controls)? */
+export function enterablePair(sim: Sim, a: NationId, b: NationId): boolean {
+  return a !== b && (relBits(sim, a, b) & (HOSTILE | SAME_SIDE | TREATY_BIT.alliance)) !== 0;
+}
+
 // Memo tables for pure lookups whose inputs change only with a revision bump
 // or between phases of the week (province output changes when projects finish,
 // in the monthly settlement and through event choices). A memo lives for one
@@ -187,7 +192,7 @@ interface Memo {
   epoch: number;
   tables: Map<string, Map<string, unknown>>;
 }
-const memoBy = new WeakMap<object, Memo>();
+let memoBy = new WeakMap<object, Memo>();
 let lastMemo: Memo | null = null;
 let memoEpoch = 0;
 
@@ -215,6 +220,85 @@ export function memoize<T>(sim: Sim, table: string, key: string, compute: () => 
   const v = compute();
   t.set(key, v);
   return v;
+}
+
+const geoGen = new WeakMap<object, number>();
+let geoMemo = new WeakMap<object, { tick: number; geo: number; epoch: number; tables: Map<string, Map<string, unknown>> }>();
+
+/**
+ * The revision of what borders, routes and sides depend on: ownership and control,
+ * wars and alliances, forts and railways. Every bump moves it except treaty terms
+ * that change none of these (trade agreements, non-aggression pacts).
+ */
+export function geoRev(sim: Sim): number {
+  return geoGen.get(sim.state) ?? 0;
+}
+
+export function bumpGeo(sim: Sim): void {
+  geoGen.set(sim.state, (geoGen.get(sim.state) ?? 0) + 1);
+}
+
+/** Like memoize, but kept across revisions that leave geography alone (see geoRev). */
+export function memoGeo<T>(sim: Sim, table: string, key: string, compute: () => T): T {
+  const st = sim.state;
+  const geo = geoGen.get(st) ?? 0;
+  let m = geoMemo.get(st);
+  if (!m || m.tick !== st.tick || m.geo !== geo || m.epoch !== memoEpoch) geoMemo.set(st, (m = { tick: st.tick, geo, epoch: memoEpoch, tables: new Map() }));
+  let t = m.tables.get(table);
+  if (!t) m.tables.set(table, (t = new Map()));
+  if (t.has(key)) return t.get(key) as T;
+  const v = compute();
+  t.set(key, v);
+  return v;
+}
+
+/**
+ * Like memoize, but kept for the whole week: for AI heuristics (threat, the value
+ * of a trade agreement) that may lag the commands issued earlier the same week.
+ * Never use it for anything a rule depends on.
+ */
+let weekMemo = new WeakMap<object, { tick: number; epoch: number; tables: Map<string, Map<string, unknown>> }>();
+export function memoWeek<T>(sim: Sim, table: string, key: string, compute: () => T): T {
+  const st = sim.state;
+  let m = weekMemo.get(st);
+  if (!m || m.tick !== st.tick || m.epoch !== memoEpoch) weekMemo.set(st, (m = { tick: st.tick, epoch: memoEpoch, tables: new Map() }));
+  let t = m.tables.get(table);
+  if (!t) m.tables.set(table, (t = new Map()));
+  if (t.has(key)) return t.get(key) as T;
+  const v = compute();
+  t.set(key, v);
+  return v;
+}
+
+/**
+ * Memo tables in use. A week run in slices keeps its own aside while the
+ * interface reads the state between slices, so nothing the interface looks up
+ * (a once-a-week AI estimate above all) is memoised at a different moment than
+ * in an uninterrupted week.
+ */
+export interface MemoStores {
+  by: typeof memoBy;
+  last: Memo | null;
+  geo: typeof geoMemo;
+  week: typeof weekMemo;
+}
+
+/** Sets the memo tables in use aside and starts empty ones; returns those set aside. */
+export function setMemoAside(): MemoStores {
+  const kept: MemoStores = { by: memoBy, last: lastMemo, geo: geoMemo, week: weekMemo };
+  memoBy = new WeakMap();
+  lastMemo = null;
+  geoMemo = new WeakMap();
+  weekMemo = new WeakMap();
+  return kept;
+}
+
+/** Puts memo tables set aside back in use, dropping whatever was memoised meanwhile. */
+export function restoreMemo(m: MemoStores): void {
+  memoBy = m.by;
+  lastMemo = m.last;
+  geoMemo = m.geo;
+  weekMemo = m.week;
 }
 
 /**

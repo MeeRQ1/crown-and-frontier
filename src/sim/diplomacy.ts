@@ -4,11 +4,12 @@
 // Acceptance is a transparent score: every term is listed with its value and
 // the proposal is accepted when the total is >= 0. No hidden dice.
 
-import { C } from './config';
+import { C, RESOURCE_INFO } from './config';
 import { PERSONALITIES } from './data/personalities';
 import { claimsOnlyFocus } from './focus';
 import { sameBloc, sphereOf } from './influence';
 import { tradeValue } from './economy';
+import { dependenceOn, endContractsBetween } from './trade';
 import { nationStrength } from './military';
 import { nationMods } from './modifiers';
 import {
@@ -51,6 +52,8 @@ export const MEMORY_LABELS: Record<string, string> = {
   loan: 'Lent us money',
   spoils: 'Took more than their share of the spoils',
   settlement: 'Dictated a harsh peace to us',
+  brokeContract: 'Broke a trade contract with us',
+  keptContract: 'Honoured a trade contract with us',
 };
 
 export const TREATY_LABELS: Record<TreatyType, string> = {
@@ -61,14 +64,22 @@ export const TREATY_LABELS: Record<TreatyType, string> = {
 
 // ───────────────────────────── Memories & opinion ───────────────────────────
 
-export function memoriesOf(sim: Sim, holder: NationId, about: NationId): Memory[] {
+const NO_MEMORIES: readonly Memory[] = Object.freeze([]);
+
+/** What `holder` remembers about `about`. Reading records nothing: addMemory does. */
+export function memoriesOf(sim: Sim, holder: NationId, about: NationId): readonly Memory[] {
+  return sim.state.memories[holder]?.[about] ?? NO_MEMORIES;
+}
+
+/** The list a memory is recorded in, created on first use. */
+function memoryList(sim: Sim, holder: NationId, about: NationId): Memory[] {
   const m = (sim.state.memories[holder] ??= {});
   return (m[about] ??= []);
 }
 
 export function addMemory(sim: Sim, holder: NationId, about: NationId, kind: string, value: number, decay: number): void {
   if (holder === about) return;
-  const list = memoriesOf(sim, holder, about);
+  const list = memoryList(sim, holder, about);
   const ex = list.find((x) => x.kind === kind);
   if (ex) {
     ex.value = clamp(ex.value + value, -80, 80);
@@ -222,6 +233,9 @@ export function evaluateTreaty(sim: Sim, from: NationId, to: NationId, type: Tre
   const dist = nationDistance(sim, from, to);
   const plan = st.nations[to].ai.warPlan;
   if (plan && plan.target === from) add('We have designs on their land', -100);
+  // economic dependence: a realm that relies on the proposer's goods wants it close
+  const dep = type !== 'trade' ? dependenceOn(sim, to, from) : null;
+  if (dep && dep.share >= C.trade.dependence) add(`We rely on them for ${RESOURCE_INFO[dep.res].label.toLowerCase()} (${Math.round(dep.share * 100)}% of our supply)`, Math.min(15, dep.share * 25));
   if (type === 'nap') {
     add('Base reluctance', -10);
     add(`Opinion of them (${op})`, op * 0.4);
@@ -288,14 +302,14 @@ export function signTreaty(sim: Sim, type: TreatyType, a: NationId, b: NationId)
     since: st.tick,
     until: type === 'nap' ? st.tick + months(C.diplomacy.napMonths) : null,
   });
-  bump(sim);
+  bump(sim, type === 'alliance' ? 'all' : 'terms');
 }
 
 export function removeTreaty(sim: Sim, type: TreatyType, a: NationId, b: NationId): boolean {
   const before = sim.state.treaties.length;
   sim.state.treaties = sim.state.treaties.filter((t) => !(t.type === type && ((t.a === a && t.b === b) || (t.a === b && t.b === a))));
   if (sim.state.treaties.length !== before) {
-    bump(sim);
+    bump(sim, type === 'alliance' ? 'all' : 'terms');
     return true;
   }
   return false;
@@ -329,6 +343,8 @@ export function cancelTreatyProblem(sim: Sim, nid: NationId, other: NationId, ty
 
 export function cancelTreaty(sim: Sim, nid: NationId, other: NationId, type: TreatyType): void {
   const st = sim.state;
+  // contracts are signed under the trade agreement: ending it ends them, at the canceller's cost
+  if (type === 'trade') endContractsBetween(sim, nid, other);
   removeTreaty(sim, type, nid, other);
   const n = st.nations[nid];
   if (type === 'trade') addMemory(sim, other, nid, 'betrayal', -15, 0.5);
@@ -539,7 +555,7 @@ export function monthlyDiplomacy(sim: Sim): void {
   for (const e of st.envoys) {
     if (!st.nations[e.to]?.alive) continue;
     const gain = C.diplomacy.envoyGain * Math.max(0, 1 + nationMods(sim, e.from).relationGain);
-    const list = memoriesOf(sim, e.to, e.from);
+    const list = memoryList(sim, e.to, e.from);
     const m = list.find((x) => x.kind === 'envoy');
     if (m) m.value = Math.min(C.diplomacy.envoyCap, m.value + gain);
     else list.push({ kind: 'envoy', value: gain, decay: 0.5 });

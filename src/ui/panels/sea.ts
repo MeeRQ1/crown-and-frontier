@@ -366,16 +366,16 @@ export function navyAirSection(app: App): HTMLElement | null {
     return !!o && atWar(sim, me, o) && provinceBlockaded(sim, pid);
   });
   const reports = st.reports.filter((r) => r.sea && (r.attackerNations.includes(me) || r.defenderNations.includes(me))).slice(-5).reverse();
-  const tileEl = (label: string, value: string, sub?: string) => h('div', { class: 'stat-tile' }, h('div', { class: 'eyebrow' }, label), h('div', { class: 'big' }, value), sub ? h('div', { class: 'sub' }, sub) : null);
+  const cell = (label: string, value: string, title?: string) => h('div', { title }, h('span', { class: 'k' }, label), h('b', null, value));
   return section(
     'Navy and air',
     h(
       'div',
-      { class: 'stat-grid' },
-      tileEl('Fleets', String(fleets.length), `${ships} ships`),
-      tileEl('Fleet upkeep', `${fmt(l.expenses['Fleet upkeep'] ?? 0)}/mo`, 'crowns, last month'),
-      tileEl('Air wings', String(wings.length), `${wings.filter((w) => w.mission !== 'idle').length} on missions`),
-      tileEl('Blockades', `${theirBlockaded.length} / ${ourBlockaded.length}`, 'enemy coasts we hold / our coasts held'),
+      { class: 'strip' },
+      cell('Fleets', `${fleets.length} · ${ships} ships`),
+      cell('Fleet upkeep', `${fmt(l.expenses['Fleet upkeep'] ?? 0)} cr/mo`),
+      cell('Air wings', `${wings.length} · ${wings.filter((w) => w.mission !== 'idle').length} flying`),
+      cell('Blockades', `${theirBlockaded.length} held · ${ourBlockaded.length} on us`, 'enemy coasts we blockade · our coasts blockaded'),
     ),
     fleets.length ? h('div', null, ...fleets.map((f) => fleetRow(app, f))) : h('p', { class: 'small muted' }, 'No fleets. Ships are built in ports (a province card on the coast).'),
     ourBlockaded.length ? h('div', { class: 'callout bad', style: 'margin-top:6px' }, icon('alert'), h('span', null, `Blockaded: ${ourBlockaded.map((p) => provName(sim, p)).join(', ')}. Win back the sea around them or our trade and their crowns suffer.`)) : null,

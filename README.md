@@ -1,7 +1,7 @@
 # Crown & Frontier
 
 A single-player grand strategy game for the browser. You rule a young crown at the dawn of the
-industrial age, on one of six maps or one you make yourself. Grow by
+industrial age, on one of nine maps or one you make yourself. Grow by
 settlement, investment or conquest, but every province you gain
 beyond your heartland is **raw frontier**: it pays little, raises no troops and supplies no
 armies until you integrate it. Outlast your AI rivals and win by territorial dominance,
@@ -9,30 +9,42 @@ economic prosperity or diplomatic leadership.
 
 ![Crown & Frontier: Aldmere, the standard campaign](docs/screenshots/after-aldmere/laptop-03-map-overview.jpg)
 
-- **Six maps.**
+- **Nine maps.**
   - *Aldmere*, the standard campaign: 298 provinces, 14 realms, four mountain ranges with
     six passes, six rivers, 34 unclaimed frontier provinces and 30 sea zones.
   - *The Reach*, the quick campaign: 99 provinces and 9 realms.
   - Three generated maps: *the Sundered Isles* (116 provinces, a naval war among islands),
     *the Kharan Steppe* (263, a war of movement) and *the Middle Sea* (548 provinces and 16
     realms around an inland sea).
-  - A real-world map, *The Baltic, 1906*: Sweden, Norway, Denmark, the German Empire and the
-    Russian Empire, built from Natural Earth (public domain).
+  - *Hesperia, 1890*, a large original world from authored geography: 754 provinces and 22
+    realms on two continents facing each other across the Narrows, with three unclaimed
+    frontiers.
+  - Three historical maps built from Natural Earth (public domain), with the borders of the
+    time approximated from present-day divisions; Europe and the World start with the
+    alliances, ententes and claims of 1914:
+    - *The Baltic, 1906*: Sweden, Norway, Denmark, the German Empire and the Russian Empire.
+    - *Europe, 1914*: 686 provinces and 23 realms, from Ireland to the Volga.
+    - *The World, 1914*: 1,225 provinces and 57 realms, colonial empires on every continent.
 - **Map library and editor.** Keep your own maps in the browser. Generate a new map from a
   seed, size, number of realms, shape and climate, then edit it by hand. Paint realms,
   regions, terrain and deposits; edit straits, rivers and ports; merge provinces. A
   validator points at anything to fix. Export and import map files, and play any map.
-- **A living political atlas.** The map shows printed relief, rivers and lettered seas, with
-  realm washes and inked borders. Detail changes with zoom, and nine map modes (political,
-  terrain, supply, economy, frontier, diplomacy, military, resources, sea control) each come
-  with a legend.
+- **An ivory atlas in slate furniture.** The map is ivory land and blue-grey water, with
+  muted realm washes, inked borders, terrain motifs, counters, and landmarks at local zoom.
+  One collision registry places every name and marker. Ledgers are opaque ivory registers in
+  slate frames. Detail changes with zoom, and nine map modes (political, terrain, supply,
+  economy, frontier, diplomacy, military, resources, sea control) each come with a legend.
 - **Systems:** an industrial economy with six resources (food, coal, iron, oil, rubber,
-  nitrates), factories, materiel and trade agreements that exchange real resources;
+  nitrates), factories and materiel. **Trade contracts** set a good, a quantity, a price and a
+  term; stock is reserved and delivered overland or by sea, blockades hold it back, and
+  defaults and cancellations have costs. Forecasts show each good six months ahead;
   population and manpower; supply lines; an industrial-age roster (infantry, cavalry,
-  artillery, engineers, armour) in battles shaped by terrain, rivers, forts and trenches;
+  artillery, engineers, armour) in battles shaped by terrain, rivers, forts and trenches.
+  Every army says why an order is stalled and what helps or hurts it where it stands;
   sieges; **navies** (transports, torpedo boats, cruisers, battleships, submarines,
   carriers) that fight for sea zones, close straits, blockade coasts and carry armies to
-  hostile shores; **air wings** (reconnaissance, fighters, ground attack, bombers) flying
+  hostile shores, where a coast held with a fleet offshore becomes a beachhead that supplies
+  them; **air wings** (reconnaissance, fighters, ground attack, bombers) flying
   from airfields for air superiority, ground support, interdiction and bombing; a five-era
   research tree of 73 technologies in five branches with horizon years; **national focus
   trees** (a generic tree and a national branch for every realm); diplomacy with coalitions,
@@ -90,10 +102,12 @@ this if you try.
   your current campaign is kept.
 - **Each save keeps its map.** A save records exactly which map and map revision it was played
   on. Saves of imported maps carry the map with them.
-- **Older saves are converted, never discarded.** Saves from earlier releases (formats 1 and
-  2, the 17th-century rules) are converted to the industrial age (format 3) when loaded, and
-  the game says what changed. A save that cannot be converted stays in the list with the
-  reason and can still be exported.
+- **Saving into a used slot keeps the save it replaces,** listed as "Slot N (the save it
+  replaced)" on the Load screen.
+- **Older saves are converted, never discarded.** Saves from earlier releases (formats 1–4)
+  are converted to the current format (5, trade contracts) when loaded, and the game says
+  what changed. A save that cannot be converted stays in the list with the reason and can
+  still be exported.
 
 ## Develop
 
@@ -113,10 +127,14 @@ npm run genworld       # regenerate Aldmere from tools/aldmere.spec.ts (determin
 npm run genmap         # regenerate the Reach's geometry (byte-identical to the checked-in file)
 npm run genmaps        # regenerate the Isles, the Steppe and the Middle Sea from their recipes
 npm run genbaltic      # rebuild The Baltic, 1906 from Natural Earth (downloads and checks the data)
+npm run genreal -- --map europe   # rebuild Europe, 1914 (or earth, or hesperia) through tools/realmap.ts
+npm run atlas:assets   # bring the atlas pack's art and fonts in from the committed handoff zip
 npm run check          # typecheck + tests + build + package + verify:web
 npm run fuzz -- --scenario aldmere --seeds 1-3 --years 8   # random legal/illegal commands + invariants
 npm run bench -- --scenario aldmere --seeds 1-2 --years 30 # simulation benchmarks (tick percentiles, phases, heap)
 npm run bench:web -- --maps reach,aldmere                   # browser benchmarks on dist/ (after npm run build)
+npm run bench:web -- --maps earth --stress earth:1:280      # adds a late-game run on the World
+npx tsx tools/shots-atlas.ts after                          # the screen inventory in screenshots (after npm run build)
 npm run rulecheck -- --compare <record.json>                # prove a refactor changed no rule
 npm run genstress -- --provinces 900                        # generated large map package for scaling tests
 ```
@@ -144,12 +162,14 @@ src/maps/       map package format (v3: sea zones and ports), validator (imports
   ai/           strategic, operational/execution layers, navy and air, difficulty profiles
   data/         technologies, focus trees, personalities, events
 src/data/       built-in map data: Aldmere and the Reach (realms and regions in aldmere.ts and
-                reach.ts, generated province data and geometry), and maps/ (generated maps and
-                the Baltic); geometry is loaded on demand
+                reach.ts, generated province data and geometry), and maps/ (the generated maps,
+                Hesperia and the real-world maps); geometry is loaded on demand
+src/assets/     the atlas pack's art (atlas/) and fonts, imported through Vite
 src/ui/         map renderer (map/), design system (style.css), HUD, inspector, ledgers,
                 dialogs, screens, map library (library.ts, maplib.ts), map editor (editor/),
                 tutorial, storage, audio
-tools/          map generators (genworld, genmap, genmaps, genbaltic), AI campaign runner, realm tracer,
+tools/          map generators (genworld, genmap, genmaps, genbaltic; realmap + genreal with the
+                *.data.ts definitions for Europe, the World and Hesperia), AI campaign runner, realm tracer,
                 ZIP packager, web verifier, combat examples, benchmarks, fuzzer, rule check
 tests/          Vitest suites
 e2e/            scripted browser playthrough (development helper)
@@ -167,13 +187,25 @@ that the final state matches.
 - [DEPLOYMENT.md](DEPLOYMENT.md): GitHub Pages, other hosts, the ZIP, embedding, and browser compatibility.
 - [STATUS.md](STATUS.md): the requirement ledger, acceptance checks, known limitations and next steps.
 - [docs/REDESIGN.md](docs/REDESIGN.md): the interface and world redesign: diagnosis, direction and what was built.
+- [docs/atlas/](docs/atlas/): the atlas and strategy refinement update:
+  - [AUDIT.md](docs/atlas/AUDIT.md): the audit, baseline and plan;
+  - [SCREENS.md](docs/atlas/SCREENS.md): the screen inventory with patterns, states and
+    verified interactions;
+  - [MAPS.md](docs/atlas/MAPS.md): the shared map format, the pipeline, how to author a map,
+    the new maps' targets and counts, and their performance;
+  - [SESSIONS.md](docs/atlas/SESSIONS.md): the recorded player-style sessions on Europe and
+    the World, what they found and what was fixed.
 - [docs/expansion/](docs/expansion/): the strategic depth expansion, with the Stage A audit
   ([AUDIT.md](docs/expansion/AUDIT.md)), the plan and requirement ledger
   ([PLAN.md](docs/expansion/PLAN.md)), the setting decision ([SETTING.md](docs/expansion/SETTING.md))
   and the recorded player-style session ([SESSIONS.md](docs/expansion/SESSIONS.md)).
-- [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md): the three bundled OFL fonts and the geometry
-  libraries of the map generator (d3-delaunay, delaunator, robust-predicates), whose licences ship
-  in `licenses/`; Natural Earth (public domain) for the real-world map; and the development tools.
+- [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md):
+  - the two bundled OFL fonts and the atlas art, including four AI-generated landmark
+    illustrations;
+  - the geometry libraries of the map generator (d3-delaunay, delaunator,
+    robust-predicates), whose licences ship in `licenses/`;
+  - Natural Earth (public domain) for the three real-world maps;
+  - the development tools.
 
 ## Known limitations
 
@@ -205,13 +237,30 @@ that the final state matches.
 - **Navy and air are abstracted:** fleets fight in sea zones and wings fly missions over a
   province and its neighbours; there are no individual ships' positions, convoys or air
   routes. Troops at sea cannot be redirected until they land.
-- **Save format:** 4. Format-1, format-2 and format-3 saves are converted on load, each with
-  a notice; a format-3 campaign keeps each realm's national policy as the matching
-  completed focus. Format-3 saves written before Stage C load with empty navies and air arms.
+- **Save format:** 5.
+  - Format-1 to format-4 saves are converted on load, each with a notice.
+  - A format-4 campaign keeps its running trade exchanges as 12-month contracts at list price.
+  - A format-3 campaign keeps each realm's national policy as the matching completed focus.
+  - Format-3 saves written before Stage C load with empty navies and air arms.
+- **The World, 1914 runs slower than the clock's setting:**
+  - At the fastest speed (6 weeks a second) it gives about three quarters of that in
+    peacetime in headless Chromium on a 4-core machine, and about a quarter in a world
+    war, where a week can take several hundred milliseconds to work out.
+  - The week is worked out in slices between frames, so the map and controls keep
+    responding, though a single slice can take up to about 400 ms.
+  - Measurements are in `docs/atlas/MAPS.md`.
+- **The historical maps end on score:** in AI-only campaigns no realm completes a
+  victory within 30 years, and the largest starting realm (Britain on the World, Russia
+  on Europe) leads on score (`reports/ai/`).
+- **Historical maps are approximations:** the borders of 1906 and 1914 follow present-day
+  divisions where they differ, and starting forces and AI temperaments are game choices
+  (`docs/atlas/MAPS.md`).
 
 ## Licence
 
 This repository does not yet include a source licence. The owner decides the licence and whether the
 repository is public. All game content (names, maps, rules and text) is original, except the
-geography and place names of The Baltic, 1906, which come from Natural Earth (public domain). See
-THIRD_PARTY_NOTICES.md for the bundled fonts and libraries, the map data and the development tools.
+geography and place names of the three real-world maps (The Baltic, 1906; Europe, 1914; The World,
+1914), which come from Natural Earth (public domain), and the atlas art described in
+THIRD_PARTY_NOTICES.md. See that file for the bundled fonts and libraries, the map data and the
+development tools.

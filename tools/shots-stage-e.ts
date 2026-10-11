@@ -61,9 +61,10 @@ async function main(): Promise<void> {
     await page.keyboard.press('p');
     await page.waitForTimeout(400);
     await shot('01-focus-tree.png');
-    await page.locator('[data-branch="national"] .focus-card.available button').first().click();
+    await page.locator('.tree-node.available[data-node^="nat_"]').first().click();
+    await page.locator('.tree-inspector .action button').click();
     await page.waitForTimeout(200);
-    await page.locator('[data-branch="diplomacy"]').scrollIntoViewIfNeeded();
+    await page.locator('.tree-node[data-node^="dip_"]').first().scrollIntoViewIfNeeded();
     await page.waitForTimeout(200);
     await shot('02-focus-generic-branches.png');
 

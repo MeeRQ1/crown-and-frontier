@@ -212,7 +212,10 @@ them.
 ## Supply (`supply.ts`)
 
 **Sources** are provinces owned and controlled by us or a friend (ally or same war
-side) that are integrated ≥ 50, fortified, or a capital. Supply travels through
+side) that are integrated ≥ 50, fortified, or a capital, and **beachheads**: a coastal
+province a realm holds (owned or occupied) with one of its fleets stationed offshore
+(not under way) in a zone where enemy warships do not outgun its friends. The sea lane
+home is not traced; the fleet offshore stands for it. Supply travels through
 friendly-controlled provinces at 1 per step (+0.5 into mountains and marsh, −0.5 with
 roads ≥ 2). An army within **range 3** (+1 with Supply Trains) is *connected*; the last
 step may enter enemy land. The stockpile must not be empty.
@@ -754,7 +757,8 @@ the knife-edge flickers of an opinion or a treaty no longer wind back years of s
 3. **Diplomatic Leadership:** influence over partners whose opinion of you is ≥ 35, each
    counted once for its strongest bond — an alliance at least 3 years old or being in your
    sphere 2, your guarantee (a year old) 1 — plus 1 for a trade agreement at least 3 years
-   old; at *D* per other surviving realm (minimum 6), with trust ≥ 65 and no offensive war,
+   old with a contract in force under it (an agreement alone is only the framework for
+   contracts, and the AI signs one with nearly every realm); at *D* per other surviving realm (minimum 6), with trust ≥ 65 and no offensive war,
    held for 60 months. New treaties do not count, so cycling treaties is pointless.
 
 | Threshold | The Reach (9 realms) | Aldmere (14 realms) |

@@ -4,8 +4,7 @@ import { describe, expect, it } from 'vitest';
 import { C, UNITS } from '../src/sim/config';
 import { applyCommand, checkCommand } from '../src/sim/commands';
 import { forecastBattle } from '../src/sim/combat';
-import { signTreaty } from '../src/sim/diplomacy';
-import { computeLedger, monthlyEconomy, provinceDeposit, resourceCap, tradeFlows } from '../src/sim/economy';
+import { computeLedger, monthlyEconomy, provinceDeposit, resourceCap } from '../src/sim/economy';
 import { nextMemoEpoch } from '../src/sim/index';
 import { checkInvariants } from '../src/sim/invariants';
 import { bump } from '../src/sim/state';
@@ -116,50 +115,7 @@ describe('industry', () => {
   });
 });
 
-describe('trade', () => {
-  it('a trade agreement moves a surplus to a partner in need, paid at the fixed price', () => {
-    const sim = lineGame();
-    const a = sim.state.nations.a;
-    const b = sim.state.nations.b;
-    signTreaty(sim, 'trade', 'a', 'b');
-    a.stock.coal = resourceCap(sim, 'a'); // a has plenty
-    b.stock.coal = 0; // b has none
-    bump(sim);
-    nextMemoEpoch();
-    const flows = tradeFlows(sim);
-    const coal = flows.find((f) => f.res === 'coal' && f.from === 'a' && f.to === 'b');
-    expect(coal).toBeDefined();
-    const la = computeLedger(sim, 'a');
-    const lb = computeLedger(sim, 'b');
-    expect(la.resources.coal.exported).toBeCloseTo(coal!.amount, 9);
-    expect(lb.resources.coal.imported).toBeCloseTo(coal!.amount, 9);
-    expect(la.income['Resource sales']).toBeGreaterThan(0);
-    expect(lb.expenses['Resource purchases']).toBeGreaterThan(0);
-    // what one pays the other receives
-    const paid = flows.filter((f) => f.to === 'b').reduce((s, f) => s + f.amount * f.price, 0);
-    expect(lb.expenses['Resource purchases']).toBeCloseTo(paid, 9);
-  });
-
-  it('a realm in debt does not buy', () => {
-    const sim = lineGame();
-    signTreaty(sim, 'trade', 'a', 'b');
-    sim.state.nations.a.stock.coal = resourceCap(sim, 'a');
-    sim.state.nations.b.stock.coal = 0;
-    sim.state.nations.b.treasury = -10;
-    bump(sim);
-    nextMemoEpoch();
-    expect(tradeFlows(sim).some((f) => f.to === 'b')).toBe(false);
-  });
-
-  it('without an agreement nothing changes hands', () => {
-    const sim = lineGame();
-    sim.state.nations.a.stock.coal = resourceCap(sim, 'a');
-    sim.state.nations.b.stock.coal = 0;
-    bump(sim);
-    nextMemoEpoch();
-    expect(tradeFlows(sim)).toEqual([]);
-  });
-});
+// trade between realms: tests/trade.test.ts (contracts, format 5)
 
 describe('industrial roster', () => {
   it('armour and engineers need their technology', () => {

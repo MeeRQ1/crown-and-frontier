@@ -31,18 +31,48 @@ export const MISSION_LABELS: Record<AirMission, string> = {
   recon: 'Reconnaissance',
 };
 
+const airGen = new WeakMap<object, number>();
+
+/** Call after a wing is added, removed, rebased or given a mission: keeps the wing index exact. */
+export function touchWings(sim: Sim): void {
+  airGen.set(sim.state, (airGen.get(sim.state) ?? 0) + 1);
+}
+
+interface WingIndex {
+  gen: number;
+  count: number;
+  byNation: Map<NationId, AirWing[]>;
+  byBase: Map<ProvinceId, AirWing[]>;
+  /** wings on bombing missions, by target */
+  bombing: Map<ProvinceId, AirWing[]>;
+}
+const wingIdx = new WeakMap<object, WingIndex>();
+
+/** Wings by realm, base and bombing target, each list in id order. */
+function wingIndex(sim: Sim): WingIndex {
+  const st = sim.state;
+  const gen = airGen.get(st) ?? 0;
+  const ids = Object.keys(st.wings);
+  const hit = wingIdx.get(st);
+  // the count also catches wings added or removed without touchWings (tests editing state directly)
+  if (hit && hit.gen === gen && hit.count === ids.length) return hit;
+  const x: WingIndex = { gen, count: ids.length, byNation: new Map(), byBase: new Map(), bombing: new Map() };
+  for (const id of ids.sort()) {
+    const w = st.wings[id];
+    (x.byNation.get(w.nation) ?? x.byNation.set(w.nation, []).get(w.nation)!).push(w);
+    (x.byBase.get(w.base) ?? x.byBase.set(w.base, []).get(w.base)!).push(w);
+    if (w.mission === 'bombing' && w.target) (x.bombing.get(w.target) ?? x.bombing.set(w.target, []).get(w.target)!).push(w);
+  }
+  wingIdx.set(st, x);
+  return x;
+}
+
 export function wingsOf(sim: Sim, nid: NationId): AirWing[] {
-  return Object.keys(sim.state.wings)
-    .sort()
-    .map((id) => sim.state.wings[id])
-    .filter((w) => w.nation === nid);
+  return [...(wingIndex(sim).byNation.get(nid) ?? [])];
 }
 
 export function wingsAt(sim: Sim, pid: ProvinceId): AirWing[] {
-  return Object.keys(sim.state.wings)
-    .sort()
-    .map((id) => sim.state.wings[id])
-    .filter((w) => w.base === pid);
+  return [...(wingIndex(sim).byBase.get(pid) ?? [])];
 }
 
 export function wingRange(sim: Sim, w: Pick<AirWing, 'nation' | 'type'>): number {
@@ -126,6 +156,7 @@ export function createWing(sim: Sim, nid: NationId, base: ProvinceId, type: Wing
   const count = wingsOf(sim, nid).filter((w) => w.type === type).length + 1;
   const w: AirWing = { id, nation: nid, name: `${sim.world.nationDefs[nid].adjective} ${WINGS[type].label} ${count}`, type, base, strength: 100, mission: 'idle', target: null };
   st.wings[id] = w;
+  touchWings(sim);
   return w;
 }
 
@@ -292,11 +323,13 @@ export function interdiction(sim: Sim, pid: ProvinceId, nid: NationId): { supply
 export function bombingLoss(sim: Sim, pid: ProvinceId): number {
   const owner = sim.state.provinces[pid].owner;
   if (!owner || !Object.keys(sim.state.wings).length) return 0;
-  return memoize(sim, 'bombingLoss', pid, () => {
+  const idx = wingIndex(sim);
+  const here = idx.bombing.get(pid);
+  if (!here) return 0;
+  return memoize(sim, 'bombingLoss', `${pid}|${idx.gen}`, () => {
     let bomb = 0;
-    for (const id of Object.keys(sim.state.wings).sort()) {
-      const w = sim.state.wings[id];
-      if (w.mission !== 'bombing' || w.target !== pid || !activeMission(sim, w) || !atWar(sim, w.nation, owner)) continue;
+    for (const w of here) {
+      if (!activeMission(sim, w) || !atWar(sim, w.nation, owner)) continue;
       bomb += WINGS[w.type].bomb * (w.strength / 100) * Math.max(0.2, 1 + nationMods(sim, w.nation).airAttack);
     }
     if (bomb <= 0) return 0;
@@ -312,6 +345,8 @@ export function weeklyAir(sim: Sim): void {
   const st = sim.state;
   const ids = Object.keys(st.wings).sort();
   if (!ids.length) return;
+  // bases, missions and losses change below: the index is rebuilt when next asked for
+  touchWings(sim);
   // lost bases: rebase to the nearest airfield with room, else the wing is gone
   for (const id of ids) {
     const w = st.wings[id];
@@ -392,12 +427,13 @@ export function airUpkeep(sim: Sim, nid: NationId): number {
 
 export function airFuel(sim: Sim, nid: NationId): number {
   let f = 0;
-  for (const w of Object.values(sim.state.wings)) if (w.nation === nid) f += WINGS[w.type].fuel * (w.mission === 'idle' ? 0.3 : 1);
+  for (const w of wingIndex(sim).byNation.get(nid) ?? []) f += WINGS[w.type].fuel * (w.mission === 'idle' ? 0.3 : 1);
   return f;
 }
 
 export function removeAir(sim: Sim, nid: NationId): void {
   for (const [id, w] of Object.entries(sim.state.wings)) if (w.nation === nid) delete sim.state.wings[id];
+  touchWings(sim);
   for (const pid of sim.world.provIds) {
     const p = sim.state.provinces[pid];
     p.hangar = p.hangar.filter((o) => o.nation !== nid);

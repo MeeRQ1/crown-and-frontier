@@ -12,6 +12,7 @@ import type { Difficulty, GameState, MonthlyLedger, NationId, NationState, Regim
 import { getWorld, mapFingerprint, validateScenario } from './world';
 import { validateContent, validateFocuses } from './content';
 import { GENERIC_FOCUSES } from './data/focus';
+import { signTreaty } from './diplomacy';
 import { nationalFocuses } from './focus';
 
 export interface NewGameOptions {
@@ -74,12 +75,14 @@ export function createGame(opts: NewGameOptions = {}): Sim {
     guarantees: [],
     loans: [],
     blocs: [],
+    contracts: [],
+    shipments: [],
     reparations: [],
     disarmaments: [],
     proposals: [],
     reports: [],
     notifications: [],
-    counters: { army: 0, battle: 0, war: 0, treaty: 0, note: 0, proposal: 0, event: 0, regiment: 0, coalition: 0, fleet: 0, ship: 0, wing: 0, loan: 0, bloc: 0 },
+    counters: { army: 0, battle: 0, war: 0, treaty: 0, note: 0, proposal: 0, event: 0, regiment: 0, coalition: 0, fleet: 0, ship: 0, wing: 0, loan: 0, bloc: 0, contract: 0 },
     result: null,
     continueAfterResult: false,
     diagnostics: [],
@@ -173,6 +176,8 @@ export function createGame(opts: NewGameOptions = {}): Sim {
     st.nations[nid] = n;
   });
   const sim: Sim = { world, state: st };
+  // treaties in force at the start (the historical maps' alliances and pacts)
+  for (const t of world.scenario.treaties ?? []) signTreaty(sim, t.type, t.a, t.b);
   for (const nid of world.nationIds) {
     const n = st.nations[nid];
     const def = world.nationDefs[nid];
@@ -213,7 +218,12 @@ export function createGame(opts: NewGameOptions = {}): Sim {
 
 /** Diplomacy and focus counters of a realm's statistics (all zero). */
 export function emptyDiplomacyStats() {
-  return { focusesDone: 0, settlementsImposed: 0, demandsWon: 0, guaranteesGiven: 0, guaranteeCalls: 0, loansGiven: 0, loanCrowns: 0, blocMonths: 0, sphereMonths: 0, settlementsShared: 0, demands: {} };
+  return { focusesDone: 0, settlementsImposed: 0, demandsWon: 0, guaranteesGiven: 0, guaranteeCalls: 0, loansGiven: 0, loanCrowns: 0, blocMonths: 0, sphereMonths: 0, settlementsShared: 0, demands: {}, ...emptyTradeStats() };
+}
+
+/** Trade-contract counters of a realm's statistics (format 5). */
+export function emptyTradeStats() {
+  return { contractsSigned: 0, contractsKept: 0, contractsDefaulted: 0, contractsCancelled: 0, contractUnits: 0 };
 }
 
 /** Navy and air counters of a realm's statistics (all zero). */

@@ -8,12 +8,13 @@ import { createGame, type NewGameOptions } from '../sim/game';
 import { canEnter, etaWeeks, findPath } from '../sim/movement';
 import { readSave, SaveError, serialize } from '../sim/save';
 import { atWar, dateOf, months, ownedProvinces, provName, type Sim } from '../sim/state';
-import { isOver, step } from '../sim/tick';
+import { isOver, step, weekSlices } from '../sim/tick';
 import { fleetEta, fleetsIn, fleetSummary, pathToCoast, transportFor, zonePath } from '../sim/naval';
-import type { AirMission, Army, Command, CommandResult, Demand, DemandKind, NationId, ProvinceId } from '../sim/types';
+import type { AirMission, Army, Command, CommandResult, ContractTerms, Demand, DemandKind, NationId, ProvinceId, Tradeable } from '../sim/types';
 import { Sound } from './audio';
 import { h, setChildren } from './dom';
 import { fontsReady } from './fonts';
+import { spritesReady } from './map/sprites';
 import { weeks } from './format';
 import { icon } from './icons';
 import type { MapGeometry } from './map/geometry';
@@ -27,17 +28,20 @@ import { dialog, pendingDecisions, renderDock } from './panels/dialogs';
 import { attention, renderHud } from './panels/hud';
 import { renderInspector } from './panels/inspector';
 import { renderLedger, type LedgerTab } from './panels/ledgers';
+import type { LogFilter } from './ledgers/chronicle';
 import { Minimap, renderModes, renderNavCluster } from './panels/mapui';
 import { openMenuDialog, renderEndScreen, renderMenu, screenCleanup } from './screens';
 import { loadSettings, saveSettings, type UISettings } from './settings';
 import { MapLibrary } from './maplib';
-import { downloadText, SaveStore } from './storage';
+import { downloadText, SaveStore, slotLabel } from './storage';
 import { Tutorial } from './tutorial';
 
 type DistOmit<T, K extends keyof T> = T extends unknown ? Omit<T, K> : never;
 export type PlayerCommand = DistOmit<Command, 'nation'>;
 
 export const SPEEDS = [0, 0.5, 1, 2.5, 6]; // ticks (weeks) per second; index 2 is "normal"
+/** milliseconds of simulation per animation frame, at most (one slice may run over) */
+const SIM_BUDGET_MS = 24;
 
 export interface UIState {
   peace: { war: string; with: string; mode: 'demand' | 'concede' | 'white'; provinces: string[]; gold: number } | null;
@@ -48,7 +52,7 @@ export interface UIState {
   split: Record<string, number>;
   ledgerTab: LedgerTab | null;
   diploTarget: NationId | null;
-  logFilter: 'all' | 'urgent' | 'battles';
+  logFilter: LogFilter;
   inspectorPeek: boolean;
   presentationOpen: boolean;
   dockOpen: boolean;
@@ -58,6 +62,14 @@ export interface UIState {
   groupOrders: boolean;
   /** legend panel open (starts closed on phones, where it would cover the map) */
   legendOpen: boolean;
+  /** Industry & Trade: the good in the workspace, and a contract being drafted */
+  tradeGood: Tradeable | null;
+  tradeDraft: ContractTerms | null;
+  /** the technology and the focus shown in the Research and National Focus inspectors */
+  techSel: string | null;
+  focusSel: string | null;
+  /** the How to Play article open */
+  helpTopic: string | null;
 }
 
 const RAIL: Array<{ tab: LedgerTab; label: string; icon: Parameters<typeof icon>[0]; key: string; desk?: boolean }> = [
@@ -109,6 +121,8 @@ export class App {
   private pendingCenter: { pid: ProvinceId; zoomPx?: number; instant?: boolean } | null = null;
 
   private acc = 0;
+  /** the week being simulated while it spans frames (see weekSlices) */
+  private week: Generator<void, void, void> | null = null;
   private lastFrame = 0;
   private lastUI = 0;
   private uiDirty = true;
@@ -125,6 +139,8 @@ export class App {
   private hoverPos: { x: number; y: number } | null = null;
   private pointerDown = false;
   private resizeObs: ResizeObserver | null = null;
+  /** measures the legend and mode bar so the decision dock can stack above them */
+  private modesObs: ResizeObserver | null = null;
   private lastAlertProvince: ProvinceId | null = null;
 
   // DOM
@@ -190,7 +206,7 @@ export class App {
   }
 
   private freshUI(): UIState {
-    return { peace: null, settle: {}, counter: null, split: {}, ledgerTab: null, diploTarget: null, logFilter: 'all', inspectorPeek: false, presentationOpen: false, dockOpen: false, dockItem: null, attentionOpen: false, groupOrders: false, legendOpen: this.settings?.showLegend ?? true };
+    return { peace: null, settle: {}, counter: null, split: {}, ledgerTab: null, diploTarget: null, logFilter: 'all', inspectorPeek: false, presentationOpen: false, dockOpen: false, dockItem: null, attentionOpen: false, groupOrders: false, legendOpen: this.settings?.showLegend ?? true, tradeGood: null, tradeDraft: null, techSel: null, focusSel: null, helpTopic: null };
   }
 
   get player(): NationId | null {
@@ -218,7 +234,7 @@ export class App {
     await this.store.init();
     progress(70, 'Inking the maps…');
     await this.maps.init().catch(() => undefined);
-    await fontsReady;
+    await Promise.all([fontsReady, spritesReady]);
     progress(95, 'Unrolling the atlas…');
     this.showMenu();
     progress(100, 'Ready');
@@ -227,6 +243,7 @@ export class App {
   // ───────────────────────────── Screens ────────────────────────────────────
 
   showScreen(el: HTMLElement): void {
+    this.hideHover();
     this.hideScreen();
     this.screenEl = el;
     this.root.appendChild(el);
@@ -268,7 +285,7 @@ export class App {
   async startGame(sim: Sim, tutorial = false): Promise<void> {
     const token = ++this.starting;
     const geometry = await loadGeometry(sim.state.scenarioId);
-    await fontsReady;
+    await Promise.all([fontsReady, spritesReady]);
     if (token !== this.starting) return;
     this.teardownGame();
     this.sim = sim;
@@ -301,8 +318,11 @@ export class App {
 
   teardownGame(): void {
     cancelAnimationFrame(this.raf);
+    this.week = null;
     this.resizeObs?.disconnect();
     this.resizeObs = null;
+    this.modesObs?.disconnect();
+    this.modesObs = null;
     this.gameEl?.remove();
     this.gameEl = null;
     this.renderer = null;
@@ -361,6 +381,8 @@ export class App {
     this.bindCanvas();
     this.resizeObs = new ResizeObserver(() => this.resize());
     this.resizeObs.observe(this.stageEl);
+    this.modesObs = new ResizeObserver(() => this.stageEl.style.setProperty('--modes-h', `${Math.ceil(this.modesEl.getBoundingClientRect().height)}px`));
+    this.modesObs.observe(this.modesEl);
     this.resize();
   }
 
@@ -417,17 +439,28 @@ export class App {
     this.lastFrame = t;
     const sim = this.sim;
     if (!sim || !this.renderer) return;
-    if (this.speed > 0 && !isOver(sim)) {
-      this.acc += (dt / 1000) * SPEEDS[this.speed];
-      let steps = 0;
-      while (this.acc >= 1 && steps < 6 && this.speed > 0 && !isOver(sim)) {
-        step(sim);
+    if (this.speed > 0 && !isOver(sim)) this.acc += (dt / 1000) * SPEEDS[this.speed];
+    // Simulate a slice at a time within a budget per frame, so a long week (a world
+    // war on the largest maps) spreads over frames instead of freezing the map and
+    // the controls. A week once begun is finished even if the game is paused.
+    const until = performance.now() + SIM_BUDGET_MS;
+    let weeks = 0;
+    while (performance.now() < until) {
+      if (!this.week) {
+        if (!(this.speed > 0 && this.acc >= 1 && weeks < 6 && !isOver(sim))) break;
         this.acc -= 1;
-        steps++;
+        this.week = weekSlices(sim);
+      }
+      if (this.week.next().done) {
+        this.week = null;
+        weeks++;
         this.afterTick();
       }
-      if (this.acc > 3) this.acc = 0;
     }
+    if (this.acc > 3) this.acc = 0;
+    // the map moved under a still pointer (centring on a selection, a wheel step, the
+    // keyboard): the hover card describes what is under the pointer now
+    if (this.hoverPos && !this.pointers.size && this.viewKey() !== this.hoverView) this.hover(this.hoverPos.x, this.hoverPos.y);
     if (this.mapDirty || this.renderer.camera.animating || this.wantsFrame) {
       this.mapDirty = false;
       this.drawMap(t);
@@ -495,9 +528,34 @@ export class App {
         selectedWing: this.selectedWing,
         fleetPreview,
         fleetPreviewLabel,
+        tradeRoutes: this.ui.ledgerTab === 'industry' && this.player ? this.tradeRoutes(sim, this.player) : null,
       },
       now,
     );
+    // the political legend lists the realms on screen: rebuild it once the view settles
+    if (this.mode === 'political' && this.ui.legendOpen && !this.wantsFrame) {
+      const cam = this.renderer.camera;
+      const key = `${Math.round(cam.offX / 40)}|${Math.round(cam.offY / 40)}|${cam.zoom.toFixed(3)}|${sim.state.rev}`;
+      if (key !== this.legendKey) {
+        this.legendKey = key;
+        renderModes(this);
+      }
+    }
+  }
+
+  private legendKey = '';
+
+  /** Our contracts as routes between the two capitals (the chosen good only, when one is chosen). */
+  private tradeRoutes(sim: Sim, pid: NationId): Array<{ from: ProvinceId; to: ProvinceId; sea: boolean }> {
+    const out: Array<{ from: ProvinceId; to: ProvinceId; sea: boolean }> = [];
+    for (const c of sim.state.contracts) {
+      if (c.seller !== pid && c.buyer !== pid) continue;
+      if (this.ui.tradeGood && c.res !== this.ui.tradeGood) continue;
+      const a = sim.state.nations[c.seller].capital;
+      const b = sim.state.nations[c.buyer].capital;
+      if (a && b) out.push({ from: a, to: b, sea: c.lag > 0 });
+    }
+    return out;
   }
 
   /** A select/input inside a panel has focus: rebuilding would close or reset it. */
@@ -618,10 +676,24 @@ export class App {
     if (this.targeting && ((this.targeting.kind === 'fleet' && !st.fleets[this.targeting.fleet]) || (this.targeting.kind === 'air' && !st.wings[this.targeting.wing]))) this.targeting = null;
   }
 
+  /**
+   * Completes the week in progress. Commands, saves and bug reports wait for it,
+   * so they always see whole weeks, and a replay applies each command between
+   * the same two weeks as the campaign did.
+   */
+  finishWeek(): void {
+    const week = this.week;
+    if (!week) return;
+    this.week = null;
+    while (!week.next().done);
+    this.afterTick();
+  }
+
   /** Developer/test hook (console only): advance the simulation N weeks immediately. */
   debugAdvance(weeksToRun: number): void {
     const sim = this.sim;
     if (!sim) return;
+    this.finishWeek();
     for (let i = 0; i < weeksToRun && !isOver(sim); i++) {
       step(sim);
       this.afterTick();
@@ -636,6 +708,7 @@ export class App {
 
   continueAfterEnd(): void {
     if (!this.sim) return;
+    this.finishWeek();
     // a logged command, so a bug report from the continued campaign still replays
     applyCommand(this.sim, { type: 'continueCampaign', nation: this.player });
     this.hideScreen();
@@ -648,6 +721,7 @@ export class App {
     const sim = this.sim;
     const pid = this.player;
     if (!sim || !pid) return { ok: false, reason: 'No active realm.' };
+    this.finishWeek();
     const full = { ...cmd, nation: pid } as Command;
     const r = applyCommand(sim, full);
     if (!r.ok) {
@@ -832,6 +906,7 @@ export class App {
     const a = this.sim?.state.armies[id];
     const group = a && this.ui.groupOrders && a.group ? this.groupArmies(a.group) : [];
     if (group.length > 1) {
+      this.finishWeek();
       // every army of the group marches on its own best route
       let ok = 0;
       const why: string[] = [];
@@ -970,6 +1045,7 @@ export class App {
   // ───────────────────────────── Drawer, dock, toasts ───────────────────────
 
   openLedger(tab: LedgerTab): void {
+    this.hideHover();
     this.ui.ledgerTab = tab;
     this.drawerEl.classList.remove('closed');
     // switching from a ledger that chose the map mode to one that does not want it puts the
@@ -989,12 +1065,13 @@ export class App {
     this.updateInsets();
     this.refresh();
     this.tutorial?.update();
-    (this.drawerEl.querySelector('.tab.active') as HTMLElement | null)?.focus({ preventScroll: true });
+    (this.drawerEl.querySelector('#ledger-title') as HTMLElement | null)?.focus({ preventScroll: true });
   }
 
   closeLedger(): void {
     this.ui.ledgerTab = null;
     this.drawerEl.classList.add('closed');
+    this.stageEl.classList.remove('wide-ledger');
     setChildren(this.drawerEl);
     this.focusNation = null;
     const lm = this.ledgerMode;
@@ -1020,6 +1097,7 @@ export class App {
   }
 
   openMenu(): void {
+    this.hideHover();
     openMenuDialog(this);
   }
 
@@ -1124,9 +1202,11 @@ export class App {
 
   async save(slot: string): Promise<boolean> {
     if (!this.sim) return false;
+    this.finishWeek();
     try {
-      await this.store.put(slot, serialize(this.sim));
-      this.toast(`Saved (${slot}).`, 'good');
+      const replaced = await this.store.putKeepingPrevious(slot, serialize(this.sim));
+      const label = slotLabel(slot);
+      this.toast(replaced ? `Saved to ${label}. The save it replaced is kept on the Load screen.` : `Saved to ${label}.`, 'good');
       return true;
     } catch (e) {
       this.toast((e as Error).message, 'fail');
@@ -1138,6 +1218,7 @@ export class App {
     const sim = this.sim;
     if (!sim || !sim.state.settings.playerNation) return;
     if (!force && this.settings.autosaveMonths <= 0) return;
+    this.finishWeek();
     this.lastAutosave = sim.state.tick;
     try {
       await this.store.autosave(serialize(sim));
@@ -1176,7 +1257,7 @@ export class App {
 
   private showLoadError(msg: string): void {
     // no game DOM yet: a minimal layer over the current screen
-    const layer = h('div', { class: 'modal-layer' });
+    const layer = h('div', { class: 'modal-layer app-layer' });
     const ok = h('button', { class: 'btn primary', type: 'button' }, 'Close');
     ok.addEventListener('click', () => layer.remove());
     layer.appendChild(h('div', { class: 'modal narrow', role: 'dialog', 'aria-modal': 'true' }, h('header', null, h('h2', null, 'Cannot load this save')), h('div', { class: 'body' }, h('p', null, msg)), h('footer', null, ok)));
@@ -1186,6 +1267,7 @@ export class App {
 
   exportSave(): void {
     if (!this.sim) return;
+    this.finishWeek();
     const d = dateOf(this.sim);
     const nation = this.player ?? 'observer';
     downloadText(`crown-and-frontier-${this.sim.state.scenarioId}-${nation}-${d.year}-${d.month + 1}.json`, serialize(this.sim));
@@ -1284,9 +1366,40 @@ export class App {
     });
   }
 
+  /** Hide the map's hover card and highlight (a panel now covers the pointer, or the map lost it). */
+  hideHover(): void {
+    if (!this.tipEl) return;
+    this.hoverPos = null;
+    if (this.hoverProvince) this.mapDirty = true;
+    this.hoverProvince = null;
+    this.tipEl.classList.add('hidden');
+  }
+
+  /** Whether a screen point (stage coordinates) lies under an open panel, where the map takes no input. */
+  private underPanel(x: number, y: number): boolean {
+    const s = this.stageEl.getBoundingClientRect();
+    for (const el of [this.drawerEl, this.inspectorEl, this.railEl, this.dockEl, this.tutorialEl]) {
+      if (!el || el.classList.contains('closed') || el.classList.contains('hidden')) continue;
+      for (const r of el === this.dockEl ? [...el.children].map((c) => c.getBoundingClientRect()) : [el.getBoundingClientRect()]) {
+        if (r.width && x + s.left >= r.left && x + s.left <= r.right && y + s.top >= r.top && y + s.top <= r.bottom) return true;
+      }
+    }
+    return false;
+  }
+
+  /** The camera when the hover card was last worked out. */
+  private hoverView = '';
+
+  private viewKey(): string {
+    const c = this.renderer!.camera;
+    return `${c.zoom}|${c.offX}|${c.offY}`;
+  }
+
   private hover(x: number, y: number): void {
     if (!this.renderer || !this.sim) return;
+    if (this.underPanel(x, y)) return this.hideHover();
     this.hoverPos = { x, y };
+    this.hoverView = this.viewKey();
     const armyId = this.renderer.armyAt(x, y);
     const pid = this.renderer.provinceAt(x, y);
     if (pid !== this.hoverProvince) {

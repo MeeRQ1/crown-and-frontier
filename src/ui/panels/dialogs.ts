@@ -12,6 +12,8 @@ import { demandCost, describeDemand, evaluateSettlement, settlementCost } from '
 import { dateOf, hasTreaty, nationName, provName } from '../../sim/state';
 import { scoreFor, termsCost } from '../../sim/war';
 import type { App } from '../app';
+import { cancelFee, evaluateContract, resLabel } from '../../sim/trade';
+import { forecastChart, termsTable } from '../trade-ui';
 import { button, h, rebuild, setChildren } from '../dom';
 import { icon } from '../icons';
 import { shield } from './common';
@@ -234,10 +236,28 @@ function proposalCard(app: App, id: string, n: number): HTMLElement | null {
     title = `${from} offers a loan`;
     body.push(h('p', null, `${from} would lend us ${Math.round(amount)} crowns now. We repay ${Math.round((amount * (1 + C.loan.interest)) / C.loan.months)} a month for ${C.loan.months} months (${Math.round(C.loan.interest * 100)}% interest).`));
     body.push(h('p', { class: 'small faint' }, `While we repay, ${from} gains influence over us; enough influence draws a smaller realm into its sphere.`));
+  } else if (p.kind === 'contract' && p.contract) {
+    const t = p.contract;
+    const me = app.player!;
+    const buying = t.buyer === me;
+    title = buying ? `${from} offers to sell us ${resLabel(t.res).toLowerCase()}` : `${from} wants to buy our ${resLabel(t.res).toLowerCase()}`;
+    body.push(termsTable(sim, t));
+    body.push(forecastChart(sim, me, t.res, Math.min(12, t.months), t));
+    const own = evaluateContract(sim, me, t);
+    body.push(
+      h(
+        'details',
+        { class: 'acceptance' },
+        h('summary', null, `Our merchants judge it ${own.accept ? 'worth signing' : 'not worth signing'} (${own.score >= 0 ? '+' : ''}${Math.round(own.score)}) — why?`),
+        h('ul', { class: 'reasons' }, own.reasons.map((r) => h('li', null, h('span', null, r.label), h('span', { class: r.value >= 0 ? 'pos' : 'neg' }, `${r.value >= 0 ? '+' : ''}${r.value}`)))),
+      ),
+    );
+    body.push(h('p', { class: 'small faint' }, `Ending it early costs a month of its value (${cancelFee(t).toFixed(1)} crowns) and ${C.trade.cancelTrust} trust. Two months short of goods (seller) or unable to pay (buyer) end it in default.`));
+    acceptLabel = 'Sign the contract';
   } else if (p.kind === 'blocInvite' || p.kind === 'blocJoin') {
     const b = sim.state.blocs.find((x) => x.id === p.bloc);
     title = p.kind === 'blocJoin' ? `${from} asks to join our trade bloc` : p.bloc === 'new' ? `${from} proposes a trade bloc` : `${from} invites us into the ${b?.name ?? 'trade bloc'}`;
-    body.push(h('p', null, `Members buy from each other ${Math.round(C.bloc.buyDiscount * 100)}% cheaper, earn ${Math.round(C.bloc.commerceBonus * 100)}% more commerce from their agreements with each other, and share the crowns that blockades cost any member.`));
+    body.push(h('p', null, `Members offer each other contracts ${Math.round(C.bloc.buyDiscount * 100)}% below list price, earn ${Math.round(C.bloc.commerceBonus * 100)}% more commerce from their agreements with each other, and share the crowns that blockades cost any member.`));
     if (b) body.push(h('p', { class: 'small faint' }, `Members: ${b.members.map((m) => nationName(sim, m)).join(', ')}; led by ${nationName(sim, b.leader)}.`));
   } else if (p.kind === 'peace') {
     const w = sim.state.wars[p.war!];
@@ -259,7 +279,7 @@ function proposalCard(app: App, id: string, n: number): HTMLElement | null {
     title = `${from} proposes a ${TREATY_LABELS[p.kind].toLowerCase()}`;
     const what: Record<string, string> = {
       nap: 'Neither side may declare war on the other for 5 years. Cancelling early costs trust and imposes a 12-month cooling-off.',
-      trade: 'Both realms gain crowns every month; war cancels it automatically.',
+      trade: `The framework for trade contracts between us (goods move only under a contract), and ${C.economy.tradeCommerce} crown of commerce a month each. War ends it, and every contract under it.`,
       alliance: 'Each side is called to arms when the other is attacked (defensive only). Grants military access.',
     };
     body.push(h('p', null, what[p.kind]));

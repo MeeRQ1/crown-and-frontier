@@ -9,7 +9,8 @@
 // changed since (another revision), the save loads only when the provinces and
 // realms are the same, with a notice; otherwise it is refused.
 
-import { SCHEMA_VERSION } from './config';
+import { RESOURCE_INFO, SCHEMA_VERSION } from './config';
+import { convertLegacyTrade } from './trade';
 import { checkInvariants } from './invariants';
 import { addForceDefaults, MigrationError, migrateSave, type RawSave } from './migrate';
 import { startingFleets } from './naval';
@@ -141,12 +142,17 @@ export function readSave(text: string): LoadedSave {
   const sameShape = sameKeys(st.provinces, world.provIds) && sameKeys(st.nations, world.nationIds);
   const name = mapScenarioPart(st.scenarioId)?.meta.name ?? world.scenario.name;
   if (recorded.checksum !== current.checksum) {
+    // a map can change without a new revision number (between development builds): say so
+    // rather than report two equal revisions as different
+    const sameRev = recorded.revision === current.revision;
+    const then = sameRev
+      ? `another edition of ${name} (also revision ${current.revision}, but checksum ${recorded.checksum} rather than ${current.checksum})`
+      : `revision ${recorded.revision} of ${name}`;
+    const now = sameRev ? 'this version of the game' : `this version of the game has revision ${current.revision}, which`;
     if (!sameShape) {
-      throw new SaveError(
-        `This campaign was saved on revision ${recorded.revision} of ${name}, but this version of the game has revision ${current.revision}, whose provinces or realms are different. Load it with the version of the game that made it.`,
-      );
+      throw new SaveError(`This campaign was saved on ${then}, but ${now} has different provinces or realms. Load it with the version of the game that made it.`);
     }
-    notices.push(`This campaign was saved on revision ${recorded.revision} of ${name}; this version of the game has revision ${current.revision}. It continues on the current map, where some borders, rules or realm details may differ from when it was saved.`);
+    notices.push(`This campaign was saved on ${then}${sameRev ? '' : `; this version of the game has revision ${current.revision}`}. It continues on the current map, where some borders, rules or realm details may differ from when it was saved.`);
     st.map = { ...current };
   }
   for (const pid of world.provIds) if (!st.provinces[pid]) throw new SaveError(`The save is missing province "${pid}".`);
@@ -168,6 +174,18 @@ export function readSave(text: string): LoadedSave {
   if (raw.pendingFleets) {
     delete raw.pendingFleets;
     startingFleets(sim);
+  }
+  if (raw.pendingContracts) {
+    delete raw.pendingContracts;
+    const made = convertLegacyTrade(sim);
+    const player = st.settings.playerNation;
+    const mine = made.filter((c) => c.seller === player || c.buyer === player);
+    notices.push(
+      `This campaign was saved before trade contracts (save format 4) and was converted to format 5. Goods no longer move between trade partners by themselves: ` +
+        `the ${made.length} exchange${made.length === 1 ? '' : 's'} running when it was saved became 12-month contracts at list price` +
+        (mine.length ? `, ${mine.length} of them ours (${mine.map((c) => `${c.seller === player ? 'selling' : 'buying'} ${c.qty} ${RESOURCE_INFO[c.res].label.toLowerCase()} a month`).join(', ')})` : '') +
+        `. Industry & Trade shows them, with what each realm can offer.`,
+    );
   }
   const problems = checkInvariants(sim);
   if (problems.length) throw new SaveError(`The save is inconsistent: ${problems.slice(0, 3).join('; ')}.`);

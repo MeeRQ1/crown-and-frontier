@@ -4,7 +4,7 @@
 import type { App } from '../app';
 import { h, rebuild, setChildren } from '../dom';
 import { icon } from '../icons';
-import { legendFor, MODE_MAP, MODES } from '../map/modes';
+import { legendFor, MODE_MAP, MODES, realmFill } from '../map/modes';
 import { tip } from './common';
 
 export function renderModes(app: App): void {
@@ -59,16 +59,47 @@ function legend(app: App): HTMLElement {
     kids.push(h('div', { class: 'ramp', style: `background:linear-gradient(90deg, ${m.ramp.stops.join(',')})` }));
     kids.push(h('div', { class: 'ramp-lbl' }, h('span', null, m.ramp.from), h('span', null, m.ramp.to)));
   }
+  if (app.mode === 'political' && app.sim && app.renderer) {
+    // the realms actually on screen, largest first, with the muted fill the map draws
+    const sim = app.sim;
+    const cam = app.renderer.camera;
+    const view = cam.viewRect(0);
+    const area = new Map<string, number>();
+    for (const p of app.renderer.geo.provincesIn(view[0], view[1], view[2], view[3])) {
+      const o = sim.state.provinces[p.id]?.owner;
+      if (o) area.set(o, (area.get(o) ?? 0) + p.area);
+    }
+    const realms = [...area].sort((a, b) => b[1] - a[1] || (a[0] < b[0] ? -1 : 1));
+    const shown = realms.slice(0, 8);
+    kids.push(
+      h(
+        'div',
+        { class: 'items', 'data-sk': 'legend-realms' },
+        shown.map(([nid]) => h('div', { class: 'it' }, h('span', { class: 'sw', style: `background:${realmFill(sim.world.nationDefs[nid].color)}` }), h('span', null, sim.world.nationDefs[nid].short))),
+      ),
+    );
+    if (realms.length > shown.length) kids.push(h('div', { class: 'more' }, `and ${realms.length - shown.length} more on screen; every realm is named on the map`));
+  }
   if (items.length) {
     kids.push(
       h(
         'div',
-        { class: `items ${app.mode === 'terrain' ? 'one' : ''}` },
-        items.map((it) => h('div', { class: 'it' }, h('span', { class: 'sw', style: it.hatch ? `background:repeating-linear-gradient(135deg, ${it.color} 0 3px, #efe6cf 3px 6px)` : `background:${it.color}` }), it.label)),
+        { class: `items ${app.mode === 'terrain' || app.mode === 'political' || app.mode === 'military' ? 'one' : ''}` },
+        items.map((it) =>
+          h(
+            'div',
+            { class: 'it' },
+            h('span', {
+              class: `sw ${it.line ? 'line' : ''}`,
+              style: it.line ? `border-top-color:${it.color}` : it.hatch ? `background:repeating-linear-gradient(135deg, ${it.color} 0 2px, #eee7d7 2px 5px)` : `background:${it.color}`,
+            }),
+            h('span', null, it.label),
+          ),
+        ),
       ),
     );
   }
-  if (app.mode === 'political' && app.sim) kids.push(h('p', { class: 'faint', style: 'margin-top:6px' }, 'Realm colours are also shown by name lettering; set "Realm patterns" in Settings for hatch patterns.'));
+  if (app.mode === 'political' && app.sim) kids.push(h('p', { class: 'faint', style: 'margin-top:6px' }, 'Each realm is also named on the map and outlined in its own hue; set "Realm patterns" in Settings for hatch patterns.'));
   return h('div', { class: 'legend' }, ...kids);
 }
 
@@ -191,17 +222,17 @@ export class Minimap {
       const g = c.getContext('2d')!;
       const z = (this.w * dpr) / bw;
       g.setTransform(1, 0, 0, 1, 0, 0);
-      g.fillStyle = '#2c5163';
+      g.fillStyle = '#a9c5ca';
       g.fillRect(0, 0, c.width, c.height);
       g.setTransform(z, 0, 0, z, -b.minX * z, -b.minY * z);
       for (const p of r.geo.provList) {
         const o = sim.state.provinces[p.id].owner;
-        g.fillStyle = o ? sim.world.nationDefs[o].color : '#e6dcc2';
+        g.fillStyle = o ? realmFill(sim.world.nationDefs[o].color) : '#eee7d7';
         g.fill(p.path);
       }
-      g.fillStyle = '#b9ab8e';
+      g.fillStyle = '#ddd5c1';
       for (const w of r.geo.peaks) g.fill(w.path);
-      g.fillStyle = '#76807d';
+      g.fillStyle = '#d3d0c3';
       for (const w of r.geo.beyond) g.fill(w.path);
       this.base = c;
     }
@@ -218,8 +249,12 @@ export class Minimap {
     const cam = r.camera;
     const v = cam.viewRect(0);
     const s = c.width / bw;
-    g.strokeStyle = '#f2d48a';
-    g.lineWidth = 1.5 * dpr;
-    g.strokeRect((v[0] - b.minX) * s, (v[1] - b.minY) * s, (v[2] - v[0]) * s, (v[3] - v[1]) * s);
+    const rect: [number, number, number, number] = [(v[0] - b.minX) * s, (v[1] - b.minY) * s, (v[2] - v[0]) * s, (v[3] - v[1]) * s];
+    g.strokeStyle = '#f5efe2';
+    g.lineWidth = 3.5 * dpr;
+    g.strokeRect(...rect);
+    g.strokeStyle = '#665322';
+    g.lineWidth = 1.6 * dpr;
+    g.strokeRect(...rect);
   }
 }

@@ -9,6 +9,8 @@
 //   3  the industrial age: new unit roster, resources, industry, research eras
 //   4  national focus replaces the six policies; peace settlements, guarantees,
 //      influence, loans and trade blocs
+//   5  trade contracts and goods under way replace the automatic exchange of
+//      surplus between trade partners
 
 import { checkMapObject } from '../maps/validate';
 import { mapChecksum, type MapPackage } from '../maps/format';
@@ -16,7 +18,7 @@ import { C, SCHEMA_VERSION, STRATEGIC } from './config';
 import { LEGACY_TECHS, startingTechs } from './data/techs';
 import { POLICY_TO_FOCUS } from './data/focus';
 import { emptyFlows } from './economy';
-import { defaultFactories, emptyDiplomacyStats, emptyForceStats } from './game';
+import { defaultFactories, emptyDiplomacyStats, emptyForceStats, emptyTradeStats } from './game';
 import type { MapFingerprint } from './types';
 import { getWorld, isBuiltinMap, mapFingerprint, mapScenarioPart, scenarioIds } from './world';
 
@@ -154,6 +156,18 @@ const STEPS: Record<number, Step> = {
         `National policies are replaced by focus trees: every realm keeps its policy as the matching completed focus${kept.length ? ' (yours included)' : ''}, and now chooses a national focus. ` +
         `Peace settlements with several parties, guarantees, influence and spheres, loans and trade blocs are new; wars under way share their spoils from now on.`,
     );
+  },
+  // 4 → 5: trade contracts. The running exchanges become contracts once the map is
+  // loaded (readSave, `pendingContracts`), where the notice names them.
+  4: (save) => {
+    const st = save.state as Record<string, any>;
+    st.contracts = [];
+    st.shipments = [];
+    st.counters = { ...st.counters, contract: 0 };
+    for (const n of Object.values<any>(st.nations ?? {})) n.stats = { ...emptyTradeStats(), ...n.stats };
+    st.pendingContracts = true;
+    st.schema = 5;
+    save.schema = 5;
   },
 };
 

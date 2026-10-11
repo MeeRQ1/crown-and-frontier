@@ -17,6 +17,7 @@
 import { C, TERRAIN } from './config';
 import { ownedBy } from './index';
 import { nationMods } from './modifiers';
+import { RAIL_STEP } from './supply';
 import { bump, notify, provName, type Sim } from './state';
 import type { NationId, ProjectKind, ProvinceId } from './types';
 
@@ -220,7 +221,8 @@ export function weeklyConstruction(sim: Sim): void {
       case 'infra':
         p.infra = Math.min(C.construction.infraMax, p.infra + 1);
         notify(sim, pr.nation, 'low', 'build', `The railway in ${provName(sim, pid)} has reached level ${p.infra}.`, { province: pid });
-        bump(sim);
+        // supply steps get cheaper only at two railway levels (supply.ts stepCost): no other level moves a supply line
+        bump(sim, p.infra === RAIL_STEP ? 'all' : 'terms');
         break;
       case 'factory':
         p.factories = Math.min(factoryMax(sim, pid), p.factories + 1);

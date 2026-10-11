@@ -24,7 +24,7 @@
 // coast.
 
 import { C, SHIPS, SHIP_TYPES } from './config';
-import { memoize, touchArmies } from './index';
+import { memoGeo, touchArmies } from './index';
 import { armyCap } from './influence';
 import { nationMods } from './modifiers';
 import { range } from './rng';
@@ -388,7 +388,7 @@ interface Balance {
 
 /** Naval balance in a zone from `nid`'s side (friends: us, allies, co-belligerents). */
 export function zoneBalance(sim: Sim, zone: ZoneId, nid: NationId): Balance {
-  return memoize(sim, 'zoneBalance', `${zone}|${nid}|${fleetEpoch(sim)}`, () => {
+  return memoGeo(sim, 'zoneBalance', `${zone}|${nid}|${fleetEpoch(sim)}`, () => {
     const b: Balance = { friendSurface: 0, hostileSurface: 0, hostileSubs: 0 };
     for (const f of fleetsIn(sim, zone)) {
       if (atWar(sim, nid, f.nation)) {
@@ -425,7 +425,7 @@ export function provinceBlockaded(sim: Sim, pid: ProvinceId): boolean {
 
 /** Share of a realm's coastal development that is blockaded (0–1). */
 export function blockadeShare(sim: Sim, nid: NationId): number {
-  return memoize(sim, 'blockadeShare', `${nid}|${fleetEpoch(sim)}`, () => {
+  return memoGeo(sim, 'blockadeShare', `${nid}|${fleetEpoch(sim)}`, () => {
     let all = 0;
     let cut = 0;
     for (const pid of sim.world.provIds) {
@@ -913,10 +913,11 @@ export function mergeFleetsProblem(sim: Sim, nid: NationId, ids: FleetId[]): str
   return null;
 }
 
+/** Merges fleets into the first one named (the one the order is given from: it keeps its name). */
 export function mergeFleets(sim: Sim, ids: FleetId[]): Fleet {
-  const fs = ids.map((id) => sim.state.fleets[id]).sort((a, b) => (a.id < b.id ? -1 : 1));
-  const into = fs[0];
-  for (const f of fs.slice(1)) {
+  const into = sim.state.fleets[ids[0]];
+  const fs = ids.slice(1).map((id) => sim.state.fleets[id]).sort((a, b) => (a.id < b.id ? -1 : 1));
+  for (const f of fs) {
     into.ships.push(...f.ships);
     for (const id of f.cargo) {
       into.cargo.push(id);

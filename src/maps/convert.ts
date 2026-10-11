@@ -21,6 +21,7 @@ export function scenarioFromPackage(pkg: MapScenarioPart): ScenarioDef {
     rivers: pkg.rivers.map(([a, b]) => [a, b] as [string, string]),
     provinces: pkg.provinces.map((p) => ({ ...p, claims: [...p.claims], neighbors: [...p.neighbors] })),
     seaZones: (pkg.seaZones ?? []).map((z) => ({ ...z, neighbors: [...z.neighbors], coasts: [...z.coasts], ...(z.straits ? { straits: z.straits.map(([a, b]) => [a, b] as [string, string]) } : {}) })),
+    ...(pkg.treaties?.length ? { treaties: pkg.treaties.map((t) => ({ ...t })) } : {}),
   };
 }
 

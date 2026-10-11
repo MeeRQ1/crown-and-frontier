@@ -145,6 +145,27 @@ export function checkInvariants(sim: Sim): string[] {
       if (!st.nations[m]?.alive) out.push(`bloc ${b.id}: dead member ${m}`);
     }
   }
+  const contractIds = new Set<string>();
+  for (const c of st.contracts ?? []) {
+    if (contractIds.has(c.id)) out.push(`contract ${c.id}: duplicate id`);
+    contractIds.add(c.id);
+    if (!st.nations[c.seller]?.alive || !st.nations[c.buyer]?.alive) out.push(`contract ${c.id}: a party is not alive`);
+    if (c.seller === c.buyer) out.push(`contract ${c.id}: a realm trading with itself`);
+    if (!(c.qty >= C.trade.minQty && c.qty <= C.trade.maxQty)) out.push(`contract ${c.id}: quantity ${c.qty}`);
+    if (!(c.price > 0)) out.push(`contract ${c.id}: price ${c.price}`);
+    if (!(c.until > c.start)) out.push(`contract ${c.id}: term ends before it starts`);
+    if (c.shipped < -1e-9) out.push(`contract ${c.id}: negative shipments`);
+    if (atWar(sim, c.seller, c.buyer)) out.push(`contract ${c.id}: between realms at war`);
+  }
+  for (const s of st.shipments ?? []) {
+    if (!(s.qty > 0)) out.push(`shipment ${s.id}: quantity ${s.qty}`);
+    if (!(s.arrives > s.sent)) out.push(`shipment ${s.id}: arrives before it is sent`);
+    if (!st.nations[s.seller] || !st.nations[s.buyer]) out.push(`shipment ${s.id}: unknown realm`);
+  }
+  for (const nid of sim.world.nationIds) {
+    const n = st.nations[nid];
+    for (const r of Object.keys(n.stock) as Array<keyof typeof n.stock>) if (n.stock[r] < -1e-6) out.push(`${nid}: negative ${r} stock`);
+  }
   for (const h in st.influence) for (const t in st.influence[h]) {
     const v = st.influence[h][t];
     if (!(v >= 0 && v <= 100)) out.push(`influence ${h}->${t}: ${v}`);

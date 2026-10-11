@@ -248,7 +248,8 @@ export function monthlyFocus(sim: Sim): void {
     n.focus.progress = 0;
     n.stats.focusesDone++;
     const got = applyReward(sim, nid, d);
-    bump(sim);
+    // railways move supply lines; other rewards leave geography alone
+    bump(sim, d.reward?.infra ? 'all' : 'terms');
     notify(sim, nid, 'normal', 'focus', `National focus complete: ${d.name}.${got.length ? ` ${got.join(' ')}` : ''} Choose the next focus (Focus ledger).`);
   }
 }
@@ -320,7 +321,7 @@ export function applyReward(sim: Sim, nid: NationId, d: FocusDef): string[] {
     });
     for (const p of fresh) st.provinces[p].claims.push(nid);
     if (fresh.length) {
-      bump(sim);
+      bump(sim, 'terms');
       out.push(`Claims on ${fresh.map((p) => provName(sim, p)).join(', ')}.`);
       const owners = [...new Set(fresh.map((p) => st.provinces[p].owner!))].sort();
       for (const o of owners) notify(sim, o, 'normal', 'claim', `${nationName(sim, nid)} now claims ${fresh.filter((p) => st.provinces[p].owner === o).map((p) => provName(sim, p)).join(', ')} (national focus ${d.name}).`);

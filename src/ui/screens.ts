@@ -7,7 +7,7 @@ import { PERSONALITIES } from '../sim/data/personalities';
 import { TECHS } from '../sim/data/techs';
 import { computeLedger, grossIncome, reserveCap, totalDev } from '../sim/economy';
 import { SCHEMA_VERSION } from '../sim/config';
-import { dateOf, nationName, ownedProvinces, type Sim } from '../sim/state';
+import { dateOf, nationName, ownedProvinces, treatyPartners, type Sim } from '../sim/state';
 import type { Difficulty, NationId } from '../sim/types';
 import { VICTORY_LABELS } from '../sim/victory';
 import { DEFAULT_SCENARIO, getWorld, isBuiltinMap, mapScenarioPart, scenarioIds } from '../sim/world';
@@ -23,14 +23,14 @@ import { loadGeometry } from './map/maps';
 import { MapRenderer } from './map/renderer';
 import { confirmDialog, dialog } from './panels/dialogs';
 import { DEFAULT_SETTINGS, type UISettings } from './settings';
-import { downloadText, pickFile } from './storage';
+import { downloadText, pickFile, slotLabel } from './storage';
 
 /** Cleanup hooks for screens that own animation or observers. */
 export const screenCleanup = new WeakMap<HTMLElement, () => void>();
 
 const LEDE = 'A young crown on a divided continent. Every province beyond your heartland is raw frontier: little tax, few recruits, restless people, until you bind it to the crown. Settle, trade or conquer, and hold what you take.';
 
-const MAP_KIND: Record<string, string> = { small: 'Quick campaign', standard: 'Standard campaign', large: 'Grand campaign', huge: 'Grand campaign' };
+const MAP_KIND: Record<string, string> = { small: 'Quick campaign', standard: 'Standard campaign', large: 'Grand campaign', huge: 'World campaign' };
 
 /** Title, kind and campaign lengths (with their calendar years) from the map's own rules. */
 function mapInfo(id: string): { title: string; kind: string; startYear: number; lengths: Array<[number, string]>; defaultYears: number } {
@@ -84,7 +84,7 @@ export function renderMenu(app: App): HTMLElement {
           'div',
           { class: 'menu-foot' },
           app.store.problem ? h('p', { class: 'callout warn', style: 'margin-bottom:10px' }, icon('alert'), app.store.problem) : null,
-          h('p', null, 'An original game: its realms, places and events are fictional, except on The Baltic, 1906, a real-world map drawn from Natural Earth (public domain). It runs entirely in your browser, with no account and no server.'),
+          h('p', null, 'An original game. Its realms, places and events are fictional, except on the three historical maps (The Baltic, 1906; Europe, 1914; The World, 1914), drawn from Natural Earth (public domain) with borders approximated. It runs entirely in your browser, with no account and no server.'),
         ),
       ),
     ),
@@ -206,11 +206,20 @@ export function renderNewGame(app: App, initialMap: string = DEFAULT_SCENARIO): 
   const sheet = h('div', { class: 'realm-sheet' });
   const settingsEl = h('div', { class: 'setup-settings' });
 
+  // preparing a map takes a moment (a few seconds on the largest): say so, and let that paint first
+  const starting = (start: () => void) => {
+    for (const b of [beginBtn, beginBtn2, watchBtn]) {
+      b.disabled = true;
+      b.setAttribute('aria-busy', 'true');
+    }
+    for (const b of [beginBtn, beginBtn2]) setChildren(b, icon('hourglass'), 'Preparing the map…');
+    requestAnimationFrame(() => setTimeout(start, 0));
+  };
   const begin = () => {
     app.updateSettings({ tutorial });
-    app.newGame({ scenario: map, seed, playerNation: nation, difficulty, campaignYears: years, aiIncomeBonus: aiBonus }, tutorial);
+    starting(() => app.newGame({ scenario: map, seed, playerNation: nation, difficulty, campaignYears: years, aiIncomeBonus: aiBonus }, tutorial));
   };
-  const observe = () => app.newGame({ scenario: map, seed, playerNation: null, difficulty, campaignYears: years }, false);
+  const observe = () => starting(() => app.newGame({ scenario: map, seed, playerNation: null, difficulty, campaignYears: years }, false));
 
   const drawMaps = () => {
     setChildren(
@@ -274,7 +283,11 @@ export function renderNewGame(app: App, initialMap: string = DEFAULT_SCENARIO): 
     const sim = startOf(map);
     const d = w.nationDefs[nation];
     const f = startFacts(sim, nation);
-    const nb = f.neighbours.map((o) => h('span', { class: 'nb' }, shieldSvg(w.nationDefs[o]), w.nationDefs[o].short));
+    const realms = (ids: NationId[]) => ids.map((o) => h('span', { class: 'nb' }, shieldSvg(w.nationDefs[o]), w.nationDefs[o].short));
+    const nb = realms(f.neighbours);
+    // the treaties a historical map starts with
+    const allies = treatyPartners(sim, 'alliance', nation);
+    const pacts = treatyPartners(sim, 'nap', nation);
     const fact = (ic: IconName, label: string, value: Child) => h('div', { class: 'fact' }, icon(ic), h('span', { class: 'k' }, label), h('span', { class: 'v' }, value));
     setChildren(
       sheet,
@@ -300,6 +313,8 @@ export function renderNewGame(app: App, initialMap: string = DEFAULT_SCENARIO): 
         f.rivers ? fact('supply', 'River borders', `${f.rivers} (defenders +20% against crossings)`) : null,
         fact('claim', 'Claims on others', f.claims ? `${f.claims} province${f.claims === 1 ? '' : 's'}` : 'none'),
         fact('alert', 'Own land claimed by others', f.claimed ? `${f.claimed} province${f.claimed === 1 ? '' : 's'}` : 'none'),
+        allies.length ? fact('alliance', `Allied with ${allies.length} realm${allies.length === 1 ? '' : 's'}`, h('span', { class: 'nbs' }, realms(allies))) : null,
+        pacts.length ? fact('pact', `Non-aggression pact${pacts.length === 1 ? '' : 's'}`, h('span', { class: 'nbs' }, realms(pacts))) : null,
       ),
     );
     const attribution = mapScenarioPart(map)?.meta.attribution ?? [];
@@ -396,7 +411,7 @@ export function renderLoad(app: App): HTMLElement {
                 { class: 'grow' },
                 h('div', { class: 'sv-t' }, m ? m.nationName : s.key),
                 h('div', { class: 'sv-s' }, m ? `${m.mapName ?? (isBuiltinMap(m.scenario) ? mapInfo(m.scenario).title : m.scenario)} · ${m.date} · saved ${new Date(m.savedAt).toLocaleString()}` : 'Unreadable save'),
-                h('div', { class: 'sv-k' }, s.key.startsWith('autosave') ? 'Autosave' : s.key.replace('slot-', 'Slot ')),
+                h('div', { class: 'sv-k' }, slotLabel(s.key)),
                 why ? h('div', { class: 'small bad' }, why) : null,
                 !why && s.schema !== null && s.schema < SCHEMA_VERSION
                   ? h('div', { class: 'small muted' }, `Made by an earlier version (save format ${s.schema}). It is converted to the current rules when loaded, and you are told what changed; export it first to keep the original.`)
@@ -407,15 +422,23 @@ export function renderLoad(app: App): HTMLElement {
               button('', () => confirmDialog(app, 'Delete this save?', `${m ? `${m.nationName}, ${m.date}` : s.key} will be removed from this browser. This cannot be undone.`, () => void app.store.remove(s.key).then(refresh), 'Delete'), { cls: 'icon quiet', icon: 'close', title: 'Delete this save' }),
             );
           })
-        : h('div', { class: 'callout info' }, icon('info'), 'No saves in this browser yet. Campaigns autosave every few months, and when the tab is hidden.'),
+        : h(
+            'div',
+            { class: 'empty-state' },
+            icon('save'),
+            h('p', null, h('b', null, 'No saves in this browser yet.')),
+            h('p', { class: 'small' }, 'Campaigns save themselves every few months and whenever the tab is hidden. A save exported from another browser or device can be imported here.'),
+            h('div', { class: 'row', style: 'gap:8px;justify-content:center' }, button('Start a new campaign', () => app.showScreen(renderNewGame(app)), { cls: 'primary', icon: 'flag' }), button('Import a save file', importSave, { icon: 'upload' })),
+          ),
     );
   };
-  void refresh();
-  const imp = button('Import a save file', async () => {
+  const importSave = async () => {
     const text = await pickFile('.json,application/json');
     if (text === '__too_big__') return dialog(app, 'File too large', [h('p', null, 'That file is too large to be a save.')]);
     if (text) app.loadText(text);
-  }, { icon: 'upload' });
+  };
+  void refresh();
+  const imp = button('Import a save file', importSave, { icon: 'upload' });
   return h(
     'div',
     { class: 'screen', role: 'main' },
@@ -520,11 +543,12 @@ export function renderHowTo(app: App): HTMLElement {
         'div',
         { class: 'page' },
         h('header', null, backBtn(app), h('h2', null, 'How to play')),
-        h('p', { class: 'serif', style: 'font-size:var(--fs-lg);color:var(--paper-300)' }, LEDE),
+        h('p', { class: 'serif', style: 'font-size:var(--fs-lg);color:var(--text-2)' }, LEDE),
         sec(
           'The maps',
           h('p', null, h('b', null, 'Aldmere'), ' is the standard campaign: fourteen realms and about three hundred provinces, with mountain passes, rivers, islands and wide unclaimed frontiers. Every realm has several fronts and marches take months. ', h('b', null, 'The Reach'), ' is the quick campaign: nine realms and 99 provinces, where wars are decided in a few seasons.'),
           h('p', null, h('b', null, 'The Sundered Isles'), ' is a naval campaign among islands, ', h('b', null, 'the Kharan Steppe'), ' a war of movement across open grassland, and ', h('b', null, 'the Middle Sea'), ' a grand campaign of sixteen realms around an inland sea. ', h('b', null, 'The Baltic, 1906'), ' is northern Europe as it was: Sweden, Norway, Denmark, the German Empire and the Russian Empire, with coasts, lakes, rivers and towns from Natural Earth.'),
+          h('p', null, h('b', null, 'Hesperia, 1890'), ' is a large invented world: two continents facing each other across the Narrows, an island kingdom in the ocean and three unclaimed frontiers (754 provinces, 22 realms). ', h('b', null, 'Europe, 1914'), ' (686 provinces, 23 realms) and ', h('b', null, 'The World, 1914'), ' (1,225 provinces, 57 realms, colonial empires on every continent) start on the eve of the Great War, from Natural Earth, with the borders of 1914 approximated from present-day divisions. On the World a week of war takes longer to work out, so the fastest speed runs slower there; the map stays responsive.'),
           h('p', null, 'The Map library (main menu) lists every map with its size and style, and holds your own maps: make one in the map editor, or import a map file.'),
         ),
         sec(
@@ -575,10 +599,19 @@ export function openMenuDialog(app: App): void {
       await app.save(key);
       close();
     }, { icon: 'save' });
+  // what each slot holds: saving replaces it, and the replaced save stays on the Load screen
+  const holds = h('div', { class: 'small muted', style: 'margin-top:6px' });
+  void app.store.list().then((slots) => {
+    const used = ['slot-1', 'slot-2', 'slot-3'].map((k) => slots.find((x) => x.key === k)).filter((x): x is NonNullable<typeof x> => !!x?.meta);
+    holds.textContent = used.length
+      ? `${used.map((x) => `${slotLabel(x.key)}: ${x.meta!.nationName}, ${x.meta!.date}`).join(' · ')}. Saving into a used slot keeps the save it replaces on the Load screen.`
+      : 'All three slots are free.';
+  });
   const body = [
     h('p', { class: 'small muted' }, `${st.playerNation ? sim.world.nationDefs[st.playerNation].name : 'Observer'} · ${mapInfo(sim.state.scenarioId).title} · ${dateOf(sim).label} · seed ${st.seed} · ${DIFFICULTY[st.difficulty].label}${st.aiIncomeBonus ? ` · AI income +${Math.round(st.aiIncomeBonus * 100)}%` : ''}`),
     h('div', { class: 'eyebrow', style: 'margin-top:10px' }, 'Save'),
     h('div', { class: 'actions' }, slot('slot-1', 'Slot 1'), slot('slot-2', 'Slot 2'), slot('slot-3', 'Slot 3')),
+    holds,
     h('div', { class: 'eyebrow', style: 'margin-top:14px' }, 'Files and options'),
     h(
       'div',
@@ -636,7 +669,7 @@ export function renderEndScreen(app: App): HTMLElement {
         'div',
         { class: 'page' },
         h('header', null, h('h2', null, title)),
-        h('p', { class: 'serif', style: 'font-size:var(--fs-lg);color:var(--paper-300)' }, r.reason, ` (${dateOf(sim, r.tick).label}, ${mapInfo(st.scenarioId).title})`),
+        h('p', { class: 'serif', style: 'font-size:var(--fs-lg);color:var(--text)' }, r.reason, ` (${dateOf(sim, r.tick).label}, ${mapInfo(st.scenarioId).title})`),
         n
           ? h(
               'section',

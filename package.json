@@ -25,7 +25,9 @@
     "rulecheck": "tsx tools/rulecheck.ts",
     "fuzz": "tsx tools/fuzz.ts",
     "genmaps": "tsx tools/genmaps.ts",
-    "genbaltic": "tsx tools/genbaltic.ts"
+    "genbaltic": "tsx tools/genbaltic.ts",
+    "genreal": "node --max-old-space-size=8192 --import tsx tools/genreal.ts",
+    "atlas:assets": "tsx tools/atlas-assets.ts"
   },
   "devDependencies": {
     "@types/d3-delaunay": "^6.0.4",
@@ -37,9 +39,6 @@
     "vitest": "^5.0.2"
   },
   "dependencies": {
-    "@fontsource-variable/alegreya": "^5.3.0",
-    "@fontsource-variable/source-sans-3": "^5.3.0",
-    "@fontsource/alegreya-sc": "^5.3.0",
     "d3-delaunay": "^6.0.4"
   }
 }

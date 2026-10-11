@@ -1,7 +1,9 @@
 // Supply network.
 //
 // Sources: provinces owned AND controlled by the nation or a friend (ally / same
-// war side) that are integrated >= 50, fortified, or a capital, and not in revolt.
+// war side) that are integrated >= 50, fortified, or a capital, and not in revolt;
+// and beachheads: a coastal province a realm holds (owned or occupied) with one of
+// its fleets stationed offshore in a zone enemy warships do not command.
 // Supply travels through friendly-controlled provinces; each step costs 1
 // (+0.5 into mountains/marsh, -0.5 with roads >= 2, minimum 0.5). An army is on a
 // supply line when its province is within range (3 + technology) — the final
@@ -13,9 +15,9 @@
 
 import { C, TERRAIN } from './config';
 import { CostHeap } from './heap';
-import { armiesIn } from './index';
+import { armiesIn, geoRev } from './index';
 import { nationMods } from './modifiers';
-import { fleetEpoch, straitBlocked } from './naval';
+import { fleetEpoch, fleetsIn, straitBlocked, zoneBalance } from './naval';
 import { isFriendly, type Sim } from './state';
 import { edgeKey } from './world';
 import type { Army, NationId, ProvinceId } from './types';
@@ -34,23 +36,112 @@ export interface SupplyInfo {
   remedies: string[];
 }
 
-const distCache = new WeakMap<object, Map<NationId, { key: string; dist: Record<ProvinceId, number> }>>();
+const distCache = new WeakMap<object, Map<NationId, { key: string; inputs: string; dist: Record<ProvinceId, number> }>>();
 
 export function isSupplySource(sim: Sim, pid: ProvinceId): boolean {
   const p = sim.state.provinces[pid];
-  if (!p.owner || p.controller !== p.owner) return false;
   if (p.revoltUntil > sim.state.tick) return false;
-  if (p.integration >= C.integration.supplySourceMin) return true;
-  if (p.fort > 0) return true;
-  return sim.state.nations[p.owner]?.capital === pid;
+  if (p.owner && p.controller === p.owner) {
+    if (p.integration >= C.integration.supplySourceMin) return true;
+    if (p.fort > 0) return true;
+    if (sim.state.nations[p.owner]?.capital === pid) return true;
+  }
+  return isBeachhead(sim, pid);
 }
+
+/**
+ * A beachhead: a coastal province held by a realm (owned or occupied) with one of its
+ * fleets stationed offshore in a zone where enemy warships do not outgun its friends.
+ * Supply comes in by sea, so an army landed overseas need not starve.
+ */
+export function isBeachhead(sim: Sim, pid: ProvinceId): boolean {
+  const holder = sim.state.provinces[pid].controller;
+  const zones = sim.world.provZones[pid];
+  if (!holder || !zones?.length) return false;
+  for (const z of zones) {
+    if (!fleetsIn(sim, z).some((f) => f.nation === holder && !f.path.length)) continue;
+    const b = zoneBalance(sim, z, holder);
+    if (b.hostileSurface === 0 || b.friendSurface >= b.hostileSurface) return true;
+  }
+  return false;
+}
+
+/** Railway level from which a supply step costs less (construction bumps geography only on reaching it). */
+export const RAIL_STEP = 2;
 
 function stepCost(sim: Sim, pid: ProvinceId): number {
   const t = sim.world.prov[pid].terrain;
   let c = 1;
   if (t === 'mountains' || t === 'marsh') c += 0.5;
-  if (sim.state.provinces[pid].infra >= 2) c -= 0.5;
+  if (sim.state.provinces[pid].infra >= RAIL_STEP) c -= 0.5;
   return Math.max(0.5, c);
+}
+
+const sourcesMemo = new WeakMap<object, { tick: number; geo: number; fleets: number; key: string }>();
+
+/** Which provinces are supply sources this week, as a hash (shared by every realm). */
+function sourcesKey(sim: Sim): string {
+  const st = sim.state;
+  const geo = geoRev(sim);
+  const fleets = fleetEpoch(sim);
+  const hit = sourcesMemo.get(st);
+  if (hit && hit.tick === st.tick && hit.geo === geo && hit.fleets === fleets) return hit.key;
+  let h = 2166136261;
+  let n = 0;
+  const ids = sim.world.provIds;
+  for (let i = 0; i < ids.length; i++) {
+    if (!isSupplySource(sim, ids[i])) continue;
+    h = Math.imul(h ^ i, 16777619) >>> 0;
+    n++;
+  }
+  const key = `${n}:${h}`;
+  sourcesMemo.set(st, { tick: st.tick, geo, fleets, key });
+  return key;
+}
+
+/** The straits closed to a realm by enemy warships, as a bit string. */
+const blockedMemo = new WeakMap<object, Map<NationId, { tick: number; fleets: number; geo: number; key: string }>>();
+
+function blockedKey(sim: Sim, nid: NationId): string {
+  if (!sim.world.straitZone.size) return '';
+  const st = sim.state;
+  const fleets = fleetEpoch(sim);
+  const geo = geoRev(sim);
+  let per = blockedMemo.get(st);
+  if (!per) blockedMemo.set(st, (per = new Map()));
+  const hit = per.get(nid);
+  if (hit && hit.tick === st.tick && hit.fleets === fleets && hit.geo === geo) return hit.key;
+  let key = '';
+  for (const k of sim.world.straitZone.keys()) {
+    const [a, b] = k.split('|');
+    key += straitBlocked(sim, nid, a, b) ? '1' : '0';
+  }
+  per.set(nid, { tick: st.tick, fleets, geo, key });
+  return key;
+}
+
+/**
+ * Everything a realm's supply distances are computed from, as an exact key: for each
+ * province, whether it is friendly, a source and on a railway, plus the straits closed
+ * to the realm. Compared when geography changes, so a capture on another continent
+ * does not recompute realms it cannot affect.
+ */
+function supplyInputs(sim: Sim, nid: NationId): string {
+  const ids = sim.world.provIds;
+  const friends = new Map<NationId | null, boolean>();
+  const codes: number[] = [];
+  let word = 0;
+  let n = 0;
+  for (let i = 0; i < ids.length; i++) {
+    const p = sim.state.provinces[ids[i]];
+    let f = friends.get(p.controller);
+    if (f === undefined) friends.set(p.controller, (f = isFriendly(sim, nid, p.controller)));
+    // three bits a province, five provinces a character (below the surrogate range)
+    word = word * 8 + (f ? 1 : 0) + (f && isSupplySource(sim, ids[i]) ? 2 : 0) + (p.infra >= RAIL_STEP ? 4 : 0);
+    if (++n === 5) (codes.push(word), (word = 0), (n = 0));
+  }
+  codes.push(word);
+  return `${String.fromCharCode(...codes)}|${blockedKey(sim, nid)}`;
 }
 
 /** Supply distance from the nearest friendly source to every province (Infinity if unreachable). */
@@ -60,10 +151,16 @@ export function supplyDistances(sim: Sim, nid: NationId): Record<ProvinceId, num
     per = new Map();
     distCache.set(sim.state, per);
   }
-  // sea control changes which straits carry supply
-  const key = `${sim.state.tick}|${sim.state.rev}|${fleetEpoch(sim)}`;
+  // the distances hold until control, sides, forts or railways change (geoRev), the supply
+  // sources change (integration, revolts) or sea control opens or shuts one of our straits
+  const key = `${geoRev(sim)}|${sourcesKey(sim)}|${blockedKey(sim, nid)}`;
   const hit = per.get(nid);
   if (hit && hit.key === key) return hit.dist;
+  const inputs = supplyInputs(sim, nid);
+  if (hit && hit.inputs === inputs) {
+    hit.key = key;
+    return hit.dist;
+  }
 
   const dist: Record<ProvinceId, number> = {};
   // one friendliness lookup per controlling realm, not per province
@@ -99,7 +196,7 @@ export function supplyDistances(sim: Sim, nid: NationId): Record<ProvinceId, num
       }
     }
   }
-  per.set(nid, { key, dist });
+  per.set(nid, { key, inputs, dist });
   return dist;
 }
 
@@ -138,7 +235,7 @@ export function supplyAt(sim: Sim, nid: NationId, pid: ProvinceId, extraRegiment
   if (explain) {
     if (!inRange) {
       reasons.push(dist === Infinity ? 'No friendly supply source can reach this province.' : `Supply line too long: ${dist.toFixed(1)} steps from the nearest source (range ${range}).`);
-      remedies.push('Hold provinces back toward home, integrate frontier land to 50+, build a fort nearby, or research Supply Trains.');
+      remedies.push('Hold provinces back toward home, integrate frontier land to 50+, build a fort nearby, keep a fleet off a coast we hold (a beachhead), or research Supply Trains.');
     } else if (stock <= 0) {
       reasons.push('The national supply stockpile is empty.');
       remedies.push('Reduce army size, secure grain provinces, or research Refrigeration.');
@@ -150,6 +247,15 @@ export function supplyAt(sim: Sim, nid: NationId, pid: ProvinceId, extraRegiment
     }
   }
   return { connected, distance: dist, range, capacity, load, level, status: supplyStatus(level), reasons, remedies };
+}
+
+/**
+ * Whether an army of `nid` in `pid` draws on the national stockpile: within
+ * supply range of a source and the stockpile not empty (supplyAt's `connected`,
+ * without the capacity and load it also works out).
+ */
+export function supplyConnected(sim: Sim, nid: NationId, pid: ProvinceId): boolean {
+  return supplyDistances(sim, nid)[pid] <= supplyRange(sim, nid) && sim.state.nations[nid].supplies > 0;
 }
 
 export function armySupplyInfo(sim: Sim, a: Army, quick = false): SupplyInfo {

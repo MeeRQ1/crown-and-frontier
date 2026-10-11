@@ -94,32 +94,41 @@ export function centroid(p: Pt[]): Pt {
  * Sea seeds on a jittered grid outside the land outlines, kept clear of every
  * non-sea seed. Appends to `seeds` (the Reach's original behaviour).
  */
-export function fillSea(seeds: Seed[], bounds: Bounds, outlines: Pt[][], opts: { spacing: number; clearance: number; seaGap: number; seed: number }): void {
+export function fillSea(seeds: Seed[], bounds: Bounds, outlines: Pt[][] | ((x: number, y: number) => boolean), opts: { spacing: number; clearance: number; seaGap: number; seed: number }): void {
   const rnd = mulberry(opts.seed);
   const spacing = opts.spacing;
-  const solid = seeds.filter((s) => s.kind !== 'sea');
+  const onLand = typeof outlines === 'function' ? outlines : (x: number, y: number) => outlines.some((o) => pointInPoly(x, y, o));
+  // spatial hashes keep the distance tests local; they accept exactly the seeds a full scan would
+  const hash = (cellSize: number) => {
+    const m = new Map<string, Seed[]>();
+    const key = (x: number, y: number) => `${Math.floor(x / cellSize)},${Math.floor(y / cellSize)}`;
+    return {
+      add: (s: Seed) => (m.get(key(s.x, s.y)) ?? m.set(key(s.x, s.y), []).get(key(s.x, s.y))!).push(s),
+      near: (x: number, y: number, r: number) => {
+        const out: Seed[] = [];
+        const i0 = Math.floor((x - r) / cellSize);
+        const i1 = Math.floor((x + r) / cellSize);
+        const j0 = Math.floor((y - r) / cellSize);
+        const j1 = Math.floor((y + r) / cellSize);
+        for (let j = j0; j <= j1; j++) for (let i = i0; i <= i1; i++) for (const s of m.get(`${i},${j}`) ?? []) out.push(s);
+        return out;
+      },
+    };
+  };
+  const solid = hash(opts.clearance);
+  const seas = hash(opts.seaGap);
+  for (const s of seeds) (s.kind === 'sea' ? seas : solid).add(s);
   let n = 0;
   for (let y = bounds.minY + 10; y < bounds.maxY; y += spacing) {
     for (let x = bounds.minX + 10; x < bounds.maxX; x += spacing) {
       const px = x + (rnd() - 0.5) * spacing * 0.6;
       const py = y + (rnd() - 0.5) * spacing * 0.6;
-      if (outlines.some((o) => pointInPoly(px, py, o))) continue;
-      let ok = true;
-      for (const s of solid) {
-        const d = Math.hypot(s.x - px, s.y - py);
-        if (d < opts.clearance) {
-          ok = false;
-          break;
-        }
-      }
-      if (!ok) continue;
-      for (const s of seeds) {
-        if (s.kind === 'sea' && Math.hypot(s.x - px, s.y - py) < opts.seaGap) {
-          ok = false;
-          break;
-        }
-      }
-      if (ok) seeds.push({ kind: 'sea', id: `~sea${n++}`, x: px, y: py });
+      if (onLand(px, py)) continue;
+      if (solid.near(px, py, opts.clearance).some((s) => Math.hypot(s.x - px, s.y - py) < opts.clearance)) continue;
+      if (seas.near(px, py, opts.seaGap).some((s) => Math.hypot(s.x - px, s.y - py) < opts.seaGap)) continue;
+      const sea: Seed = { kind: 'sea', id: `~sea${n++}`, x: px, y: py };
+      seeds.push(sea);
+      seas.add(sea);
     }
   }
 }

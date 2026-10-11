@@ -1,0 +1,450 @@
+{
+ "env": {
+  "label": "atlas final: branch 6153e86",
+  "scenario": "aldmere",
+  "provinces": 298,
+  "realms": 14,
+  "years": 30,
+  "seeds": "1-2",
+  "node": "v22.22.2",
+  "cpu": "Intel(R) Xeon(R) Processor @ 2.80GHz ×4",
+  "os": "linux 6.18.44-fc-v114",
+  "memoryGB": 16,
+  "gcExposed": true,
+  "date": "2026-10-11"
+ },
+ "creation": {
+  "buildWorldMs": 4.4,
+  "createGameMs": 11.7
+ },
+ "runs": [
+  {
+   "seed": 1,
+   "weeks": 1440,
+   "tick": {
+    "avg": 8.6,
+    "p50": 7.75,
+    "p95": 15.77,
+    "p99": 21.7,
+    "max": 44.4,
+    "maxAt": 0
+   },
+   "phases": {
+    "proposals": {
+     "avg": 0,
+     "p99": 0,
+     "max": 0.1
+    },
+    "ai.strategic": {
+     "avg": 4.21,
+     "p99": 9.46,
+     "max": 29
+    },
+    "ai.operational": {
+     "avg": 1.54,
+     "p99": 6.63,
+     "max": 13.7
+    },
+    "ai": {
+     "avg": 5.77,
+     "p99": 14.21,
+     "max": 37.4
+    },
+    "orders": {
+     "avg": 0.01,
+     "p99": 0.04,
+     "max": 0.2
+    },
+    "naval": {
+     "avg": 0.14,
+     "p99": 0.6,
+     "max": 2.3
+    },
+    "movement": {
+     "avg": 0.04,
+     "p99": 0.25,
+     "max": 2.1
+    },
+    "air": {
+     "avg": 0.03,
+     "p99": 0.28,
+     "max": 1.8
+    },
+    "battles": {
+     "avg": 0.09,
+     "p99": 0.79,
+     "max": 15.7
+    },
+    "sieges": {
+     "avg": 0.06,
+     "p99": 0.25,
+     "max": 1.5
+    },
+    "armyCare": {
+     "avg": 0.63,
+     "p99": 2.63,
+     "max": 5.5
+    },
+    "recruitment": {
+     "avg": 0.04,
+     "p99": 0.16,
+     "max": 1.5
+    },
+    "construction": {
+     "avg": 0.02,
+     "p99": 0.08,
+     "max": 3.1
+    },
+    "warScores": {
+     "avg": 0.02,
+     "p99": 0.14,
+     "max": 1.5
+    },
+    "m.economy": {
+     "avg": 2.76,
+     "p99": 6.46,
+     "max": 8.8
+    },
+    "m.research": {
+     "avg": 0.11,
+     "p99": 0.47,
+     "max": 0.9
+    },
+    "m.integration": {
+     "avg": 0.98,
+     "p99": 3.46,
+     "max": 4.6
+    },
+    "m.diplomacy": {
+     "avg": 1.32,
+     "p99": 3.38,
+     "max": 5.6
+    },
+    "m.wars": {
+     "avg": 0.07,
+     "p99": 0.34,
+     "max": 0.7
+    },
+    "m.events": {
+     "avg": 0.39,
+     "p99": 1.63,
+     "max": 7.4
+    },
+    "m.victory": {
+     "avg": 0.93,
+     "p99": 2.28,
+     "max": 4.3
+    }
+   },
+   "slowest": [
+    {
+     "tick": 1,
+     "ms": 44.4,
+     "parts": "ai 37.4, ai.strategic 29, ai.operational 8.1"
+    },
+    {
+     "tick": 92,
+     "ms": 38.8,
+     "parts": "ai 23.1, ai.operational 13, ai.strategic 10.1, armyCare 5.5, m.economy 3.5, m.diplomacy 3.1"
+    },
+    {
+     "tick": 84,
+     "ms": 36.8,
+     "parts": "ai 29.7, ai.strategic 16, ai.operational 13.7, m.economy 2.7"
+    },
+    {
+     "tick": 4,
+     "ms": 33.9,
+     "parts": "ai 10.4, m.economy 8.8, ai.strategic 7.8, m.integration 4.4, m.diplomacy 3.4, m.victory 3.1, ai.operational 2.6"
+    },
+    {
+     "tick": 1256,
+     "ms": 28.3,
+     "parts": "ai 16.2, ai.strategic 8.4, ai.operational 7.7, m.economy 5"
+    }
+   ],
+   "stateKB": {
+    "y0": 128,
+    "y1": 206,
+    "y10": 303,
+    "y20": 327,
+    "y30": 346
+   },
+   "heapMB": {
+    "y0": 18.7,
+    "y1": 21.7,
+    "y10": 25.4,
+    "y20": 26.6,
+    "y30": 27.2
+   },
+   "counts": {
+    "y0": {
+     "armies": 28,
+     "wars": 0,
+     "battles": 0,
+     "notifications": 0,
+     "diagnostics": 0,
+     "memories": 0
+    },
+    "y1": {
+     "armies": 19,
+     "wars": 0,
+     "battles": 0,
+     "notifications": 288,
+     "diagnostics": 130,
+     "memories": 48
+    },
+    "y10": {
+     "armies": 15,
+     "wars": 0,
+     "battles": 0,
+     "notifications": 400,
+     "diagnostics": 400,
+     "memories": 214
+    },
+    "y20": {
+     "armies": 16,
+     "wars": 1,
+     "battles": 1,
+     "notifications": 400,
+     "diagnostics": 400,
+     "memories": 220
+    },
+    "y30": {
+     "armies": 23,
+     "wars": 0,
+     "battles": 0,
+     "notifications": 400,
+     "diagnostics": 400,
+     "memories": 220
+    }
+   },
+   "calls": {
+    "findPathMs": 0.1,
+    "pathsFound": 200,
+    "reachFromMs": 0.1,
+    "supplyDistancesMs": 0.06,
+    "evaluateTreatyMs": 0.03
+   },
+   "save": {
+    "kb": 347,
+    "saveMs": 5.4,
+    "loadMs": 14.7
+   }
+  },
+  {
+   "seed": 2,
+   "weeks": 1440,
+   "tick": {
+    "avg": 7.65,
+    "p50": 6.94,
+    "p95": 13.21,
+    "p99": 16.43,
+    "max": 25.5,
+    "maxAt": 339
+   },
+   "phases": {
+    "proposals": {
+     "avg": 0,
+     "p99": 0.01,
+     "max": 0.1
+    },
+    "ai.strategic": {
+     "avg": 3.91,
+     "p99": 8.19,
+     "max": 12.7
+    },
+    "ai.operational": {
+     "avg": 1.23,
+     "p99": 4.89,
+     "max": 7.1
+    },
+    "ai": {
+     "avg": 5.17,
+     "p99": 10.63,
+     "max": 14.1
+    },
+    "orders": {
+     "avg": 0.01,
+     "p99": 0.04,
+     "max": 0.1
+    },
+    "naval": {
+     "avg": 0.12,
+     "p99": 0.37,
+     "max": 3.2
+    },
+    "movement": {
+     "avg": 0.03,
+     "p99": 0.17,
+     "max": 0.3
+    },
+    "air": {
+     "avg": 0.02,
+     "p99": 0.15,
+     "max": 0.9
+    },
+    "battles": {
+     "avg": 0.05,
+     "p99": 0.46,
+     "max": 1.3
+    },
+    "sieges": {
+     "avg": 0.06,
+     "p99": 0.18,
+     "max": 1.5
+    },
+    "armyCare": {
+     "avg": 0.54,
+     "p99": 2.08,
+     "max": 7.1
+    },
+    "recruitment": {
+     "avg": 0.04,
+     "p99": 0.12,
+     "max": 1.5
+    },
+    "construction": {
+     "avg": 0.02,
+     "p99": 0.06,
+     "max": 0.6
+    },
+    "warScores": {
+     "avg": 0.01,
+     "p99": 0.09,
+     "max": 0.2
+    },
+    "m.economy": {
+     "avg": 2.59,
+     "p99": 5.99,
+     "max": 7.5
+    },
+    "m.research": {
+     "avg": 0.1,
+     "p99": 0.46,
+     "max": 3.1
+    },
+    "m.integration": {
+     "avg": 0.87,
+     "p99": 1.98,
+     "max": 3.3
+    },
+    "m.diplomacy": {
+     "avg": 1.17,
+     "p99": 2.61,
+     "max": 5.2
+    },
+    "m.wars": {
+     "avg": 0.05,
+     "p99": 0.19,
+     "max": 0.8
+    },
+    "m.events": {
+     "avg": 0.35,
+     "p99": 1.4,
+     "max": 2.6
+    },
+    "m.victory": {
+     "avg": 0.87,
+     "p99": 2.16,
+     "max": 3
+    }
+   },
+   "slowest": [
+    {
+     "tick": 340,
+     "ms": 25.5,
+     "parts": "armyCare 7.1, ai 6.5, m.economy 6, ai.strategic 5.4"
+    },
+    {
+     "tick": 244,
+     "ms": 23.5,
+     "parts": "ai 10, ai.strategic 6.3, m.economy 5.8, ai.operational 3.7"
+    },
+    {
+     "tick": 400,
+     "ms": 20.1,
+     "parts": "ai 8.1, m.economy 5.9, ai.strategic 4.3, ai.operational 3.8"
+    },
+    {
+     "tick": 504,
+     "ms": 19.9,
+     "parts": "m.economy 6.9, ai 6.2, ai.strategic 5.5"
+    },
+    {
+     "tick": 588,
+     "ms": 19.9,
+     "parts": "ai 7.3, m.economy 4.5, ai.strategic 4.1, ai.operational 3.2"
+    }
+   ],
+   "stateKB": {
+    "y0": 128,
+    "y1": 209,
+    "y10": 319,
+    "y20": 334,
+    "y30": 343
+   },
+   "heapMB": {
+    "y0": 28.2,
+    "y1": 27,
+    "y10": 28.3,
+    "y20": 27.3,
+    "y30": 27.8
+   },
+   "counts": {
+    "y0": {
+     "armies": 28,
+     "wars": 0,
+     "battles": 0,
+     "notifications": 0,
+     "diagnostics": 0,
+     "memories": 0
+    },
+    "y1": {
+     "armies": 20,
+     "wars": 0,
+     "battles": 0,
+     "notifications": 297,
+     "diagnostics": 134,
+     "memories": 45
+    },
+    "y10": {
+     "armies": 16,
+     "wars": 0,
+     "battles": 0,
+     "notifications": 400,
+     "diagnostics": 400,
+     "memories": 227
+    },
+    "y20": {
+     "armies": 19,
+     "wars": 0,
+     "battles": 0,
+     "notifications": 400,
+     "diagnostics": 400,
+     "memories": 249
+    },
+    "y30": {
+     "armies": 24,
+     "wars": 0,
+     "battles": 0,
+     "notifications": 400,
+     "diagnostics": 400,
+     "memories": 218
+    }
+   },
+   "calls": {
+    "findPathMs": 0.09,
+    "pathsFound": 195,
+    "reachFromMs": 0.05,
+    "supplyDistancesMs": 0.04,
+    "evaluateTreatyMs": 0.04
+   },
+   "save": {
+    "kb": 344,
+    "saveMs": 3.4,
+    "loadMs": 10.3
+   }
+  }
+ ]
+}
