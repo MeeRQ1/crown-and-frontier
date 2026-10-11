@@ -468,6 +468,9 @@ function periodName(d: Division): string {
 /** Lands whose regions are named after the land alone (one name, with directions where there are several). */
 const BY_LAND = new Set(['Upper Senegal and Niger', 'Nigeria', 'Kamerun', 'Belgian Congo', 'Angola', 'German East Africa', 'Sudan', 'Abyssinia', 'Mozambique', 'Madagascar', 'Chad', 'Niger Territory', 'Mauritania', 'Algeria', 'Libya', 'Egypt', 'Río de Oro', 'Italian Somaliland', 'British East Africa', 'Northern Rhodesia', 'Southern Rhodesia', 'Bechuanaland', 'German South West Africa', 'Ubangi-Shari', 'Middle Congo', 'Gabon', 'French Guinea', 'Ivory Coast', 'Gold Coast', 'Senegal', 'Dahomey', 'Uganda', 'Tunisia', 'Hejaz', 'Yemen', 'Aden', 'Oman', 'Trucial Coast', 'Afghanistan', 'Mongolia', 'Inner Mongolia', 'Sinkiang', 'Kokonor', 'Tibet', 'Dutch Borneo', 'Sumatra', 'Celebes', 'Java', 'Moluccas', 'Dutch New Guinea', 'Lesser Sunda Islands', 'Kaiser-Wilhelmsland', 'Papua', 'Sarawak', 'North Borneo', 'Malaya', 'Laos', 'Cambodia', 'Tonkin', 'Annam', 'Cochinchina', 'Formosa', 'Karafuto', 'Greenland', 'Iceland', 'Alaska', 'Newfoundland', 'Northern Territories', 'Turkestan', 'Steppe', 'Burma', 'Ceylon', 'Nepal', 'Najd', 'Jabal Shammar', 'Asir', 'Hasa', 'Bolivia', 'Paraguay', 'Uruguay', 'Ecuador', 'Venezuela', 'Colombia', 'Guatemala', 'Honduras', 'Nicaragua', 'Costa Rica', 'Panama', 'Cuba', 'Haiti', 'Santo Domingo', 'El Salvador', 'British Guiana', 'Dutch Guiana', 'French Guiana', 'Peru']);
 
+const ENGLAND = new Set(['London', 'South East England', 'East Anglia', 'Midlands', 'West Country', 'Yorkshire', 'Lancashire and Cheshire', 'Northumbria']);
+const PARIS_BASIN = new Set(['Île-de-France', 'Picardy and Flanders', 'Normandy', 'Orléanais and Berry', 'Champagne and Lorraine', 'Anjou and Maine']);
+
 export function regionName(land: string, _realm: string, divisions: Division[], single: boolean, shares: number[]): string {
   if (single || BY_LAND.has(land)) return land;
   const names: Array<[string, number]> = [];
@@ -478,6 +481,15 @@ export function regionName(land: string, _realm: string, divisions: Division[], 
     else names.push([n, shares[i]]);
   });
   names.sort((a, b) => b[1] - a[1]);
+  // a region spread over many of the finer names takes the larger historical unit
+  // they belong to: England (and Wales) rather than its largest county group, the
+  // Paris basin rather than the province that happens to be largest
+  const share = (set: Set<string>) => names.filter(([n]) => set.has(n)).reduce((a, [, v]) => a + v, 0);
+  if (names[0][1] < 0.4) {
+    const english = share(ENGLAND);
+    if (english >= 0.6) return share(new Set(['Wales'])) >= 0.1 ? 'England and Wales' : 'England';
+    if (names.some(([n]) => n === 'Île-de-France') && share(PARIS_BASIN) >= 0.6) return 'Paris Basin';
+  }
   // two names joined, unless either is already a pair (Fez and Meknes)
   if (names.length > 1 && names[1][1] >= 0.3 && !/ and /.test(names[0][0] + names[1][0])) return `${names[0][0]} and ${names[1][0]}`;
   return names[0][0];
