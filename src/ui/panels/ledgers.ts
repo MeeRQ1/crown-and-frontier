@@ -11,7 +11,7 @@ import { menServing, reserveCap } from '../../sim/economy';
 import { checkCommand } from '../../sim/commands';
 import { armyCap, blocOf, evaluateBloc, evaluateLoan, foundBlocProblem, guaranteeProblem, guaranteesBy, guaranteeSlots, guarantorsOf, influenceGain, influenceOver, inviteProblem, joinProblem, loanProblem, sphereMembers, sphereOf } from '../../sim/influence';
 import { maxMorale, nationStrength, unitUnlocked } from '../../sim/military';
-import { aliveNations, alliesOf, armiesOf, atWar, dateOf, hasTreaty, menOf, nationName, ownedProvinces, provName, sideOf, truceUntil, warsOf } from '../../sim/state';
+import { aliveNations, alliesOf, armiesOf, atWar, dateOf, hasTreaty, menOf, nationName, ownedProvinces, provName, sideOf, truceUntil, warsOf, type Sim } from '../../sim/state';
 import { armySupplyInfo } from '../../sim/supply';
 import type { Army, Demand, DemandKind, NationId, PeaceTerms, StrategicResource, TreatyType, War } from '../../sim/types';
 import { buildSettlement, contributionShares, counterOffer, DEMAND_LABELS, demandCost, describeDemand, evaluateSettlement, settlementCost } from '../../sim/settlement';
@@ -807,7 +807,7 @@ function warCard(app: App, w: War, mine: boolean): HTMLElement {
             comp('Enemy land we hold', side === 'defender' ? b.occDef : b.occAtt, 'share of their land, weighted by development'),
             comp('Our land they hold', -(side === 'defender' ? b.occAtt : b.occDef), ''),
             comp('Battles', b.battle, `capped at ±${C.war.battleScoreCap}`),
-            comp('War goal', b.goal, `held goal provinces, ±${C.war.goalScoreCap}`),
+            comp('War goal', b.goal, goalTick(sim, w)),
           ),
         ),
         side ? h('p', { class: 'small' }, `Battles on record: won ${won} of ${reports.length}. Our war exhaustion ${Math.round(st.nations[me!].warExhaustion)} (raises unrest).`) : null,
@@ -817,6 +817,32 @@ function warCard(app: App, w: War, mine: boolean): HTMLElement {
     mine && me && (me === w.attackerLead || me === w.defenderLead) ? h('div', { class: 'war-tools' }, settlementBuilder(app, w)) : null,
     mine && me ? h('div', { class: 'war-tools' }, peaceBuilder(app, w)) : null,
   );
+}
+
+/**
+ * How the war-goal score moves: it builds month by month (holding two of three goal
+ * provinces after a year of holding none still shows the year's losses), so say what
+ * it is doing now.
+ */
+function goalTick(sim: Sim, w: War): string {
+  const st = sim.state;
+  const n = w.goal.provinces.length;
+  const cap = `builds month by month, ±${C.war.goalScoreCap}`;
+  if (!n) return cap;
+  const held = w.goal.provinces.filter((p) => {
+    const c = st.provinces[p].controller;
+    return !!c && w.attackers.includes(c);
+  }).length;
+  const months = (st.tick - w.startTick) / 4;
+  const now =
+    held === n
+      ? 'now +1 a month for the attackers: they hold every goal province'
+      : held === 0
+        ? months >= C.war.goalTickMonths
+          ? 'now −1 a month for the attackers: they hold no goal province'
+          : `−1 a month for the attackers from the ${C.war.goalTickMonths}th month while they hold no goal province`
+        : `unchanged while the attackers hold ${held} of the ${n} goal provinces (all: +1 a month; none: −1)`;
+  return `${cap}; ${now}`;
 }
 
 const DEMAND_KINDS: DemandKind[] = ['cede', 'gold', 'reparations', 'disarm', 'renounce', 'sphere'];
