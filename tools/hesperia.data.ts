@@ -95,8 +95,8 @@ const LAKES: Array<{ name: string; pts: XY[] }> = [
 
 /** Rivers from source to mouth. */
 const RIVERS: Array<{ name: string; pts: XY[] }> = [
-  { name: 'Saune', pts: [[-19, 57], [-18.6, 53.5], [-18, 49.5], [-16, 45.8], [-14.5, 43.5], [-13, 41.5], [-11.5, 39.4], [-10.5, 37.6], [-9.3, 35.8], [-8.5, 34.4], [-7.2, 33]] },
-  { name: 'Morwe', pts: [[-24.5, 45], [-26.5, 43.8], [-28.5, 42.2], [-30.4, 41], [-32.4, 40]] },
+  { name: 'Saune', pts: [[-19, 57], [-18.6, 53.5], [-18, 49.5], [-16, 45.8], [-14.5, 43.5], [-13, 41.5], [-11.5, 39.4], [-10.5, 37.6], [-9.3, 35.8], [-8.5, 34.4], [-7.2, 33], [-6.2, 31.9]] },
+  { name: 'Morwe', pts: [[-34.6, 48.4], [-34.4, 46.4], [-34.6, 44.6], [-35.2, 43.2], [-35.6, 42.2]] },
   { name: 'Halde', pts: [[-24.5, 56.8], [-24, 58.6], [-23.2, 60.4], [-22.2, 61.8]] },
   { name: 'Ember', pts: [[-21, 31], [-19.8, 28.6], [-18.6, 26.4], [-17, 24.6], [-15.4, 22.4], [-13.6, 20.9]] },
   { name: 'Amun', pts: [[29, 22.5], [26.5, 24], [22.5, 25.8], [19, 27], [16, 27.8], [12.5, 28.4], [9.5, 28.6], [6, 28.8], [2.6, 28.6]] },
@@ -468,7 +468,7 @@ function source(): MapSource {
       r.push(r[0]);
       return feature({ name: l.name }, 'Polygon', [r]);
     }),
-    rivers: RIVERS.map((r) => feature({ name: r.name }, 'LineString', rough(r.pts, false, 4, 0.18, `river:${r.name}`).map(P))),
+    rivers: RIVERS.map((r) => feature({ name: r.name, featurecla: 'River' }, 'LineString', rough(r.pts, false, 4, 0.18, `river:${r.name}`).map(P))),
     places,
     divisions: REGION_LIST.map((r) => ({ adm0_a3: r.realm, name: r.id, region: '' })),
     divisionAt,
@@ -517,6 +517,7 @@ export function hesperiaDef(): RealMapDef {
     lakes: Object.fromEntries(LAKES.map((l) => [l.name, l.name])),
     rivers: Object.fromEntries(RIVERS.map((r) => [r.name, r.name])),
     riverMinKm: 300,
+    riverLakeMouths: true,
     ridges: RIDGES.map((r) => ({ name: r.name, halfKm: r.halfKm, pts: r.pts.map(P) })),
     passes: PASSES.map((p) => {
       const [lon, lat] = P(p.at);

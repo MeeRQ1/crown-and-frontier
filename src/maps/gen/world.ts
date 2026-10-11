@@ -83,6 +83,8 @@ export interface RangeSpec {
 export interface RiverSpec {
   name: string;
   pts: Pt[];
+  /** the river ends in a lake rather than the sea */
+  lake?: boolean;
 }
 export interface LakeSpec {
   name: string;
@@ -803,6 +805,7 @@ export function generateWorld(S: WorldSpec, log: (line: string) => void = () => 
   {
     const adj = new Map<string, Array<{ to: string; w: number; sk: string }>>();
     const coastNodes = new Set<string>();
+    const lakeNodes = new Set<string>();
     const nodePt = new Map<string, Pt>();
     for (const seg of M.segs.values()) {
       if (seg.cells.length !== 2) continue;
@@ -811,6 +814,10 @@ export function generateWorld(S: WorldSpec, log: (line: string) => void = () => 
       if (ci.kind === 'sea' || cj.kind === 'sea') {
         coastNodes.add(seg.k0);
         coastNodes.add(seg.k1);
+      }
+      if (ci.kind === 'lake' || cj.kind === 'lake') {
+        lakeNodes.add(seg.k0);
+        lakeNodes.add(seg.k1);
       }
       if (ci.kind !== 'prov' || cj.kind !== 'prov') continue;
       nodePt.set(seg.k0, seg.v0);
@@ -840,8 +847,9 @@ export function generateWorld(S: WorldSpec, log: (line: string) => void = () => 
         }
         return best;
       };
+      const mouths = r.lake ? lakeNodes : coastNodes;
       const src = nearest(line[0], (k) => adj.has(k) && !coastNodes.has(k));
-      const dst = nearest(line[line.length - 1], (k) => adj.has(k) && coastNodes.has(k));
+      const dst = nearest(line[line.length - 1], (k) => adj.has(k) && mouths.has(k));
       const dist = new Map<string, number>([[src, 0]]);
       const prev = new Map<string, { from: string; sk: string }>();
       const heap = new MinHeap<string>();

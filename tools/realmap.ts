@@ -256,6 +256,8 @@ export interface RealMapDef {
   /** Natural Earth river name → the name shown */
   rivers: Record<string, string>;
   riverMinKm: number;
+  /** keep rivers that end in a lake as well as those that reach the sea */
+  riverLakeMouths?: boolean;
   ridges: Array<{ name: string; halfKm: number; pts: Array<[number, number]> }>;
   passes: Array<{ name: string; lon: number; lat: number }>;
   islandNames: Array<[string, number, number]>;
@@ -813,6 +815,12 @@ export function buildRealMap(D: RealMapDef, log: (l: string) => void = () => {})
     for (let c = 0; c < CELLS; c++) if (!land[c]) (seaDist[c] = 0), q.push(c);
     for (let k = 0; k < q.length; k++) for (const n of nbrs4(q[k])) if (seaDist[n] > seaDist[q[k]] + 1) (seaDist[n] = seaDist[q[k]] + 1), q.push(n);
   }
+  const lakeDist = new Int32Array(CELLS).fill(1 << 29);
+  if (D.riverLakeMouths) {
+    const q: number[] = [];
+    for (let c = 0; c < CELLS; c++) if (raster[c] === -2) (lakeDist[c] = 0), q.push(c);
+    for (let k = 0; k < q.length; k++) for (const n of nbrs4(q[k])) if (lakeDist[n] > lakeDist[q[k]] + 1) (lakeDist[n] = lakeDist[q[k]] + 1), q.push(n);
+  }
   const riverList: RiverSpec[] = [];
   for (const f of src('rivers10')) {
     const name = D.rivers[String(f.properties.name)];
@@ -823,13 +831,18 @@ export function buildRealMap(D: RealMapDef, log: (l: string) => void = () => {})
         if (run.length >= 2) {
           let len = 0;
           for (let k = 1; k < run.length; k++) len += Math.hypot(run[k][0] - run[k - 1][0], run[k][1] - run[k - 1][1]);
-          const a = seaDist[cellAt(run[0][0], run[0][1])];
-          const b = seaDist[cellAt(run[run.length - 1][0], run[run.length - 1][1])];
+          const c0 = cellAt(run[0][0], run[0][1]);
+          const c1 = cellAt(run[run.length - 1][0], run[run.length - 1][1]);
+          // a river reaches the sea or, where the map allows it, ends in a lake
+          const lake = Math.min(seaDist[c0], seaDist[c1]) > 3;
+          const dist = lake ? lakeDist : seaDist;
+          const a = dist[c0];
+          const b = dist[c1];
           const pts = a < b ? run.slice().reverse() : run;
           if (len * KM >= D.riverMinKm && Math.min(a, b) <= 3) {
             const thin: Pt[] = [pts[0]];
             for (const p of pts.slice(1)) if (Math.hypot(p[0] - thin[thin.length - 1][0], p[1] - thin[thin.length - 1][1]) >= 18) thin.push(p);
-            if (thin.length >= 3) riverList.push({ name, pts: thin.map(([x, y]) => [Math.round(x), Math.round(y)]) });
+            if (thin.length >= 3) riverList.push({ name, pts: thin.map(([x, y]) => [Math.round(x), Math.round(y)]), ...(lake ? { lake } : {}) });
           }
         }
         run = [];
