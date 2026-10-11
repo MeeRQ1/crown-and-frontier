@@ -14,6 +14,7 @@ import { reachFrom } from '../src/sim/ai/common';
 import { evaluateTreaty } from '../src/sim/diplomacy';
 import { createGame } from '../src/sim/game';
 import { findPath } from '../src/sim/movement';
+import { readSave, serialize } from '../src/sim/save';
 import { seedState, nextFloat } from '../src/sim/rng';
 import { aliveNations, type Sim } from '../src/sim/state';
 import { supplyDistances } from '../src/sim/supply';
@@ -124,6 +125,8 @@ interface Run {
   heapMB: Record<string, number>;
   counts: Record<string, { armies: number; wars: number; battles: number; notifications: number; diagnostics: number; memories: number }>;
   calls: ReturnType<typeof callCosts> | null;
+  /** saving and loading the campaign at its end (median of three) */
+  save: { kb: number; saveMs: number; loadMs: number };
 }
 
 const runs: Run[] = [];
@@ -170,6 +173,17 @@ for (let seed = s0; seed <= (s1 ?? s0); seed++) {
     if (w + 1 === Math.floor(weeks / 2)) calls = callCosts(sim);
   }
   slow.sort((a, b) => b.ms - a.ms);
+  const saveMs: number[] = [];
+  const loadMs: number[] = [];
+  let saved = '';
+  for (let i = 0; i < 3; i++) {
+    const t0 = now();
+    saved = serialize(sim);
+    saveMs.push(now() - t0);
+    const t1 = now();
+    readSave(saved);
+    loadMs.push(now() - t1);
+  }
   const phases: Run['phases'] = {};
   for (const [k, xs] of Object.entries(phaseSeries)) {
     // monthly phases run every 4th week: report their per-run cost
@@ -194,6 +208,7 @@ for (let seed = s0; seed <= (s1 ?? s0); seed++) {
     heapMB,
     counts,
     calls,
+    save: { kb: Math.round(saved.length / 1024), saveMs: r1(median(saveMs)), loadMs: r1(median(loadMs)) },
   });
   console.error(`seed ${seed}: ${totals.length} weeks, avg ${r2(avg(totals))} ms, p99 ${r2(pct(totals, 0.99))} ms, max ${r1(Math.max(...totals))} ms`);
 }
@@ -229,6 +244,7 @@ lines.push('', 'Slowest weeks, first seed:', '');
 for (const s of runs[0].slowest) lines.push(`- week ${s.tick}: ${s.ms} ms (${s.parts})`);
 const c = runs[0].calls;
 if (c) lines.push('', `Call costs at mid-campaign: findPath ${c.findPathMs} ms (${c.pathsFound}/200 found), reachFrom ${c.reachFromMs} ms, supply distances (cold, per realm) ${c.supplyDistancesMs} ms, evaluateTreaty ${c.evaluateTreatyMs} ms.`);
+lines.push('', `Save at the end of the campaign (first seed, median of three): ${runs[0].save.kb} KB; save ${runs[0].save.saveMs} ms, load ${runs[0].save.loadMs} ms.`);
 lines.push('', `State size (KB): ${Object.entries(runs[0].stateKB).map(([k, v]) => `${k} ${v}`).join(', ')}. Heap (MB): ${Object.entries(runs[0].heapMB).map(([k, v]) => `${k} ${v}`).join(', ')}.`);
 lines.push(`Counts: ${Object.entries(runs[0].counts).map(([k, v]) => `${k}: ${v.armies} armies, ${v.wars} wars, ${v.memories} memories`).join('; ')}.`);
 console.log(lines.join('\n'));

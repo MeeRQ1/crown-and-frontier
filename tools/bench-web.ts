@@ -2,9 +2,12 @@
 // rendering): load and campaign creation, frame cost while panning at each zoom
 // tier and in each map mode, frames during battles, ledger rendering, frames
 // while the game runs at its fastest speed (simulation and drawing on the main
-// thread), and heap / DOM growth over a long session.
+// thread), and heap / DOM growth over a long session. With --stress, a late-game
+// state (an AI campaign played to that week in Node) is loaded and the same twelve
+// weeks are run twice: a whole week per frame, as the loop did before weeks were
+// sliced, and in slices at the fastest speed.
 //
-//   npm run build && npx tsx tools/bench-web.ts [--maps reach,aldmere,file.json] [--years 10] [--out reports/perf/web.md]
+//   npm run build && npx tsx tools/bench-web.ts [--maps reach,aldmere,file.json] [--years 10] [--stress earth:1:280] [--out reports/perf/web.md]
 //
 // Numbers from headless software rendering are not real-device numbers; they
 // are comparable between revisions on the same machine.
@@ -31,6 +34,7 @@ const get = (k: string, d: string) => {
 const maps = get('maps', 'reach,aldmere').split(',');
 const years = Number(get('years', '10'));
 const outPath = get('out', '');
+const stress = get('stress', '');
 const MIME: Record<string, string> = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript', '.css': 'text/css', '.json': 'application/json', '.svg': 'image/svg+xml', '.woff2': 'font/woff2', '.txt': 'text/plain' };
 
 const server = createServer((req, res) => {
@@ -264,6 +268,71 @@ for (const m of maps) {
   log(`Long session (${years} years at full speed, heap MB / DOM nodes / state KB): ${longRun.map((x) => `y${x.year} ${x.heapMB} / ${x.dom} / ${x.stateKB}`).join('; ')}; ${Math.round(longRun.at(-1)!.ms / 1000)} s of wall time.`);
   log('');
   await page.close();
+}
+if (stress) {
+  const [scn, seedS, weekS] = stress.split(':');
+  const { createGame } = await import('../src/sim/game');
+  const { step } = await import('../src/sim/tick');
+  const { serialize } = await import('../src/sim/save');
+  const sim = createGame({ scenario: scn, seed: Number(seedS), playerNation: null });
+  while (sim.state.tick < Number(weekS)) step(sim);
+  const text = serialize(sim);
+  const wars = Object.keys(sim.state.wars).length;
+  const armies = Object.keys(sim.state.armies).length;
+  const WEEKS = 12;
+  const open = async (): Promise<Page> => {
+    const page = await newPage();
+    await page.goto(base);
+    await page.waitForSelector('.menu-list button');
+    await page.evaluate(async (t) => {
+      const a = window.cnf;
+      a.updateSettings({ autoPauseProposal: false, autoPauseEvent: false, autoPauseWar: false, autoPauseBattle: false });
+      a.loadText(t);
+      while (!a.renderer || !a.sim) await new Promise((r) => setTimeout(r, 5));
+      for (let i = 0; i < 10; i++) await new Promise((r) => requestAnimationFrame(r));
+    }, text);
+    return page;
+  };
+  // a whole week per frame (the loop before weeks were sliced)
+  let page = await open();
+  const whole = await page.evaluate(async (n) => {
+    const a = window.cnf;
+    const frames: number[] = [];
+    for (let i = 0; i < n; i++) {
+      const t = performance.now();
+      a.debugAdvance(1);
+      await new Promise((r) => requestAnimationFrame(r));
+      frames.push(performance.now() - t);
+    }
+    return { frames, tick: a.sim.state.tick };
+  }, WEEKS);
+  await page.close();
+  // the same weeks in slices, at the fastest speed
+  page = await open();
+  const sliced = await page.evaluate(async (n) => {
+    const a = window.cnf;
+    const frames: number[] = [];
+    const end = a.sim.state.tick + n;
+    const t0 = performance.now();
+    a.setSpeed(4);
+    let last = t0;
+    while (a.sim.state.tick < end && performance.now() - t0 < 120000) {
+      await new Promise((r) => requestAnimationFrame(r));
+      const now = performance.now();
+      frames.push(now - last);
+      last = now;
+    }
+    a.setSpeed(0);
+    return { frames, ms: performance.now() - t0, tick: a.sim.state.tick };
+  }, WEEKS);
+  await page.close();
+  const w = stats(whole.frames);
+  const sl = stats(sliced.frames);
+  log(`### Late-game stress: ${scn}, seed ${seedS}, week ${weekS} (${wars} wars, ${armies} armies, AI only)`);
+  log('');
+  log(`- The next ${WEEKS} weeks, a whole week per frame (the loop before this change): frame avg ${w.avg} ms, p95 ${w.p95} ms, worst ${w.max} ms; ${(WEEKS / (whole.frames.reduce((x, y) => x + y, 0) / 1000)).toFixed(1)} weeks/s.`);
+  log(`- The same ${WEEKS} weeks in slices at the fastest speed: ${sl.n} frames, frame avg ${sl.avg} ms, p95 ${sl.p95} ms, worst ${sl.max} ms; ${(WEEKS / (sliced.ms / 1000)).toFixed(1)} weeks/s.`);
+  log('');
 }
 await browser.close();
 server.close();
