@@ -31,7 +31,7 @@
 //  - the Bering Strait lies on the map's seam and has no crossing.
 
 import type { NationDef, Terrain } from '../src/sim/types';
-import { ISLAND_NAMES as EU_ISLANDS, NATIONS as EU_NATIONS, NAMES as EU_NAMES, NOT_YET as EU_NOT_YET, PASSES as EU_PASSES, REGIONS as EU_REGIONS, RIDGES as EU_RIDGES, classify as euClassify } from './europe.data';
+import { CLAIMS_1914, TREATIES_1914, ISLAND_NAMES as EU_ISLANDS, NATIONS as EU_NATIONS, NAMES as EU_NAMES, NOT_YET as EU_NOT_YET, PASSES as EU_PASSES, REGIONS as EU_REGIONS, RIDGES as EU_RIDGES, classify as euClassify } from './europe.data';
 import { equalEarth, type Division, type RealMapDef } from './realmap';
 
 type Arms = NonNullable<NationDef['arms']>;
@@ -85,7 +85,7 @@ export const NATIONS: NationDef[] = [
   nation('afg', 'Emirate of Afghanistan', 'Afghanistan', 'Afghan', '#8a7a52', 'kabul', 'defensive', arms('sable', 'none', 'sable', 'tower', 'argent'), 'The mountain emirate between the Russian and British empires, which conducts its foreign affairs through India.', 'Mountains and hardy tribes: soldiers fight well at home.', 'Poor, remote and without industry.', { moraleAdd: 0.4, incomeMul: -0.2, researchMul: -0.2 }, 'Mountain realm', 'challenging'),
   nation('njd', 'Emirate of Najd and Hasa', 'Najd', 'Najdi', '#6f8f4f', 'riyadh', 'expansionist', arms('vert', 'bend', 'argent', 'none', 'argent'), 'Ibn Saud’s desert emirate of central Arabia, newly master of the Gulf coast of Hasa and rival of the Rashidis of Ha’il.', 'Desert warriors: cavalry strikes hard.', 'Sand and few people: no industry, little income.', { cavalryAttackAdd: 0.1, moraleAdd: 0.3, incomeMul: -0.25 }, 'Desert emirate', 'challenging'),
   nation('omn', 'Sultanate of Muscat and Oman', 'Oman', 'Omani', '#a0644e', 'muscat', 'commercial', arms('gules', 'none', 'gules', 'ship', 'argent'), 'A seafaring sultanate at the mouth of the Gulf, under British protection, at odds with the imamate of its interior.', 'Dhows and the Indian Ocean trade.', 'Small, poor and divided.', { tradeMul: 0.2, incomeMul: -0.1 }, 'Maritime trader', 'challenging'),
-  nation('nep', 'Kingdom of Nepal', 'Nepal', 'Nepalese', '#8a5c9c', 'kathmandu', 'defensive', arms('gules', 'bordure', 'azure', 'sun', 'argent'), 'A Himalayan kingdom ruled by the Rana prime ministers, closed to foreigners and allied to British India.', 'Gurkha soldiers and mountain walls.', 'Landlocked and poor.', { moraleAdd: 0.4, fortCostMul: -0.2, incomeMul: -0.15 }, 'Mountain realm', 'challenging'),
+  nation('nep', 'Kingdom of Nepal', 'Nepal', 'Nepalese', '#8a5c9c', 'kathmandu', 'defensive', arms('gules', 'bordure', 'azure', 'sun', 'argent'), 'A Himalayan kingdom ruled by the Rana prime ministers, closed to foreigners and a friend of British India.', 'Gurkha soldiers and mountain walls.', 'Landlocked and poor.', { moraleAdd: 0.4, fortCostMul: -0.2, incomeMul: -0.15 }, 'Mountain realm', 'challenging'),
   nation('chn', 'Republic of China', 'China', 'Chinese', '#cf9f3e', 'peking', 'defensive', arms('or', 'chief', 'gules', 'sun', 'gules'), 'The young republic of Yuan Shikai, three years after the fall of the Qing: the most populous country on earth, with foreign concessions in its ports.', 'Numbers: an immense population and manpower.', 'Divided provinces and foreign debt: income, research and integration are weak.', { manpowerMul: 0.3, incomeMul: -0.2, researchMul: -0.2, integrationMul: -0.15 }, 'Old empire', 'challenging'),
   nation('tib', 'Tibet', 'Tibet', 'Tibetan', '#b3865a', 'lhasa', 'defensive', arms('azure', 'none', 'azure', 'mountain', 'argent'), 'The Dalai Lama’s state on the roof of the world, independent in fact since the Chinese garrison left in 1913.', 'The highest mountains on earth.', 'Few people and no industry.', { fortCostMul: -0.3, incomeMul: -0.25, researchMul: -0.3 }, 'Mountain realm', 'challenging'),
   nation('mgl', 'Bogd Khanate of Mongolia', 'Mongolia', 'Mongolian', '#6b956b', 'urga', 'opportunist', arms('gules', 'pale', 'azure', 'sun', 'or'), 'Outer Mongolia under the Bogd Khan, independent of China since 1911 and leaning on Russia.', 'Horsemen of the steppe.', 'Empty land: little income or industry.', { cavalryAttackAdd: 0.1, cavalryCostMul: -0.2, incomeMul: -0.25 }, 'Steppe horde', 'challenging'),
@@ -471,7 +471,7 @@ const BY_LAND = new Set(['Upper Senegal and Niger', 'Nigeria', 'Kamerun', 'Belgi
 const ENGLAND = new Set(['London', 'South East England', 'East Anglia', 'Midlands', 'West Country', 'Yorkshire', 'Lancashire and Cheshire', 'Northumbria']);
 const PARIS_BASIN = new Set(['Île-de-France', 'Picardy and Flanders', 'Normandy', 'Orléanais and Berry', 'Champagne and Lorraine', 'Anjou and Maine']);
 
-export function regionName(land: string, _realm: string, divisions: Division[], single: boolean, shares: number[]): string {
+export function regionName(land: string, _realm: string, divisions: Division[], single: boolean, shares: number[], capital?: number): string {
   if (single || BY_LAND.has(land)) return land;
   const names: Array<[string, number]> = [];
   divisions.forEach((d, i) => {
@@ -490,6 +490,11 @@ export function regionName(land: string, _realm: string, divisions: Division[], 
     if (english >= 0.6) return share(new Set(['Wales'])) >= 0.1 ? 'England and Wales' : 'England';
     if (names.some(([n]) => n === 'Île-de-France') && share(PARIS_BASIN) >= 0.6) return 'Paris Basin';
   }
+  // a region with no dominant part that holds the capital is named for the capital's own land
+  // (Rome's region is Lazio, not the larger Sardinia that shares it), unless that land is
+  // the city alone (Washington's region is not the District of Columbia)
+  const home = capital === undefined ? undefined : names.find(([n]) => n === periodName(divisions[capital]));
+  if (home && home[1] >= 0.02 && names[0][1] < 0.5) return home[0];
   // two names joined, unless either is already a pair (Fez and Meknes)
   if (names.length > 1 && names[1][1] >= 0.3 && !/ and /.test(names[0][0] + names[1][0])) return `${names[0][0]} and ${names[1][0]}`;
   return names[0][0];
@@ -723,6 +728,22 @@ const DEPOSIT_HINTS: RealMapDef['depositHints'] = [
 /** The frame: the whole world from 56° S to 78° N, cut at the Bering Strait (169° W). */
 export const BOX = { west: -169, east: 191, south: -56, north: 78 };
 
+/**
+ * Beyond Europe (see TREATIES_1914): the Anglo-Japanese Alliance (1902, renewed
+ * 1911) is a defensive alliance; the Russo-Japanese agreements of 1907–1912 on
+ * their spheres are a non-aggression pact; and the dominions, whose foreign
+ * policy London still conducted in 1914, are allied with Britain.
+ */
+const TREATIES_WORLD: NonNullable<RealMapDef['treaties']> = [
+  ...TREATIES_1914,
+  { type: 'alliance', a: 'gbr', b: 'jpn' },
+  { type: 'nap', a: 'rus', b: 'jpn' },
+  { type: 'alliance', a: 'gbr', b: 'can' },
+  { type: 'alliance', a: 'gbr', b: 'saf' },
+  { type: 'alliance', a: 'gbr', b: 'ast' },
+  { type: 'alliance', a: 'gbr', b: 'nzl' },
+];
+
 export function earthDef(): RealMapDef {
   return {
     id: 'earth',
@@ -764,6 +785,8 @@ export function earthDef(): RealMapDef {
     nameKm: 260,
     straits: STRAITS,
     straitMaxKm: 160,
+    treaties: TREATIES_WORLD,
+    claims: CLAIMS_1914.map((c) => ({ ...c, km: 260 })),
     cities: { max: 260, minPop: 150000, spacingKm: 260 },
     depositHints: DEPOSIT_HINTS,
     climate: 'temperate',
@@ -771,12 +794,12 @@ export function earthDef(): RealMapDef {
     meta: {
       name: 'The World, 1914',
       description:
-        'The whole world in the summer of 1914, from the Arctic to Cape Horn: the European great powers and their empires, the United States and Japan, China three years into its republic, and the independent kingdoms of Asia and Africa. Historical borders, approximated from present-day divisions; colonies and protectorates are held by the powers that governed them, and realms too small for a province on this scale are drawn with a neighbour.',
+        'The whole world at the start of 1914, from the Arctic to Cape Horn: the European great powers and their empires, the United States and Japan, China two years into its republic, and the independent kingdoms of Asia and Africa. The alliances of 1914 are in force, with the Anglo-Japanese Alliance and the dominions beside Britain, and the claims of the time stand. Historical borders, approximated from present-day divisions; colonies and protectorates are held by the powers that governed them, and realms too small for a province on this scale are drawn with a neighbour.',
       blurb: 'A huge historical campaign: over a thousand provinces and 57 realms on the eve of the Great War.',
       size: 'huge',
       difficulty: 'hard',
       style: 'Empires across oceans; every front at once',
-      mechanics: ['Real geography', 'Historical borders of 1914', 'Colonial empires', 'Oceans that wrap around', 'Mountain passes', 'Straits and islands'],
+      mechanics: ['Real geography', 'Historical borders of 1914', 'Alliances and claims of 1914', 'Colonial empires', 'Oceans that wrap around', 'Mountain passes', 'Straits and islands'],
       origin: 'builtin',
       attribution: [
         'Coastlines, lakes, rivers, first-level divisions and towns: Natural Earth (naturalearthdata.com), public domain.',

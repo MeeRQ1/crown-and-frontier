@@ -21,7 +21,7 @@
 import { execFileSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
-import { MAP_FORMAT, MAP_FORMAT_VERSION, sizeFor, type MapLabelDef, type MapMeta, type MapPackage } from '../src/maps/format';
+import { MAP_FORMAT, MAP_FORMAT_VERSION, sizeFor, type MapLabelDef, type MapMeta, type MapPackage, type StartTreaty } from '../src/maps/format';
 import { previewSvg, type Pt } from '../src/maps/gen/core';
 import { slug } from '../src/maps/gen/names';
 import { components, outline, placeDeposits, type Climate, type Grid } from '../src/maps/gen/procedural';
@@ -196,8 +196,12 @@ export interface AutoRegions {
   sparse(group: string, realm: string, lat: number, lon: number): number;
   biome(group: string, lat: number, lon: number): Partial<Record<Terrain, number>>;
   integ?(group: string, realm: string): [number, number] | undefined;
-  /** the region's name, from its group and its divisions (largest first, with their shares of its area); `single` when the group is one region */
-  name(group: string, realm: string, divisions: Division[], single: boolean, shares: number[]): string;
+  /**
+   * The region's name, from its group and its divisions (largest first, with their shares
+   * of its area); `single` when the group is one region; `capital` is the index of the
+   * division holding the realm's capital town, when the region has it.
+   */
+  name(group: string, realm: string, divisions: Division[], single: boolean, shares: number[], capital?: number): string;
 }
 
 /**
@@ -258,6 +262,13 @@ export interface RealMapDef {
   riverMinKm: number;
   /** keep rivers that end in a lake as well as those that reach the sea */
   riverLakeMouths?: boolean;
+  /** treaties in force at the start: the period's alliances and pacts */
+  treaties?: StartTreaty[];
+  /**
+   * Claims at the start: realm `by` claims, from realm `on`, the province of `on`
+   * nearest to each town in `at` (lon, lat), within `km` (default 160); never a capital.
+   */
+  claims?: Array<{ by: string; on: string; name: string; at: Array<[number, number]>; km?: number }>;
   ridges: Array<{ name: string; halfKm: number; pts: Array<[number, number]> }>;
   passes: Array<{ name: string; lon: number; lat: number }>;
   islandNames: Array<[string, number, number]>;
@@ -494,6 +505,16 @@ export function buildRealMap(D: RealMapDef, log: (l: string) => void = () => {})
       u.lat += lonlat[c][1];
       unitOf[c] = u;
     }
+    // the division holding each realm's capital town (a region without a dominant part takes its name)
+    const capitalUnits = new Set<Unit>();
+    for (const [name, adm0] of Object.values(D.capitals)) {
+      const f = src('places').find((x) => String(x.properties.name).replace(/\s+/g, ' ').trim() === name && x.properties.adm0_a3 === adm0);
+      if (!f) continue;
+      const [x, y] = proj(Number(f.properties.longitude), Number(f.properties.latitude));
+      let u: Unit | null = null;
+      for (let r = 0; r <= 3 && !u; r++) for (let dy = -r; dy <= r && !u; dy++) for (let dx = -r; dx <= r && !u; dx++) u = unitOf[cellAt(x + dx * STEP, y + dy * STEP)];
+      if (u) capitalUnits.add(u);
+    }
     const out: RealRegion[] = [];
     const regionOfUnit = new Map<Unit, string>();
     const groups = new Map<string, Unit[]>();
@@ -563,7 +584,8 @@ export function buildRealMap(D: RealMapDef, log: (l: string) => void = () => {})
       };
       const names = clusters.map((m) => {
         const w = m.reduce((s, u) => s + u.cells, 0);
-        return A.name(group, realm, m.map((u) => u.div), clusters.length === 1, m.map((u) => u.cells / w));
+        const cap = m.findIndex((u) => capitalUnits.has(u));
+        return A.name(group, realm, m.map((u) => u.div), clusters.length === 1, m.map((u) => u.cells / w), cap >= 0 ? cap : undefined);
       });
       // clusters named alike take a direction from where they lie among their namesakes
       for (const n of new Set(names)) {
@@ -1115,6 +1137,27 @@ export function buildRealMap(D: RealMapDef, log: (l: string) => void = () => {})
         return w;
       },
     });
+    // the period's claims and treaties, where both parties are on the map
+    const realms = new Set(D.nations.map((n) => n.id));
+    const capitals = new Set(D.nations.map((n) => n.capital));
+    for (const c of D.claims ?? []) {
+      if (!realms.has(c.by) || !realms.has(c.on)) continue;
+      for (const [lon, lat] of c.at) {
+        const [x, y] = proj(lon, lat);
+        let best: (typeof pkg.provinces)[number] | null = null;
+        let bd = (c.km ?? 160) / KM;
+        for (const p of pkg.provinces) {
+          // never a capital: where the claimed land has no province of its own on this scale, nothing is claimed
+          if (p.owner !== c.on || capitals.has(p.id)) continue;
+          const ctr = pkg.geometry.centers[p.id];
+          const d = Math.hypot(ctr.cx - x, ctr.cy - y);
+          if (d < bd) (bd = d), (best = p);
+        }
+        if (best && !best.claims.includes(c.by)) best.claims.push(c.by);
+      }
+    }
+    const treaties = (D.treaties ?? []).filter((t) => realms.has(t.a) && realms.has(t.b));
+    if (treaties.length) pkg.treaties = treaties.map((t) => ({ ...t }));
     addSeaZones(pkg);
     if (D.wrapOcean) wrapZones(pkg);
     pkg.meta = { ...D.meta, size: sizeFor(pkg.provinces.length) };
@@ -1215,6 +1258,16 @@ function extraReport(pkg: MapPackage, warnings: string[], credit?: string): stri
   for (const nat of pkg.nations) {
     const mine = pkg.provinces.filter((p) => p.owner === nat.id);
     lines.push(`| ${nat.name} | ${mine.length} | ${mine.reduce((s, p) => s + p.dev, 0)} | ${pkg.provinces.find((p) => p.id === nat.capital)?.name} |`);
+  }
+  const realm = (id: string) => pkg.nations.find((n) => n.id === id)?.short ?? id;
+  if (pkg.treaties?.length) {
+    const kind = { alliance: 'defensive alliance', nap: 'non-aggression pact', trade: 'trade agreement' } as const;
+    lines.push('', '## Treaties at the start', '', ...pkg.treaties.map((t) => `- ${realm(t.a)} and ${realm(t.b)}: ${kind[t.type]}`));
+  }
+  const claimed = pkg.provinces.filter((p) => p.claims.length);
+  if (claimed.length) {
+    lines.push('', '## Claims at the start', '');
+    for (const p of claimed) lines.push(`- ${p.name} (${realm(p.owner ?? '')}): claimed by ${p.claims.map(realm).join(', ')}`);
   }
   const dep = new Map<string, number>();
   for (const p of pkg.provinces) dep.set(String(p.resource), (dep.get(String(p.resource)) ?? 0) + 1);

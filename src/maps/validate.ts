@@ -277,6 +277,13 @@ export function normalizeMapPackage(raw: unknown): { pkg: MapPackage; errors: Ma
     const pr = r.pair(x, 'River border');
     if (pr) pkg.rivers.push(pr);
   }
+  if (o.treaties !== undefined) {
+    pkg.treaties = [];
+    for (const x of r.arr(o.treaties, 'Treaties at the start', 400)) {
+      const to = r.obj(x, 'Treaty at the start');
+      pkg.treaties.push({ type: r.oneOf(to.type, ['alliance', 'nap', 'trade'] as const, 'Treaty type'), a: r.id(to.a, 'Treaty party'), b: r.id(to.b, 'Treaty party') });
+    }
+  }
   if (version >= 3) {
     for (const x of r.arr(o.seaZones ?? [], 'Sea zones', MAP_LIMITS.seaZones)) {
       const zo = r.obj(x, 'Sea zone');
@@ -456,6 +463,15 @@ export function validateMapPackage(pkg: MapPackage): MapCheck {
     const cap = provById.get(n.capital);
     if (!cap) err('reference', `${n.name || n.id}'s capital "${n.capital}" is not a province of this map.`, n.id);
     else if (cap.owner !== n.id) err('capital', `${n.name || n.id}'s capital ${cap.name || cap.id} must be owned by ${n.name || n.id}.`, n.id);
+  }
+  // treaties in force at the start
+  const signed = new Set<string>();
+  const realmName = (id: string) => pkg.nations.find((n) => n.id === id)?.name || id;
+  for (const t of pkg.treaties ?? []) {
+    if (!nationIds.has(t.a) || !nationIds.has(t.b)) err('reference', `A treaty at the start names an unknown realm ("${t.a}", "${t.b}").`, nationIds.has(t.a) ? t.a : t.b);
+    else if (t.a === t.b) err('value', `${realmName(t.a)} is listed in a treaty with itself.`, t.a);
+    else if (signed.has(`${t.type}|${key(t.a, t.b)}`)) err('duplicate', `The ${t.type === 'nap' ? 'non-aggression pact' : t.type === 'trade' ? 'trade agreement' : 'alliance'} between ${realmName(t.a)} and ${realmName(t.b)} is listed twice.`, t.a);
+    signed.add(`${t.type}|${key(t.a, t.b)}`);
   }
   const owned = new Map<string, string[]>();
   for (const p of pkg.provinces) if (p.owner) (owned.get(p.owner) ?? owned.set(p.owner, []).get(p.owner)!).push(p.id);

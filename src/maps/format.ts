@@ -102,6 +102,13 @@ export interface MapGeometryData {
   seas?: SeaGeometry;
 }
 
+/** A treaty in force when a campaign on the map starts (historical maps). */
+export interface StartTreaty {
+  type: 'alliance' | 'nap' | 'trade';
+  a: string;
+  b: string;
+}
+
 export interface MapPackage {
   format: typeof MAP_FORMAT;
   version: number;
@@ -119,6 +126,8 @@ export interface MapPackage {
   rivers: Array<[string, string]>;
   /** sea zones fleets move between (format 3) */
   seaZones: SeaZoneDef[];
+  /** treaties in force at the start (optional: none on most maps) */
+  treaties?: StartTreaty[];
   geometry: MapGeometryData;
 }
 
@@ -149,8 +158,10 @@ function canonicalJson(v: unknown): string {
  * invalidate saves, while any change a campaign depends on does. Key order does
  * not matter (a sanitised copy of a package has the same checksum).
  */
-export function mapChecksum(pkg: Pick<MapPackage, 'id' | 'revision' | 'rules' | 'regions' | 'nations' | 'provinces' | 'straits' | 'rivers' | 'seaZones'>): string {
+export function mapChecksum(pkg: Pick<MapPackage, 'id' | 'revision' | 'rules' | 'regions' | 'nations' | 'provinces' | 'straits' | 'rivers' | 'seaZones' | 'treaties'>): string {
+  // a map without treaties at the start has the same checksum as before the field existed
   const canon = canonicalJson({
+    treaties: pkg.treaties,
     seaZones: pkg.seaZones,
     id: pkg.id,
     revision: pkg.revision,

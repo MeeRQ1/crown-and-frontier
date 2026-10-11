@@ -222,7 +222,7 @@ async function run(page: Page, origin: string, p: string): Promise<void> {
     await cnf(page, (app) => app.openMenu());
     await page.waitForTimeout(200);
     // a confirmation: delete a save from the Load screen
-    await cnf(page, (app) => app.save('slot1'));
+    await cnf(page, (app) => app.save('slot-1'));
     await page.waitForTimeout(400);
     await page.goto(origin);
     await page.waitForTimeout(300);

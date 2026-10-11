@@ -242,7 +242,14 @@ export function renderHud(app: App): void {
     setChildren(el, ...parts);
     fitHud(el);
   });
+  // fit again when the bar changes width, or first appears (it can be built while hidden)
+  if (!watched.has(el) && typeof ResizeObserver === 'function') {
+    watched.add(el);
+    new ResizeObserver(() => fitHud(el)).observe(el);
+  }
 }
+
+const watched = new WeakSet<HTMLElement>();
 
 /**
  * Fits the bar to its width. When a cell would clip its text (a laptop screen

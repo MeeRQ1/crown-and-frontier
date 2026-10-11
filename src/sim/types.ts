@@ -138,6 +138,8 @@ export interface ScenarioDef {
   blurb?: string;
   /** technology costs are multiplied by this (default 1) */
   researchCostMul?: number;
+  /** treaties in force when a campaign starts (historical maps) */
+  treaties?: Array<{ type: TreatyType; a: NationId; b: NationId }>;
 }
 
 /** Static world derived from a scenario: lookups and graph structure. */

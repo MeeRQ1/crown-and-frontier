@@ -376,9 +376,86 @@ const BALTIC: Record<string, NationalNames> = {
   },
 };
 
-/** Hand-written national names for the realms of the built-in hand-made maps. */
+/**
+ * The great powers of 1914 on Europe and the World. Each name fits the effect its
+ * template gives that realm's temperament (a defensive realm's heritage is a
+ * bulwark, an expansionist's ambition is claims on its neighbours); the resource
+ * focus keeps its generated name, because the deposit it develops differs by map.
+ */
+const POWERS_1914: Record<string, NationalNames> = {
+  gbr: {
+    heritage: ['Pax Britannica', 'A century of naval mastery and free trade, now challenged on every sea.'],
+    develop: ['The People’s Budget', 'Pensions, labour exchanges and roads at home, paid for by Lloyd George’s taxes.'],
+    sea: ['Two-Power Standard', 'A navy as large as the next two together.'],
+    ambition: ['Imperial Preference', 'Trade within the empire on easy terms: wealth, order and contented provinces.'],
+  },
+  fra: {
+    heritage: ['Fortress France', 'Verdun, Toul, Épinal and Belfort: a wall of forts along the eastern frontier.'],
+    develop: ['Freycinet Plan', 'Railways, canals and ports for the heart of France.'],
+    sea: ['Jeune École', 'Cruisers and torpedo boats to strike at an enemy’s trade.'],
+    ambition: ['La Belle Époque', 'Wealth, order and contented provinces.'],
+  },
+  ger: {
+    heritage: ['Prussian Military Tradition', 'The army of Moltke and Sedan: victories are expected and conquests are settled.'],
+    develop: ['Prussian State Railways', 'Double tracks to the eastern frontier.'],
+    sea: ['Hochseeflotte', 'A battle fleet to rival any in the world.'],
+    ambition: ['Mitteleuropa', 'A German-led order in the heart of Europe: claims on the border lands of our neighbours.'],
+  },
+  aus: {
+    heritage: ['The Dual Monarchy', 'Two crowns and one army: the fortresses of Galicia and the Alps guard a realm of many peoples.'],
+    develop: ['The Ringstrasse', 'Boulevards, railways and credit for the imperial capital and its hinterland.'],
+    sea: ['K.u.K. Kriegsmarine', 'Dreadnoughts for the Adriatic, built at Trieste.'],
+    ambition: ['The Compromise Renewed', 'Wealth, order and contented provinces in both halves of the monarchy.'],
+  },
+  rus: {
+    heritage: ['The Russian Steamroller', 'Endless columns that march far and take what lies undefended.'],
+    develop: ['Stolypin Land Reform', 'Peasants leave the commune for their own farms.'],
+    sea: ['Rebuild the Fleet', 'New battleships for the Baltic and the Black Sea after the disaster of Tsushima.'],
+    ambition: ['Pan-Slavism', 'Russia as protector of the Slavs: claims on the border lands of our neighbours.'],
+  },
+  ita: {
+    heritage: ['Sacro Egoismo', 'Quick to march, and quick to take what others leave unguarded.'],
+    develop: ['Reclaim the Agro Romano', 'Draining the marshes round Rome and settling the land.'],
+    sea: ['Regia Marina', 'Dreadnoughts for the Mediterranean between Taranto and Tripoli.'],
+    ambition: ['Italia Irredenta', 'Every Italian land under the Italian crown: claims on the border lands of our neighbours.'],
+  },
+  ott: {
+    heritage: ['Ottoman Revival', 'After the Balkan defeats, an army reorganised by German officers and quick to strike.'],
+    develop: ['Tanzimat Reforms', 'Schools, courts and roads for the provinces round the capital.'],
+    sea: ['Ottoman Dreadnoughts', 'Battleships bought abroad by public subscription to recover the Aegean islands.'],
+    ambition: ['Recover Rumelia', 'The lands lost in the Balkan Wars: claims on the border lands of our neighbours.'],
+  },
+  spa: {
+    heritage: ['Spanish Neutrality', 'Spain keeps out of the powers’ quarrels and guards its own coasts and mountains.'],
+    develop: ['Regenerationism', 'Schools and irrigation for Castile after the disaster of 1898.'],
+    sea: ['Fleet Law of 1908', 'A small modern fleet: three dreadnoughts of the España class.'],
+    ambition: ['Restoration Prosperity', 'Wealth, order and contented provinces under the restored monarchy.'],
+  },
+  jpn: {
+    heritage: ['Conscript Army', 'A modern army raised on old loyalties: victories are expected and conquests are settled.'],
+    develop: ['Meiji Railways', 'Trunk lines and ports for the home islands.'],
+    sea: ['Eight-Eight Fleet', 'Eight battleships and eight battlecruisers.'],
+    ambition: ['Continental Policy', 'Footholds in Manchuria and beyond: claims on the border lands of our neighbours.'],
+  },
+  usa: {
+    heritage: ['Dollar Diplomacy', 'Loans and investment instead of bullets: American banks finance the hemisphere.'],
+    develop: ['Good Roads Movement', 'Paved roads and farm-to-market routes around the capital.'],
+    sea: ['Great White Fleet', 'A battle fleet to show the flag on every ocean.'],
+    ambition: ['The Progressive Era', 'Wealth, order and contented provinces.'],
+  },
+  chn: {
+    heritage: ['Beiyang Army', 'Yuan Shikai’s modern army holds the young republic together.'],
+    develop: ['Self-Strengthening', 'Arsenals, railways and schools for the capital province.'],
+    sea: ['Rebuild the Navy', 'A new fleet to replace the one lost in 1895.'],
+    ambition: ['Republic of Five Races', 'Wealth, order and contented provinces under the five-coloured flag.'],
+  },
+};
+
+/** Hand-written national names for the realms of the built-in hand-made and historical maps. */
 export const NATIONAL_NAMES: Record<string, Record<string, NationalNames>> = {
   aldmere: FICTIONAL,
   reach: FICTIONAL,
   baltic: BALTIC,
+  europe: POWERS_1914,
+  earth: POWERS_1914,
 };

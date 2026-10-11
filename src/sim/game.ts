@@ -12,6 +12,7 @@ import type { Difficulty, GameState, MonthlyLedger, NationId, NationState, Regim
 import { getWorld, mapFingerprint, validateScenario } from './world';
 import { validateContent, validateFocuses } from './content';
 import { GENERIC_FOCUSES } from './data/focus';
+import { signTreaty } from './diplomacy';
 import { nationalFocuses } from './focus';
 
 export interface NewGameOptions {
@@ -175,6 +176,8 @@ export function createGame(opts: NewGameOptions = {}): Sim {
     st.nations[nid] = n;
   });
   const sim: Sim = { world, state: st };
+  // treaties in force at the start (the historical maps' alliances and pacts)
+  for (const t of world.scenario.treaties ?? []) signTreaty(sim, t.type, t.a, t.b);
   for (const nid of world.nationIds) {
     const n = st.nations[nid];
     const def = world.nationDefs[nid];

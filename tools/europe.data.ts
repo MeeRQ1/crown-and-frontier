@@ -47,7 +47,7 @@ export const NATIONS: NationDef[] = [
   nation('ger', 'German Empire', 'Germany', 'German', '#5d5d6b', 'berlin', 'expansionist', arms('or', 'none', 'or', 'crown', 'sable'), 'The industrial empire at the centre of Europe, with the strongest army on the continent and a fleet built to rival Britain’s.', 'Industry and staff work: research and income above every neighbour.', 'Two fronts: France in the west, Russia in the east.', { researchMul: 0.15, incomeMul: 0.1 }, 'Wealthy heartland', 'recommended'),
   nation('aus', 'Austria-Hungary', 'Austria', 'Austro-Hungarian', '#c9a23f', 'vienna', 'defensive', arms('gules', 'fess', 'argent', 'none', 'or'), 'The Dual Monarchy of the Habsburgs: a dozen peoples from Bohemia to Bosnia under one crown, newly anxious about Serbia.', 'Mountain fortresses and a large army on paper.', 'Many peoples: newly held land integrates slowly and unrest runs high.', { integrationMul: -0.25, fortCostMul: -0.15 }, 'Established crown', 'standard'),
   nation('rus', 'Russian Empire', 'Russia', 'Russian', '#4f7a55', 'stpetersburg', 'opportunist', arms('argent', 'saltire', 'azure', 'none', 'or'), 'The empire of the tsars from Finland and Poland to the Caucasus, slow to mobilise and vast in manpower.', 'Vast manpower: armies are cheap to fill.', 'Railways and industry lag: research and supply are slow.', { manpowerMul: 0.35, researchMul: -0.15, supplyProdMul: -0.1 }, 'Established crown', 'standard'),
-  nation('ita', 'Kingdom of Italy', 'Italy', 'Italian', '#5f9a5a', 'rome', 'opportunist', arms('gules', 'cross', 'argent', 'crown', 'or'), 'A young kingdom, newly master of Libya and the Dodecanese, bound to the Central Powers by treaty and to the sea by geography.', 'A long coast and a growing fleet.', 'Poor in coal and iron, and torn between alliances.', { tradeMul: 0.1, supplyProdMul: -0.05 }, 'Established crown', 'standard'),
+  nation('ita', 'Kingdom of Italy', 'Italy', 'Italian', '#5f9a5a', 'rome', 'opportunist', arms('gules', 'cross', 'argent', 'crown', 'or'), 'A young kingdom, newly master of Libya and the Dodecanese, bound to Germany and Austria-Hungary by the Triple Alliance and to the sea by geography.', 'A long coast and a growing fleet.', 'Poor in coal and iron, and torn between alliances.', { tradeMul: 0.1, supplyProdMul: -0.05 }, 'Established crown', 'standard'),
   nation('ott', 'Ottoman Empire', 'Ottomans', 'Ottoman', '#9b5b3a', 'constantinople', 'opportunist', arms('gules', 'none', 'gules', 'crescent', 'argent'), 'The old empire of the straits, shrunk by the Balkan wars, still ruling Anatolia, the Levant and Mesopotamia from Constantinople.', 'The straits and a large hinterland: defenders fight well at home.', 'Debts and distances: income and supply are weak, and the provinces restless.', { incomeMul: -0.15, integrationMul: -0.2, moraleAdd: 0.3 }, 'Old empire', 'challenging'),
   nation('spa', 'Kingdom of Spain', 'Spain', 'Spanish', '#d0a13a', 'madrid', 'defensive', arms('gules', 'fess', 'or', 'none', 'gules'), 'A kingdom behind the Pyrenees, neutral and recovering from the loss of its last colonies, with a new zone in northern Morocco.', 'Mountains and a long border to defend: forts are cheap.', 'Little industry.', { fortCostMul: -0.2, researchMul: -0.1 }, 'Established crown', 'standard'),
   nation('por', 'Portuguese Republic', 'Portugal', 'Portuguese', '#4e8a6a', 'lisbon', 'commercial', arms('vert', 'perPale', 'gules', 'roundel', 'or'), 'An Atlantic republic since 1910, Britain’s oldest ally.', 'Atlantic trade.', 'Small, poor and far from the rest of Europe.', { tradeMul: 0.2, manpowerMul: -0.1 }, 'Maritime trader', 'challenging'),
@@ -1299,6 +1299,53 @@ export function inCrop(lon: number, lat: number): boolean {
   return true;
 }
 
+// ───────────────────────────── 1914: treaties and claims ────────────────────
+
+/**
+ * Treaties in force in the spring of 1914, in the game's terms. The game has
+ * defensive alliances, non-aggression pacts and trade agreements only, so:
+ *  - the Triple Alliance (Germany, Austria-Hungary, Italy; 1882, renewed 1912),
+ *    the Franco-Russian Alliance (1894), the Anglo-Portuguese Alliance and the
+ *    Greek-Serbian alliance of 1913 are defensive alliances;
+ *  - the Entente Cordiale (1904), the Anglo-Russian Convention (1907) and the
+ *    Franco-Italian neutrality accord of 1902 settled disputes without binding
+ *    anyone to fight: they are non-aggression pacts, which lapse after five
+ *    years unless renewed;
+ *  - secret or later treaties are left out (Romania's secret accession to the
+ *    Triple Alliance; the German-Ottoman alliance of August 1914).
+ */
+export const TREATIES_1914: NonNullable<RealMapDef['treaties']> = [
+  { type: 'alliance', a: 'ger', b: 'aus' },
+  { type: 'alliance', a: 'ger', b: 'ita' },
+  { type: 'alliance', a: 'aus', b: 'ita' },
+  { type: 'alliance', a: 'fra', b: 'rus' },
+  { type: 'alliance', a: 'gbr', b: 'por' },
+  { type: 'alliance', a: 'ser', b: 'gre' },
+  { type: 'nap', a: 'gbr', b: 'fra' },
+  { type: 'nap', a: 'gbr', b: 'rus' },
+  { type: 'nap', a: 'fra', b: 'ita' },
+];
+
+/**
+ * Lands one realm claimed from another in 1914 (irredentism and the quarrels
+ * left by the Balkan Wars): each claim covers the province of the holder
+ * nearest to each town listed. A claim is a grievance and a ground for war in
+ * the game, not a statement that the land belonged to the claimant.
+ */
+export const CLAIMS_1914: NonNullable<RealMapDef['claims']> = [
+  { by: 'fra', on: 'ger', name: 'Alsace-Lorraine', at: [[7.75, 48.58], [6.18, 49.12], [7.36, 48.08]] },
+  { by: 'ita', on: 'aus', name: 'Trentino and Trieste', at: [[11.12, 46.07], [13.77, 45.65], [13.62, 45.94], [13.85, 44.87]] },
+  { by: 'ser', on: 'aus', name: 'Bosnia and Herzegovina', at: [[18.41, 43.86], [17.19, 44.77], [17.81, 43.34]] },
+  { by: 'rom', on: 'aus', name: 'Transylvania and Bukovina', at: [[23.6, 46.77], [25.6, 45.65], [24.15, 45.79], [25.94, 48.29]] },
+  { by: 'bul', on: 'ser', name: 'Vardar Macedonia', at: [[21.43, 42.0], [21.33, 41.03]] },
+  { by: 'bul', on: 'gre', name: 'Aegean Macedonia', at: [[22.94, 40.64], [24.41, 40.94]] },
+  { by: 'bul', on: 'rom', name: 'Southern Dobruja', at: [[27.83, 43.57]] },
+  { by: 'den', on: 'ger', name: 'North Schleswig', at: [[9.49, 55.25], [9.42, 55.04]] },
+  { by: 'gre', on: 'alb', name: 'Northern Epirus', at: [[20.14, 40.08], [20.78, 40.62]] },
+  { by: 'gre', on: 'ita', name: 'the Dodecanese', at: [[28.22, 36.43]] },
+  { by: 'ott', on: 'gre', name: 'the Aegean islands', at: [[26.55, 39.1], [26.13, 38.37]] },
+];
+
 export function europeDef(): RealMapDef {
   return {
     id: 'europe',
@@ -1329,18 +1376,20 @@ export function europeDef(): RealMapDef {
     notYet: NOT_YET,
     straits: STRAITS,
     straitMaxKm: 140,
+    treaties: TREATIES_1914,
+    claims: CLAIMS_1914,
     cities: { max: 120, minPop: 150000, spacingKm: 90 },
     depositHints: DEPOSIT_HINTS,
     climate: 'temperate',
     meta: {
       name: 'Europe, 1914',
       description:
-        'Europe in the spring of 1914, from Ireland to the Volga and from the North Cape to the Nile delta: the great powers, the Balkan kingdoms newly redrawn by the wars of 1912–13, and the Ottoman Empire on the straits. Historical borders, approximated from present-day divisions; Egypt and Cyprus are held by Britain.',
+        'Europe at the start of 1914, from Ireland to the Volga and from the North Cape to the Nile delta: the great powers, the Balkan kingdoms newly redrawn by the wars of 1912–13, and the Ottoman Empire on the straits. The alliances of 1914 are in force (the Triple Alliance, the Franco-Russian Alliance; the ententes as non-aggression pacts), and the claims of the time stand: Alsace-Lorraine, the Trentino and Trieste, Bosnia, Transylvania, Macedonia. Historical borders, approximated from present-day divisions; Egypt and Cyprus are held by Britain.',
       blurb: 'A large historical campaign: about 700 provinces and 23 realms on the eve of the Great War.',
       size: 'large',
       difficulty: 'hard',
       style: 'Great-power alliances on crowded fronts',
-      mechanics: ['Real geography', 'Historical borders of 1914', 'Mountain passes', 'Straits and islands', 'River crossings'],
+      mechanics: ['Real geography', 'Historical borders of 1914', 'Alliances and claims of 1914', 'Mountain passes', 'Straits and islands', 'River crossings'],
       origin: 'builtin',
       attribution: [
         'Coastlines, lakes, rivers, first-level divisions and towns: Natural Earth (naturalearthdata.com), public domain.',

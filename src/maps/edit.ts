@@ -292,6 +292,7 @@ export function removeRealm(pkg: MapPackage, nid: string): EditResult {
     if (p.owner === nid) (p.owner = null), (p.integration = 0);
     if (p.claims.includes(nid)) p.claims = p.claims.filter((c) => c !== nid);
   }
+  if (pkg.treaties) pkg.treaties = pkg.treaties.filter((t) => t.a !== nid && t.b !== nid);
   return done;
 }
 
