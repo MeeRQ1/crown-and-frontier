@@ -102,10 +102,6 @@
   --focus: var(--cf-ivory);
   color-scheme: light;
 
-  /* legacy names still used by inline styles */
-  --paper-50: var(--text);
-  --paper-100: var(--text);
-  --paper-300: var(--text-2);
   --seal: var(--cf-brass);
 }
 /* the ivory register: content to read */

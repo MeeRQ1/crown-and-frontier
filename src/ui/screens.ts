@@ -206,11 +206,20 @@ export function renderNewGame(app: App, initialMap: string = DEFAULT_SCENARIO): 
   const sheet = h('div', { class: 'realm-sheet' });
   const settingsEl = h('div', { class: 'setup-settings' });
 
+  // preparing a map takes a moment (a few seconds on the largest): say so, and let that paint first
+  const starting = (start: () => void) => {
+    for (const b of [beginBtn, beginBtn2, watchBtn]) {
+      b.disabled = true;
+      b.setAttribute('aria-busy', 'true');
+    }
+    for (const b of [beginBtn, beginBtn2]) setChildren(b, icon('hourglass'), 'Preparing the map…');
+    requestAnimationFrame(() => setTimeout(start, 0));
+  };
   const begin = () => {
     app.updateSettings({ tutorial });
-    app.newGame({ scenario: map, seed, playerNation: nation, difficulty, campaignYears: years, aiIncomeBonus: aiBonus }, tutorial);
+    starting(() => app.newGame({ scenario: map, seed, playerNation: nation, difficulty, campaignYears: years, aiIncomeBonus: aiBonus }, tutorial));
   };
-  const observe = () => app.newGame({ scenario: map, seed, playerNation: null, difficulty, campaignYears: years }, false);
+  const observe = () => starting(() => app.newGame({ scenario: map, seed, playerNation: null, difficulty, campaignYears: years }, false));
 
   const drawMaps = () => {
     setChildren(
@@ -528,7 +537,7 @@ export function renderHowTo(app: App): HTMLElement {
         'div',
         { class: 'page' },
         h('header', null, backBtn(app), h('h2', null, 'How to play')),
-        h('p', { class: 'serif', style: 'font-size:var(--fs-lg);color:var(--paper-300)' }, LEDE),
+        h('p', { class: 'serif', style: 'font-size:var(--fs-lg);color:var(--text-2)' }, LEDE),
         sec(
           'The maps',
           h('p', null, h('b', null, 'Aldmere'), ' is the standard campaign: fourteen realms and about three hundred provinces, with mountain passes, rivers, islands and wide unclaimed frontiers. Every realm has several fronts and marches take months. ', h('b', null, 'The Reach'), ' is the quick campaign: nine realms and 99 provinces, where wars are decided in a few seasons.'),
@@ -654,7 +663,7 @@ export function renderEndScreen(app: App): HTMLElement {
         'div',
         { class: 'page' },
         h('header', null, h('h2', null, title)),
-        h('p', { class: 'serif', style: 'font-size:var(--fs-lg);color:var(--paper-300)' }, r.reason, ` (${dateOf(sim, r.tick).label}, ${mapInfo(st.scenarioId).title})`),
+        h('p', { class: 'serif', style: 'font-size:var(--fs-lg);color:var(--text)' }, r.reason, ` (${dateOf(sim, r.tick).label}, ${mapInfo(st.scenarioId).title})`),
         n
           ? h(
               'section',
