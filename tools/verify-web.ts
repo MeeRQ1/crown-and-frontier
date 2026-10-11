@@ -690,6 +690,33 @@ async function diplomacyFlow(browser: Browser, base: string): Promise<void> {
   const standing = await page.locator('[data-sk="diplo-standing"]').textContent();
   record('Diplomacy: founding a trade bloc with a trade partner', JSON.stringify(bloc) === JSON.stringify(['aur', ids.partner].sort()) && /Customs Union/.test(standing ?? ''), `members ${JSON.stringify(bloc)}`);
 
+  // ── Industry & Trade: buy a good a partner has to spare, through the offer form
+  await page.evaluate(() => (window as any).cnf.openLedger('industry'));
+  await page.waitForTimeout(200);
+  let good: string | null = null;
+  for (const g of ['food', 'coal', 'iron', 'oil', 'rubber', 'nitrates']) {
+    await press(`[data-fk="good-${g}"]`);
+    if (await page.evaluate(() => !!document.querySelector('[data-sk="trade-workspace"] [data-fk^="buy-"]:not([disabled])'))) {
+      good = g;
+      break;
+    }
+  }
+  let tradeNote = 'no partner had a good to spare';
+  let traded = false;
+  if (good) {
+    const before = await state<number>(`st.contracts.filter((c) => c.buyer === 'aur' && c.res === '${good}').length`);
+    await press('[data-sk="trade-workspace"] [data-fk^="buy-"]:not([disabled])');
+    const draft = (await page.locator('[data-sk="contract-draft"]').textContent()) ?? '';
+    await press('[data-fk="draft-send"]');
+    const after = await state<number>(`st.contracts.filter((c) => c.buyer === 'aur' && c.res === '${good}').length`);
+    const listed = (await page.locator('[data-sk="contracts"] tbody tr').count()) > 0;
+    const forecast = await page.locator('[data-sk="trade-workspace"] svg, [data-sk="trade-workspace"] canvas').count();
+    traded = after === before + 1 && listed && /Offer to buy from/.test(draft) && forecast > 0;
+    tradeNote = `${good}: draft "${draft.replace(/\s+/g, ' ').slice(0, 70)}…"; contracts ${before} → ${after}; ${listed ? 'listed in force' : 'not listed'}`;
+  }
+  record('Industry & Trade: a purchase from a partner’s spare stock is drafted with its forecast, sent, accepted and listed in force', traded, tradeNote);
+  await page.evaluate(() => (window as any).cnf.closeLedger());
+
   // ── the peace conference: the AI's suggested terms for both winners, accepted
   await page.evaluate(() => (window as any).cnf.openLedger('wars'));
   await page.waitForTimeout(200);

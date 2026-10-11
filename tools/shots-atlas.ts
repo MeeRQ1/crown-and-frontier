@@ -8,6 +8,9 @@ import { existsSync, mkdirSync, readFileSync } from 'node:fs';
 import { createServer } from 'node:http';
 import { extname, join, normalize } from 'node:path';
 import { chromium, type Page } from 'playwright';
+import { createGame } from '../src/sim/game';
+import { serialize } from '../src/sim/save';
+import { step as stepSim } from '../src/sim/tick';
 import { diploSave } from './diplo-save';
 import { seaAirSave } from './sea-air-save';
 
@@ -321,6 +324,69 @@ async function run(page: Page, origin: string, p: string): Promise<void> {
     for (let i = 0; i < 6; i++) await page.mouse.wheel(0, -240);
     await page.waitForTimeout(800);
   });
+
+  // ── the three maps of the atlas update (no "before" counterpart) ──
+  await step(page, `${p}-m11-new-campaign-earth`, async () => {
+    await page.goto(origin);
+    await page.waitForTimeout(300);
+    await clickText(page, 'New campaign');
+    await page.locator('[data-map="earth"]').first().click();
+    await page.waitForTimeout(300);
+  });
+  for (const [map, a, b] of [
+    ['earth', 'z03', 'z04'],
+    ['europe', 'z05', 'z06'],
+    ['hesperia', 'z07', 'z08'],
+  ] as const) {
+    await freshGame(page, origin, map, false);
+    await step(page, `${p}-${a}-${map}-world`, async () => {
+      await cnf(page, (app) => app.fitWorld());
+      await page.waitForTimeout(1200);
+    });
+    await step(page, `${p}-${b}-${map}-regional`, async () => {
+      await cnf(page, (app) => app.selectProvince(app.sim.state.nations[app.player].capital, true));
+      await page.mouse.move(683, 400);
+      for (let i = 0; i < 3; i++) await page.mouse.wheel(0, -240);
+      await page.waitForTimeout(1200);
+    });
+  }
+
+  // ── a crowded late-game front: the World, 1914 at week 280 of an AI campaign ──
+  await step(page, `${p}-z09-earth-war-front`, async () => {
+    const text = earthWarSave();
+    await page.goto(origin);
+    await page.waitForTimeout(400);
+    await cnf(page, (app, t) => app.loadText(t), text);
+    await page.waitForFunction(() => (window as any).cnf.sim?.state.tick === 280 && !!(window as any).cnf.renderer, null, { timeout: 60000 });
+    await cnf(page, (app) => {
+      app.setSpeed(0);
+      // the attacker's army deepest in enemy land, among the most crowded provinces
+      const st = app.sim.state;
+      const counts: Record<string, number> = {};
+      for (const a of Object.values(st.armies) as any[]) counts[a.location] = (counts[a.location] ?? 0) + 1;
+      const inWar = (Object.values(st.armies) as any[]).filter((a) => {
+        const c = st.provinces[a.location].controller;
+        return c && c !== a.nation && Object.values(st.wars).some((w: any) => (w.attackers.includes(a.nation) && w.defenders.includes(c)) || (w.defenders.includes(a.nation) && w.attackers.includes(c)));
+      });
+      inWar.sort((x, y) => (counts[y.location] ?? 0) - (counts[x.location] ?? 0) || (x.id < y.id ? -1 : 1));
+      if (inWar[0]) app.selectArmy(inWar[0].id, true);
+      app.refresh();
+    });
+    await page.mouse.move(683, 400);
+    for (let i = 0; i < 2; i++) await page.mouse.wheel(0, -240);
+    await page.waitForTimeout(1500);
+  });
+}
+
+let earthWar: string | null = null;
+/** An AI-only campaign on the World, 1914 played to week 280 (a world war under way). */
+function earthWarSave(): string {
+  if (!earthWar) {
+    const sim = createGame({ scenario: 'earth', seed: 1, playerNation: null });
+    while (sim.state.tick < 280) stepSim(sim);
+    earthWar = serialize(sim);
+  }
+  return earthWar;
 }
 
 async function runNarrow(page: Page, origin: string): Promise<void> {
