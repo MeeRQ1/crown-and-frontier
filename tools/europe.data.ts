@@ -1336,7 +1336,7 @@ export function europeDef(): RealMapDef {
       name: 'Europe, 1914',
       description:
         'Europe in the spring of 1914, from Ireland to the Volga and from the North Cape to the Nile delta: the great powers, the Balkan kingdoms newly redrawn by the wars of 1912–13, and the Ottoman Empire on the straits. Historical borders, approximated from present-day divisions; Egypt and Cyprus are held by Britain.',
-      blurb: 'A large historical campaign: about 600 provinces and 23 realms on the eve of the Great War.',
+      blurb: 'A large historical campaign: about 700 provinces and 23 realms on the eve of the Great War.',
       size: 'large',
       difficulty: 'hard',
       style: 'Great-power alliances on crowded fronts',

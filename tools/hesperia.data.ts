@@ -553,7 +553,7 @@ export function hesperiaDef(): RealMapDef {
       name: 'Hesperia, 1890',
       description:
         'An invented world of two continents facing each other across the Narrows: the old Empire of Varr and its rival kingdoms in the west, the lowland workshops of Lys, the forests of Kharsk and the ancient Tessarine plateau in the east, an island kingdom in the ocean and planters’ isles in the south. Three frontiers start unclaimed: the frozen Hoarlands, the Red Waste and the outer Sapphire Isles.',
-      blurb: 'A large original campaign: about 700 provinces and 22 realms on two continents, with crossings, frontiers and an island sea power.',
+      blurb: 'A large original campaign: about 750 provinces and 22 realms on two continents, with crossings, frontiers and an island sea power.',
       size: 'large',
       difficulty: 'standard',
       style: 'Two continents across a narrow sea',
