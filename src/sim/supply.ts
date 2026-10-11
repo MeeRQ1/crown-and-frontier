@@ -34,7 +34,7 @@ export interface SupplyInfo {
   remedies: string[];
 }
 
-const distCache = new WeakMap<object, Map<NationId, { key: string; dist: Record<ProvinceId, number> }>>();
+const distCache = new WeakMap<object, Map<NationId, { key: string; inputs: string; dist: Record<ProvinceId, number> }>>();
 
 export function isSupplySource(sim: Sim, pid: ProvinceId): boolean {
   const p = sim.state.provinces[pid];
@@ -98,6 +98,30 @@ function blockedKey(sim: Sim, nid: NationId): string {
   return key;
 }
 
+/**
+ * Everything a realm's supply distances are computed from, as an exact key: for each
+ * province, whether it is friendly, a source and on a railway, plus the straits closed
+ * to the realm. Compared when geography changes, so a capture on another continent
+ * does not recompute realms it cannot affect.
+ */
+function supplyInputs(sim: Sim, nid: NationId): string {
+  const ids = sim.world.provIds;
+  const friends = new Map<NationId | null, boolean>();
+  const codes: number[] = [];
+  let word = 0;
+  let n = 0;
+  for (let i = 0; i < ids.length; i++) {
+    const p = sim.state.provinces[ids[i]];
+    let f = friends.get(p.controller);
+    if (f === undefined) friends.set(p.controller, (f = isFriendly(sim, nid, p.controller)));
+    // three bits a province, five provinces a character (below the surrogate range)
+    word = word * 8 + (f ? 1 : 0) + (f && isSupplySource(sim, ids[i]) ? 2 : 0) + (p.infra >= RAIL_STEP ? 4 : 0);
+    if (++n === 5) (codes.push(word), (word = 0), (n = 0));
+  }
+  codes.push(word);
+  return `${String.fromCharCode(...codes)}|${blockedKey(sim, nid)}`;
+}
+
 /** Supply distance from the nearest friendly source to every province (Infinity if unreachable). */
 export function supplyDistances(sim: Sim, nid: NationId): Record<ProvinceId, number> {
   let per = distCache.get(sim.state);
@@ -110,6 +134,11 @@ export function supplyDistances(sim: Sim, nid: NationId): Record<ProvinceId, num
   const key = `${geoRev(sim)}|${sourcesKey(sim)}|${blockedKey(sim, nid)}`;
   const hit = per.get(nid);
   if (hit && hit.key === key) return hit.dist;
+  const inputs = supplyInputs(sim, nid);
+  if (hit && hit.inputs === inputs) {
+    hit.key = key;
+    return hit.dist;
+  }
 
   const dist: Record<ProvinceId, number> = {};
   // one friendliness lookup per controlling realm, not per province
@@ -145,7 +174,7 @@ export function supplyDistances(sim: Sim, nid: NationId): Record<ProvinceId, num
       }
     }
   }
-  per.set(nid, { key, dist });
+  per.set(nid, { key, inputs, dist });
   return dist;
 }
 

@@ -176,6 +176,11 @@ export function treatyPair(sim: Sim, type: TreatyType, a: NationId, b: NationId)
   return a !== b && (relBits(sim, a, b) & TREATY_BIT[type]) !== 0;
 }
 
+/** Is `b` an enemy, an ally or on `a`'s side of a war (so `a`'s armies may enter land `b` controls)? */
+export function enterablePair(sim: Sim, a: NationId, b: NationId): boolean {
+  return a !== b && (relBits(sim, a, b) & (HOSTILE | SAME_SIDE | TREATY_BIT.alliance)) !== 0;
+}
+
 // Memo tables for pure lookups whose inputs change only with a revision bump
 // or between phases of the week (province output changes when projects finish,
 // in the monthly settlement and through event choices). A memo lives for one

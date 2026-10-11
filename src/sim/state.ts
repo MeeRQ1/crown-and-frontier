@@ -1,7 +1,7 @@
 // Core state access helpers shared by all simulation modules.
 
 import { C } from './config';
-import { armiesIn, armiesOfNation, bumpGeo, controlledBy, hostilePair, memoGeo, ownedBy, sameSidePair, treatyPair } from './index';
+import { armiesIn, armiesOfNation, bumpGeo, controlledBy, enterablePair, hostilePair, memoGeo, ownedBy, sameSidePair, treatyPair } from './index';
 import type {
   Army,
   ArmyId,
@@ -179,17 +179,10 @@ export function bump(sim: Sim, scope: 'all' | 'terms' = 'all'): void {
 export function hasAccess(sim: Sim, nid: NationId, owner: NationId | null, ctrl: NationId | null): boolean {
   if (ctrl === nid || owner === nid) return true;
   if (ctrl === null && owner === null) return true; // unclaimed wilds are open
-  if (ctrl && atWar(sim, nid, ctrl)) return true;
-  if (owner && atWar(sim, nid, owner)) return true;
-  if (ctrl && hasTreaty(sim, 'alliance', nid, ctrl)) return true;
-  // armies of a co-belligerent may pass through each other's territory
-  if (ctrl) {
-    for (const w of warsOf(sim, nid)) {
-      const side = sideOf(w, nid);
-      if (side && sideOf(w, ctrl) === side) return true;
-    }
-  }
-  return false;
+  // the controller is an enemy, an ally or a co-belligerent (armies on one side of a
+  // war may pass through each other's territory); or the owner is an enemy
+  if (ctrl && enterablePair(sim, nid, ctrl)) return true;
+  return !!owner && atWar(sim, nid, owner);
 }
 
 const borderCache = new WeakMap<object, { key: string; pairs: Set<string> }>();
