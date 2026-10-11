@@ -539,19 +539,33 @@ export function debtStage(sim: Sim, nid: NationId): DebtStage {
 
 /** Monthly settlement for all living nations. */
 export function monthlyEconomy(sim: Sim): void {
+  const steps = monthlyEconomySteps(sim);
+  while (!steps.next().done);
+}
+
+/**
+ * The monthly settlement a realm at a time: it yields after the contract plan and
+ * after each realm's ledger and settlement, so the browser can spread a long month
+ * across frames (weekSlices). Nothing changes the state between the steps, so the
+ * result is exactly monthlyEconomy's.
+ */
+export function* monthlyEconomySteps(sim: Sim): Generator<void, void, void> {
   const st = sim.state;
   // one contract plan and set of ledgers for everyone, from the state at the start of the settlement
   const trade = contractPlan(sim);
+  yield;
   const ledgers = new Map<NationId, MonthlyLedger>();
   const plans = new Map<NationId, ResourcePlan>();
   for (const nid of sim.world.nationIds) {
     if (!st.nations[nid].alive) continue;
     ledgers.set(nid, computeLedger(sim, nid, trade));
     plans.set(nid, resourcePlan(sim, nid));
+    yield;
   }
   for (const nid of sim.world.nationIds) {
     const n = st.nations[nid];
     if (!n.alive) continue;
+    yield;
     const ledger = ledgers.get(nid)!;
     const plan = plans.get(nid)!;
     const prevStage = debtStage(sim, nid);

@@ -47,6 +47,8 @@ export class BaseMap {
   private overview: HTMLCanvasElement | null = null;
   private overviewScale = 1;
   private clock = 0;
+  /** the renderer's frame counter: tiles used in the current frame are never evicted */
+  private frame = 0;
   detail: TerrainDetail = 'full';
 
   constructor(
@@ -59,6 +61,7 @@ export class BaseMap {
     this.detail = d;
     this.tiles.clear();
     this.overview = null;
+    this.scaled = null;
   }
 
   /** Pixels per world unit at a tile level. */
@@ -71,72 +74,135 @@ export class BaseMap {
    * time budget; returns false if some tiles are still pending (redraw soon).
    */
   draw(ctx: CanvasRenderingContext2D, zoom: number, offX: number, offY: number, vw: number, vh: number, dpr: number, budgetMs = 10): boolean {
-    this.clock++;
-    const scale = zoom * dpr;
-    // backdrop: the whole-world overview (instant)
+    this.beginFrame();
+    return this.drawRegion(ctx, zoom * dpr, offX * dpr, offY * dpr, [0, 0, vw * dpr, vh * dpr], budgetMs);
+  }
+
+  /**
+   * Draw the base map over a rectangle of a canvas, in device pixels, where a world
+   * point lands at `scale · w + (ax, ay)`. Renders missing tiles within a time
+   * budget; returns false if some tiles are still pending (redraw soon), and lists
+   * where they go in `missing`.
+   */
+  drawRegion(ctx: CanvasRenderingContext2D, scale: number, ax: number, ay: number, rect: [number, number, number, number], budgetMs = 10, missing?: Array<[number, number, number, number]>): boolean {
+    const [rx0, ry0, rx1, ry1] = rect;
+    const b = this.geo.bounds;
     const ov = this.getOverview();
     ctx.save();
-    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    ctx.setTransform(1, 0, 0, 1, 0, 0);
     ctx.fillStyle = PALETTE.seaDeep;
-    ctx.fillRect(0, 0, vw, vh);
-    ctx.imageSmoothingEnabled = true;
-    ctx.imageSmoothingQuality = 'high';
-    const b = this.geo.bounds;
-    ctx.drawImage(ov, offX + b.minX * zoom, offY + b.minY * zoom, (b.maxX - b.minX) * zoom, (b.maxY - b.minY) * zoom);
-    ctx.restore();
+    ctx.fillRect(rx0, ry0, rx1 - rx0, ry1 - ry0);
     // tiles at the level just above the needed resolution
     const level = Math.ceil(Math.log2(scale * 16));
     const ppw = BaseMap.ppw(level);
-    if (ppw <= this.overviewScale * 1.05) return true;
+    if (scale <= this.overviewScale || ppw <= this.overviewScale * 1.05) {
+      // the whole-world overview has all the detail this scale shows (it is painted
+      // the same way as the tiles, at its own scale): resampled once per scale (a
+      // high-quality downscale of it costs ~16 ms), then copied
+      ctx.drawImage(this.scaledOverview(scale), Math.round(ax + b.minX * scale), Math.round(ay + b.minY * scale));
+      ctx.restore();
+      return true;
+    }
     const tw = TILE / ppw; // world units per tile
-    const x0 = (0 - offX) / zoom;
-    const y0 = (0 - offY) / zoom;
-    const x1 = (vw - offX) / zoom;
-    const y1 = (vh - offY) / zoom;
+    const x0 = (rx0 - ax) / scale;
+    const y0 = (ry0 - ay) / scale;
+    const x1 = (rx1 - ax) / scale;
+    const y1 = (ry1 - ay) / scale;
     const tx0 = Math.floor(Math.max(x0, b.minX) / tw);
     const ty0 = Math.floor(Math.max(y0, b.minY) / tw);
     const tx1 = Math.floor(Math.min(x1, b.maxX) / tw);
     const ty1 = Math.floor(Math.min(y1, b.maxY) / tw);
-    const t0 = performance.now();
-    let complete = true;
-    ctx.save();
-    ctx.setTransform(1, 0, 0, 1, 0, 0);
-    ctx.imageSmoothingEnabled = true;
-    const drawScale = scale / ppw;
     // nearest tiles first so the centre sharpens first
     const cxT = (tx0 + tx1) / 2;
     const cyT = (ty0 + ty1) / 2;
     const order: Array<[number, number]> = [];
     for (let ty = ty0; ty <= ty1; ty++) for (let tx = tx0; tx <= tx1; tx++) order.push([tx, ty]);
     order.sort((p, q) => Math.hypot(p[0] - cxT, p[1] - cyT) - Math.hypot(q[0] - cxT, q[1] - cyT));
+    // Render missing tiles within the budget, which counts the time spent rendering
+    // a tile and drawing it the first time (when it is rasterised), not the time
+    // spent drawing cached tiles (that can exceed the budget on a large screen, and
+    // must not starve the missing ones); one is always rendered, so the map converges.
+    let spent = 0;
+    let rendered = 0;
+    let complete = true;
+    const holes: Array<[number, number, number, number]> = [];
+    ctx.imageSmoothingEnabled = true;
+    const drawScale = scale / ppw;
     for (const [tx, ty] of order) {
       const key = `${level}|${tx}|${ty}`;
+      const sx = tx * tw * scale + ax;
+      const sy = ty * tw * scale + ay;
+      const size = TILE * drawScale;
+      const t1 = performance.now();
       let t = this.tiles.get(key);
+      const fresh = !t;
       if (!t) {
-        if (performance.now() - t0 > budgetMs) {
+        if (rendered > 0 && spent > budgetMs) {
           complete = false;
+          holes.push([sx, sy, sx + size, sy + size]);
           continue;
         }
         t = { canvas: this.renderTile(level, tx, ty), used: 0 };
+        rendered++;
         this.tiles.set(key, t);
       }
-      t.used = this.clock;
-      const sx = (tx * tw * zoom + offX) * dpr;
-      const sy = (ty * tw * zoom + offY) * dpr;
-      const size = TILE * drawScale;
-      // overlap by a fraction of a pixel to hide seams
-      ctx.drawImage(t.canvas, Math.floor(sx), Math.floor(sy), Math.ceil(size + (sx % 1)) + 1, Math.ceil(size + (sy % 1)) + 1);
+      t.used = this.frame;
+      // overlap by a fraction of a pixel to hide seams; whole pixels from floor and
+      // ceil of both edges, so a tile is drawn the same wherever the origin lies (with
+      // `sx % 1`, negative for a tile left of the origin, it was a pixel narrower there)
+      const x0 = Math.floor(sx);
+      const y0 = Math.floor(sy);
+      ctx.drawImage(t.canvas, x0, y0, Math.ceil(sx + size) + 1 - x0, Math.ceil(sy + size) + 1 - y0);
+      if (fresh) spent += performance.now() - t1;
+    }
+    // where tiles are still to come, the overview stands in (blurred, for a few frames)
+    if (holes.length) {
+      ctx.save();
+      ctx.beginPath();
+      for (const h of holes) ctx.rect(h[0], h[1], h[2] - h[0], h[3] - h[1]);
+      ctx.clip();
+      ctx.drawImage(ov, ax + b.minX * scale, ay + b.minY * scale, (b.maxX - b.minX) * scale, (b.maxY - b.minY) * scale);
+      ctx.restore();
+      missing?.push(...holes);
     }
     ctx.restore();
     this.evict();
     return complete;
   }
 
+  private scaled: { scale: number; canvas: HTMLCanvasElement } | null = null;
+  /** The overview resampled to a scale (pixels per world unit), kept for the last scale asked. */
+  private scaledOverview(scale: number): HTMLCanvasElement {
+    const ov = this.getOverview();
+    if (Math.abs(scale - this.overviewScale) < 1e-9) return ov;
+    if (this.scaled?.scale === scale) return this.scaled.canvas;
+    const b = this.geo.bounds;
+    const c = this.scaled?.canvas ?? document.createElement('canvas');
+    c.width = Math.max(1, Math.round((b.maxX - b.minX) * scale));
+    c.height = Math.max(1, Math.round((b.maxY - b.minY) * scale));
+    const g = c.getContext('2d')!;
+    g.imageSmoothingEnabled = true;
+    g.imageSmoothingQuality = 'high';
+    g.drawImage(ov, 0, 0, c.width, c.height);
+    this.scaled = { scale, canvas: c };
+    return c;
+  }
+
+  /** Start a frame: tiles drawn from now on count as in use until the next one. */
+  beginFrame(): void {
+    this.frame = ++this.clock;
+  }
+
+  /**
+   * Keep at most about 320 tiles (80 MB), dropping the least recently used, but
+   * never one drawn in the current frame: a large or high-density screen needs
+   * several hundred tiles at once, and evicting those would re-render them every frame.
+   */
   private evict(): void {
-    const max = 140;
+    const max = 320;
     if (this.tiles.size <= max) return;
-    const arr = [...this.tiles.entries()].sort((a, b) => a[1].used - b[1].used);
-    for (let i = 0; i < arr.length - max; i++) this.tiles.delete(arr[i][0]);
+    const arr = [...this.tiles.entries()].filter((e) => e[1].used < this.frame).sort((a, b) => a[1].used - b[1].used);
+    for (let i = 0; i < Math.min(arr.length, this.tiles.size - max); i++) this.tiles.delete(arr[i][0]);
   }
 
   private getOverview(): HTMLCanvasElement {

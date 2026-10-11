@@ -50,6 +50,8 @@ export class EditorView {
   /** Shows a package; the outlines are rebuilt only when its drawn geometry changed. */
   setMap(pkg: MapPackage): void {
     this.pkg = pkg;
+    // an edit: owners, regions, colours or rivers may have changed
+    this.version++;
     if (pkg.geometry !== this.geometryRef) {
       const sameBounds = this.geo && JSON.stringify(this.geo.bounds) === JSON.stringify(pkg.geometry.bounds);
       this.geo = new GeoIndex(drawnFromPackage(pkg));
@@ -151,12 +153,36 @@ export class EditorView {
 
   private provIndex = new Map<string, MapPackage['provinces'][number]>();
   private colorIndex = new Map<string, string>();
+  /** bumped by every setMap (an edit); the indexes and border paths are rebuilt only then, or for another layer */
+  private version = 0;
+  private built = '';
+  private borders: { thin: Path2D; thick: Path2D } = { thin: new Path2D(), thick: new Path2D() };
+
+  /** The province and colour indexes and the border paths, for the package as it is now. */
+  private ensureIndexes(): void {
+    const key = `${this.version}|${this.layer}`;
+    if (key === this.built) return;
+    this.built = key;
+    const { geo, pkg } = this;
+    this.provIndex = new Map(pkg.provinces.map((p) => [p.id, p]));
+    this.colorIndex = new Map(pkg.nations.map((n) => [n.id, n.color]));
+    // province borders, and realm or region borders
+    const thin = new Path2D();
+    const thick = new Path2D();
+    for (const e of geo.edges) {
+      if (e.coast) continue;
+      const a = this.provIndex.get(e.a);
+      const b = this.provIndex.get(e.b);
+      const differ = this.layer === 'regions' ? a?.region !== b?.region : this.layer === 'realms' ? a?.owner !== b?.owner : false;
+      (differ ? thick : thin).addPath(e.path);
+    }
+    this.borders = { thin, thick };
+  }
 
   draw(): void {
     const { ctx, camera: cam, geo, pkg } = this;
     if (!pkg || !geo) return;
-    this.provIndex = new Map(pkg.provinces.map((p) => [p.id, p]));
-    this.colorIndex = new Map(pkg.nations.map((n) => [n.id, n.color]));
+    this.ensureIndexes();
     const z = cam.zoom;
     const px = 1 / z;
     ctx.setTransform(1, 0, 0, 1, 0, 0);
@@ -196,15 +222,7 @@ export class EditorView {
       ctx.fill(pk.path);
     }
     // province borders, then realm or region borders
-    const thin = new Path2D();
-    const thick = new Path2D();
-    for (const e of geo.edges) {
-      if (e.coast) continue;
-      const a = this.provIndex.get(e.a);
-      const b = this.provIndex.get(e.b);
-      const differ = this.layer === 'regions' ? a?.region !== b?.region : this.layer === 'realms' ? a?.owner !== b?.owner : false;
-      (differ ? thick : thin).addPath(e.path);
-    }
+    const { thin, thick } = this.borders;
     ctx.lineJoin = 'round';
     ctx.strokeStyle = 'rgba(53, 47, 39, 0.35)';
     ctx.lineWidth = 0.8 * px;

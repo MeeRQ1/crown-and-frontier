@@ -65,17 +65,29 @@ function distToSegSq(px: number, py: number, ax: number, ay: number, bx: number,
   return x * x + y * y;
 }
 
-function distToPoly(x: number, y: number, poly: number[]): number {
+/**
+ * The distance from a point to a polygon's outline, except that it gives up
+ * (returns -1) at the first side certainly closer than `floor`: a candidate that
+ * cannot win, or must be refused, need not be measured in full. Otherwise it
+ * returns the exact distance, so callers compare it as before and get the same
+ * results (tests/geometry-anchors.test.ts).
+ */
+function distToPolyAbove(x: number, y: number, poly: number[], floor: number): number {
+  // a hair under floor²: below it the distance is surely under floor, despite rounding
+  const f2 = floor <= 0 ? -1 : floor * floor * (1 - 1e-9);
   let m = Infinity;
   for (let i = 0, j = poly.length - 2; i < poly.length; j = i, i += 2) {
     const d = distToSegSq(x, y, poly[j], poly[j + 1], poly[i], poly[i + 1]);
-    if (d < m) m = d;
+    if (d < m) {
+      m = d;
+      if (m < f2) return -1;
+    }
   }
   return Math.sqrt(m);
 }
 
 /** Pole of inaccessibility (a label anchor well inside the polygon), grid refinement. */
-function poleOf(poly: number[], bb: BBox): { x: number; y: number; r: number } {
+export function poleOf(poly: number[], bb: BBox): { x: number; y: number; r: number } {
   let best = { x: (bb[0] + bb[2]) / 2, y: (bb[1] + bb[3]) / 2, r: -1 };
   let step = Math.max(bb[2] - bb[0], bb[3] - bb[1]) / 8;
   let cx = best.x;
@@ -85,7 +97,7 @@ function poleOf(poly: number[], bb: BBox): { x: number; y: number; r: number } {
     for (let x = cx - span; x <= cx + span; x += step) {
       for (let y = cy - span; y <= cy + span; y += step) {
         if (!pointInPoly(x, y, poly)) continue;
-        const r = distToPoly(x, y, poly);
+        const r = distToPolyAbove(x, y, poly, best.r);
         if (r > best.r) best = { x, y, r };
       }
     }
@@ -116,7 +128,7 @@ export function rng(seed: number): () => number {
 }
 
 /** Poisson-ish scatter inside a polygon (deterministic), keeping clear of its edge. */
-function scatter(poly: number[], bb: BBox, spacing: number, margin: number, seed: number, max = 400): Array<{ x: number; y: number }> {
+export function scatter(poly: number[], bb: BBox, spacing: number, margin: number, seed: number, max = 400): Array<{ x: number; y: number }> {
   const r = rng(seed);
   const out: Array<{ x: number; y: number }> = [];
   const w = bb[2] - bb[0];
@@ -127,7 +139,8 @@ function scatter(poly: number[], bb: BBox, spacing: number, margin: number, seed
     const x = bb[0] + r() * w;
     const y = bb[1] + r() * hgt;
     if (!pointInPoly(x, y, poly)) continue;
-    if (margin > 0 && distToPoly(x, y, poly) < margin) continue;
+    // (closer than the margin to the outline; exact: sqrt is monotone)
+    if (margin > 0 && distToPolyAbove(x, y, poly, margin) < margin) continue;
     let ok = true;
     for (const q of out) {
       const dx = q.x - x;

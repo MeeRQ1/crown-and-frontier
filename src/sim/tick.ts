@@ -27,18 +27,18 @@ import { weeklyCombat, detectBattles } from './combat';
 import { weeklyProposals } from './commands';
 import { weeklyConstruction } from './construction';
 import { weeklyAir, weeklyHangars } from './air';
-import { monthlyEconomy } from './economy';
+import { monthlyEconomySteps } from './economy';
 import { weeklyNaval, weeklyShipyards } from './naval';
 import { monthlyEvents } from './events';
 import { monthlyIntegration } from './integration';
-import { weeklyArmyCare, weeklyRecruitment } from './military';
+import { weeklyArmyCareSteps, weeklyRecruitment } from './military';
 import { weeklyMovement, weeklyOrders } from './movement';
 import { monthlyResearch } from './progression';
 import { monthlyFocus } from './focus';
 import { nextMemoEpoch, restoreMemo, setMemoAside } from './index';
 import { weeklySieges } from './siege';
 import { monthlyDiplomacy } from './diplomacy';
-import { monthlyInfluence } from './influence';
+import { monthlyInfluenceSteps } from './influence';
 import { WEEKS_PER_MONTH, type Sim } from './state';
 import { checkPlayerDefeat, monthlyVictory } from './victory';
 import { monthlyWars, weeklyWarScores } from './war';
@@ -96,6 +96,17 @@ export function* weekSlices(sim: Sim, opts: StepOptions = {}): Generator<void, v
     run(name, f);
     yield* pause();
   }
+  /** A phase that works in steps (a realm or a few armies at a time), a slice each. */
+  function* phaseSteps(name: string, steps: Generator<void, void, void>): Generator<void, void, void> {
+    nextMemoEpoch();
+    let done = false;
+    for (;;) {
+      run(name, () => (done = !!steps.next().done));
+      if (done) break;
+      yield* pause();
+    }
+    yield* pause();
+  }
   yield* phase('proposals', () => weeklyProposals(sim));
   if (!opts.noAI) {
     nextMemoEpoch();
@@ -117,7 +128,7 @@ export function* weekSlices(sim: Sim, opts: StepOptions = {}): Generator<void, v
     weeklyCombat(sim);
   });
   yield* phase('sieges', () => weeklySieges(sim));
-  yield* phase('armyCare', () => weeklyArmyCare(sim));
+  yield* phaseSteps('armyCare', weeklyArmyCareSteps(sim));
   yield* phase('recruitment', () => {
     weeklyRecruitment(sim);
     weeklyShipyards(sim);
@@ -126,16 +137,19 @@ export function* weekSlices(sim: Sim, opts: StepOptions = {}): Generator<void, v
   yield* phase('construction', () => weeklyConstruction(sim));
   yield* phase('warScores', () => weeklyWarScores(sim));
   if ((st.tick + 1) % WEEKS_PER_MONTH === 0) {
-    yield* phase('m.economy', () => monthlyEconomy(sim));
+    yield* phaseSteps('m.economy', monthlyEconomySteps(sim));
     yield* phase('m.research', () => {
       monthlyResearch(sim);
       monthlyFocus(sim);
     });
     yield* phase('m.integration', () => monthlyIntegration(sim));
-    yield* phase('m.diplomacy', () => {
-      monthlyDiplomacy(sim);
-      monthlyInfluence(sim);
-    });
+    yield* phaseSteps(
+      'm.diplomacy',
+      (function* () {
+        monthlyDiplomacy(sim);
+        yield* monthlyInfluenceSteps(sim);
+      })(),
+    );
     yield* phase('m.wars', () => monthlyWars(sim));
     yield* phase('m.events', () => monthlyEvents(sim));
     yield* phase('m.victory', () => {

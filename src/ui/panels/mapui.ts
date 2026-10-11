@@ -173,6 +173,8 @@ export class Minimap {
   private canvas: HTMLCanvasElement;
   private base: HTMLCanvasElement | null = null;
   private key = '';
+  private rev = '';
+  private owners = '';
   private w = 200;
   private h = 130;
 
@@ -213,7 +215,13 @@ export class Minimap {
     this.w = 196;
     this.h = Math.round((196 * bh) / bw);
     const dpr = Math.min(2, window.devicePixelRatio || 1);
-    const key = `${sim.state.rev}|${this.w}|${dpr}`;
+    // repainted when an owner changes (the revision changes far more often, for treaties)
+    const rev = `${sim.state.rev}|${this.w}|${dpr}`;
+    if (rev !== this.rev) {
+      this.rev = rev;
+      this.owners = `${r.geo.provList.map((p) => sim.state.provinces[p.id]?.owner ?? '').join(',')}|${this.w}|${dpr}`;
+    }
+    const key = this.owners;
     if (key !== this.key || !this.base) {
       this.key = key;
       const c = this.base ?? document.createElement('canvas');

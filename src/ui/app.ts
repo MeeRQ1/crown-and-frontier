@@ -40,8 +40,16 @@ type DistOmit<T, K extends keyof T> = T extends unknown ? Omit<T, K> : never;
 export type PlayerCommand = DistOmit<Command, 'nation'>;
 
 export const SPEEDS = [0, 0.5, 1, 2.5, 6]; // ticks (weeks) per second; index 2 is "normal"
-/** milliseconds of simulation per animation frame, at most (one slice may run over) */
-const SIM_BUDGET_MS = 24;
+/**
+ * Work a frame may do (interface, map and simulation) and still be shown at 60 Hz:
+ * the simulation gets what the interface and the map leave of it. Less while the
+ * player is moving the map or clicking, more when nobody is touching anything.
+ */
+const FRAME_BUDGET_MS = { input: 10, idle: 14 };
+/** while the clock runs, the simulation always gets at least this much a frame (one slice may run over) */
+const SIM_MIN_MS = 3;
+/** how long after the last input the map counts as being handled */
+const INPUT_HOLD_MS = 600;
 
 export interface UIState {
   peace: { war: string; with: string; mode: 'demand' | 'concede' | 'white'; provinces: string[]; gold: number } | null;
@@ -130,6 +138,12 @@ export class App {
   private lastNote = 0;
   private lastAutosave = 0;
   private lastMinimap = 0;
+  /** the last pointer, wheel or key input (see FRAME_BUDGET_MS) */
+  private lastInput = -Infinity;
+  /** an open ledger is rebuilt while the clock runs at most this often: ten times what its last rebuild cost */
+  private ledgerDue = 0;
+  /** openLedger has just built the ledger: the next interface pass need not build it again */
+  private ledgerFresh = false;
   private endShown = false;
   private raf = 0;
   private starting = 0;
@@ -439,28 +453,15 @@ export class App {
     this.lastFrame = t;
     const sim = this.sim;
     if (!sim || !this.renderer) return;
+    const start = performance.now();
     if (this.speed > 0 && !isOver(sim)) this.acc += (dt / 1000) * SPEEDS[this.speed];
-    // Simulate a slice at a time within a budget per frame, so a long week (a world
-    // war on the largest maps) spreads over frames instead of freezing the map and
-    // the controls. A week once begun is finished even if the game is paused.
-    const until = performance.now() + SIM_BUDGET_MS;
-    let weeks = 0;
-    while (performance.now() < until) {
-      if (!this.week) {
-        if (!(this.speed > 0 && this.acc >= 1 && weeks < 6 && !isOver(sim))) break;
-        this.acc -= 1;
-        this.week = weekSlices(sim);
-      }
-      if (this.week.next().done) {
-        this.week = null;
-        weeks++;
-        this.afterTick();
-      }
-    }
-    if (this.acc > 3) this.acc = 0;
     // the map moved under a still pointer (centring on a selection, a wheel step, the
     // keyboard): the hover card describes what is under the pointer now
     if (this.hoverPos && !this.pointers.size && this.viewKey() !== this.hoverView) this.hover(this.hoverPos.x, this.hoverPos.y);
+    const busy = this.pointers.size > 0 || this.renderer.camera.animating || start - this.lastInput < INPUT_HOLD_MS;
+    this.renderer.interacting = busy;
+    // the player has stopped handling the map: the cache's margin can be painted now
+    if (!busy && this.renderer.idleWork) this.mapDirty = true;
     if (this.mapDirty || this.renderer.camera.animating || this.wantsFrame) {
       this.mapDirty = false;
       this.drawMap(t);
@@ -474,6 +475,27 @@ export class App {
       this.uiDirty = false;
       this.renderUI();
     }
+    // Simulate a slice at a time with what is left of the frame's budget, so a long
+    // week (a world war on the largest maps) spreads over frames instead of freezing
+    // the map and the controls; what the slices change is drawn next frame. A week
+    // once begun is finished even if the game is paused.
+    const budget = Math.max(SIM_MIN_MS, (busy ? FRAME_BUDGET_MS.input : FRAME_BUDGET_MS.idle) - (performance.now() - start));
+    const until = performance.now() + budget;
+    let weeks = 0;
+    while (performance.now() < until) {
+      if (!this.week) {
+        if (!(this.speed > 0 && this.acc >= 1 && weeks < 6 && !isOver(sim))) break;
+        this.acc -= 1;
+        this.week = weekSlices(sim);
+      }
+      if (this.week.next().done) {
+        this.week = null;
+        weeks++;
+        this.afterTick();
+      }
+    }
+    // a clock that cannot keep up runs slower instead of piling up weeks to catch up
+    if (this.acc > 3) this.acc = 0;
   }
 
   private wantsFrame = false;
@@ -565,10 +587,17 @@ export class App {
     return !!a.closest('.drawer, .inspector, .modal-layer, .dock');
   }
 
+  /** counts refresh(): something the player did or chose (cached interface figures are worked out again) */
+  actions = 0;
+
   refresh(): void {
+    this.actions++;
     this.uiDirty = true;
     this.mapDirty = true;
     this.lastUI = 0;
+    // something the player did: the open ledger shows it at once
+    this.ledgerDue = 0;
+    this.ledgerFresh = false;
   }
 
   mapChanged(): void {
@@ -582,7 +611,16 @@ export class App {
     this.renderRail();
     renderInspector(this);
     this.inspectorEl.classList.toggle('peek', this.ui.inspectorPeek);
-    if (this.ui.ledgerTab) renderLedger(this);
+    if (this.ui.ledgerTab) {
+      // while the clock runs, a costly ledger (diplomacy or wars on the largest maps)
+      // refreshes less often than the rest of the interface; paused, it always does
+      const now = performance.now();
+      if (this.ledgerFresh) this.ledgerFresh = false;
+      else if (this.speed === 0 || now >= this.ledgerDue) {
+        renderLedger(this);
+        this.ledgerDue = now + 10 * (performance.now() - now);
+      } else this.uiDirty = true;
+    }
     renderModes(this);
     renderNavCluster(this);
     renderDock(this);
@@ -1064,6 +1102,8 @@ export class App {
     renderLedger(this);
     this.updateInsets();
     this.refresh();
+    // the ledger was just built: the rest of the interface catches up next frame without building it again
+    this.ledgerFresh = true;
     this.tutorial?.update();
     (this.drawerEl.querySelector('#ledger-title') as HTMLElement | null)?.focus({ preventScroll: true });
   }
@@ -1283,6 +1323,7 @@ export class App {
       (e) => {
         e.preventDefault();
         if (!this.renderer) return;
+        this.lastInput = performance.now();
         const r = c.getBoundingClientRect();
         const factor = Math.exp(-e.deltaY * (e.deltaMode === 1 ? 0.05 : 0.0016));
         this.renderer.camera.zoomAt(e.clientX - r.left, e.clientY - r.top, factor);
@@ -1291,6 +1332,7 @@ export class App {
       { passive: false },
     );
     c.addEventListener('pointerdown', (e) => {
+      this.lastInput = performance.now();
       c.setPointerCapture(e.pointerId);
       const r = c.getBoundingClientRect();
       const x = e.clientX - r.left;
@@ -1311,6 +1353,7 @@ export class App {
       }
     });
     c.addEventListener('pointermove', (e) => {
+      this.lastInput = performance.now();
       const r = c.getBoundingClientRect();
       const x = e.clientX - r.left;
       const y = e.clientY - r.top;
@@ -1555,6 +1598,7 @@ export class App {
   }
 
   private onKey(e: KeyboardEvent): void {
+    this.lastInput = performance.now();
     if (!this.sim || this.screenEl) return;
     const t = e.target as HTMLElement | null;
     if (t && (t.tagName === 'INPUT' || t.tagName === 'SELECT' || t.tagName === 'TEXTAREA')) return;

@@ -186,10 +186,11 @@ export class MapRenderer {
   /** called when lazily loaded art (landmarks) arrives */
   onArt: (() => void) | null = null;
   private realmKey = '';
+  private realmSim: Sim | null = null;
+  private realmSigs = new Map<NationId, string>();
   private realms = new Map<NationId, RealmShape>();
   /** realm lettering frames, reused while a realm's territory is unchanged */
   private labelCache = new Map<NationId, { sig: string; label: RealmShape['label'] }>();
-  private riverPath: Path2D | null = null;
   private patternCache = new Map<string, CanvasPattern | null>();
   private pending = false;
 
@@ -269,51 +270,50 @@ export class MapRenderer {
     return null;
   }
 
-  /** Draw a frame; returns true if another frame is wanted (animation or tiles pending). */
+  /** Draw a frame; returns true if another frame is wanted (animation, tiles pending, a battle on screen). */
   draw(sim: Sim, rs: RenderState, now: number): boolean {
     const cam = this.camera;
     const animating = cam.update(now);
     const ctx = this.ctx;
     const dpr = this.dpr;
     this.base.setDetail(rs.presentation.terrain);
-    const complete = this.base.draw(ctx, cam.zoom, cam.offX, cam.offY, this.width, this.height, dpr, animating ? 6 : 12);
-    this.pending = !complete;
+    this.base.beginFrame();
 
     const z = cam.zoom;
     const tier = this.tier();
     const view = cam.viewRect(60);
     const visible = this.geo.provincesIn(view[0], view[1], view[2], view[3]);
     this.ensureRealms(sim);
+    const mctx = this.modeContext(sim, rs);
+    const px = 1 / z; // one CSS pixel in world units
+
+    // 1–4. the ground: geography, mode washes, hatching, borders, rivers, sea zones,
+    // straits and railways. Kept in a cache a little larger than the screen and
+    // copied each frame (see drawGround); `lod = false` draws it directly instead.
+    if (this.lod) this.pending = this.drawGround(sim, rs, tier, mctx, now, animating);
+    else {
+      this.pending = !this.base.draw(ctx, cam.zoom, cam.offX, cam.offY, this.width, this.height, dpr, animating ? 6 : 12);
+      ctx.setTransform(dpr * z, 0, 0, dpr * z, dpr * cam.offX, dpr * cam.offY);
+      this.paintGround(ctx, sim, rs, tier, px, view, visible, mctx);
+    }
 
     // world transform
     ctx.setTransform(dpr * z, 0, 0, dpr * z, dpr * cam.offX, dpr * cam.offY);
-    const px = 1 / z; // one CSS pixel in world units
-
-    // 1–3. washes, hatching, borders and rivers: at the far tier, while the
-    // camera only pans, from a cached layer (redrawn when the realms, the mode
-    // or the zoom change); otherwise drawn directly
-    const mctx = buildContext(sim, rs.mode, rs.player);
-    const farLayer = tier === 'far' && !animating && this.lod ? this.farLayers(sim, rs, tier, mctx) : null;
-    if (farLayer) {
-      const x = dpr * (cam.offX + farLayer.x0 * z);
-      const y = dpr * (cam.offY + farLayer.y0 * z);
-      ctx.save();
-      ctx.setTransform(1, 0, 0, 1, 0, 0);
-      ctx.globalCompositeOperation = 'multiply';
-      ctx.drawImage(farLayer.wash, x, y);
-      ctx.globalCompositeOperation = 'source-over';
-      ctx.drawImage(farLayer.lines, x, y);
-      ctx.restore();
-    } else this.paintRealmLayers(ctx, sim, rs, tier, px, view, visible, { wash: true, lines: true, washComposite: 'multiply' }, mctx);
     if (rs.outlineRealm) {
       const r = this.realms.get(rs.outlineRealm);
       if (r) this.understroked(r.outline, BRASS_INK, 2.8 * px, IVORY_RAISED, 5 * px);
     }
-
-    // 4. sea zones, straits and fords, railways
-    this.drawSeaZones(sim, rs, tier, px);
-    this.drawStraits(px);
-    if (tier === 'close' || rs.mode === 'supply') this.drawRoads(sim, px, visible);
+    if (rs.selectedZone) {
+      const path = this.geo.zonePath(rs.selectedZone);
+      if (path) {
+        ctx.save();
+        ctx.clip(this.geo.seaClip(), 'evenodd');
+        ctx.globalAlpha = 0.28;
+        ctx.fillStyle = BRASS;
+        ctx.fill(path);
+        ctx.restore();
+      }
+    }
 
     // 5. highlights
     if (rs.highlight?.length) {
@@ -414,7 +414,8 @@ export class MapRenderer {
     this.drawSites(sim, rs, tier, visible);
     this.drawZoneNames(rs, tier);
     this.drawLabels(sim, rs, tier, visible);
-    return animating || this.pending || (!rs.reducedMotion && Object.keys(sim.state.battles).length > 0);
+    // a battle's pulse animates only while one is on screen
+    return animating || this.pending || (!rs.reducedMotion && this.battleMarkers.length > 0);
   }
 
   /** A line over a lighter understroke (selection, order routes), both in world units. */
@@ -434,25 +435,41 @@ export class MapRenderer {
 
   // ───────────────────────────── caches ───────────────────────────────────
 
+  /**
+   * Realm shapes (union, borders, outline, lettering frame), rebuilt when the
+   * revision changes (every change of owner bumps it), and then only for the realms
+   * whose provinces changed: a realm's shapes depend on its own provinces alone.
+   */
   private ensureRealms(sim: Sim): void {
-    const key = `${sim.state.tick >= 0 ? sim.state.rev : 0}`;
-    if (key === this.realmKey && this.realms.size) return;
-    this.realmKey = key;
-    this.realms.clear();
     const st = sim.state;
-    const owner = (id: string) => st.provinces[id]?.owner ?? null;
+    const key = `${st.rev}`;
+    if (key === this.realmKey && this.realmSim === sim) return;
+    this.realmKey = key;
+    if (this.realmSim !== sim) this.realmSigs.clear();
+    this.realmSim = sim;
+    const byOwner = new Map<NationId, ProvinceId[]>();
+    for (const pid of sim.world.provIds) {
+      const o = st.provinces[pid]?.owner;
+      if (!o) continue;
+      let list = byOwner.get(o);
+      if (!list) byOwner.set(o, (list = []));
+      list.push(pid);
+    }
+    const next = new Map<NationId, RealmShape>();
     for (const nid of sim.world.nationIds) {
-      if (!st.nations[nid].alive) continue;
+      const owned = byOwner.get(nid);
+      if (!st.nations[nid].alive || !owned?.length) continue;
+      const sig = owned.join(',');
+      const had = this.realms.get(nid);
+      if (had && this.realmSigs.get(nid) === sig) {
+        next.set(nid, had);
+        continue;
+      }
       const union = new Path2D();
       const border = new Path2D();
       const outline = new Path2D();
       const bbox: [number, number, number, number] = [Infinity, Infinity, -Infinity, -Infinity];
-      let any = false;
-      let sig = '';
-      for (const pid of sim.world.provIds) {
-        if (owner(pid) !== nid) continue;
-        any = true;
-        sig += `${pid},`;
+      for (const pid of owned) {
         const pg = this.geo.provs.get(pid)!;
         union.addPath(pg.path);
         bbox[0] = Math.min(bbox[0], pg.bbox[0]);
@@ -465,17 +482,19 @@ export class MapRenderer {
             continue;
           }
           const other = e.a === pid ? e.b : e.a;
-          if (owner(other) !== nid) {
+          if (st.provinces[other]?.owner !== nid) {
             border.addPath(e.path);
             outline.addPath(e.path);
           }
         }
       }
-      if (!any) continue;
       let lab = this.labelCache.get(nid);
       if (!lab || lab.sig !== sig) this.labelCache.set(nid, (lab = { sig, label: this.realmLabel(sim, nid) }));
-      this.realms.set(nid, { union, border, outline, bbox, label: lab.label });
+      next.set(nid, { union, border, outline, bbox, label: lab.label });
+      this.realmSigs.set(nid, sig);
     }
+    for (const nid of this.realmSigs.keys()) if (!next.has(nid)) this.realmSigs.delete(nid);
+    this.realms = next;
   }
 
   /** Axis-aligned lettering frame for a realm's largest connected territory. */
@@ -606,41 +625,264 @@ export class MapRenderer {
     return first;
   }
 
-  /** Far-tier level of detail (cached layers while panning); the benchmark turns it off to compare. */
+  /** Draw the ground through its cache (true) or directly every frame (false: the reference the checks compare with). */
   lod = true;
-  private farCache: { key: string; wash: HTMLCanvasElement; lines: HTMLCanvasElement; x0: number; y0: number } | null = null;
-  /** Far-tier layers covering the whole map at the current zoom; null when too large to keep. */
-  private farLayers(sim: Sim, rs: RenderState, tier: Tier, mctx: ReturnType<typeof buildContext>): { wash: HTMLCanvasElement; lines: HTMLCanvasElement; x0: number; y0: number } | null {
-    const z = this.camera.zoom;
-    const dpr = this.dpr;
-    const b = this.geo.bounds;
-    const w = Math.ceil((b.maxX - b.minX) * z * dpr);
-    const h = Math.ceil((b.maxY - b.minY) * z * dpr);
-    if (w * h > 9e6 || w < 1 || h < 1) return null;
+  private ground: Ground | null = null;
+  /** the ground of the mode shown before, at the same zoom (opening and closing a ledger switches modes) */
+  private spareGround: Ground | null = null;
+  /** the zoom of the last frame and when it last changed (zooming draws the cache scaled until it settles) */
+  private lastZoom = 0;
+  private zoomChangedAt = -Infinity;
+  /** what painting a cell of the cache's margin has been costing, raster included (ms) */
+  private cellMs = 4;
+  /** the player is moving the map or clicking: the margin waits (set by the app each frame) */
+  interacting = false;
+  /** part of the cache's margin is still to paint (when the player is not handling the map) */
+  idleWork = false;
+  /** the margin is next painted no sooner than this (see drawGround) */
+  private marginAt = 0;
+  private mctxKey = '';
+  private mctx: ReturnType<typeof buildContext> | null = null;
+
+  /** The map mode's data (supply distances, threat, fronts), worked out once per state. */
+  private modeContext(sim: Sim, rs: RenderState): ReturnType<typeof buildContext> {
     const st = sim.state;
-    const key = [st.tick, st.rev, memoEpochNow(), rs.mode, rs.focusNation, rs.player, rs.presentation.borders, rs.presentation.patterns, z, dpr].join('|');
-    if (this.farCache?.key === key) return this.farCache;
-    const make = () => {
-      const c = document.createElement('canvas');
-      c.width = w;
-      c.height = h;
-      return c;
-    };
-    const wash = make();
-    const lines = make();
-    const px = 1 / z;
-    const all = this.geo.provList;
-    const view: [number, number, number, number] = [b.minX, b.minY, b.maxX, b.maxY];
-    for (const [c, parts] of [
-      [wash, { wash: true, lines: false, washComposite: 'source-over' as GlobalCompositeOperation }],
-      [lines, { wash: false, lines: true, washComposite: 'source-over' as GlobalCompositeOperation }],
-    ] as const) {
-      const g = c.getContext('2d')!;
-      g.setTransform(dpr * z, 0, 0, dpr * z, -b.minX * dpr * z, -b.minY * dpr * z);
-      this.paintRealmLayers(g, sim, rs, tier, px, view, all, parts, mctx);
+    const key = `${st.tick}|${st.rev}|${memoEpochNow()}|${rs.mode}|${rs.player}`;
+    if (key !== this.mctxKey || !this.mctx || this.mctx.sim !== sim) {
+      this.mctxKey = key;
+      this.mctx = buildContext(sim, rs.mode, rs.player);
     }
-    this.farCache = { key, wash, lines, x0: b.minX, y0: b.minY };
-    return this.farCache;
+    return this.mctx;
+  }
+
+  /** Everything under the overlays, for a world rectangle: geography aside (the base map draws it). */
+  private paintGround(
+    g: CanvasRenderingContext2D,
+    sim: Sim,
+    rs: RenderState,
+    tier: Tier,
+    px: number,
+    view: [number, number, number, number],
+    visible: ProvGeo[],
+    mctx: ReturnType<typeof buildContext>,
+  ): void {
+    this.paintRealmLayers(g, sim, rs, tier, px, view, visible, { wash: true, lines: true, washComposite: 'multiply' }, mctx);
+    this.drawSeaZones(g, sim, rs, tier, px);
+    this.drawStraits(g, px);
+    if (tier === 'close' || rs.mode === 'supply') {
+      // a railway runs between province centres: take in the provinces around the rectangle too
+      const r = this.geo.provScale;
+      this.drawRoads(g, sim, px, this.geo.provincesIn(view[0] - r, view[1] - r, view[2] + r, view[3] + r));
+    }
+  }
+
+  /**
+   * The ground through its cache: a canvas a fifth of the screen (at most 192 CSS
+   * pixels) larger on each side, at the current zoom, in device pixels (a world point lands at
+   * `zoom · dpr · w + (ax, ay)`, with whole-pixel ax and ay). Each frame copies it to
+   * the screen at a whole-pixel offset; panning past its edge shifts it by whole
+   * pixels and paints only the strips uncovered. A province whose wash, hatching,
+   * owner or railways change is repainted where it lies; a change of mode, of the
+   * presentation settings or of the screen repaints all of it, the visible part
+   * first and the margin over the next frames. While the zoom is changing (the
+   * wheel, a pinch or a camera flight) the cache is drawn scaled, then repainted
+   * crisp once the zoom has held for ZOOM_SETTLE_MS. Returns true while parts are
+   * still to paint.
+   */
+  private drawGround(sim: Sim, rs: RenderState, tier: Tier, mctx: ReturnType<typeof buildContext>, now: number, animating: boolean): boolean {
+    const cam = this.camera;
+    const ctx = this.ctx;
+    const dpr = this.dpr;
+    const z = cam.zoom;
+    const W = this.canvas.width;
+    const H = this.canvas.height;
+    const ox = cam.offX * dpr;
+    const oy = cam.offY * dpr;
+    const p = rs.presentation;
+    const key = [rs.mode, rs.focusNation, rs.player, p.borders, p.patterns, p.terrain, dpr, W, H].join('|');
+    if (z !== this.lastZoom) {
+      this.lastZoom = z;
+      this.zoomChangedAt = now;
+    }
+    let gr = this.ground;
+    if (gr && gr.key === key && gr.z !== z && (animating || now - this.zoomChangedAt < ZOOM_SETTLE_MS)) {
+      // zooming: the cache scaled, over the whole map at low resolution where the
+      // cache does not reach (or is not painted yet)
+      const k = z / gr.z;
+      const dx = ox - gr.ax * k;
+      const dy = oy - gr.ay * k;
+      const covers = dx <= 0 && dy <= 0 && dx + gr.w * k >= W && dy + gr.h * k >= H;
+      const view: [number, number, number, number] = [-dx / k, -dy / k, (W - dx) / k, (H - dy) / k];
+      ctx.setTransform(1, 0, 0, 1, 0, 0);
+      ctx.imageSmoothingEnabled = true;
+      if (!covers || anyDirty(gr, view)) {
+        const wl = this.worldLayer(sim, rs, mctx, gr);
+        const b = this.geo.bounds;
+        const kw = (z * dpr) / wl.s;
+        ctx.fillStyle = PALETTE.seaDeep;
+        ctx.fillRect(0, 0, W, H);
+        ctx.drawImage(wl.canvas, z * dpr * b.minX + ox, z * dpr * b.minY + oy, wl.canvas.width * kw, wl.canvas.height * kw);
+      }
+      for (const r of cleanRuns(gr, view)) ctx.drawImage(gr.canvas, r[0], r[1], r[2] - r[0], r[3] - r[1], dx + r[0] * k, dy + r[1] * k, (r[2] - r[0]) * k, (r[3] - r[1]) * k);
+      return true;
+    }
+    if (!gr || gr.key !== key || gr.z !== z) {
+      const spare = this.spareGround;
+      if (spare && spare.key === key && spare.z === z) {
+        // back to the mode before (a ledger closed): its ground, brought up to date below
+        this.spareGround = gr;
+        gr = this.ground = spare;
+        scrollGround(gr, ox, oy);
+      } else if (gr && gr.z === z) {
+        // another mode at the same zoom: the old ground is kept for a quick return
+        this.spareGround = gr;
+        gr = this.ground = newGround(spare, key, z, W, H, ox, oy, dpr);
+      } else {
+        this.spareGround = null;
+        gr = this.ground = newGround(gr, key, z, W, H, ox, oy, dpr);
+      }
+    } else scrollGround(gr, ox, oy);
+    this.diffGround(sim, rs, gr, mctx, tier);
+    // the part on screen now, then the margin within a budget
+    const t0 = performance.now();
+    const vx = gr.ax - ox;
+    const vy = gr.ay - oy;
+    const onScreen: [number, number, number, number] = [Math.floor(vx), Math.floor(vy), Math.ceil(vx + W), Math.ceil(vy + H)];
+    let pending = false;
+    const scale = z * dpr;
+    const paint = (r: [number, number, number, number], budget: number): boolean => {
+      const g = gr.g;
+      g.save();
+      g.setTransform(1, 0, 0, 1, 0, 0);
+      g.beginPath();
+      g.rect(r[0], r[1], r[2] - r[0], r[3] - r[1]);
+      g.clip();
+      const missing: Array<[number, number, number, number]> = [];
+      const complete = this.base.drawRegion(g, scale, gr.ax, gr.ay, r, budget, missing);
+      g.setTransform(scale, 0, 0, scale, gr.ax, gr.ay);
+      const pad = 12 / z;
+      const view: [number, number, number, number] = [(r[0] - gr.ax) / scale - pad, (r[1] - gr.ay) / scale - pad, (r[2] - gr.ax) / scale + pad, (r[3] - gr.ay) / scale + pad];
+      this.paintGround(g, sim, rs, tier, 1 / z, view, this.geo.provincesIn(view[0], view[1], view[2], view[3]), mctx);
+      g.restore();
+      // where base tiles are still to come, paint again next frame
+      for (const m of missing) markDirty(gr, [Math.max(m[0], r[0]), Math.max(m[1], r[1]), Math.min(m[2], r[2]), Math.min(m[3], r[3])]);
+      return complete;
+    };
+    const urgent = takeDirty(gr, onScreen);
+    for (const r of urgent) if (!paint(r, Math.max(2, 8 - (performance.now() - t0)))) pending = true;
+    // The margin, nearest cells first, only in a frame that painted nothing on screen,
+    // as many cells as the budget allows at what a cell has been costing. The cost is
+    // measured to the end of the copy below: drawing waits until then to rasterise.
+    let cells = 0;
+    if (!urgent.length && !this.interacting && now >= this.marginAt) {
+      const n = Math.max(1, Math.floor(GROUND_BUDGET_MS / this.cellMs));
+      for (; cells < n; cells++) {
+        const r = takeNearestDirty(gr, (onScreen[0] + onScreen[2]) / 2, (onScreen[1] + onScreen[3]) / 2);
+        if (!r) break;
+        if (!paint(r, 2)) {
+          pending = true;
+          cells++;
+          break;
+        }
+      }
+    }
+    ctx.setTransform(1, 0, 0, 1, 0, 0);
+    const sx = Math.round(gr.ax - ox);
+    const sy = Math.round(gr.ay - oy);
+    ctx.drawImage(gr.canvas, sx, sy, W, H, 0, 0, W, H);
+    if (cells) {
+      const spent = performance.now() - t0;
+      this.cellMs = 0.7 * this.cellMs + (0.3 * spent) / cells;
+      // at most a quarter of the time goes to the margin (a cell that needs new base
+      // tiles can take tens of milliseconds without a graphics processor)
+      this.marginAt = now + 3 * spent;
+    }
+    // what is off screen waits while the player handles the map (the app wakes the
+    // renderer when they stop: idleWork)
+    this.idleWork = gr.dirty.some((d) => d);
+    return pending || (this.idleWork && !this.interacting && now >= this.marginAt);
+  }
+
+  private world: { canvas: HTMLCanvasElement; s: number; key: string } | null = null;
+  /**
+   * The ground of the whole map at low resolution (about 2048 pixels across), shown
+   * where the scaled cache does not reach while the zoom changes. Painted when first
+   * needed and again when a province's fill has changed since.
+   */
+  private worldLayer(sim: Sim, rs: RenderState, mctx: ReturnType<typeof buildContext>, gr: Ground): { canvas: HTMLCanvasElement; s: number } {
+    const p = rs.presentation;
+    const key = [rs.mode, rs.focusNation, rs.player, p.borders, p.patterns, p.terrain, gr.zoneSig, gr.sig?.join('\n') ?? ''].join('|');
+    if (this.world?.key === key) return this.world;
+    const b = this.geo.bounds;
+    const s = Math.min(2048 / (b.maxX - b.minX), 2048 / (b.maxY - b.minY));
+    const w = Math.max(1, Math.round((b.maxX - b.minX) * s));
+    const h = Math.max(1, Math.round((b.maxY - b.minY) * s));
+    let canvas = this.world?.canvas;
+    if (!canvas || canvas.width !== w || canvas.height !== h) {
+      canvas = document.createElement('canvas');
+      canvas.width = w;
+      canvas.height = h;
+    }
+    const g = canvas.getContext('2d', { alpha: false })!;
+    this.base.drawRegion(g, s, -b.minX * s, -b.minY * s, [0, 0, w, h], 0);
+    g.save();
+    g.setTransform(s, 0, 0, s, -b.minX * s, -b.minY * s);
+    const view: [number, number, number, number] = [b.minX, b.minY, b.maxX, b.maxY];
+    this.paintGround(g, sim, rs, 'far', 1 / s, view, this.geo.provList, mctx);
+    g.restore();
+    this.world = { canvas, s, key };
+    return this.world;
+  }
+
+  /**
+   * Repaint what changed since the cache was painted: each province whose fill,
+   * hatching, owner (borders) or railways differ, over its bounding box and the
+   * width of the strokes; every sea zone when the fleets that colour them change.
+   */
+  private diffGround(sim: Sim, rs: RenderState, gr: Ground, mctx: ReturnType<typeof buildContext>, tier: Tier): void {
+    const st = sim.state;
+    const key = `${st.tick}|${st.rev}|${memoEpochNow()}|${tier}`;
+    if (gr.sigKey === key && gr.sigSim === sim) return;
+    const roads = tier === 'close' || rs.mode === 'supply';
+    const provs = this.geo.provList;
+    const sig: string[] = new Array(provs.length);
+    for (let i = 0; i < provs.length; i++) {
+      const id = provs[i].id;
+      const f = fillFor(rs.mode, mctx, id, rs.focusNation);
+      const ps = st.provinces[id];
+      sig[i] = `${f.alpha > 0 ? `${f.color}|${f.alpha}` : ''}|${f.hatch ?? ''}|${ps?.owner ?? ''}${roads ? `|${ps?.infra ?? 0}` : ''}`;
+    }
+    let zones = '';
+    if (rs.mode === 'sea' || (rs.mode === 'military' && rs.player)) zones = this.zoneSignature(sim, rs);
+    const fresh = gr.sigSim !== sim || !gr.sig;
+    if (!fresh && zones !== gr.zoneSig) markDirty(gr, [0, 0, gr.w, gr.h]);
+    else if (!fresh) {
+      const scale = gr.z * this.dpr;
+      const pad = 12 * this.dpr;
+      const mark = (pg: ProvGeo) => markDirty(gr, [pg.bbox[0] * scale + gr.ax - pad, pg.bbox[1] * scale + gr.ay - pad, pg.bbox[2] * scale + gr.ax + pad, pg.bbox[3] * scale + gr.ay + pad]);
+      for (let i = 0; i < provs.length; i++) {
+        if (sig[i] === gr.sig![i]) continue;
+        mark(provs[i]);
+        // a railway reaches the neighbours' centres
+        if (roads) for (const n of sim.world.prov[provs[i].id]?.neighbors ?? []) mark(this.geo.provs.get(n)!);
+      }
+    }
+    gr.sig = sig;
+    gr.zoneSig = zones;
+    gr.sigKey = key;
+    gr.sigSim = sim;
+  }
+
+  /** Who colours each sea zone in the sea and military modes. */
+  private zoneSignature(sim: Sim, rs: RenderState): string {
+    const me = rs.player;
+    let out = '';
+    for (const z of this.geo.zoneIds) {
+      const fl = fleetsIn(sim, z);
+      if (!fl.length) continue;
+      out += `${z}:${fl.map((f) => `${f.nation}${me && (f.nation === me || isFriendly(sim, me, f.nation)) ? '+' : me && atWar(sim, me, f.nation) ? '-' : ''}${surfacePower(f) + subPower(f) * 0.5}`).join(',')};`;
+    }
+    return out;
   }
 
   /** Mode washes, occupation hatching, borders, realm edges and rivers. */
@@ -713,36 +955,64 @@ export class MapRenderer {
       ctx.stroke(thin);
       ctx.restore();
     }
+    // realm borders and territory within the view: identical to the whole realms' shapes
+    // there, and far less to trace than a large realm's full outline for each cell
+    const st = sim.state;
+    const localBorder = new Map<NationId, Path2D>();
+    const realmBorder = new Path2D();
+    for (const e of this.geo.edges) {
+      if (e.coast || !boxMeets(e.bbox, view)) continue;
+      const oa = st.provinces[e.a]?.owner ?? null;
+      const ob = st.provinces[e.b]?.owner ?? null;
+      if (oa === ob) continue;
+      for (const o of [oa, ob]) {
+        if (!o || !this.realms.has(o)) continue;
+        let path = localBorder.get(o);
+        if (!path) localBorder.set(o, (path = new Path2D()));
+        path.addPath(e.path);
+        realmBorder.addPath(e.path);
+      }
+    }
     // a narrow inner edge in each realm's own hue: identity does not rest on the wash alone
     if (rs.mode === 'political' || rs.mode === 'diplomacy') {
       const edgeW = (bstyle === 'strong' ? 6 : bstyle === 'subtle' ? 3 : 4.5) * px;
-      for (const [nid, rsh] of this.realms) {
+      const localUnion = new Map<NationId, Path2D>();
+      for (const p of visible) {
+        const o = st.provinces[p.id]?.owner;
+        if (!o || !localBorder.has(o)) continue;
+        let path = localUnion.get(o);
+        if (!path) localUnion.set(o, (path = new Path2D()));
+        path.addPath(p.path);
+      }
+      for (const nid of this.realms.keys()) {
+        const border = localBorder.get(nid);
+        const union = localUnion.get(nid);
+        if (!border || !union) continue;
         ctx.save();
-        ctx.clip(rsh.union);
+        ctx.clip(union);
         ctx.globalAlpha = rs.mode === 'political' ? 0.5 : 0.3;
         ctx.strokeStyle = realmFill(sim.world.nationDefs[nid].color);
         ctx.lineWidth = edgeW * 2;
-        ctx.stroke(rsh.border);
+        // round joins: with the default mitre, a sharp corner of a border threw a
+        // spike up to ten half-widths long into the realm
+        ctx.lineJoin = 'round';
+        ctx.stroke(border);
         ctx.restore();
       }
     }
     // rivers: strategic lines (attackers crossing one fight at a disadvantage)
     if (this.geo.riverEdges.length) {
-      if (!this.riverPath) {
-        this.riverPath = new Path2D();
-        for (const e of this.geo.riverEdges) this.riverPath.addPath(e.path);
-      }
+      const rivers = new Path2D();
+      for (const e of this.geo.riverEdges) if (boxMeets(e.bbox, view)) rivers.addPath(e.path);
       ctx.save();
       ctx.lineCap = 'round';
       ctx.lineJoin = 'round';
       ctx.globalAlpha = LINE.river.opacity;
       ctx.strokeStyle = LINE.river.stroke;
       ctx.lineWidth = LINE.river.px * (tier === 'close' ? 1.5 : 1) * px;
-      ctx.stroke(this.riverPath);
+      ctx.stroke(rivers);
       ctx.restore();
     }
-    const realmBorder = new Path2D();
-    for (const rsh of this.realms.values()) realmBorder.addPath(rsh.border);
     ctx.strokeStyle = LINE.realm.stroke;
     ctx.lineWidth = LINE.realm.px * (bstyle === 'strong' ? 1.35 : bstyle === 'subtle' ? 0.7 : 1) * px;
     ctx.lineJoin = 'round';
@@ -775,8 +1045,7 @@ export class MapRenderer {
   // ───────────────────────────── world-space extras ───────────────────────
 
   /** Strait crossings: a dashed ink ferry line. */
-  private drawStraits(px: number): void {
-    const ctx = this.ctx;
+  private drawStraits(ctx: CanvasRenderingContext2D, px: number): void {
     ctx.save();
     ctx.lineCap = 'round';
     for (const [a, b] of this.geo.straits) {
@@ -798,8 +1067,7 @@ export class MapRenderer {
   }
 
   /** Railways (infrastructure): fine lines, heavier for higher levels, dashed at level 1. */
-  private drawRoads(sim: Sim, px: number, visible: Array<{ id: string }>): void {
-    const ctx = this.ctx;
+  private drawRoads(ctx: CanvasRenderingContext2D, sim: Sim, px: number, visible: Array<{ id: string }>): void {
     const st = sim.state;
     const vis = new Set(visible.map((v) => v.id));
     ctx.save();
@@ -922,13 +1190,12 @@ export class MapRenderer {
   // ───────────────────────────── sea and air ──────────────────────────────
 
   /** Zone borders (world space); in the military and sea modes, who holds each zone. */
-  private drawSeaZones(sim: Sim, rs: RenderState, tier: Tier, px: number): void {
+  private drawSeaZones(ctx: CanvasRenderingContext2D, sim: Sim, rs: RenderState, tier: Tier, px: number): void {
     const geo = this.geo;
     if (!geo.zoneIds.length) return;
-    const ctx = this.ctx;
     const me = rs.player;
     ctx.save();
-    if ((rs.mode === 'military' && me) || rs.mode === 'sea' || rs.selectedZone) ctx.clip(geo.seaClip(), 'evenodd');
+    if ((rs.mode === 'military' && me) || rs.mode === 'sea') ctx.clip(geo.seaClip(), 'evenodd');
     if (rs.mode === 'sea') {
       // every zone in the colour of the realm with the strongest warships there
       for (const z of geo.zoneIds) {
@@ -964,16 +1231,6 @@ export class MapRenderer {
         ctx.save();
         ctx.globalAlpha = 0.3;
         ctx.fillStyle = theirs <= 0 ? ROUTE : ours <= 0 ? DANGER : ours >= theirs ? '#5f7f8c' : '#8a5a50';
-        ctx.fill(path);
-        ctx.restore();
-      }
-    }
-    if (rs.selectedZone) {
-      const path = geo.zonePath(rs.selectedZone);
-      if (path) {
-        ctx.save();
-        ctx.globalAlpha = 0.28;
-        ctx.fillStyle = BRASS;
         ctx.fill(path);
         ctx.restore();
       }
@@ -1923,6 +2180,180 @@ export class MapRenderer {
     const offY = (h - (b.maxY - b.minY) * z) / 2 - b.minY * z;
     return { z, offX, offY };
   }
+}
+
+// ───────────────────────────── the ground cache ─────────────────────────
+
+/** Cells of the ground cache that are repainted as a unit, in device pixels. */
+const CELL = 256;
+/** How long the zoom must hold before the ground is repainted crisp at it. */
+const ZOOM_SETTLE_MS = 140;
+/** Time a frame may spend painting the cache's margin (the part off screen). */
+const GROUND_BUDGET_MS = 6;
+
+interface Ground {
+  canvas: HTMLCanvasElement;
+  g: CanvasRenderingContext2D;
+  w: number;
+  h: number;
+  /** margins on each side, in device pixels */
+  mx: number;
+  my: number;
+  /** a world point lands at z · dpr · w + (ax, ay) in the cache (whole pixels) */
+  ax: number;
+  ay: number;
+  z: number;
+  key: string;
+  cols: number;
+  rows: number;
+  /** cells still to paint */
+  dirty: Uint8Array;
+  /** what each province looked like when painted (see diffGround) */
+  sig: string[] | null;
+  zoneSig: string;
+  sigKey: string;
+  sigSim: Sim | null;
+}
+
+function newGround(old: Ground | null, key: string, z: number, W: number, H: number, ox: number, oy: number, dpr: number): Ground {
+  const mx = Math.ceil(Math.min(W * 0.2, 192 * dpr));
+  const my = Math.ceil(Math.min(H * 0.2, 192 * dpr));
+  const w = W + 2 * mx;
+  const h = H + 2 * my;
+  let canvas = old?.canvas;
+  let g = old?.g;
+  if (!canvas || !g || canvas.width !== w || canvas.height !== h) {
+    canvas = document.createElement('canvas');
+    canvas.width = w;
+    canvas.height = h;
+    g = canvas.getContext('2d', { alpha: false })!;
+  }
+  const cols = Math.ceil(w / CELL);
+  const rows = Math.ceil(h / CELL);
+  return { canvas, g, w, h, mx, my, ax: Math.round(ox) + mx, ay: Math.round(oy) + my, z, key, cols, rows, dirty: new Uint8Array(cols * rows).fill(1), sig: null, zoneSig: '', sigKey: '', sigSim: null };
+}
+
+/** Keep the screen inside the cache: shift its contents by whole pixels and mark the uncovered strips. */
+function scrollGround(gr: Ground, ox: number, oy: number): void {
+  const vx = gr.ax - ox;
+  const vy = gr.ay - oy;
+  if (vx >= 0 && vy >= 0 && vx + gr.w - 2 * gr.mx <= gr.w && vy + gr.h - 2 * gr.my <= gr.h) return;
+  const ax = Math.round(ox) + gr.mx;
+  const ay = Math.round(oy) + gr.my;
+  const sx = ax - gr.ax;
+  const sy = ay - gr.ay;
+  const was = gr.dirty;
+  gr.dirty = new Uint8Array(gr.cols * gr.rows);
+  gr.ax = ax;
+  gr.ay = ay;
+  if (Math.abs(sx) >= gr.w || Math.abs(sy) >= gr.h) {
+    gr.dirty.fill(1);
+    return;
+  }
+  const g = gr.g;
+  g.save();
+  g.setTransform(1, 0, 0, 1, 0, 0);
+  g.drawImage(gr.canvas, sx, sy);
+  g.restore();
+  for (let r = 0; r < gr.rows; r++)
+    for (let c = 0; c < gr.cols; c++) if (was[r * gr.cols + c]) markDirty(gr, [c * CELL + sx, r * CELL + sy, (c + 1) * CELL + sx, (r + 1) * CELL + sy]);
+  if (sx > 0) markDirty(gr, [0, 0, sx, gr.h]);
+  if (sx < 0) markDirty(gr, [gr.w + sx, 0, gr.w, gr.h]);
+  if (sy > 0) markDirty(gr, [0, 0, gr.w, sy]);
+  if (sy < 0) markDirty(gr, [0, gr.h + sy, gr.w, gr.h]);
+}
+
+function markDirty(gr: Ground, r: [number, number, number, number]): void {
+  const c0 = Math.max(0, Math.floor(r[0] / CELL));
+  const r0 = Math.max(0, Math.floor(r[1] / CELL));
+  const c1 = Math.min(gr.cols - 1, Math.floor((r[2] - 1) / CELL));
+  const r1 = Math.min(gr.rows - 1, Math.floor((r[3] - 1) / CELL));
+  for (let y = r0; y <= r1; y++) for (let x = c0; x <= c1; x++) gr.dirty[y * gr.cols + x] = 1;
+}
+
+function cellRect(gr: Ground, c0: number, r0: number, c1: number, r1: number): [number, number, number, number] {
+  return [c0 * CELL, r0 * CELL, Math.min(gr.w, (c1 + 1) * CELL), Math.min(gr.h, (r1 + 1) * CELL)];
+}
+
+/**
+ * Take the dirty cells that meet a rectangle, as the one rectangle that bounds them
+ * (repainting a clean cell among them costs less than tracing the map's paths again
+ * for each piece).
+ */
+function takeDirty(gr: Ground, r: [number, number, number, number]): Array<[number, number, number, number]> {
+  const c0 = Math.max(0, Math.floor(r[0] / CELL));
+  const r0 = Math.max(0, Math.floor(r[1] / CELL));
+  const c1 = Math.min(gr.cols - 1, Math.floor((r[2] - 1) / CELL));
+  const r1 = Math.min(gr.rows - 1, Math.floor((r[3] - 1) / CELL));
+  let bx0 = Infinity;
+  let by0 = Infinity;
+  let bx1 = -1;
+  let by1 = -1;
+  for (let y = r0; y <= r1; y++)
+    for (let x = c0; x <= c1; x++)
+      if (gr.dirty[y * gr.cols + x]) {
+        bx0 = Math.min(bx0, x);
+        by0 = Math.min(by0, y);
+        bx1 = Math.max(bx1, x);
+        by1 = Math.max(by1, y);
+      }
+  if (bx1 < 0) return [];
+  for (let y = by0; y <= by1; y++) for (let x = bx0; x <= bx1; x++) gr.dirty[y * gr.cols + x] = 0;
+  return [cellRect(gr, bx0, by0, bx1, by1)];
+}
+
+function anyDirty(gr: Ground, r: [number, number, number, number]): boolean {
+  const c0 = Math.max(0, Math.floor(r[0] / CELL));
+  const r0 = Math.max(0, Math.floor(r[1] / CELL));
+  const c1 = Math.min(gr.cols - 1, Math.floor((r[2] - 1) / CELL));
+  const r1 = Math.min(gr.rows - 1, Math.floor((r[3] - 1) / CELL));
+  for (let y = r0; y <= r1; y++) for (let x = c0; x <= c1; x++) if (gr.dirty[y * gr.cols + x]) return true;
+  return false;
+}
+
+/** Runs of painted cells per row that meet a rectangle (to show the cache while parts of it are still to paint). */
+function cleanRuns(gr: Ground, r: [number, number, number, number]): Array<[number, number, number, number]> {
+  const c0 = Math.max(0, Math.floor(r[0] / CELL));
+  const r0 = Math.max(0, Math.floor(r[1] / CELL));
+  const c1 = Math.min(gr.cols - 1, Math.floor((r[2] - 1) / CELL));
+  const r1 = Math.min(gr.rows - 1, Math.floor((r[3] - 1) / CELL));
+  const out: Array<[number, number, number, number]> = [];
+  for (let y = r0; y <= r1; y++) {
+    let x = c0;
+    while (x <= c1) {
+      if (gr.dirty[y * gr.cols + x]) {
+        x++;
+        continue;
+      }
+      const start = x;
+      while (x <= c1 && !gr.dirty[y * gr.cols + x]) x++;
+      out.push(cellRect(gr, start, y, x - 1, y));
+    }
+  }
+  // one rectangle when every cell is painted
+  if (out.length === r1 - r0 + 1 && out.every((q) => q[0] === out[0][0] && q[2] === out[0][2])) return out.length ? [[out[0][0], out[0][1], out[0][2], out[out.length - 1][3]]] : [];
+  return out;
+}
+
+/** Take the dirty cell nearest a point (the middle of the screen), if any. */
+function takeNearestDirty(gr: Ground, x: number, y: number): [number, number, number, number] | null {
+  let best = -1;
+  let bd = Infinity;
+  for (let i = 0; i < gr.dirty.length; i++) {
+    if (!gr.dirty[i]) continue;
+    const d = Math.hypot(((i % gr.cols) + 0.5) * CELL - x, (Math.floor(i / gr.cols) + 0.5) * CELL - y);
+    if (d < bd) (bd = d), (best = i);
+  }
+  if (best < 0) return null;
+  gr.dirty[best] = 0;
+  const c = best % gr.cols;
+  const r = Math.floor(best / gr.cols);
+  return cellRect(gr, c, r, c, r);
+}
+
+/** Do two world rectangles meet? */
+function boxMeets(a: [number, number, number, number], b: [number, number, number, number]): boolean {
+  return a[2] >= b[0] && a[0] <= b[2] && a[3] >= b[1] && a[1] <= b[3];
 }
 
 /** A rotated label box: centre, half extents and axis. */
