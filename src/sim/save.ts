@@ -142,12 +142,17 @@ export function readSave(text: string): LoadedSave {
   const sameShape = sameKeys(st.provinces, world.provIds) && sameKeys(st.nations, world.nationIds);
   const name = mapScenarioPart(st.scenarioId)?.meta.name ?? world.scenario.name;
   if (recorded.checksum !== current.checksum) {
+    // a map can change without a new revision number (between development builds): say so
+    // rather than report two equal revisions as different
+    const sameRev = recorded.revision === current.revision;
+    const then = sameRev
+      ? `another edition of ${name} (also revision ${current.revision}, but checksum ${recorded.checksum} rather than ${current.checksum})`
+      : `revision ${recorded.revision} of ${name}`;
+    const now = sameRev ? 'this version of the game' : `this version of the game has revision ${current.revision}, which`;
     if (!sameShape) {
-      throw new SaveError(
-        `This campaign was saved on revision ${recorded.revision} of ${name}, but this version of the game has revision ${current.revision}, whose provinces or realms are different. Load it with the version of the game that made it.`,
-      );
+      throw new SaveError(`This campaign was saved on ${then}, but ${now} has different provinces or realms. Load it with the version of the game that made it.`);
     }
-    notices.push(`This campaign was saved on revision ${recorded.revision} of ${name}; this version of the game has revision ${current.revision}. It continues on the current map, where some borders, rules or realm details may differ from when it was saved.`);
+    notices.push(`This campaign was saved on ${then}${sameRev ? '' : `; this version of the game has revision ${current.revision}`}. It continues on the current map, where some borders, rules or realm details may differ from when it was saved.`);
     st.map = { ...current };
   }
   for (const pid of world.provIds) if (!st.provinces[pid]) throw new SaveError(`The save is missing province "${pid}".`);

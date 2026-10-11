@@ -124,6 +124,15 @@ describe('save format', () => {
     expect(sim.state.map).toEqual(mapFingerprint('reach'));
   });
 
+  it('a save from another edition of the same revision says so, not that two equal revisions differ', () => {
+    const obj = JSON.parse(serialize(createGame({ scenario: 'reach', seed: 2, playerNation: 'aur' })));
+    const current = mapFingerprint('reach');
+    obj.state.map = { ...current, checksum: '00000000' };
+    const { notices } = readSave(reencode(obj));
+    expect(notices.join(' ')).toMatch(new RegExp(`another edition of The Reach \\(also revision ${current.revision}, but checksum 00000000 rather than ${current.checksum}\\)`));
+    expect(notices.join(' ')).not.toMatch(/has revision/);
+  });
+
   it('a save from another revision of its map is refused when the provinces differ', () => {
     const obj = JSON.parse(serialize(createGame({ scenario: 'reach', seed: 2, playerNation: 'aur' })));
     obj.state.map = { id: 'reach', revision: 0, checksum: '00000000' };
