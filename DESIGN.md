@@ -212,7 +212,10 @@ them.
 ## Supply (`supply.ts`)
 
 **Sources** are provinces owned and controlled by us or a friend (ally or same war
-side) that are integrated ≥ 50, fortified, or a capital. Supply travels through
+side) that are integrated ≥ 50, fortified, or a capital, and **beachheads**: a coastal
+province a realm holds (owned or occupied) with one of its fleets stationed offshore
+(not under way) in a zone where enemy warships do not outgun its friends. The sea lane
+home is not traced; the fleet offshore stands for it. Supply travels through
 friendly-controlled provinces at 1 per step (+0.5 into mountains and marsh, −0.5 with
 roads ≥ 2). An army within **range 3** (+1 with Supply Trains) is *connected*; the last
 step may enter enemy land. The stockpile must not be empty.

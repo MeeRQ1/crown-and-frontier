@@ -1,7 +1,9 @@
 // Supply network.
 //
 // Sources: provinces owned AND controlled by the nation or a friend (ally / same
-// war side) that are integrated >= 50, fortified, or a capital, and not in revolt.
+// war side) that are integrated >= 50, fortified, or a capital, and not in revolt;
+// and beachheads: a coastal province a realm holds (owned or occupied) with one of
+// its fleets stationed offshore in a zone enemy warships do not command.
 // Supply travels through friendly-controlled provinces; each step costs 1
 // (+0.5 into mountains/marsh, -0.5 with roads >= 2, minimum 0.5). An army is on a
 // supply line when its province is within range (3 + technology) — the final
@@ -15,7 +17,7 @@ import { C, TERRAIN } from './config';
 import { CostHeap } from './heap';
 import { armiesIn, geoRev } from './index';
 import { nationMods } from './modifiers';
-import { fleetEpoch, straitBlocked } from './naval';
+import { fleetEpoch, fleetsIn, straitBlocked, zoneBalance } from './naval';
 import { isFriendly, type Sim } from './state';
 import { edgeKey } from './world';
 import type { Army, NationId, ProvinceId } from './types';
@@ -38,11 +40,30 @@ const distCache = new WeakMap<object, Map<NationId, { key: string; inputs: strin
 
 export function isSupplySource(sim: Sim, pid: ProvinceId): boolean {
   const p = sim.state.provinces[pid];
-  if (!p.owner || p.controller !== p.owner) return false;
   if (p.revoltUntil > sim.state.tick) return false;
-  if (p.integration >= C.integration.supplySourceMin) return true;
-  if (p.fort > 0) return true;
-  return sim.state.nations[p.owner]?.capital === pid;
+  if (p.owner && p.controller === p.owner) {
+    if (p.integration >= C.integration.supplySourceMin) return true;
+    if (p.fort > 0) return true;
+    if (sim.state.nations[p.owner]?.capital === pid) return true;
+  }
+  return isBeachhead(sim, pid);
+}
+
+/**
+ * A beachhead: a coastal province held by a realm (owned or occupied) with one of its
+ * fleets stationed offshore in a zone where enemy warships do not outgun its friends.
+ * Supply comes in by sea, so an army landed overseas need not starve.
+ */
+export function isBeachhead(sim: Sim, pid: ProvinceId): boolean {
+  const holder = sim.state.provinces[pid].controller;
+  const zones = sim.world.provZones[pid];
+  if (!holder || !zones?.length) return false;
+  for (const z of zones) {
+    if (!fleetsIn(sim, z).some((f) => f.nation === holder && !f.path.length)) continue;
+    const b = zoneBalance(sim, z, holder);
+    if (b.hostileSurface === 0 || b.friendSurface >= b.hostileSurface) return true;
+  }
+  return false;
 }
 
 /** Railway level from which a supply step costs less (construction bumps geography only on reaching it). */
@@ -56,14 +77,15 @@ function stepCost(sim: Sim, pid: ProvinceId): number {
   return Math.max(0.5, c);
 }
 
-const sourcesMemo = new WeakMap<object, { tick: number; geo: number; key: string }>();
+const sourcesMemo = new WeakMap<object, { tick: number; geo: number; fleets: number; key: string }>();
 
 /** Which provinces are supply sources this week, as a hash (shared by every realm). */
 function sourcesKey(sim: Sim): string {
   const st = sim.state;
   const geo = geoRev(sim);
+  const fleets = fleetEpoch(sim);
   const hit = sourcesMemo.get(st);
-  if (hit && hit.tick === st.tick && hit.geo === geo) return hit.key;
+  if (hit && hit.tick === st.tick && hit.geo === geo && hit.fleets === fleets) return hit.key;
   let h = 2166136261;
   let n = 0;
   const ids = sim.world.provIds;
@@ -73,7 +95,7 @@ function sourcesKey(sim: Sim): string {
     n++;
   }
   const key = `${n}:${h}`;
-  sourcesMemo.set(st, { tick: st.tick, geo, key });
+  sourcesMemo.set(st, { tick: st.tick, geo, fleets, key });
   return key;
 }
 
@@ -213,7 +235,7 @@ export function supplyAt(sim: Sim, nid: NationId, pid: ProvinceId, extraRegiment
   if (explain) {
     if (!inRange) {
       reasons.push(dist === Infinity ? 'No friendly supply source can reach this province.' : `Supply line too long: ${dist.toFixed(1)} steps from the nearest source (range ${range}).`);
-      remedies.push('Hold provinces back toward home, integrate frontier land to 50+, build a fort nearby, or research Supply Trains.');
+      remedies.push('Hold provinces back toward home, integrate frontier land to 50+, build a fort nearby, keep a fleet off a coast we hold (a beachhead), or research Supply Trains.');
     } else if (stock <= 0) {
       reasons.push('The national supply stockpile is empty.');
       remedies.push('Reduce army size, secure grain provinces, or research Refrigeration.');

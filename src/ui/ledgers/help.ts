@@ -159,6 +159,7 @@ function articles(): Article[] {
         'Ships are built in ports; each port level is a slipway. Guns hit surface ships; submarines torpedo big ships and only torpedo boats and cruisers can hunt them; carriers strike from the air.',
         'Enemy warships that outgun ours in a zone close its straits to our armies and supply; a coast whose zones all hold enemy warships is blockaded and loses a quarter of its crowns and its sea trade.',
         'Transports carry two regiments each: select an army on a coast with a fleet offshore and choose Ship by sea. Troops landing on an enemy coast fight at a disadvantage that week.',
+        'A coast we hold with one of our fleets stationed offshore, where enemy warships do not outgun it, is a beachhead: a supply source, so troops landed overseas are fed by sea.',
         'With Aviation, build airfields and raise wings for superiority, ground support, interdiction, strategic bombing and reconnaissance. Holding 1.5× the enemy’s air power over a province holds the sky there.',
       ],
       links: [['military', 'Open Military']],
