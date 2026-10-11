@@ -109,6 +109,16 @@ describe('shipyards and fleets', () => {
     expect(a.stats.shipsBuilt).toBe(1);
   });
 
+  it('merging keeps the fleet the order was given from, whatever the fleets are numbered', () => {
+    const sim = seaGame();
+    const fs = Array.from({ length: 11 }, () => fleet(sim, 'a', 'zw', ['transport']));
+    const home = fs[5]; // its id sorts after the later ones' ("f6" > "f10")
+    const ids = [home.id, ...fs.filter((f) => f !== home).map((f) => f.id)];
+    expect(applyCommand(sim, { type: 'mergeFleets', nation: 'a', fleets: ids })).toEqual({ ok: true, message: `Merged into ${home.name}.` });
+    expect(Object.values(sim.state.fleets).map((f) => f.id)).toEqual([home.id]);
+    expect(home.ships.length).toBe(11);
+  });
+
   it('fleets sail between zones at their speed', () => {
     const sim = seaGame();
     const f = fleet(sim, 'a', 'zw', ['capital']);

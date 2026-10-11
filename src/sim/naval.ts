@@ -913,10 +913,11 @@ export function mergeFleetsProblem(sim: Sim, nid: NationId, ids: FleetId[]): str
   return null;
 }
 
+/** Merges fleets into the first one named (the one the order is given from: it keeps its name). */
 export function mergeFleets(sim: Sim, ids: FleetId[]): Fleet {
-  const fs = ids.map((id) => sim.state.fleets[id]).sort((a, b) => (a.id < b.id ? -1 : 1));
-  const into = fs[0];
-  for (const f of fs.slice(1)) {
+  const into = sim.state.fleets[ids[0]];
+  const fs = ids.slice(1).map((id) => sim.state.fleets[id]).sort((a, b) => (a.id < b.id ? -1 : 1));
+  for (const f of fs) {
     into.ships.push(...f.ships);
     for (const id of f.cargo) {
       into.cargo.push(id);
