@@ -30,7 +30,10 @@ import { researchCostFor, scaledVictory } from '../src/maps/rules';
 import { ringFromEdges, type EdgeLike } from '../src/maps/rings';
 import { decodeGrid } from '../src/maps/seazones';
 import { addSeaZones, validateMapPackage } from '../src/maps/validate';
+import { createGame } from '../src/sim/game';
+import { RESEARCH_PACE_MONTHS, researchPace } from '../src/sim/progression';
 import type { NationDef, RegionDef, ResourceKind, Terrain } from '../src/sim/types';
+import { registerMapScenario, unregisterScenario } from '../src/sim/world';
 
 export const NE_VERSION = 'v5.1.2';
 const CACHE = '.cache/naturalearth';
@@ -1176,6 +1179,7 @@ export function buildRealMap(D: RealMapDef, log: (l: string) => void = () => {})
   const { world, pkg, check } = built;
   if (!check.ok && process.env.REALMAP_DUMP) writeFileSync(process.env.REALMAP_DUMP, JSON.stringify(pkg));
   if (!check.ok) throw new Error(`${D.id}: the map does not validate: ${check.errors.slice(0, 6).map((e) => e.message).join(' ')}`);
+  pkg.rules.researchCostMul = calibrateResearch(pkg, log);
   const report = worldReport(D.meta.name, `npm run genreal -- --map ${D.id}`, spec, world) + extraReport(pkg, check.warnings.map((w) => w.message), D.source?.credit);
   return { pkg, report, world };
 }
@@ -1251,6 +1255,25 @@ function rulesFor(D: RealMapDef, pkg: MapPackage): MapPackage['rules'] {
     },
     researchCostMul: researchCostFor(n, pkg.nations.length),
   };
+}
+
+/**
+ * The research cost multiplier that gives this map the hand-made maps' pace at the
+ * start (RESEARCH_PACE_MONTHS per technology). Costs scale with the multiplier, so
+ * one measurement on a trial campaign is enough.
+ */
+function calibrateResearch(pkg: MapPackage, log: (l: string) => void): number {
+  const id = `pace-${pkg.id}`;
+  const was = pkg.rules.researchCostMul ?? 1;
+  registerMapScenario({ ...pkg, id });
+  try {
+    const pace = researchPace(createGame({ scenario: id, seed: 1, playerNation: null }));
+    const mul = Math.round(Math.min(4, Math.max(0.25, (was * RESEARCH_PACE_MONTHS) / pace)) * 100) / 100;
+    log(`research: ${pace.toFixed(1)} months per technology at ×${was}; ×${mul} for ${RESEARCH_PACE_MONTHS}`);
+    return mul;
+  } finally {
+    unregisterScenario(id);
+  }
 }
 
 function extraReport(pkg: MapPackage, warnings: string[], credit?: string): string {

@@ -8,7 +8,7 @@
 // early, and no technology can be finished more than 10 years early.
 
 import { C, forceLabel } from './config';
-import { TECHS } from './data/techs';
+import { TECH_LIST, TECHS } from './data/techs';
 import { integrationFactor } from './economy';
 import { overextension } from './integration';
 import { nationMods } from './modifiers';
@@ -82,6 +82,31 @@ export function monthlyResearch(sim: Sim): void {
       notify(sim, nid, 'normal', 'research', `Research complete: ${t.name}.${t.unlocks ? ` We can now build ${forceLabel(t.unlocks).toLowerCase()}.` : ''} Choose the next technology.`);
     }
   }
+}
+
+/** The pace of research every map is calibrated to: months per technology at the start (see researchPace). */
+export const RESEARCH_PACE_MONTHS = 40;
+
+/**
+ * How fast research feels at the start of a campaign, in months per technology: the
+ * mean of two realms' months for their three cheapest available technologies, the
+ * median realm's and the median of the strongest quarter's. The hand-made maps lie
+ * between 34 and 52; the generated maps' cost multiplier is set to give
+ * RESEARCH_PACE_MONTHS, because a late start leaves only the costly technologies
+ * and the realms' research rates do not follow their number of provinces.
+ */
+export function researchPace(sim: Sim): number {
+  const per = sim.world.nationIds.map((nid) => {
+    const costs = TECH_LIST.filter((t) => techAvailable(sim, nid, t.id))
+      .map((t) => techCost(sim, t.id))
+      .sort((a, b) => a - b)
+      .slice(0, 3);
+    const rate = researchRate(sim, nid);
+    return { rate, months: costs.length ? costs.reduce((a, b) => a + b, 0) / costs.length / rate : 0 };
+  });
+  const median = (xs: number[]) => [...xs].sort((a, b) => a - b)[Math.floor(xs.length / 2)] ?? 0;
+  const strongest = [...per].sort((a, b) => b.rate - a.rate).slice(0, Math.max(3, Math.round(per.length / 4)));
+  return (median(per.map((x) => x.months)) + median(strongest.map((x) => x.months))) / 2;
 }
 
 /**

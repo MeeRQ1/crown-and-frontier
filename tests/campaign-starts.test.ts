@@ -8,6 +8,7 @@ import { describe, expect, it } from 'vitest';
 import { BUILTIN_MAPS, builtinPackage } from '../src/maps/builtin';
 import { parseMapPackage, validateMapPackage } from '../src/maps/validate';
 import { createGame } from '../src/sim/game';
+import { RESEARCH_PACE_MONTHS, researchPace } from '../src/sim/progression';
 import { hasTreaty } from '../src/sim/state';
 import { checkInvariants } from '../src/sim/invariants';
 import { isSupplySource, supplyConnected } from '../src/sim/supply';
@@ -81,4 +82,18 @@ describe('the alliances and claims of 1914', () => {
     expect(codes([{ type: 'nap', a: 'ger', b: 'aus' }, { type: 'nap', a: 'aus', b: 'ger' }])).toContain('duplicate');
     expect(codes([{ type: 'marriage', a: 'ger', b: 'aus' }]).length).toBeGreaterThan(0);
   });
+});
+
+describe('the pace of research at the start', () => {
+  // months per technology for a typical realm: 34–52 on the hand-made maps; the generated
+  // maps are calibrated to RESEARCH_PACE_MONTHS, so a late start (the 1914 maps, where
+  // only the costly technologies are left) is not twice as slow as an early one
+  for (const id of BUILTIN_MAPS) {
+    it(`${id}: research moves at a playable pace`, () => {
+      const pace = researchPace(createGame({ scenario: id, seed: 1, playerNation: null }));
+      expect(pace, id).toBeGreaterThan(30);
+      expect(pace, id).toBeLessThan(70);
+      if (['hesperia', 'europe', 'earth'].includes(id)) expect(Math.abs(pace - RESEARCH_PACE_MONTHS), id).toBeLessThan(1);
+    });
+  }
 });
