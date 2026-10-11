@@ -427,7 +427,7 @@ function influencePolicy(sim: Sim, nid: NationId): void {
   // a guarantee for a smaller neighbour that a realm we fear threatens
   if (st.tick - last('guarantee') >= months(12) && guaranteesBy(sim, nid).length < guaranteeSlots(sim, nid)) {
     const cands = others
-      .filter((o) => nationDistance(sim, nid, o) <= 2 && n.ai.warPlan?.target !== o && !guaranteeProblem(sim, nid, o) && !claimsOn(sim, nid, o).length)
+      .filter((o) => nationDistance(sim, nid, o) <= 2 && nationStrength(sim, o) <= mine && n.ai.warPlan?.target !== o && !guaranteeProblem(sim, nid, o) && !claimsOn(sim, nid, o).length)
       .map((o) => {
         let v = 0;
         if (nationStrength(sim, o) <= mine * 0.6) v += 1;
