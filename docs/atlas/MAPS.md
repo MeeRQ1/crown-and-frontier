@@ -271,11 +271,59 @@ preview.
 
 ## Performance on the large maps
 
-The "before" figures in [AUDIT.md](AUDIT.md) were taken on a 4-core Intel Xeon @ 2.10 GHz.
-The final measurements are being retaken with `main` and this branch run one after the
-other on one machine, so that both sides share the same declared conditions; until they are
-in, this section has no figures. The full reports will be in
-[`reports/perf/`](../../reports/perf/).
+`main` (99e0322) and this branch (6153e86, the final simulation code) were measured one
+after the other on one machine with nothing else running: a 4-core Intel Xeon @ 2.80 GHz,
+Node 22.22, headless Chromium 141 with software rendering at 1366 × 768. The "before"
+figures in [AUDIT.md](AUDIT.md) came from a different machine (2.10 GHz) and are not
+compared here. The full reports are in [`reports/perf/`](../../reports/perf/)
+(`atlas-final-*`, `web-atlas-final-*`).
+
+**Simulation**, AI only, milliseconds per week (seed 1 / seed 2). The budget at the
+fastest speed is 166 ms a week. Europe, Hesperia and the World are not on `main`.
+
+| Map | Years | main: average | main: p99 | branch: average | branch: p99 | branch: slowest week | branch: save / load at the end |
+|---|---|---|---|---|---|---|---|
+| The Reach | 30 | 3.83 / 4.02 | 10.3 / 11.8 | 3.60 / 3.46 | 10.8 / 9.0 | 26.8 | 2.2 / 7.7 ms, 208 KB |
+| Aldmere | 30 | 10.14 / 9.37 | 29.0 / 23.5 | 8.60 / 7.65 | 21.7 / 16.4 | 44.4 | 5.4 / 14.7 ms, 347 KB |
+| The Middle Sea | 30 | 16.39 / 16.69 | 53.7 / 42.5 | 12.38 / 11.99 | 32.8 / 27.7 | 77.6 | 4.6 / 16.7 ms, 457 KB |
+| Europe, 1914 | 10 | — | — | 39.6 / 36.6 | 91.3 / 79.2 | 234.3 | 6.3 / 25.1 ms, 572 KB |
+| Hesperia, 1890 | 10 | — | — | 25.0 / 23.1 | 62.1 / 49.7 | 79.1 | 6.0 / 23.9 ms, 548 KB |
+| The World, 1914 | 10 | — | — | 137.9 / 139.2 | 272 / 297 | 378.1 | 12.9 / 50.9 ms, 1.1 MB |
+
+The hand-made maps got faster despite the new systems (the Middle Sea by about a
+quarter): the access and supply searches were made cheaper for the World, and the AI
+works from distance fields and weekly memos. On `main`, Aldmere's second seed ended in
+a victory after 996 weeks, so its average covers a shorter campaign.
+
+On the World the average week fits the budget in its first ten years, but one week in a
+hundred takes 270–300 ms. In a world war it is heavier (below).
+
+**In the browser** (milliseconds; the first frame includes loading the map's geometry):
+
+| Map | Build | Page load to menu | First frame of a campaign | Draw at medium zoom, avg / p95 | Fastest speed: weeks in 6 s (target 36), frame p95 | Heap after 10 years |
+|---|---|---|---|---|---|---|
+| The Reach | main | 222 | 519 | 3.4 / 4.7 | 36, 24.6 | 32 MB |
+| The Reach | branch | 401 | 1,071 | 5.1 / 19.2 | 36, 25.5 | 35 MB |
+| Aldmere | main | 284 | 735 | 6.0 / 19.1 | 36, 40.3 | 38 MB |
+| Aldmere | branch | 440 | 747 | 7.4 / 22.3 | 36, 39.2 | 23 MB |
+| Europe | branch | 444 | 2,897 | 10.3 / 30.5 | 36, 56.9 | 36 MB |
+| Hesperia | branch | 596 | 2,449 | 13.2 / 31.2 | 36, 59.0 | 58 MB |
+| The World | branch | 499 | 3,827 | 11.8 / 26.7 | **28**, 91.2 | 114 MB |
+
+- **The atlas costs some drawing time.** Page load rises by about 150–180 ms (the two
+  fonts and the art), and map modes with washes and motifs draw more slowly at the 95th
+  percentile (Aldmere's terrain mode 5.1 → 17.9 ms). Frames at the fastest speed are
+  unchanged on the Reach and Aldmere.
+- **The World at the fastest speed** works out 28 of the 36 weeks a 6-second run should
+  give: the clock runs at about three quarters of the setting in peacetime.
+- **A world war on the World** (seed 1 at week 280: 3 wars, 205 armies): working out a
+  whole week per frame, as before this update, gave frames of 499 ms on average and
+  704 ms at worst (2.0 weeks a second). Worked out in slices of 24 ms between frames,
+  frames average 104 ms, with a p95 of 275 ms and a worst of 382 ms (1.5 weeks a
+  second): the map and controls keep responding, but a single unit of AI work can still
+  take a few hundred milliseconds, and the clock runs at a quarter of the setting.
+- **Far zoom** uses the level of detail on every map; on Europe and the World the frame
+  average at far zoom falls from 95 to 45 ms and from 174 to 59 ms with it.
 
 ## Simplifications and known gaps
 
