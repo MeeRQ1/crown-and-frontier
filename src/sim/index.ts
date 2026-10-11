@@ -192,7 +192,7 @@ interface Memo {
   epoch: number;
   tables: Map<string, Map<string, unknown>>;
 }
-const memoBy = new WeakMap<object, Memo>();
+let memoBy = new WeakMap<object, Memo>();
 let lastMemo: Memo | null = null;
 let memoEpoch = 0;
 
@@ -223,7 +223,7 @@ export function memoize<T>(sim: Sim, table: string, key: string, compute: () => 
 }
 
 const geoGen = new WeakMap<object, number>();
-const geoMemo = new WeakMap<object, { tick: number; geo: number; epoch: number; tables: Map<string, Map<string, unknown>> }>();
+let geoMemo = new WeakMap<object, { tick: number; geo: number; epoch: number; tables: Map<string, Map<string, unknown>> }>();
 
 /**
  * The revision of what borders, routes and sides depend on: ownership and control,
@@ -257,7 +257,7 @@ export function memoGeo<T>(sim: Sim, table: string, key: string, compute: () => 
  * of a trade agreement) that may lag the commands issued earlier the same week.
  * Never use it for anything a rule depends on.
  */
-const weekMemo = new WeakMap<object, { tick: number; epoch: number; tables: Map<string, Map<string, unknown>> }>();
+let weekMemo = new WeakMap<object, { tick: number; epoch: number; tables: Map<string, Map<string, unknown>> }>();
 export function memoWeek<T>(sim: Sim, table: string, key: string, compute: () => T): T {
   const st = sim.state;
   let m = weekMemo.get(st);
@@ -268,6 +268,37 @@ export function memoWeek<T>(sim: Sim, table: string, key: string, compute: () =>
   const v = compute();
   t.set(key, v);
   return v;
+}
+
+/**
+ * Memo tables in use. A week run in slices keeps its own aside while the
+ * interface reads the state between slices, so nothing the interface looks up
+ * (a once-a-week AI estimate above all) is memoised at a different moment than
+ * in an uninterrupted week.
+ */
+export interface MemoStores {
+  by: typeof memoBy;
+  last: Memo | null;
+  geo: typeof geoMemo;
+  week: typeof weekMemo;
+}
+
+/** Sets the memo tables in use aside and starts empty ones; returns those set aside. */
+export function setMemoAside(): MemoStores {
+  const kept: MemoStores = { by: memoBy, last: lastMemo, geo: geoMemo, week: weekMemo };
+  memoBy = new WeakMap();
+  lastMemo = null;
+  geoMemo = new WeakMap();
+  weekMemo = new WeakMap();
+  return kept;
+}
+
+/** Puts memo tables set aside back in use, dropping whatever was memoised meanwhile. */
+export function restoreMemo(m: MemoStores): void {
+  memoBy = m.by;
+  lastMemo = m.last;
+  geoMemo = m.geo;
+  weekMemo = m.week;
 }
 
 /**

@@ -70,6 +70,7 @@ export function chronicleLedger(app: App): HTMLElement {
   );
   const body = f === 'battles' ? battles(app) : entries(app, all, f);
   const exportBug = () => {
+    app.finishWeek();
     const st = sim.state;
     const build = `${typeof __APP_VERSION__ === 'string' ? __APP_VERSION__ : 'dev'} (${import.meta.env?.MODE ?? 'unknown'})`;
     const report = diagnosticBundle(sim, { build, userAgent: navigator.userAgent });

@@ -16,8 +16,13 @@
 //     (exhaustion, forced settlements) -> events -> victory
 // Commands issued between ticks (e.g. while paused) apply immediately and are
 // visible to every phase of the next tick.
+//
+// A week can also be run in slices (weekSlices), so the browser spreads a long
+// week over several frames. Phases are never split, and nothing outside the
+// week may change the state between its slices: the app finishes the week in
+// progress before it applies a command or saves.
 
-import { runAI } from './ai/ai';
+import { aiSlices } from './ai/ai';
 import { weeklyCombat, detectBattles } from './combat';
 import { weeklyProposals } from './commands';
 import { weeklyConstruction } from './construction';
@@ -30,7 +35,7 @@ import { weeklyArmyCare, weeklyRecruitment } from './military';
 import { weeklyMovement, weeklyOrders } from './movement';
 import { monthlyResearch } from './progression';
 import { monthlyFocus } from './focus';
-import { nextMemoEpoch } from './index';
+import { nextMemoEpoch, restoreMemo, setMemoAside } from './index';
 import { weeklySieges } from './siege';
 import { monthlyDiplomacy } from './diplomacy';
 import { monthlyInfluence } from './influence';
@@ -59,51 +64,81 @@ export function isOver(sim: Sim): boolean {
   return !!sim.state.result && !sim.state.continueAfterResult;
 }
 
+/** Runs one week. */
 export function step(sim: Sim, opts: StepOptions = {}): void {
+  const week = weekSlices(sim, opts);
+  while (!week.next().done);
+}
+
+/**
+ * One week as a sequence of slices: it yields between phases and between the
+ * realms the AI plans for. Running it to the end is exactly step().
+ */
+export function* weekSlices(sim: Sim, opts: StepOptions = {}): Generator<void, void, void> {
   const st = sim.state;
   if (isOver(sim)) return;
   const prof = opts.profile;
   if (prof) prof.last = {};
-  const phase = (name: string, f: () => void) => {
-    nextMemoEpoch();
+  const run = (name: string, f: () => void) => {
     if (!prof) return f();
     const t = prof.now();
     f();
     prof.last[name] = (prof.last[name] ?? 0) + prof.now() - t;
   };
-  phase('proposals', () => weeklyProposals(sim));
-  if (!opts.noAI) phase('ai', () => runAI(sim, prof));
-  phase('orders', () => weeklyOrders(sim));
-  phase('naval', () => weeklyNaval(sim));
-  phase('movement', () => weeklyMovement(sim));
-  phase('air', () => weeklyAir(sim));
-  phase('battles', () => {
+  // between slices the week's memo tables are kept aside (see setMemoAside)
+  function* pause(): Generator<void, void, void> {
+    const own = setMemoAside();
+    yield;
+    restoreMemo(own);
+  }
+  function* phase(name: string, f: () => void): Generator<void, void, void> {
+    nextMemoEpoch();
+    run(name, f);
+    yield* pause();
+  }
+  yield* phase('proposals', () => weeklyProposals(sim));
+  if (!opts.noAI) {
+    nextMemoEpoch();
+    // one realm's plans a slice; only the time spent planning is counted
+    const ai = aiSlices(sim, prof);
+    let done = false;
+    while (!done) {
+      run('ai', () => (done = !!ai.next().done));
+      if (!done) yield* pause();
+    }
+    yield* pause();
+  }
+  yield* phase('orders', () => weeklyOrders(sim));
+  yield* phase('naval', () => weeklyNaval(sim));
+  yield* phase('movement', () => weeklyMovement(sim));
+  yield* phase('air', () => weeklyAir(sim));
+  yield* phase('battles', () => {
     detectBattles(sim);
     weeklyCombat(sim);
   });
-  phase('sieges', () => weeklySieges(sim));
-  phase('armyCare', () => weeklyArmyCare(sim));
-  phase('recruitment', () => {
+  yield* phase('sieges', () => weeklySieges(sim));
+  yield* phase('armyCare', () => weeklyArmyCare(sim));
+  yield* phase('recruitment', () => {
     weeklyRecruitment(sim);
     weeklyShipyards(sim);
     weeklyHangars(sim);
   });
-  phase('construction', () => weeklyConstruction(sim));
-  phase('warScores', () => weeklyWarScores(sim));
+  yield* phase('construction', () => weeklyConstruction(sim));
+  yield* phase('warScores', () => weeklyWarScores(sim));
   if ((st.tick + 1) % WEEKS_PER_MONTH === 0) {
-    phase('m.economy', () => monthlyEconomy(sim));
-    phase('m.research', () => {
+    yield* phase('m.economy', () => monthlyEconomy(sim));
+    yield* phase('m.research', () => {
       monthlyResearch(sim);
       monthlyFocus(sim);
     });
-    phase('m.integration', () => monthlyIntegration(sim));
-    phase('m.diplomacy', () => {
+    yield* phase('m.integration', () => monthlyIntegration(sim));
+    yield* phase('m.diplomacy', () => {
       monthlyDiplomacy(sim);
       monthlyInfluence(sim);
     });
-    phase('m.wars', () => monthlyWars(sim));
-    phase('m.events', () => monthlyEvents(sim));
-    phase('m.victory', () => {
+    yield* phase('m.wars', () => monthlyWars(sim));
+    yield* phase('m.events', () => monthlyEvents(sim));
+    yield* phase('m.victory', () => {
       checkPlayerDefeat(sim);
       monthlyVictory(sim);
     });

@@ -9,6 +9,12 @@ import { operational } from './operational';
 import { strategic } from './strategic';
 
 export function runAI(sim: Sim, prof?: PhaseProfile): void {
+  const realms = aiSlices(sim, prof);
+  while (!realms.next().done);
+}
+
+/** The AI's week, one realm's plans at a time (see weekSlices). */
+export function* aiSlices(sim: Sim, prof?: PhaseProfile): Generator<void, void, void> {
   const st = sim.state;
   const d = diffOf(sim);
   const timed = (name: string, f: () => void) => {
@@ -20,14 +26,17 @@ export function runAI(sim: Sim, prof?: PhaseProfile): void {
   for (const nid of aliveNations(sim)) {
     const n = st.nations[nid];
     if (n.isPlayer || !n.alive) continue;
+    let planned = false;
     if (st.tick >= n.ai.nextStrategic) {
       n.ai.nextStrategic = st.tick + 4;
       timed('ai.strategic', () => strategic(sim, nid));
+      planned = true;
     }
-    if (!st.nations[nid].alive) continue;
-    if (st.tick >= n.ai.nextOperational) {
+    if (st.nations[nid].alive && st.tick >= n.ai.nextOperational) {
       n.ai.nextOperational = st.tick + d.opEvery;
       timed('ai.operational', () => operational(sim, nid));
+      planned = true;
     }
+    if (planned) yield;
   }
 }

@@ -64,14 +64,22 @@ export const TREATY_LABELS: Record<TreatyType, string> = {
 
 // ───────────────────────────── Memories & opinion ───────────────────────────
 
-export function memoriesOf(sim: Sim, holder: NationId, about: NationId): Memory[] {
+const NO_MEMORIES: readonly Memory[] = Object.freeze([]);
+
+/** What `holder` remembers about `about`. Reading records nothing: addMemory does. */
+export function memoriesOf(sim: Sim, holder: NationId, about: NationId): readonly Memory[] {
+  return sim.state.memories[holder]?.[about] ?? NO_MEMORIES;
+}
+
+/** The list a memory is recorded in, created on first use. */
+function memoryList(sim: Sim, holder: NationId, about: NationId): Memory[] {
   const m = (sim.state.memories[holder] ??= {});
   return (m[about] ??= []);
 }
 
 export function addMemory(sim: Sim, holder: NationId, about: NationId, kind: string, value: number, decay: number): void {
   if (holder === about) return;
-  const list = memoriesOf(sim, holder, about);
+  const list = memoryList(sim, holder, about);
   const ex = list.find((x) => x.kind === kind);
   if (ex) {
     ex.value = clamp(ex.value + value, -80, 80);
@@ -547,7 +555,7 @@ export function monthlyDiplomacy(sim: Sim): void {
   for (const e of st.envoys) {
     if (!st.nations[e.to]?.alive) continue;
     const gain = C.diplomacy.envoyGain * Math.max(0, 1 + nationMods(sim, e.from).relationGain);
-    const list = memoriesOf(sim, e.to, e.from);
+    const list = memoryList(sim, e.to, e.from);
     const m = list.find((x) => x.kind === 'envoy');
     if (m) m.value = Math.min(C.diplomacy.envoyCap, m.value + gain);
     else list.push({ kind: 'envoy', value: gain, decay: 0.5 });

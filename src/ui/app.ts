@@ -8,7 +8,7 @@ import { createGame, type NewGameOptions } from '../sim/game';
 import { canEnter, etaWeeks, findPath } from '../sim/movement';
 import { readSave, SaveError, serialize } from '../sim/save';
 import { atWar, dateOf, months, ownedProvinces, provName, type Sim } from '../sim/state';
-import { isOver, step } from '../sim/tick';
+import { isOver, step, weekSlices } from '../sim/tick';
 import { fleetEta, fleetsIn, fleetSummary, pathToCoast, transportFor, zonePath } from '../sim/naval';
 import type { AirMission, Army, Command, CommandResult, ContractTerms, Demand, DemandKind, NationId, ProvinceId, Tradeable } from '../sim/types';
 import { Sound } from './audio';
@@ -40,6 +40,8 @@ type DistOmit<T, K extends keyof T> = T extends unknown ? Omit<T, K> : never;
 export type PlayerCommand = DistOmit<Command, 'nation'>;
 
 export const SPEEDS = [0, 0.5, 1, 2.5, 6]; // ticks (weeks) per second; index 2 is "normal"
+/** milliseconds of simulation per animation frame, at most (one slice may run over) */
+const SIM_BUDGET_MS = 24;
 
 export interface UIState {
   peace: { war: string; with: string; mode: 'demand' | 'concede' | 'white'; provinces: string[]; gold: number } | null;
@@ -119,6 +121,8 @@ export class App {
   private pendingCenter: { pid: ProvinceId; zoomPx?: number; instant?: boolean } | null = null;
 
   private acc = 0;
+  /** the week being simulated while it spans frames (see weekSlices) */
+  private week: Generator<void, void, void> | null = null;
   private lastFrame = 0;
   private lastUI = 0;
   private uiDirty = true;
@@ -314,6 +318,7 @@ export class App {
 
   teardownGame(): void {
     cancelAnimationFrame(this.raf);
+    this.week = null;
     this.resizeObs?.disconnect();
     this.resizeObs = null;
     this.modesObs?.disconnect();
@@ -434,17 +439,25 @@ export class App {
     this.lastFrame = t;
     const sim = this.sim;
     if (!sim || !this.renderer) return;
-    if (this.speed > 0 && !isOver(sim)) {
-      this.acc += (dt / 1000) * SPEEDS[this.speed];
-      let steps = 0;
-      while (this.acc >= 1 && steps < 6 && this.speed > 0 && !isOver(sim)) {
-        step(sim);
+    if (this.speed > 0 && !isOver(sim)) this.acc += (dt / 1000) * SPEEDS[this.speed];
+    // Simulate a slice at a time within a budget per frame, so a long week (a world
+    // war on the largest maps) spreads over frames instead of freezing the map and
+    // the controls. A week once begun is finished even if the game is paused.
+    const until = performance.now() + SIM_BUDGET_MS;
+    let weeks = 0;
+    while (performance.now() < until) {
+      if (!this.week) {
+        if (!(this.speed > 0 && this.acc >= 1 && weeks < 6 && !isOver(sim))) break;
         this.acc -= 1;
-        steps++;
+        this.week = weekSlices(sim);
+      }
+      if (this.week.next().done) {
+        this.week = null;
+        weeks++;
         this.afterTick();
       }
-      if (this.acc > 3) this.acc = 0;
     }
+    if (this.acc > 3) this.acc = 0;
     if (this.mapDirty || this.renderer.camera.animating || this.wantsFrame) {
       this.mapDirty = false;
       this.drawMap(t);
@@ -660,10 +673,24 @@ export class App {
     if (this.targeting && ((this.targeting.kind === 'fleet' && !st.fleets[this.targeting.fleet]) || (this.targeting.kind === 'air' && !st.wings[this.targeting.wing]))) this.targeting = null;
   }
 
+  /**
+   * Completes the week in progress. Commands, saves and bug reports wait for it,
+   * so they always see whole weeks, and a replay applies each command between
+   * the same two weeks as the campaign did.
+   */
+  finishWeek(): void {
+    const week = this.week;
+    if (!week) return;
+    this.week = null;
+    while (!week.next().done);
+    this.afterTick();
+  }
+
   /** Developer/test hook (console only): advance the simulation N weeks immediately. */
   debugAdvance(weeksToRun: number): void {
     const sim = this.sim;
     if (!sim) return;
+    this.finishWeek();
     for (let i = 0; i < weeksToRun && !isOver(sim); i++) {
       step(sim);
       this.afterTick();
@@ -678,6 +705,7 @@ export class App {
 
   continueAfterEnd(): void {
     if (!this.sim) return;
+    this.finishWeek();
     // a logged command, so a bug report from the continued campaign still replays
     applyCommand(this.sim, { type: 'continueCampaign', nation: this.player });
     this.hideScreen();
@@ -690,6 +718,7 @@ export class App {
     const sim = this.sim;
     const pid = this.player;
     if (!sim || !pid) return { ok: false, reason: 'No active realm.' };
+    this.finishWeek();
     const full = { ...cmd, nation: pid } as Command;
     const r = applyCommand(sim, full);
     if (!r.ok) {
@@ -874,6 +903,7 @@ export class App {
     const a = this.sim?.state.armies[id];
     const group = a && this.ui.groupOrders && a.group ? this.groupArmies(a.group) : [];
     if (group.length > 1) {
+      this.finishWeek();
       // every army of the group marches on its own best route
       let ok = 0;
       const why: string[] = [];
@@ -1169,6 +1199,7 @@ export class App {
 
   async save(slot: string): Promise<boolean> {
     if (!this.sim) return false;
+    this.finishWeek();
     try {
       const replaced = await this.store.putKeepingPrevious(slot, serialize(this.sim));
       const label = slotLabel(slot);
@@ -1184,6 +1215,7 @@ export class App {
     const sim = this.sim;
     if (!sim || !sim.state.settings.playerNation) return;
     if (!force && this.settings.autosaveMonths <= 0) return;
+    this.finishWeek();
     this.lastAutosave = sim.state.tick;
     try {
       await this.store.autosave(serialize(sim));
@@ -1232,6 +1264,7 @@ export class App {
 
   exportSave(): void {
     if (!this.sim) return;
+    this.finishWeek();
     const d = dateOf(this.sim);
     const nation = this.player ?? 'observer';
     downloadText(`crown-and-frontier-${this.sim.state.scenarioId}-${nation}-${d.year}-${d.month + 1}.json`, serialize(this.sim));
