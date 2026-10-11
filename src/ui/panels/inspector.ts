@@ -23,7 +23,7 @@ import { icon, type IconName } from '../icons';
 import { section, shield, tip } from './common';
 import { confirmDialog } from './dialogs';
 import { airfieldSection, fleetCard, portSection, wingCard, zoneCard } from './sea';
-import { transportFor } from '../../sim/naval';
+import { fleetCapacity, fleetsIn, transportFor } from '../../sim/naval';
 
 export function renderInspector(app: App): void {
   const sim = app.sim!;
@@ -295,6 +295,22 @@ export function armyStatus(app: App, a: Army): string {
   return orderStatus(app.sim!, a).text;
 }
 
+/** Why the army cannot ship by sea from this coast, said plainly (a tooltip alone is lost on touch screens). */
+function shipNote(app: App, a: Army): HTMLElement | null {
+  const sim = app.sim!;
+  const zones = sim.world.provZones[a.location];
+  if (!zones?.length || a.embarked || a.battle || a.retreating) return null;
+  const regs = a.regiments.length;
+  if (transportFor(sim, a.nation, a.location, regs)) return null;
+  let room = 0;
+  for (const z of zones) for (const f of fleetsIn(sim, z)) if (f.nation === a.nation && !f.cargo.length) room = Math.max(room, fleetCapacity(f));
+  const need = `${regs} regiments need ${plural(Math.ceil(regs / 2), 'transport')}`;
+  const text = room
+    ? `To ship by sea: the fleet off this coast carries ${plural(room, 'regiment')}; ${need}. Form a smaller army, or build transports.`
+    : `To ship by sea: no fleet of ours lies off this coast; ${need}.`;
+  return h('div', { class: 'small muted', style: 'flex-basis:100%' }, text);
+}
+
 function armyCard(app: App, a: Army): HTMLElement[] {
   const sim = app.sim!;
   const st = sim.state;
@@ -330,7 +346,7 @@ function armyCard(app: App, a: Army): HTMLElement[] {
       const ids = [a.id, ...others.map((o) => o.id)];
       prim.push(quick('merge', `Merge ${ids.length}`, () => app.do({ type: 'merge', armies: ids }), mergeProblem(sim, a.nation, ids), 'Combine every army of ours in this province into this one.'));
     }
-    out.push(h('div', { class: 'ins-primary' }, prim));
+    out.push(h('div', { class: 'ins-primary' }, prim, shipNote(app, a)));
   }
 
   const body = h('div', { class: 'ins-body scroll', 'data-sk': 'ins' });
