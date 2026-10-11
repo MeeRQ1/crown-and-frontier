@@ -208,7 +208,9 @@ export function renderHud(app: App): void {
     const alerts = h('div', { class: 'hud-alerts' });
     const chips = items.filter((i) => i.level === 'seal' || i.level === 'bad').slice(0, 2);
     for (const it of chips) {
-      const c = h('button', { class: `alert-chip ${it.level}`, type: 'button', 'data-fk': `chip-${it.short}` }, icon(it.icon), it.short);
+      // words without figures can give way when the bar is short of room ("1 decision" → "1")
+      const words = it.short.split(/(\s+)/).map((t) => (/\d/.test(t) || !t.trim() ? t : h('span', { class: 'word' }, t)));
+      const c = h('button', { class: `alert-chip ${it.level}`, type: 'button', 'data-fk': `chip-${it.short}`, 'aria-label': it.short }, icon(it.icon), ...words);
       if (it.act) c.addEventListener('click', it.act);
       tip(c, it.text);
       alerts.appendChild(c);
@@ -238,5 +240,22 @@ export function renderHud(app: App): void {
     tip(menu, 'Save, load, settings, quit (Esc when nothing is open)');
     parts.push(h('div', { class: 'hud-menu' }, menu));
     setChildren(el, ...parts);
+    fitHud(el);
   });
+}
+
+/**
+ * Fits the bar to its width. When a cell would clip its text (a laptop screen
+ * with war and decision alerts showing), the least important text goes first:
+ * the words after the figures and the realm's title, then the words of the
+ * alerts ("1 decision" → "1"), then the stockpile caps. Only then is a figure
+ * cut short. Every cell keeps its full text in its tooltip.
+ */
+function fitHud(el: HTMLElement): void {
+  const clipped = () => [...el.querySelectorAll<HTMLElement>('.res .val, .res .sub, .hud-realm .nm, .hud-realm .title')].some((c) => c.scrollWidth > c.clientWidth + 1);
+  el.classList.remove('tight', 'tighter', 'tightest');
+  for (const step of ['tight', 'tighter', 'tightest']) {
+    if (!clipped()) return;
+    el.classList.add(step);
+  }
 }

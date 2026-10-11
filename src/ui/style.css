@@ -507,6 +507,16 @@ input[type='checkbox'] { accent-color: var(--cf-brass-ink); width: 1.15em; heigh
 .res .sub .pos { color: var(--good); }
 .res .sub .neg { color: var(--bad); }
 .res .sub .commit { color: var(--text-2); font-weight: 400; }
+/* A cell may shrink when the bar is crowded; its text is clipped inside it, never drawn over the next. */
+.res, .hud-realm { overflow: hidden; }
+.hud-realm .stack { min-width: 0; }
+.res .val { overflow: hidden; text-overflow: ellipsis; }
+.res .sub { overflow: hidden; }
+/* When the bar is too narrow for everything (fitHud), the least important text goes first:
+   the words after the figures and the realm's title, then the alerts' words, then the caps. */
+.hud.tight .res .sub .commit, .hud.tight .hud-realm .title { display: none; }
+.hud.tighter .alert-chip .word { display: none; }
+.hud.tightest .res .val .cap { display: none; }
 .res.alert::after { content: ''; position: absolute; left: 0; right: 0; bottom: 0; height: 3px; background: var(--cf-danger-on-slate); }
 .res.caution::after { content: ''; position: absolute; left: 0; right: 0; bottom: 0; height: 3px; background: var(--cf-warning-on-slate); }
 .res.alert .val { color: var(--bad); }

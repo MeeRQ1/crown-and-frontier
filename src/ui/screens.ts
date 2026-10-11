@@ -84,7 +84,7 @@ export function renderMenu(app: App): HTMLElement {
           'div',
           { class: 'menu-foot' },
           app.store.problem ? h('p', { class: 'callout warn', style: 'margin-bottom:10px' }, icon('alert'), app.store.problem) : null,
-          h('p', null, 'An original game: its realms, places and events are fictional, except on The Baltic, 1906, a real-world map drawn from Natural Earth (public domain). It runs entirely in your browser, with no account and no server.'),
+          h('p', null, 'An original game. Its realms, places and events are fictional, except on the three historical maps (The Baltic, 1906; Europe, 1914; The World, 1914), drawn from Natural Earth (public domain) with borders approximated. It runs entirely in your browser, with no account and no server.'),
         ),
       ),
     ),
@@ -533,6 +533,7 @@ export function renderHowTo(app: App): HTMLElement {
           'The maps',
           h('p', null, h('b', null, 'Aldmere'), ' is the standard campaign: fourteen realms and about three hundred provinces, with mountain passes, rivers, islands and wide unclaimed frontiers. Every realm has several fronts and marches take months. ', h('b', null, 'The Reach'), ' is the quick campaign: nine realms and 99 provinces, where wars are decided in a few seasons.'),
           h('p', null, h('b', null, 'The Sundered Isles'), ' is a naval campaign among islands, ', h('b', null, 'the Kharan Steppe'), ' a war of movement across open grassland, and ', h('b', null, 'the Middle Sea'), ' a grand campaign of sixteen realms around an inland sea. ', h('b', null, 'The Baltic, 1906'), ' is northern Europe as it was: Sweden, Norway, Denmark, the German Empire and the Russian Empire, with coasts, lakes, rivers and towns from Natural Earth.'),
+          h('p', null, h('b', null, 'Hesperia, 1890'), ' is a large invented world: two continents facing each other across the Narrows, an island kingdom in the ocean and three unclaimed frontiers (754 provinces, 22 realms). ', h('b', null, 'Europe, 1914'), ' (686 provinces, 23 realms) and ', h('b', null, 'The World, 1914'), ' (1,225 provinces, 57 realms, colonial empires on every continent) start on the eve of the Great War, from Natural Earth, with the borders of 1914 approximated from present-day divisions. On the World a week of war takes longer to work out, so the fastest speed runs slower there; the map stays responsive.'),
           h('p', null, 'The Map library (main menu) lists every map with its size and style, and holds your own maps: make one in the map editor, or import a map file.'),
         ),
         sec(
