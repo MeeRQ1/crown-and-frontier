@@ -137,36 +137,91 @@ function branchOf(a: Army): string {
 class Registry {
   private rects: Rect[] = [];
   private boxes: OBox[] = [];
+  /** every shape placed, and a coarse grid of where: a query tests only shapes near it (the same exact tests, so the same answers) */
+  private shapes: Array<Rect | OBox> = [];
+  private cells = new Map<number, number[]>();
+  private seen: number[] = [];
+  private query = 0;
   /** names and markers left out this frame for lack of room (for checks) */
   skipped = 0;
   clear(): void {
     this.rects = [];
     this.boxes = [];
+    this.shapes = [];
+    this.cells = new Map();
+    this.seen = [];
     this.skipped = 0;
   }
   add(r: Rect): void {
     this.rects.push(r);
+    this.index(r, r.x, r.y, r.x + r.w, r.y + r.h);
   }
   addBox(b: OBox): void {
     this.boxes.push(b);
+    const [x0, y0, x1, y1] = boxBounds(b);
+    this.index(b, x0, y0, x1, y1);
+  }
+  private index(shape: Rect | OBox, x0: number, y0: number, x1: number, y1: number): void {
+    const id = this.shapes.length;
+    this.shapes.push(shape);
+    this.seen.push(0);
+    forCells(x0, y0, x1, y1, (k) => {
+      let list = this.cells.get(k);
+      if (!list) this.cells.set(k, (list = []));
+      list.push(id);
+    });
+  }
+  /** Whether a test is true of any shape whose cells meet a rectangle. */
+  private near(x0: number, y0: number, x1: number, y1: number, test: (shape: Rect | OBox) => boolean): boolean {
+    const q = ++this.query;
+    let hit = false;
+    forCells(x0, y0, x1, y1, (k) => {
+      if (hit) return;
+      for (const id of this.cells.get(k) ?? []) {
+        if (this.seen[id] === q) continue;
+        this.seen[id] = q;
+        if (test(this.shapes[id])) {
+          hit = true;
+          return;
+        }
+      }
+    });
+    return hit;
   }
   hits(r: Rect): boolean {
-    for (const q of this.rects) if (r.x < q.x + q.w && r.x + r.w > q.x && r.y < q.y + q.h && r.y + r.h > q.y) return true;
-    if (this.boxes.length) {
-      const b = orientedBox(r.x + r.w / 2, r.y + r.h / 2, r.w, r.h, 0);
-      for (const q of this.boxes) if (boxesOverlap(b, q)) return true;
-    }
-    return false;
+    let ob: OBox | null = null;
+    return this.near(r.x, r.y, r.x + r.w, r.y + r.h, (q) => {
+      if ('w' in q) return r.x < q.x + q.w && r.x + r.w > q.x && r.y < q.y + q.h && r.y + r.h > q.y;
+      return boxesOverlap((ob ??= orientedBox(r.x + r.w / 2, r.y + r.h / 2, r.w, r.h, 0)), q);
+    });
   }
   hitsBox(b: OBox, extra: Rect[] = []): boolean {
-    for (const q of this.rects) if (boxesOverlap(b, orientedBox(q.x + q.w / 2, q.y + q.h / 2, q.w, q.h, 0))) return true;
+    const [x0, y0, x1, y1] = boxBounds(b);
+    if (this.near(x0, y0, x1, y1, (q) => boxesOverlap(b, 'w' in q ? orientedBox(q.x + q.w / 2, q.y + q.h / 2, q.w, q.h, 0) : q))) return true;
     for (const q of extra) if (boxesOverlap(b, orientedBox(q.x + q.w / 2, q.y + q.h / 2, q.w, q.h, 0))) return true;
-    for (const q of this.boxes) if (boxesOverlap(b, q)) return true;
     return false;
   }
   get count(): number {
     return this.rects.length + this.boxes.length;
   }
+}
+
+/** The registry's grid: cells of 96 screen pixels (far-off shapes share the edge cells). */
+const REG_CELL = 96;
+function forCells(x0: number, y0: number, x1: number, y1: number, f: (key: number) => void): void {
+  const cl = (v: number) => Math.max(-8, Math.min(200, Math.floor(v / REG_CELL)));
+  const cx0 = cl(Math.min(x0, x1));
+  const cx1 = cl(Math.max(x0, x1));
+  const cy0 = cl(Math.min(y0, y1));
+  const cy1 = cl(Math.max(y0, y1));
+  for (let cx = cx0; cx <= cx1; cx++) for (let cy = cy0; cy <= cy1; cy++) f((cx + 16) * 1024 + cy + 16);
+}
+
+/** The bounding rectangle of a rotated label box. */
+function boxBounds(b: OBox): [number, number, number, number] {
+  const ex = b.hw * Math.abs(b.c) + b.hh * Math.abs(b.s);
+  const ey = b.hw * Math.abs(b.s) + b.hh * Math.abs(b.c);
+  return [b.x - ex, b.y - ey, b.x + ex, b.y + ey];
 }
 
 export class MapRenderer {
@@ -639,6 +694,8 @@ export class MapRenderer {
   interacting = false;
   /** part of the cache's margin is still to paint (when the player is not handling the map) */
   idleWork = false;
+  /** the clock is running (set by the app each frame): see diffGround */
+  running = false;
   /** the margin is next painted no sooner than this (see drawGround) */
   private marginAt = 0;
   private mctxKey = '';
@@ -667,7 +724,7 @@ export class MapRenderer {
     mctx: ReturnType<typeof buildContext>,
   ): void {
     this.paintRealmLayers(g, sim, rs, tier, px, view, visible, { wash: true, lines: true, washComposite: 'multiply' }, mctx);
-    this.drawSeaZones(g, sim, rs, tier, px);
+    this.drawSeaZones(g, sim, rs, tier, px, view);
     this.drawStraits(g, px);
     if (tier === 'close' || rs.mode === 'supply') {
       // a railway runs between province centres: take in the provinces around the rectangle too
@@ -742,7 +799,7 @@ export class MapRenderer {
         gr = this.ground = newGround(gr, key, z, W, H, ox, oy, dpr);
       }
     } else scrollGround(gr, ox, oy);
-    this.diffGround(sim, rs, gr, mctx, tier);
+    const behind = this.diffGround(sim, rs, gr, mctx, tier, now);
     // the part on screen now, then the margin within a budget
     const t0 = performance.now();
     const vx = gr.ax - ox;
@@ -769,7 +826,7 @@ export class MapRenderer {
       return complete;
     };
     const urgent = takeDirty(gr, onScreen);
-    for (const r of urgent) if (!paint(r, Math.max(2, 8 - (performance.now() - t0)))) pending = true;
+    for (const r of urgent) if (!paint(r, 8)) pending = true;
     // The margin, nearest cells first, only in a frame that painted nothing on screen,
     // as many cells as the budget allows at what a cell has been costing. The cost is
     // measured to the end of the copy below: drawing waits until then to rasterise.
@@ -800,21 +857,21 @@ export class MapRenderer {
     // what is off screen waits while the player handles the map (the app wakes the
     // renderer when they stop: idleWork)
     this.idleWork = gr.dirty.some((d) => d);
-    return pending || (this.idleWork && !this.interacting && now >= this.marginAt);
+    return pending || behind || (this.idleWork && !this.interacting && now >= this.marginAt);
   }
 
   private world: { canvas: HTMLCanvasElement; s: number; key: string } | null = null;
   /**
-   * The ground of the whole map at low resolution (about 2048 pixels across), shown
-   * where the scaled cache does not reach while the zoom changes. Painted when first
+   * The ground of the whole map at low resolution (1024 pixels across), shown for a
+   * few frames where the scaled cache does not reach while the zoom changes. Painted when first
    * needed and again when a province's fill has changed since.
    */
   private worldLayer(sim: Sim, rs: RenderState, mctx: ReturnType<typeof buildContext>, gr: Ground): { canvas: HTMLCanvasElement; s: number } {
     const p = rs.presentation;
-    const key = [rs.mode, rs.focusNation, rs.player, p.borders, p.patterns, p.terrain, gr.zoneSig, gr.sig?.join('\n') ?? ''].join('|');
+    const key = [rs.mode, rs.focusNation, rs.player, p.borders, p.patterns, p.terrain, gr.zoneSig.join(';'), gr.sig?.join('\n') ?? ''].join('|');
     if (this.world?.key === key) return this.world;
     const b = this.geo.bounds;
-    const s = Math.min(2048 / (b.maxX - b.minX), 2048 / (b.maxY - b.minY));
+    const s = Math.min(1024 / (b.maxX - b.minX), 1024 / (b.maxY - b.minY));
     const w = Math.max(1, Math.round((b.maxX - b.minX) * s));
     const h = Math.max(1, Math.round((b.maxY - b.minY) * s));
     let canvas = this.world?.canvas;
@@ -839,10 +896,14 @@ export class MapRenderer {
    * hatching, owner (borders) or railways differ, over its bounding box and the
    * width of the strokes; every sea zone when the fleets that colour them change.
    */
-  private diffGround(sim: Sim, rs: RenderState, gr: Ground, mctx: ReturnType<typeof buildContext>, tier: Tier): void {
+  private diffGround(sim: Sim, rs: RenderState, gr: Ground, mctx: ReturnType<typeof buildContext>, tier: Tier, now: number): boolean {
     const st = sim.state;
     const key = `${st.tick}|${st.rev}|${memoEpochNow()}|${tier}`;
-    if (gr.sigKey === key && gr.sigSim === sim) return;
+    if (gr.sigKey === key && gr.sigSim === sim) return false;
+    // while the clock runs the state changes every slice: the ground catches up at
+    // most every GROUND_REFRESH_MS (markers still move every frame); paused, at once
+    if (this.running && gr.sigSim === sim && gr.sig && now - gr.sigAt < GROUND_REFRESH_MS) return true;
+    gr.sigAt = now;
     const roads = tier === 'close' || rs.mode === 'supply';
     const provs = this.geo.provList;
     const sig: string[] = new Array(provs.length);
@@ -852,37 +913,44 @@ export class MapRenderer {
       const ps = st.provinces[id];
       sig[i] = `${f.alpha > 0 ? `${f.color}|${f.alpha}` : ''}|${f.hatch ?? ''}|${ps?.owner ?? ''}${roads ? `|${ps?.infra ?? 0}` : ''}`;
     }
-    let zones = '';
+    let zones: string[] = [];
     if (rs.mode === 'sea' || (rs.mode === 'military' && rs.player)) zones = this.zoneSignature(sim, rs);
     const fresh = gr.sigSim !== sim || !gr.sig;
-    if (!fresh && zones !== gr.zoneSig) markDirty(gr, [0, 0, gr.w, gr.h]);
-    else if (!fresh) {
+    if (!fresh) {
       const scale = gr.z * this.dpr;
       const pad = 12 * this.dpr;
-      const mark = (pg: ProvGeo) => markDirty(gr, [pg.bbox[0] * scale + gr.ax - pad, pg.bbox[1] * scale + gr.ay - pad, pg.bbox[2] * scale + gr.ax + pad, pg.bbox[3] * scale + gr.ay + pad]);
+      const markBox = (bb: [number, number, number, number]) => markDirty(gr, [bb[0] * scale + gr.ax - pad, bb[1] * scale + gr.ay - pad, bb[2] * scale + gr.ax + pad, bb[3] * scale + gr.ay + pad]);
       for (let i = 0; i < provs.length; i++) {
         if (sig[i] === gr.sig![i]) continue;
-        mark(provs[i]);
+        markBox(provs[i].bbox);
         // a railway reaches the neighbours' centres
-        if (roads) for (const n of sim.world.prov[provs[i].id]?.neighbors ?? []) mark(this.geo.provs.get(n)!);
+        if (roads) for (const n of sim.world.prov[provs[i].id]?.neighbors ?? []) markBox(this.geo.provs.get(n)!.bbox);
       }
+      // a sea zone whose colour changed (fleets came or went): where it lies
+      if (zones.length !== gr.zoneSig.length) markDirty(gr, [0, 0, gr.w, gr.h]);
+      else
+        for (let k = 0; k < zones.length; k++) {
+          if (zones[k] === gr.zoneSig[k]) continue;
+          const bb = this.geo.zoneBBox(this.geo.zoneIds[k]);
+          if (bb) markBox(bb);
+          else markDirty(gr, [0, 0, gr.w, gr.h]);
+        }
     }
     gr.sig = sig;
     gr.zoneSig = zones;
     gr.sigKey = key;
     gr.sigSim = sim;
+    return false;
   }
 
-  /** Who colours each sea zone in the sea and military modes. */
-  private zoneSignature(sim: Sim, rs: RenderState): string {
+  /** Who colours each sea zone in the sea and military modes, zone by zone (in zoneIds order). */
+  private zoneSignature(sim: Sim, rs: RenderState): string[] {
     const me = rs.player;
-    let out = '';
-    for (const z of this.geo.zoneIds) {
-      const fl = fleetsIn(sim, z);
-      if (!fl.length) continue;
-      out += `${z}:${fl.map((f) => `${f.nation}${me && (f.nation === me || isFriendly(sim, me, f.nation)) ? '+' : me && atWar(sim, me, f.nation) ? '-' : ''}${surfacePower(f) + subPower(f) * 0.5}`).join(',')};`;
-    }
-    return out;
+    return this.geo.zoneIds.map((z) =>
+      fleetsIn(sim, z)
+        .map((f) => `${f.nation}${me && (f.nation === me || isFriendly(sim, me, f.nation)) ? '+' : me && atWar(sim, me, f.nation) ? '-' : ''}${surfacePower(f) + subPower(f) * 0.5}`)
+        .join(','),
+    );
   }
 
   /** Mode washes, occupation hatching, borders, realm edges and rivers. */
@@ -1190,15 +1258,20 @@ export class MapRenderer {
   // ───────────────────────────── sea and air ──────────────────────────────
 
   /** Zone borders (world space); in the military and sea modes, who holds each zone. */
-  private drawSeaZones(ctx: CanvasRenderingContext2D, sim: Sim, rs: RenderState, tier: Tier, px: number): void {
+  private drawSeaZones(ctx: CanvasRenderingContext2D, sim: Sim, rs: RenderState, tier: Tier, px: number, view: [number, number, number, number]): void {
     const geo = this.geo;
     if (!geo.zoneIds.length) return;
     const me = rs.player;
     ctx.save();
     if ((rs.mode === 'military' && me) || rs.mode === 'sea') ctx.clip(geo.seaClip(), 'evenodd');
+    const inView = (z: string) => {
+      const bb = geo.zoneBBox(z);
+      return !bb || boxMeets(bb, view);
+    };
     if (rs.mode === 'sea') {
       // every zone in the colour of the realm with the strongest warships there
       for (const z of geo.zoneIds) {
+        if (!inView(z)) continue;
         const power = new Map<string, number>();
         for (const f of fleetsIn(sim, z)) power.set(f.nation, (power.get(f.nation) ?? 0) + surfacePower(f) + subPower(f) * 0.5);
         let best: string | null = null;
@@ -1218,6 +1291,7 @@ export class MapRenderer {
     }
     if (rs.mode === 'military' && me) {
       for (const z of geo.zoneIds) {
+        if (!inView(z)) continue;
         let ours = 0;
         let theirs = 0;
         for (const f of fleetsIn(sim, z)) {
@@ -1236,11 +1310,16 @@ export class MapRenderer {
       }
     }
     ctx.restore();
+    // the zone borders in view only: a dashed line is cut into dashes along all its
+    // length before anything is clipped, and the whole map's run to hundreds of
+    // thousands of dashes at a close zoom
+    const borders = new Path2D();
+    for (const b of geo.zoneBorderSegs) if (boxMeets(b.bbox, view)) borders.addPath(b.path);
     ctx.save();
     ctx.strokeStyle = tier === 'far' ? 'rgba(77, 109, 115, 0.22)' : 'rgba(77, 109, 115, 0.38)';
     ctx.lineWidth = (tier === 'far' ? 0.8 : 1) * px;
     ctx.setLineDash([6 * px, 5 * px]);
-    ctx.stroke(geo.zoneBorders);
+    ctx.stroke(borders);
     ctx.restore();
   }
 
@@ -2089,20 +2168,22 @@ export class MapRenderer {
     ctx.strokeStyle = o.halo;
     ctx.lineWidth = o.haloW;
     ctx.textAlign = 'center';
+    // each letter's transform (the label's, then its own offset and turn), set
+    // directly: a save and restore per letter cost more than the lettering itself
+    const m = ctx.getTransform();
+    const at = (c: (typeof chars)[number]) => {
+      const cr = Math.cos(c.r);
+      const sr = Math.sin(c.r);
+      ctx.setTransform(m.a * cr + m.c * sr, m.b * cr + m.d * sr, -m.a * sr + m.c * cr, -m.b * sr + m.d * cr, m.a * c.x + m.c * c.y + m.e, m.b * c.x + m.d * c.y + m.f);
+    };
     for (const c of chars) {
-      ctx.save();
-      ctx.translate(c.x, c.y);
-      ctx.rotate(c.r);
+      at(c);
       ctx.strokeText(c.ch, 0, 0);
-      ctx.restore();
     }
     ctx.fillStyle = o.fill;
     for (const c of chars) {
-      ctx.save();
-      ctx.translate(c.x, c.y);
-      ctx.rotate(c.r);
+      at(c);
       ctx.fillText(c.ch, 0, 0);
-      ctx.restore();
     }
     ctx.restore();
   }
@@ -2188,6 +2269,8 @@ export class MapRenderer {
 const CELL = 256;
 /** How long the zoom must hold before the ground is repainted crisp at it. */
 const ZOOM_SETTLE_MS = 140;
+/** While the clock runs, the ground's washes catch up with the state at most this often. */
+const GROUND_REFRESH_MS = 150;
 /** Time a frame may spend painting the cache's margin (the part off screen). */
 const GROUND_BUDGET_MS = 6;
 
@@ -2210,8 +2293,10 @@ interface Ground {
   dirty: Uint8Array;
   /** what each province looked like when painted (see diffGround) */
   sig: string[] | null;
-  zoneSig: string;
+  zoneSig: string[];
   sigKey: string;
+  /** when the signatures were last worked out */
+  sigAt: number;
   sigSim: Sim | null;
 }
 
@@ -2230,7 +2315,7 @@ function newGround(old: Ground | null, key: string, z: number, W: number, H: num
   }
   const cols = Math.ceil(w / CELL);
   const rows = Math.ceil(h / CELL);
-  return { canvas, g, w, h, mx, my, ax: Math.round(ox) + mx, ay: Math.round(oy) + my, z, key, cols, rows, dirty: new Uint8Array(cols * rows).fill(1), sig: null, zoneSig: '', sigKey: '', sigSim: null };
+  return { canvas, g, w, h, mx, my, ax: Math.round(ox) + mx, ay: Math.round(oy) + my, z, key, cols, rows, dirty: new Uint8Array(cols * rows).fill(1), sig: null, zoneSig: [], sigKey: '', sigAt: 0, sigSim: null };
 }
 
 /** Keep the screen inside the cache: shift its contents by whole pixels and mark the uncovered strips. */
@@ -2276,30 +2361,41 @@ function cellRect(gr: Ground, c0: number, r0: number, c1: number, r1: number): [
 }
 
 /**
- * Take the dirty cells that meet a rectangle, as the one rectangle that bounds them
- * (repainting a clean cell among them costs less than tracing the map's paths again
- * for each piece).
+ * Take the dirty cells that meet a rectangle, as few rectangles as is simple: runs
+ * of cells along each row, merged down the rows while they span the same columns.
+ * A strip uncovered by a pan or the whole screen is one rectangle (tracing the
+ * map's paths once rather than per cell); scattered cells stay apart, so a cell
+ * waiting for one base tile does not repaint the screen.
  */
 function takeDirty(gr: Ground, r: [number, number, number, number]): Array<[number, number, number, number]> {
   const c0 = Math.max(0, Math.floor(r[0] / CELL));
   const r0 = Math.max(0, Math.floor(r[1] / CELL));
   const c1 = Math.min(gr.cols - 1, Math.floor((r[2] - 1) / CELL));
   const r1 = Math.min(gr.rows - 1, Math.floor((r[3] - 1) / CELL));
-  let bx0 = Infinity;
-  let by0 = Infinity;
-  let bx1 = -1;
-  let by1 = -1;
-  for (let y = r0; y <= r1; y++)
-    for (let x = c0; x <= c1; x++)
-      if (gr.dirty[y * gr.cols + x]) {
-        bx0 = Math.min(bx0, x);
-        by0 = Math.min(by0, y);
-        bx1 = Math.max(bx1, x);
-        by1 = Math.max(by1, y);
+  const out: Array<[number, number, number, number]> = [];
+  // open rectangles from the rows above, by their column span
+  let open = new Map<string, { a: number; b: number; top: number }>();
+  const close = (o: { a: number; b: number; top: number }, bottom: number) => out.push(cellRect(gr, o.a, o.top, o.b, bottom));
+  for (let y = r0; y <= r1; y++) {
+    const next = new Map<string, { a: number; b: number; top: number }>();
+    let x = c0;
+    while (x <= c1) {
+      if (!gr.dirty[y * gr.cols + x]) {
+        x++;
+        continue;
       }
-  if (bx1 < 0) return [];
-  for (let y = by0; y <= by1; y++) for (let x = bx0; x <= bx1; x++) gr.dirty[y * gr.cols + x] = 0;
-  return [cellRect(gr, bx0, by0, bx1, by1)];
+      const a = x;
+      while (x <= c1 && gr.dirty[y * gr.cols + x]) gr.dirty[y * gr.cols + x++] = 0;
+      const k = `${a}|${x - 1}`;
+      const above = open.get(k);
+      if (above) open.delete(k);
+      next.set(k, above ?? { a, b: x - 1, top: y });
+    }
+    for (const o of open.values()) close(o, y - 1);
+    open = next;
+  }
+  for (const o of open.values()) close(o, r1);
+  return out;
 }
 
 function anyDirty(gr: Ground, r: [number, number, number, number]): boolean {

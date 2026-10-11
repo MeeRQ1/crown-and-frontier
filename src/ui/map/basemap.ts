@@ -37,6 +37,18 @@ export const PALETTE = {
 
 const TILE = 256;
 
+/** A canvas just painted is rasterised when first drawn: draw it into one pixel, so that cost is paid (and timed) now. */
+let probe: CanvasRenderingContext2D | null = null;
+function rasterise(c: HTMLCanvasElement): void {
+  if (!probe) {
+    const p = document.createElement('canvas');
+    p.width = 1;
+    p.height = 1;
+    probe = p.getContext('2d');
+  }
+  probe?.drawImage(c, 0, 0, 1, 1);
+}
+
 interface Tile {
   canvas: HTMLCanvasElement;
   used: number;
@@ -80,9 +92,9 @@ export class BaseMap {
 
   /**
    * Draw the base map over a rectangle of a canvas, in device pixels, where a world
-   * point lands at `scale · w + (ax, ay)`. Renders missing tiles within a time
-   * budget; returns false if some tiles are still pending (redraw soon), and lists
-   * where they go in `missing`.
+   * point lands at `scale · w + (ax, ay)`. Renders missing tiles while the frame's
+   * tile rendering (see beginFrame) is within a time budget; returns false if some
+   * tiles are still pending (redraw soon), and lists where they go in `missing`.
    */
   drawRegion(ctx: CanvasRenderingContext2D, scale: number, ax: number, ay: number, rect: [number, number, number, number], budgetMs = 10, missing?: Array<[number, number, number, number]>): boolean {
     const [rx0, ry0, rx1, ry1] = rect;
@@ -118,43 +130,53 @@ export class BaseMap {
     const order: Array<[number, number]> = [];
     for (let ty = ty0; ty <= ty1; ty++) for (let tx = tx0; tx <= tx1; tx++) order.push([tx, ty]);
     order.sort((p, q) => Math.hypot(p[0] - cxT, p[1] - cyT) - Math.hypot(q[0] - cxT, q[1] - cyT));
-    // Render missing tiles within the budget, which counts the time spent rendering
-    // a tile and drawing it the first time (when it is rasterised), not the time
-    // spent drawing cached tiles (that can exceed the budget on a large screen, and
-    // must not starve the missing ones); one is always rendered, so the map converges.
-    let spent = 0;
-    let rendered = 0;
+    // Render missing tiles, nearest first, within the budget, which counts the time
+    // spent rendering a tile and rasterising it (forced here with a one-pixel draw),
+    // not the time spent drawing cached tiles (that can exceed the budget on a large
+    // screen, and must not starve the missing ones); one is always rendered, so the
+    // map converges.
     let complete = true;
     const holes: Array<[number, number, number, number]> = [];
-    ctx.imageSmoothingEnabled = true;
     const drawScale = scale / ppw;
+    const size = TILE * drawScale;
+    const ready = new Set<string>();
     for (const [tx, ty] of order) {
       const key = `${level}|${tx}|${ty}`;
-      const sx = tx * tw * scale + ax;
-      const sy = ty * tw * scale + ay;
-      const size = TILE * drawScale;
-      const t1 = performance.now();
       let t = this.tiles.get(key);
-      const fresh = !t;
       if (!t) {
-        if (rendered > 0 && spent > budgetMs) {
+        if (this.frameRendered > 0 && this.frameSpent > budgetMs) {
           complete = false;
+          const sx = tx * tw * scale + ax;
+          const sy = ty * tw * scale + ay;
           holes.push([sx, sy, sx + size, sy + size]);
           continue;
         }
+        const t1 = performance.now();
         t = { canvas: this.renderTile(level, tx, ty), used: 0 };
-        rendered++;
+        rasterise(t.canvas);
+        this.frameSpent += performance.now() - t1;
+        this.frameRendered++;
         this.tiles.set(key, t);
       }
       t.used = this.frame;
-      // overlap by a fraction of a pixel to hide seams; whole pixels from floor and
-      // ceil of both edges, so a tile is drawn the same wherever the origin lies (with
-      // `sx % 1`, negative for a tile left of the origin, it was a pixel narrower there)
-      const x0 = Math.floor(sx);
-      const y0 = Math.floor(sy);
-      ctx.drawImage(t.canvas, x0, y0, Math.ceil(sx + size) + 1 - x0, Math.ceil(sy + size) + 1 - y0);
-      if (fresh) spent += performance.now() - t1;
+      ready.add(key);
     }
+    // then draw them row by row: tiles overlap by a pixel to hide seams, and a fixed
+    // order decides those pixels the same way however the region is cut into pieces
+    ctx.imageSmoothingEnabled = true;
+    for (let ty = ty0; ty <= ty1; ty++)
+      for (let tx = tx0; tx <= tx1; tx++) {
+        const key = `${level}|${tx}|${ty}`;
+        if (!ready.has(key)) continue;
+        const sx = tx * tw * scale + ax;
+        const sy = ty * tw * scale + ay;
+        // whole pixels from floor and ceil of both edges, so a tile is drawn the same
+        // wherever the origin lies (with `sx % 1`, negative left of the origin, it was
+        // a pixel narrower there)
+        const x0 = Math.floor(sx);
+        const y0 = Math.floor(sy);
+        ctx.drawImage(this.tiles.get(key)!.canvas, x0, y0, Math.ceil(sx + size) + 1 - x0, Math.ceil(sy + size) + 1 - y0);
+      }
     // where tiles are still to come, the overview stands in (blurred, for a few frames)
     if (holes.length) {
       ctx.save();
@@ -191,7 +213,12 @@ export class BaseMap {
   /** Start a frame: tiles drawn from now on count as in use until the next one. */
   beginFrame(): void {
     this.frame = ++this.clock;
+    this.frameSpent = 0;
+    this.frameRendered = 0;
   }
+  /** time spent rendering tiles this frame, and how many: the budget is the frame's, however many regions it paints */
+  private frameSpent = 0;
+  private frameRendered = 0;
 
   /**
    * Keep at most about 320 tiles (80 MB), dropping the least recently used, but

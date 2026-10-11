@@ -1042,6 +1042,24 @@ async function groundCacheFlow(browser: Browser, base: string): Promise<void> {
     app.mapChanged();
   });
   await compare('diplomacy mode, focused on France');
+  // fleets move: in the sea mode only the zones whose colour changed are repainted
+  const moved = await page.evaluate(() => {
+    const app = (window as any).cnf;
+    app.setMode('sea');
+    const sim = app.sim;
+    const fleets = Object.values(sim.state.fleets as Record<string, { id: string; zone: string }>);
+    const out: string[] = [];
+    for (const f of fleets.slice(0, 4)) {
+      const to = sim.world.zoneIds?.find?.((z: string) => z !== f.zone && !fleets.some((g) => g.zone === z)) ?? app.renderer.geo.zoneIds.find((z: string) => z !== f.zone && !fleets.some((g) => g.zone === z));
+      if (!to) continue;
+      out.push(`${f.id} ${f.zone}→${to}`);
+      f.zone = to;
+    }
+    sim.state.rev++;
+    app.mapChanged();
+    return out.join(', ');
+  });
+  await compare(`sea mode after fleets moved (${moved})`);
   await page.evaluate(() => (window as any).cnf.setMode('political'));
   await start('aldmere', 'aur');
   await zoomTo(96);

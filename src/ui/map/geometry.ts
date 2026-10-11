@@ -209,6 +209,8 @@ export class GeoIndex {
   /** typical province radius in world units (for zoom tiers) */
   readonly provScale: number;
   /** sea zones: ids by ordinal, label anchors, borders between zones, and the zone grid */
+  /** the borders between sea zones piece by piece, with bounding boxes (to draw only those in view) */
+  readonly zoneBorderSegs: Array<{ path: Path2D; bbox: BBox }> = [];
   readonly zoneIds: string[] = [];
   readonly zoneNames = new Map<string, string>();
   readonly zoneAnchors = new Map<string, { x: number; y: number }>();
@@ -290,7 +292,11 @@ export class GeoIndex {
       const cells = decodeGrid(seas.grid.rle, seas.grid.w * seas.grid.h, this.zoneIds.length);
       if (cells) this.seaGrid = { ...seas.grid, cells };
       for (const [id, a] of Object.entries(seas.anchors)) this.zoneAnchors.set(id, { x: a.cx, y: a.cy });
-      for (const b of seas.borders) this.zoneBorders.addPath(pathFrom(b.pts, false));
+      for (const b of seas.borders) {
+        const path = pathFrom(b.pts, false);
+        this.zoneBorders.addPath(path);
+        this.zoneBorderSegs.push({ path, bbox: bboxOf(b.pts) });
+      }
     }
     // a zone without a drawn anchor sits off the middle of its coasts
     for (const z of g.seaZones ?? []) {
@@ -331,6 +337,32 @@ export class GeoIndex {
   }
 
   /** The water of one zone (cell runs; land drawn over it hides the coast cells). */
+  private zoneBoxes: Map<string, BBox> | null = null;
+  /** A sea zone's bounding box in world units (from the zone grid), or null. */
+  zoneBBox(id: string): BBox | null {
+    if (!this.zoneBoxes) {
+      this.zoneBoxes = new Map();
+      const g = this.seaGrid;
+      if (g) {
+        const boxes: BBox[] = this.zoneIds.map(() => [Infinity, Infinity, -Infinity, -Infinity]);
+        for (let j = 0; j < g.h; j++)
+          for (let i = 0; i < g.w; i++) {
+            const ord = g.cells[j * g.w + i];
+            const b = ord > 0 ? boxes[ord - 1] : undefined;
+            if (!b) continue;
+            b[0] = Math.min(b[0], g.x0 + i * g.cell);
+            b[1] = Math.min(b[1], g.y0 + j * g.cell);
+            b[2] = Math.max(b[2], g.x0 + (i + 1) * g.cell + 0.5);
+            b[3] = Math.max(b[3], g.y0 + (j + 1) * g.cell + 0.5);
+          }
+        this.zoneIds.forEach((z, k) => {
+          if (boxes[k][0] <= boxes[k][2]) this.zoneBoxes!.set(z, boxes[k]);
+        });
+      }
+    }
+    return this.zoneBoxes.get(id) ?? null;
+  }
+
   zonePath(id: string): Path2D | null {
     const hit = this.zonePathCache.get(id);
     if (hit) return hit;

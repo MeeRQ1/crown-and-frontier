@@ -175,7 +175,7 @@ async function instrument(): Promise<void> {
     wrap(app.minimap, 'draw', 'minimap');
     // the renderer's stages (instance methods called through this)
     const r = app.renderer;
-    for (const m of ['ensureRealms', 'farLayers', 'paintRealmLayers', 'drawSeaZones', 'drawStraits', 'drawRoads', 'drawBattles', 'drawArmies', 'drawFleets', 'drawWings', 'drawSites', 'drawZoneNames', 'drawLabels', 'drawRoute', 'drawFleetRoutes', 'drawAirMissions']) wrap(r, m, `r.${m}`);
+    for (const m of ['ensureRealms', 'farLayers', 'paintRealmLayers', 'diffGround', 'modeContext', 'drawGround', 'worldLayer', 'drawSeaZones', 'drawStraits', 'drawRoads', 'drawBattles', 'drawArmies', 'drawFleets', 'drawWings', 'drawSites', 'drawZoneNames', 'drawLabels', 'drawRoute', 'drawFleetRoutes', 'drawAirMissions']) wrap(r, m, `r.${m}`);
     wrap(r.base, 'draw', 'r.base');
     wrap(r.base, 'drawRegion', 'r.baseRegion');
     wrap(r.base, 'renderTile', 'r.tile');
@@ -570,7 +570,7 @@ if (!only || ['dev-pan', 'dev-max', 'dev-panels-max'].some((x) => only.has(x))) 
 }
 
 // 3. the largest map in a world war: the World, 1914 at week 280, as Britain
-if (!only || ['world-idle', 'world-pan', 'world-pan-mid', 'world-pan-close', 'world-pan-far', 'world-zoom', 'world-select', 'world-panels', 'world-normal', 'world-max', 'world-max-pan'].some((x) => only.has(x))) {
+if (!only || ['world-idle', 'world-pan', 'world-pan-mid', 'world-pan-close', 'world-pan-far', 'world-zoom', 'world-select', 'world-panels', 'world-normal', 'world-max', 'world-max-military', 'world-max-orders', 'world-max-pan'].some((x) => only.has(x))) {
   await loadSave(campaign('earth-w280', 'earth', 1, 280, 'gbr'));
   await zoomTo('regional');
   await measure('world-idle', 'the World at war, paused, no input, 3 s', () => wait(3000));
@@ -598,6 +598,40 @@ if (!only || ['world-idle', 'world-pan', 'world-pan-mid', 'world-pan-close', 'wo
     await setSpeed(4);
     await wait(8000);
     await page.evaluate(() => window.cnf.setSpeed(0));
+  });
+  await measure('world-max-military', 'the World at war, fastest speed in the military map mode (threat and fronts redrawn as armies move), 8 s', async () => {
+    await page.evaluate(() => window.cnf.setMode('military'));
+    await setSpeed(4);
+    await wait(8000);
+    await page.evaluate(() => {
+      window.cnf.setSpeed(0);
+      window.cnf.setMode('political');
+    });
+  });
+  await measure('world-max-orders', 'the World at war, fastest speed, an army selected and ordered to march 8 times (right-click)', async () => {
+    // the player's largest army, centred and selected
+    const at = await page.evaluate(() => {
+      const app = window.cnf;
+      const armies = Object.values(app.sim.state.armies as Record<string, any>).filter((a) => a.nation === app.player && !a.embarked);
+      armies.sort((a, b) => b.regiments.length - a.regiments.length);
+      const a = armies[0];
+      if (!a) return null;
+      const cam = app.renderer.camera;
+      const c = app.renderer.provinceCenter(a.location);
+      cam.centerOn(c.x, c.y, cam.zoomForProvincePx(90), false);
+      app.mapChanged();
+      app.selectArmy(a.id);
+      return a.id;
+    });
+    await wait(400);
+    await setSpeed(4);
+    await wait(1500);
+    for (let i = 0; i < 8; i++) {
+      await page.mouse.click(MAP.x + (i % 2 ? 120 : -120), MAP.y + (i % 3) * 40 - 40, { button: 'right' });
+      await wait(700);
+    }
+    await page.evaluate(() => window.cnf.setSpeed(0));
+    if (!at) console.log('  (no army to order)');
   });
   await measure('world-max-pan', 'the World at war, fastest speed while dragging and clicking, 6 s', async () => {
     await setSpeed(4);

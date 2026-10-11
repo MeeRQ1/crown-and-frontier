@@ -50,6 +50,8 @@ const FRAME_BUDGET_MS = { input: 10, idle: 14 };
 const SIM_MIN_MS = 3;
 /** how long after the last input the map counts as being handled */
 const INPUT_HOLD_MS = 600;
+/** the simulation's time a frame while an order waits for the week in progress to end */
+const ORDER_BUDGET_MS = 30;
 
 export interface UIState {
   peace: { war: string; with: string; mode: 'demand' | 'concede' | 'white'; provinces: string[]; gold: number } | null;
@@ -144,6 +146,8 @@ export class App {
   private ledgerDue = 0;
   /** openLedger has just built the ledger: the next interface pass need not build it again */
   private ledgerFresh = false;
+  /** orders given while a week was half done, applied when it ends (see orderMove) */
+  private atWeekEnd: Array<() => void> = [];
   private endShown = false;
   private raf = 0;
   private starting = 0;
@@ -333,6 +337,7 @@ export class App {
   teardownGame(): void {
     cancelAnimationFrame(this.raf);
     this.week = null;
+    this.atWeekEnd = [];
     this.resizeObs?.disconnect();
     this.resizeObs = null;
     this.modesObs?.disconnect();
@@ -460,6 +465,7 @@ export class App {
     if (this.hoverPos && !this.pointers.size && this.viewKey() !== this.hoverView) this.hover(this.hoverPos.x, this.hoverPos.y);
     const busy = this.pointers.size > 0 || this.renderer.camera.animating || start - this.lastInput < INPUT_HOLD_MS;
     this.renderer.interacting = busy;
+    this.renderer.running = this.speed > 0 || !!this.week;
     // the player has stopped handling the map: the cache's margin can be painted now
     if (!busy && this.renderer.idleWork) this.mapDirty = true;
     if (this.mapDirty || this.renderer.camera.animating || this.wantsFrame) {
@@ -479,7 +485,9 @@ export class App {
     // week (a world war on the largest maps) spreads over frames instead of freezing
     // the map and the controls; what the slices change is drawn next frame. A week
     // once begun is finished even if the game is paused.
-    const budget = Math.max(SIM_MIN_MS, (busy ? FRAME_BUDGET_MS.input : FRAME_BUDGET_MS.idle) - (performance.now() - start));
+    let budget = Math.max(SIM_MIN_MS, (busy ? FRAME_BUDGET_MS.input : FRAME_BUDGET_MS.idle) - (performance.now() - start));
+    // an order waits for the week in progress: finish it in a few frames
+    if (this.atWeekEnd.length) budget = Math.max(budget, ORDER_BUDGET_MS);
     const until = performance.now() + budget;
     let weeks = 0;
     while (performance.now() < until) {
@@ -492,6 +500,7 @@ export class App {
         this.week = null;
         weeks++;
         this.afterTick();
+        this.applyWeekEndOrders();
       }
     }
     // a clock that cannot keep up runs slower instead of piling up weeks to catch up
@@ -725,6 +734,15 @@ export class App {
     this.week = null;
     while (!week.next().done);
     this.afterTick();
+    this.applyWeekEndOrders();
+  }
+
+  /** The orders given while the week that has just ended was in progress, in the order given. */
+  private applyWeekEndOrders(): void {
+    const orders = this.atWeekEnd;
+    if (!orders.length || !this.sim) return;
+    this.atWeekEnd = [];
+    for (const o of orders) o();
   }
 
   /** Developer/test hook (console only): advance the simulation N weeks immediately. */
@@ -941,6 +959,15 @@ export class App {
   orderMove(dest: ProvinceId, armyId?: string, append = false): void {
     const id = armyId ?? this.selectedArmy;
     if (!id) return;
+    // A week half done on a large map can take a tenth of a second or more to
+    // finish: rather than freeze the map until it has, the order waits for the end
+    // of the week (the frame loop hurries it), and is applied between the same two
+    // weeks as finishing it at once would.
+    if (this.week) {
+      this.atWeekEnd.push(() => this.orderMove(dest, id, append));
+      this.cancelMoveMode();
+      return;
+    }
     const a = this.sim?.state.armies[id];
     const group = a && this.ui.groupOrders && a.group ? this.groupArmies(a.group) : [];
     if (group.length > 1) {
