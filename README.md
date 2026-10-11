@@ -242,12 +242,16 @@ that the final state matches.
   - A format-4 campaign keeps its running trade exchanges as 12-month contracts at list price.
   - A format-3 campaign keeps each realm's national policy as the matching completed focus.
   - Format-3 saves written before Stage C load with empty navies and air arms.
-- **The World, 1914 is heavy in a world war:**
-  - A week can take several hundred milliseconds to work out, so the fastest speed runs
-    slower than its nominal 6 weeks a second.
-  - The week is worked out in slices between frames, so the map and controls stay
-    responsive.
+- **The World, 1914 runs slower than the clock's setting:**
+  - At the fastest speed (6 weeks a second) it gives about three quarters of that in
+    peacetime in headless Chromium on a 4-core machine, and about a quarter in a world
+    war, where a week can take several hundred milliseconds to work out.
+  - The week is worked out in slices between frames, so the map and controls keep
+    responding, though a single slice can take up to about 400 ms.
   - Measurements are in `docs/atlas/MAPS.md`.
+- **The historical maps end on score:** in AI-only campaigns no realm completes a
+  victory within 30 years, and the largest starting realm (Britain on the World, Russia
+  on Europe) leads on score (`reports/ai/`).
 - **Historical maps are approximations:** the borders of 1906 and 1914 follow present-day
   divisions where they differ, and starting forces and AI temperaments are game choices
   (`docs/atlas/MAPS.md`).
