@@ -11,7 +11,7 @@
 
 import { TERRAIN } from '../sim/config';
 import type { NationDef, Personality, ProvinceDef, Resource, Terrain } from '../sim/types';
-import { SEA, sizeFor, type MapEdge, type MapPackage } from './format';
+import { SEA, sizeFor, type MapEdge, type MapPackage, type StartTreaty } from './format';
 import { loopsFromEdges } from './rings';
 import { campaignYearsFor, researchCostFor, scaledVictory } from './rules';
 import { addSeaZones, MAP_LIMITS } from './validate';
@@ -293,6 +293,32 @@ export function removeRealm(pkg: MapPackage, nid: string): EditResult {
     if (p.claims.includes(nid)) p.claims = p.claims.filter((c) => c !== nid);
   }
   if (pkg.treaties) pkg.treaties = pkg.treaties.filter((t) => t.a !== nid && t.b !== nid);
+  return done;
+}
+
+// ───────────────────────────── treaties at the start ─────────────────────────
+
+const TREATY_WORDS: Record<StartTreaty['type'], string> = { alliance: 'an alliance', nap: 'a non-aggression pact', trade: 'a trade agreement' };
+
+/** Adds a treaty in force at the start between two realms (one of each kind per pair). */
+export function addTreaty(pkg: MapPackage, type: StartTreaty['type'], a: string, b: string): EditResult {
+  if (!(type in TREATY_WORDS)) return refuse('Choose an alliance, a non-aggression pact or a trade agreement.');
+  if (a === b) return refuse('A treaty needs two different realms.');
+  const na = pkg.nations.find((n) => n.id === a);
+  const nb = pkg.nations.find((n) => n.id === b);
+  if (!na || !nb) return refuse('Choose two realms of this map.');
+  const list = pkg.treaties ?? [];
+  if (list.some((t) => t.type === type && key(t.a, t.b) === key(a, b))) return refuse(`${na.short} and ${nb.short} already have ${TREATY_WORDS[type]}.`);
+  if (list.length >= MAP_LIMITS.nations * 4) return refuse('This map has as many treaties as it may have.');
+  pkg.treaties = [...list, { type, a, b }];
+  return done;
+}
+
+export function removeTreaty(pkg: MapPackage, type: StartTreaty['type'], a: string, b: string): EditResult {
+  const list = pkg.treaties ?? [];
+  const next = list.filter((t) => !(t.type === type && key(t.a, t.b) === key(a, b)));
+  if (next.length === list.length) return refuse('No such treaty.');
+  pkg.treaties = next.length ? next : undefined;
   return done;
 }
 

@@ -12,7 +12,7 @@ import * as E from '../../maps/edit';
 import type { MapPackage } from '../../maps/format';
 import { plural } from '../format';
 import { buildProceduralMap, CLIMATES, DEFAULT_PARAMS, MAP_SHAPES, SHAPE_LABELS, type Climate, type MapShape, type ProceduralParams } from '../../maps/gen/procedural';
-import { parseMapPackage, validateMapPackage, type MapCheck, type MapIssue } from '../../maps/validate';
+import { parseMapPackage, parseMapPackageForEditing, validateMapPackage, type MapCheck, type MapIssue } from '../../maps/validate';
 import { RESOURCES, TERRAINS } from '../../maps/vocab';
 import type { App } from '../app';
 import { button, h, setChildren, type Child } from '../dom';
@@ -49,6 +49,8 @@ const LAYERS: Array<[EditorLayer, string]> = [
 const RESOURCE_LABEL: Record<string, string> = { food: 'Food', coal: 'Coal', iron: 'Iron', oil: 'Oil', rubber: 'Rubber', nitrates: 'Nitrates' };
 const CLIMATE_LABEL: Record<Climate, string> = { temperate: 'Temperate', northern: 'Northern (forests)', southern: 'Southern (warm plains)', arid: 'Arid (steppe)' };
 const MAP_ID = /^[a-z0-9][a-z0-9-]{1,39}$/;
+/** The latest start year a map may have: the research tree reaches 1936. */
+const LATEST_START = 1936;
 
 interface Snapshot {
   text: string;
@@ -79,7 +81,8 @@ function selectInput<T extends string>(options: Array<[T, string]>, value: T, on
   return el;
 }
 
-export function renderEditor(app: App, initial: MapPackage | null): HTMLElement {
+/** Opens the editor on a map (null: the New map form); `fromLibrary` names the library map it edits (by default, the library map of its id). */
+export function renderEditor(app: App, initial: MapPackage | null, fromLibrary?: string | null): HTMLElement {
   const canvas = h('canvas', { class: 'ed-canvas', 'aria-label': 'Map being edited' });
   const view = new EditorView(canvas);
   const panel = h('div', { class: 'ed-panel-body' });
@@ -96,7 +99,7 @@ export function renderEditor(app: App, initial: MapPackage | null): HTMLElement 
 
   let pkg: MapPackage = initial ? structuredClone(initial) : (null as unknown as MapPackage);
   /** the library id this map was opened from (saving to it replaces that map) */
-  let libraryId: string | null = initial && app.maps.has(initial.id) ? initial.id : null;
+  let libraryId: string | null = fromLibrary !== undefined ? fromLibrary : initial && app.maps.has(initial.id) ? initial.id : null;
   let check: MapCheck = { ok: false, errors: [], warnings: [] };
   let tool: Tool = 'select';
   let tab: Tab = 'tool';
@@ -129,6 +132,7 @@ export function renderEditor(app: App, initial: MapPackage | null): HTMLElement 
     validateTimer = window.setTimeout(() => {
       check = validateMapPackage(pkg);
       drawHeader();
+      flagFindings();
       if (tab === 'check') drawPanel();
     }, pkg.provinces.length > 300 ? 300 : 120);
     clearTimeout(draftTimer);
@@ -223,9 +227,18 @@ export function renderEditor(app: App, initial: MapPackage | null): HTMLElement 
         return b;
       }),
     );
+  /** Where a finding is on the map: its province or sea zone, or a realm's capital. */
+  const findingSpot = (i: MapIssue): string | null =>
+    i.ref && (pkg.provinces.some((p) => p.id === i.ref) || pkg.seaZones.some((z) => z.id === i.ref)) ? i.ref : i.ref ? (pkg.nations.find((n) => n.id === i.ref)?.capital ?? null) : null;
+  /** While the Check tab is open, every error's place is outlined on the map. */
+  const flagFindings = () => {
+    view.flagged = new Set(tab === 'check' ? check.errors.map(findingSpot).filter((x): x is string => !!x) : []);
+    view.invalidate();
+  };
   const setTab = (t: Tab) => {
     tab = t;
     if (t === 'check') check = validateMapPackage(pkg);
+    flagFindings();
     drawTabs();
     drawPanel();
     drawHeader();
@@ -250,9 +263,23 @@ export function renderEditor(app: App, initial: MapPackage | null): HTMLElement 
   const drawHint = () => {
     const def = TOOLS.find((x) => x.id === tool);
     const text = tool === 'capital' ? `Click a province for the capital of ${newRealmName}.` : (def?.help ?? '');
-    setChildren(hint, message ? h('div', { class: `callout ${message.kind}` }, h('span', null, message.text)) : null, h('div', { class: 'ed-help' }, view.hover ? `${provName(view.hover)} · ` : '', text));
+    const hovered = view.hover && pkg?.provinces.some((p) => p.id === view.hover) ? view.hover : null;
+    setChildren(hint, message ? h('div', { class: `callout ${message.kind}` }, h('span', null, message.text)) : null, h('div', { class: 'ed-help' }, hovered ? `${provName(hovered)} · ` : '', text));
   };
   const provName = (id: string) => pkg.provinces.find((p) => p.id === id)?.name ?? id;
+  /** What an owner change did to realms' capitals (a realm that loses its capital gets another, or has no land left). */
+  const capitalsBefore = () => new Map(pkg.nations.map((n) => [n.id, n.capital]));
+  const capitalNotes = (before: Map<string, string>): string[] => {
+    const notes: string[] = [];
+    for (const n of pkg.nations) {
+      const was = before.get(n.id);
+      if (was === undefined) continue;
+      const holds = pkg.provinces.some((p) => p.owner === n.id);
+      if (!holds) notes.push(`${n.name} has no land left: give it a province or remove it (Realms tab).`);
+      else if (was !== n.capital) notes.push(`${n.short} lost its capital ${provName(was)}; ${provName(n.capital)} is its capital now.`);
+    }
+    return notes;
+  };
   const realmName = (id: string | null) => (id ? (pkg.nations.find((n) => n.id === id)?.name ?? id) : 'Unclaimed');
 
   // ── panel
@@ -345,7 +372,13 @@ export function renderEditor(app: App, initial: MapPackage | null): HTMLElement 
       h('h3', null, p.name, capitalOf ? h('span', { class: 'tag brass', style: 'margin-left:8px' }, `Capital of ${capitalOf.short}`) : null),
       h('div', { class: 'small muted' }, `id ${p.id} · ${coastal ? 'coastal' : 'inland'}`),
       field('Name', textInput(p.name, (v) => edit(() => E.setProvince(pkg, pid, { name: v })), { 'data-f': 'name' })),
-      field('Owner', selectInput<string>([['', 'Unclaimed frontier'], ...pkg.nations.map((n) => [n.id, n.name] as [string, string])], p.owner ?? '', (v) => edit(() => E.paintOwner(pkg, [pid], v || null)))),
+      field('Owner', selectInput<string>([['', 'Unclaimed frontier'], ...pkg.nations.map((n) => [n.id, n.name] as [string, string])], p.owner ?? '', (v) => {
+        const before = capitalsBefore();
+        if (edit(() => E.paintOwner(pkg, [pid], v || null))) {
+          const notes = capitalNotes(before);
+          if (notes.length) say(notes.join(' '), 'warn');
+        }
+      })),
       field('Region', selectInput<string>(pkg.regions.map((r) => [r.id, r.name] as [string, string]), p.region, (v) => edit(() => E.paintRegion(pkg, [pid], v)))),
       h(
         'div',
@@ -405,7 +438,7 @@ export function renderEditor(app: App, initial: MapPackage | null): HTMLElement 
       h(
         'div',
         { class: 'ed-grid2' },
-        field('Start year', numInput(r.startYear, 1870, 1930, (val) => edit(() => void (pkg.rules.startYear = Math.max(1870, Math.min(1930, Math.round(val))))))),
+        field('Start year', numInput(r.startYear, 1870, LATEST_START, (val) => edit(() => void (pkg.rules.startYear = Math.max(1870, Math.min(LATEST_START, Math.round(val))))))),
         field('Difficulty', selectInput(['gentle', 'standard', 'hard'].map((d) => [d, d[0].toUpperCase() + d.slice(1)] as [string, string]), m.difficulty, (val) => edit(() => void (pkg.meta.difficulty = val as typeof m.difficulty)))),
       ),
       field('Campaign style', textInput(m.style, (val) => edit(() => void (pkg.meta.style = val.slice(0, 120))))),
@@ -460,6 +493,43 @@ export function renderEditor(app: App, initial: MapPackage | null): HTMLElement 
       ),
       h('div', { class: 'eyebrow', style: 'margin-top:14px' }, 'New realm'),
       h('div', { class: 'row' }, nameIn, place),
+      ...treatiesSection(),
+    ];
+  };
+
+  /** The treaties in force when the campaign starts: listed, removed and added. */
+  const TREATY_LABEL: Record<string, string> = { alliance: 'Alliance', nap: 'Non-aggression pact', trade: 'Trade agreement' };
+  const treatiesSection = (): Child[] => {
+    const list = pkg.treaties ?? [];
+    const realmOpts = pkg.nations.map((n) => [n.id, n.name] as [string, string]);
+    let type: 'alliance' | 'nap' | 'trade' = 'alliance';
+    let a = pkg.nations[0]?.id ?? '';
+    let b = pkg.nations[1]?.id ?? '';
+    const typeSel = selectInput<'alliance' | 'nap' | 'trade'>([['alliance', 'Alliance'], ['nap', 'Non-aggression pact'], ['trade', 'Trade agreement']], type, (v) => (type = v));
+    const aSel = selectInput<string>(realmOpts, a, (v) => (a = v));
+    const bSel = selectInput<string>(realmOpts, b, (v) => (b = v));
+    typeSel.setAttribute('data-f', 'treaty-type');
+    aSel.setAttribute('data-f', 'treaty-a');
+    bSel.setAttribute('data-f', 'treaty-b');
+    return [
+      h('div', { class: 'eyebrow', style: 'margin-top:14px' }, `Treaties at the start (${list.length})`),
+      list.length
+        ? h(
+            'div',
+            { class: 'ed-rows' },
+            list.map((t) =>
+              h(
+                'div',
+                { class: 'ed-row', 'data-treaty': `${t.type}:${t.a}:${t.b}` },
+                h('div', { class: 'grow small' }, `${TREATY_LABEL[t.type]}: ${realmName(t.a)} and ${realmName(t.b)}`),
+                button('', () => edit(() => E.removeTreaty(pkg, t.type, t.a, t.b)), { cls: 'icon quiet', icon: 'close', title: 'Remove this treaty' }),
+              ),
+            ),
+          )
+        : h('p', { class: 'small muted' }, 'No treaties: every realm starts on its own.'),
+      pkg.nations.length >= 2
+        ? h('div', { class: 'ed-grid2' }, typeSel, h('span'), aSel, bSel, button('Add treaty', () => edit(() => E.addTreaty(pkg, type, a, b)), { cls: 'small', icon: 'plus', fk: 'ed-add-treaty' }))
+        : null,
     ];
   };
 
@@ -508,8 +578,15 @@ export function renderEditor(app: App, initial: MapPackage | null): HTMLElement 
 
   const issueRows = (issues: MapIssue[], kind: 'bad' | 'warn') =>
     issues.map((i) => {
-      const target = i.ref && (pkg.provinces.some((p) => p.id === i.ref) || pkg.seaZones.some((z) => z.id === i.ref)) ? i.ref : i.ref ? (pkg.nations.find((n) => n.id === i.ref)?.capital ?? null) : null;
-      return h('div', { class: `ed-issue ${kind}` }, icon(kind === 'bad' ? 'alert' : 'info'), h('span', { class: 'grow' }, i.message), target ? button('Show', () => select(target, true), { cls: 'small quiet' }) : null);
+      const target = findingSpot(i);
+      const region = !target && i.ref && pkg.regions.some((r) => r.id === i.ref);
+      return h(
+        'div',
+        { class: `ed-issue ${kind}`, 'data-ref': i.ref ?? '' },
+        icon(kind === 'bad' ? 'alert' : 'info'),
+        h('span', { class: 'grow' }, i.message),
+        target ? button('Show', () => select(target, true), { cls: 'small quiet' }) : region ? button('Regions', () => setTab('regions'), { cls: 'small quiet' }) : null,
+      );
     });
 
   const checkPanel = (): Child[] => [
@@ -525,8 +602,9 @@ export function renderEditor(app: App, initial: MapPackage | null): HTMLElement 
     const isZone = pkg.seaZones.some((z) => z.id === id);
     selectedZone = isZone ? id : null;
     view.selected = isZone ? null : id;
+    view.selectedZone = selectedZone;
     if (isZone) view.layer = 'seas';
-    view.flagged = new Set([id].filter(() => tab === 'check'));
+    flagFindings();
     if (focus) view.focus(id);
     if (tool !== 'select') tool = 'select';
     if (tab !== 'check') tab = 'tool';
@@ -541,6 +619,8 @@ export function renderEditor(app: App, initial: MapPackage | null): HTMLElement 
   const PAINT: Tool[] = ['owner', 'region', 'terrain', 'deposit'];
   const pointers = new Map<number, { x: number; y: number }>();
   let gesture: { kind: 'pan' | 'paint' | 'click'; x: number; y: number; moved: boolean } | null = null;
+  /** realms' capitals when a paint stroke began (to report what the stroke did to them) */
+  let strokeCapitals: Map<string, string> | null = null;
   let pinch: { d: number } | null = null;
   let spaceDown = false;
   const local = (e: PointerEvent | WheelEvent) => {
@@ -557,7 +637,10 @@ export function renderEditor(app: App, initial: MapPackage | null): HTMLElement 
           : tool === 'terrain'
             ? E.paintTerrain(pkg, [pid], paintTerrain)
             : E.paintDeposit(pkg, [pid], paintDeposit);
-    if (n) view.invalidate();
+    if (n) {
+      view.painting?.add(pid);
+      view.invalidate();
+    }
   };
   const clickAt = (sx: number, sy: number) => {
     const { province, zone } = view.pick(sx, sy);
@@ -568,7 +651,7 @@ export function renderEditor(app: App, initial: MapPackage | null): HTMLElement 
         else if (zone) select(zone);
         else {
           view.selected = null;
-          selectedZone = null;
+          selectedZone = view.selectedZone = null;
           drawPanel();
         }
         break;
@@ -583,7 +666,11 @@ export function renderEditor(app: App, initial: MapPackage | null): HTMLElement 
           const a = view.pending;
           view.pending = null;
           if (tool === 'merge') {
-            if (edit(() => E.mergeProvinces(pkg, a, province))) say(`Merged into ${provName(a)}.`, 'good');
+            if (edit(() => E.mergeProvinces(pkg, a, province))) {
+              if (view.hover === province) view.hover = null;
+              if (view.selected === province) view.selected = a;
+              say(`Merged into ${provName(a)}.`, 'good');
+            }
           } else if (view.landBorder(a, province)) {
             const had = pkg.rivers.some(([x, y]) => (x === a && y === province) || (x === province && y === a));
             if (edit(() => E.toggleRiver(pkg, a, province))) say(had ? 'River removed.' : 'River added along that border.', 'good');
@@ -630,13 +717,18 @@ export function renderEditor(app: App, initial: MapPackage | null): HTMLElement 
     if (pointers.size === 2) {
       const [a, b] = [...pointers.values()];
       pinch = { d: Math.hypot(a.x - b.x, a.y - b.y) };
-      if (gesture?.kind === 'paint') afterEdit({ quiet: true });
+      if (gesture?.kind === 'paint') {
+        view.painting = null;
+        afterEdit({ quiet: true });
+      }
       gesture = { kind: 'pan', x: (a.x + b.x) / 2, y: (a.y + b.y) / 2, moved: true };
       return;
     }
     const panning = e.button === 1 || e.button === 2 || spaceDown;
     if (!panning && PAINT.includes(tool) && e.button === 0) {
       begin();
+      strokeCapitals = tool === 'owner' ? capitalsBefore() : null;
+      view.painting = new Set();
       gesture = { kind: 'paint', x: p.x, y: p.y, moved: false };
       paintAt(view.pick(p.x, p.y).province);
     } else gesture = { kind: panning ? 'pan' : 'click', x: p.x, y: p.y, moved: false };
@@ -690,10 +782,17 @@ export function renderEditor(app: App, initial: MapPackage | null): HTMLElement 
     gesture = null;
     if (!g) return;
     if (g.kind === 'paint') {
+      view.painting = null;
+      view.invalidate();
       // the stroke is one undo step; nothing changed means nothing to undo
       const last = undoStack[undoStack.length - 1];
       if (last && last.text === snapshot().text) undoStack.pop();
-      else afterEdit();
+      else {
+        afterEdit();
+        const notes = strokeCapitals ? capitalNotes(strokeCapitals) : [];
+        if (notes.length) say(notes.join(' '), 'warn');
+      }
+      strokeCapitals = null;
       return;
     }
     if (g.kind === 'click' && !g.moved && e.type === 'pointerup') clickAt(g.x, g.y);
@@ -740,12 +839,41 @@ export function renderEditor(app: App, initial: MapPackage | null): HTMLElement 
         if (tool === 'capital') setTool('select');
       } else {
         view.selected = null;
-        selectedZone = null;
+        selectedZone = view.selectedZone = null;
       }
       drawPanel();
       view.invalidate();
+    } else if (!e.ctrlKey && !e.metaKey && !e.altKey) {
+      // keyboard navigation: + and - zoom on the middle of the map, 0 fits it, arrows pan
+      const cam = view.camera;
+      const step = 90;
+      const pans: Record<string, [number, number]> = { ArrowLeft: [step, 0], ArrowRight: [-step, 0], ArrowUp: [0, step], ArrowDown: [0, -step] };
+      if (e.key === '+' || e.key === '=') zoomBy(1.4);
+      else if (e.key === '-' || e.key === '_') zoomBy(1 / 1.4);
+      else if (e.key === '0') fitMap();
+      else if (pans[e.key]) {
+        e.preventDefault();
+        cam.pan(...pans[e.key]);
+        view.invalidate();
+      }
     }
   };
+  const zoomBy = (f: number) => {
+    view.camera.zoomAt(view.camera.vw / 2, view.camera.vh / 2, f);
+    view.invalidate();
+  };
+  const fitMap = () => {
+    view.camera.fit(true);
+    view.invalidate();
+  };
+  const navEl = h(
+    'div',
+    { class: 'ed-nav', role: 'group', 'aria-label': 'Zoom' },
+    button('', () => zoomBy(1.4), { cls: 'icon', icon: 'plus', title: 'Zoom in (+)', fk: 'ed-zoom-in' }),
+    button('', () => zoomBy(1 / 1.4), { cls: 'icon', icon: 'minus', title: 'Zoom out (−)', fk: 'ed-zoom-out' }),
+    button('Fit', () => fitMap(), { cls: 'small', title: 'Show the whole map (0)', fk: 'ed-fit' }),
+  );
+  stage.appendChild(navEl);
   window.addEventListener('keydown', onKey);
   window.addEventListener('keyup', onKey);
   const ro = new ResizeObserver(() => pkg && view.resize());
@@ -761,9 +889,26 @@ export function renderEditor(app: App, initial: MapPackage | null): HTMLElement 
       return false;
     }
     if (pkg.id !== libraryId && app.maps.has(pkg.id)) {
-      setTab('map');
-      say(`Your library already has another map with the id "${pkg.id}". Give this map another id.`, 'bad');
-      return false;
+      // never replace another map of the library without asking
+      const other = app.maps.get(pkg.id)!.pkg.meta.name;
+      const choice = await new Promise<'replace' | 'copy' | null>((resolve) => {
+        let close = () => {};
+        const pick = (v: 'replace' | 'copy' | null) => () => {
+          close();
+          resolve(v);
+        };
+        close = dialog(app, 'A map with this id is in your library', [h('p', null, `Your library already has "${other}" under the id "${pkg.id}". Replace it with this map, or keep both by saving this one under a new id?`)], [
+          button('Cancel', pick(null)),
+          button('Keep both', pick('copy'), { fk: 'ed-save-copy' }),
+          button('Replace it', pick('replace'), { cls: 'danger', fk: 'ed-save-replace' }),
+        ]);
+      });
+      if (!choice) {
+        say('Not saved.', 'info');
+        return false;
+      }
+      if (choice === 'copy') pkg.id = app.maps.freeId(pkg.id);
+      else libraryId = pkg.id;
     }
     try {
       const result = await app.maps.save(pkg);
@@ -790,7 +935,7 @@ export function renderEditor(app: App, initial: MapPackage | null): HTMLElement 
     drawHeader();
     const go = () => downloadText(`${pkg.id}.map.json`, JSON.stringify(pkg));
     if (check.ok) return go();
-    confirmDialog(app, 'Export a map with errors?', `The map has ${plural(check.errors.length, 'error')}. The file will keep your work, but it will not import or play until they are fixed.`, go, 'Export anyway', false);
+    confirmDialog(app, 'Export a map with errors?', `The map has ${plural(check.errors.length, 'error')}. The file keeps your work: open it again here with Open file to finish it. It will not import into the library or play until the errors are fixed.`, go, 'Export anyway', false);
   };
   const play = async () => {
     if (!(await saveToLibrary())) return;
@@ -805,13 +950,18 @@ export function renderEditor(app: App, initial: MapPackage | null): HTMLElement 
     const text = await pickFile('.json,application/json');
     if (!text) return;
     if (text === '__too_big__') return say('That file is too large to be a map.', 'bad');
-    const { pkg: loaded, check: c } = parseMapPackage(text);
+    // a map saved unfinished (with errors) opens too, so they can be fixed here
+    const { pkg: loaded, check: c } = parseMapPackageForEditing(text);
     if (!loaded) {
       dialog(app, 'This map cannot be opened', [h('p', null, 'The file was checked and nothing was changed. Problems found:'), issueList(c.errors)]);
       return;
     }
-    open(loaded, app.maps.has(loaded.id) ? loaded.id : null);
-    say(`Opened ${loaded.meta.name} from a file.`, 'good');
+    // a file is not the library's map of the same id until the player says so (see saveToLibrary)
+    open(loaded, null);
+    if (c.errors.length) {
+      setTab('check');
+      say(`Opened ${loaded.meta.name} from a file. It has ${plural(c.errors.length, 'error')}, listed under Check: Show takes you to each. Fix them before saving it to the library or playing.`, 'warn');
+    } else say(`Opened ${loaded.meta.name} from a file.`, 'good');
   };
 
   // ── new map form
@@ -843,7 +993,7 @@ export function renderEditor(app: App, initial: MapPackage | null): HTMLElement 
     const rivers = range('Rivers', 0, 1, 0.05, 0.5, (v) => `${Math.round(v * 100)}%`, 'gen-rivers');
     const lakes = range('Lakes', 0, 1, 0.05, 0.4, (v) => `${Math.round(v * 100)}%`, 'gen-lakes');
     const frontier = range('Unclaimed frontier', 0, 0.5, 0.02, 0.12, (v) => `${Math.round(v * 100)}% of the land`, 'gen-frontier');
-    const year = range('Start year', 1870, 1930, 5, 1890, (v) => String(v), 'gen-year');
+    const year = range('Start year', 1870, LATEST_START, 1, 1890, (v) => String(v), 'gen-year');
     let shape: MapShape = 'continent';
     let climate: Climate = 'temperate';
     const shapeSel = selectInput(MAP_SHAPES.map((s) => [s, SHAPE_LABELS[s]] as [MapShape, string]), shape, (v) => (shape = v));
@@ -920,7 +1070,8 @@ export function renderEditor(app: App, initial: MapPackage | null): HTMLElement 
     libraryId = fromLibrary;
     undoStack = [];
     redoStack = [];
-    unsaved = false;
+    // a map that is not the library's own (a new copy, a file) is not saved until it is stored there
+    unsaved = !fromLibrary;
     view.selected = null;
     view.pending = null;
     selectedZone = null;
@@ -973,6 +1124,18 @@ export function renderEditor(app: App, initial: MapPackage | null): HTMLElement 
     },
     get check() {
       return check;
+    },
+    /** the view: zoom, the selected sea zone and the places outlined for findings */
+    get view() {
+      return { zoom: view.camera?.zoom ?? 0, selectedZone: view.selectedZone, flagged: [...view.flagged] };
+    },
+    /** page coordinates of a sea zone's label point */
+    zoneScreenOf(id: string) {
+      const a = view.geo?.zoneAnchors.get(id);
+      if (!a) return null;
+      const s = view.camera.toScreen(a.x, a.y);
+      const r = canvas.getBoundingClientRect();
+      return { x: r.left + s.x, y: r.top + s.y };
     },
     /** page coordinates of a province's label point */
     screenOf(id: string) {

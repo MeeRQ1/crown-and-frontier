@@ -7,7 +7,7 @@ import { BUILTIN_MAPS, builtinPackage } from '../src/maps/builtin';
 import * as E from '../src/maps/edit';
 import { mapChecksum, type MapPackage } from '../src/maps/format';
 import { buildProceduralMap, DEFAULT_PARAMS } from '../src/maps/gen/procedural';
-import { parseMapPackage, validateMapPackage } from '../src/maps/validate';
+import { parseMapPackage, parseMapPackageForEditing, validateMapPackage } from '../src/maps/validate';
 import { createGame } from '../src/sim/game';
 import { checkInvariants } from '../src/sim/invariants';
 import { step } from '../src/sim/tick';
@@ -233,6 +233,62 @@ describe('map editor operations', () => {
     const { pkg: back, check } = parseMapPackage(JSON.stringify(pkg));
     expect(check.errors).toEqual([]);
     expect(mapChecksum(back!)).toBe(mapChecksum(pkg));
+  });
+});
+
+describe('the editor workflow around files and starting conditions', () => {
+  it('a map exported unfinished (with errors) is refused by the library but opens in the editor, and plays once fixed', async () => {
+    const pkg = await reachCopy();
+    const lost = pkg.nations[0];
+    // leave a realm with no land: the validator refuses the map
+    E.paintOwner(pkg, pkg.provinces.filter((p) => p.owner === lost.id).map((p) => p.id), pkg.nations[1].id);
+    const text = JSON.stringify(pkg);
+    const library = parseMapPackage(text);
+    expect(library.pkg).toBeNull();
+    expect(library.check.errors.length).toBeGreaterThan(0);
+    const editing = parseMapPackageForEditing(text);
+    expect(editing.pkg, 'the editor can open it').not.toBeNull();
+    expect(editing.check.errors.map((e) => e.message).join(' ')).toMatch(new RegExp(lost.name));
+    // the finding names the realm, so the editor can show where it is
+    expect(editing.check.errors.some((e) => e.ref === lost.id)).toBe(true);
+    // fixed by removing the realm: valid, imports and plays
+    expect(E.removeRealm(editing.pkg!, lost.id).ok).toBe(true);
+    ok(editing.pkg!);
+    expect(parseMapPackage(JSON.stringify(editing.pkg)).pkg).not.toBeNull();
+    playYear(editing.pkg!);
+  });
+
+  it('a file that is not a map is refused by the editor too, with the reason', () => {
+    expect(parseMapPackageForEditing('{"format":"crown-frontier-map","version":3,"id":"x","provinces":[').pkg).toBeNull();
+    expect(parseMapPackageForEditing('{"hello":1}').check.errors[0].message).toMatch(/not a Crown & Frontier map/);
+  });
+
+  it('treaties at the start are added and removed, refused when they make no sense, and kept by the validator', async () => {
+    const pkg = await reachCopy();
+    const [a, b, c] = pkg.nations.map((n) => n.id);
+    expect(E.addTreaty(pkg, 'alliance', a, b).ok).toBe(true);
+    expect(E.addTreaty(pkg, 'nap', b, c).ok).toBe(true);
+    expect(E.addTreaty(pkg, 'alliance', b, a).message).toMatch(/already have an alliance/);
+    expect(E.addTreaty(pkg, 'trade', a, a).ok).toBe(false);
+    expect(E.addTreaty(pkg, 'trade', a, 'nowhere').ok).toBe(false);
+    ok(pkg);
+    const back = parseMapPackage(JSON.stringify(pkg)).pkg!;
+    expect(back.treaties).toEqual([{ type: 'alliance', a, b }, { type: 'nap', a: b, b: c }]);
+    registerMapScenario(back);
+    try {
+      const sim = createGame({ scenario: back.id, seed: 2, playerNation: null });
+      expect(Object.values(sim.state.treaties).some((t) => t.type === 'alliance' && [t.a, t.b].sort().join() === [a, b].sort().join())).toBe(true);
+    } finally {
+      unregisterScenario(back.id);
+    }
+    expect(E.removeTreaty(pkg, 'alliance', b, a).ok).toBe(true);
+    expect(E.removeTreaty(pkg, 'nap', b, c).ok).toBe(true);
+    expect(pkg.treaties).toBeUndefined();
+    // a realm removed takes its treaties with it
+    E.addTreaty(pkg, 'trade', a, c);
+    E.removeRealm(pkg, c);
+    expect(pkg.treaties).toEqual([]);
+    ok(pkg);
   });
 });
 

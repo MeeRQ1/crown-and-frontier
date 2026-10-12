@@ -5,7 +5,7 @@
 import { BUILTIN_MAPS, builtinPackage, builtinScenario, type BuiltinMapId } from '../maps/builtin';
 import type { MapPackage, MapScenarioPart } from '../maps/format';
 import { plural } from './format';
-import type { MapCheck, MapIssue } from '../maps/validate';
+import { parseMapPackageForEditing, type MapCheck, type MapIssue } from '../maps/validate';
 import type { App } from './app';
 import { button, h, setChildren, type Child } from './dom';
 import { icon } from './icons';
@@ -28,13 +28,22 @@ export function issueList(issues: MapIssue[], max = 10): HTMLElement {
   );
 }
 
-/** Explains a refused map file. */
-export function refusedDialog(app: App, title: string, check: MapCheck): void {
-  dialog(app, title, [
-    h('p', null, 'The file was checked and nothing was changed. Problems found:'),
-    issueList(check.errors),
-    h('p', { class: 'small muted' }, 'Map files are read as data only; nothing in them is ever run.'),
-  ]);
+/** Explains a refused map file; `fix` offers to open a map that is sound in structure in the editor. */
+export function refusedDialog(app: App, title: string, check: MapCheck, fix?: () => void): void {
+  let close = () => {};
+  close = dialog(
+    app,
+    title,
+    [
+      h('p', null, 'The file was checked and nothing was changed. Problems found:'),
+      issueList(check.errors),
+      fix ? h('p', null, 'The map itself is readable: open it in the editor to fix these, then save it to your library.') : null,
+      h('p', { class: 'small muted' }, 'Map files are read as data only; nothing in them is ever run.'),
+    ],
+    fix
+      ? [button('Close', () => close()), button('Open in the editor', () => (close(), fix()), { cls: 'primary', icon: 'build', fk: 'refused-edit' })]
+      : undefined,
+  );
 }
 
 function stats(part: MapScenarioPart): string {
@@ -86,14 +95,14 @@ export function renderMapLibrary(app: App): HTMLElement {
   const say = (text: string, kind: 'good' | 'warn' | 'info' = 'info') => setChildren(status, h('div', { class: `callout ${kind}` }, icon(kind === 'good' ? 'check' : kind === 'warn' ? 'alert' : 'info'), h('span', null, text)));
 
   const play = (id: string) => app.showScreen(renderNewGame(app, id));
-  const edit = (pkg: MapPackage, asCopy: boolean) =>
+  const edit = (pkg: MapPackage, asCopy: boolean, fromFile = false) =>
     void import('./editor/editor').then(({ renderEditor }) => {
       let draft = pkg;
       if (asCopy) {
         const id = app.maps.freeId(`${pkg.id}-copy`);
         draft = { ...structuredClone(pkg), id, revision: 1, meta: { ...pkg.meta, name: `${pkg.meta.name} (copy)`, origin: 'custom' } };
       }
-      app.showScreen(renderEditor(app, draft));
+      app.showScreen(renderEditor(app, draft, fromFile ? null : undefined));
     });
   const exportMap = (pkg: MapPackage) => downloadText(`${pkg.id}.map.json`, JSON.stringify(pkg));
 
@@ -147,7 +156,11 @@ export function renderMapLibrary(app: App): HTMLElement {
       if (text === '__too_big__') return refusedDialog(app, 'This map cannot be imported', { ok: false, errors: [{ code: 'limit', message: 'The file is larger than 20 MB; maps may be at most 8 MB.' }], warnings: [] });
       try {
         const r = await app.maps.importText(text);
-        if (!r.map) return refusedDialog(app, 'This map cannot be imported', r.check);
+        if (!r.map) {
+          // an unfinished map (exported with errors from the editor) can still be opened there
+          const unfinished = parseMapPackageForEditing(text).pkg;
+          return refusedDialog(app, 'This map cannot be imported', r.check, unfinished ? () => edit(unfinished, false, true) : undefined);
+        }
         draw();
         const parts = [`${r.map.pkg.meta.name} was added to your maps.`];
         if (r.renamed) parts.push(`Its id "${r.renamed.from}" was already taken, so it is stored as "${r.renamed.to}".`);

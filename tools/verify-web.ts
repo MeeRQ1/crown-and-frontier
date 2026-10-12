@@ -447,6 +447,47 @@ async function mapEditorFlow(browser: Browser, base: string): Promise<void> {
   }
   record('Map editor: a realm left without land is reported with a way to find it, and undo repairs it', finding, detail);
 
+  // ── navigation without a wheel: zoom buttons and keys, fit; a sea zone selected is outlined
+  {
+    await page.locator('[data-tool=select]').click();
+    const z0 = await ed<number>('e.view.zoom');
+    await page.locator('[data-fk=ed-zoom-in]').click();
+    const z1 = await ed<number>('e.view.zoom');
+    await page.keyboard.press('+');
+    const z2 = await ed<number>('e.view.zoom');
+    await page.keyboard.press('ArrowLeft');
+    await page.keyboard.press('0');
+    await page.waitForTimeout(700);
+    const z3 = await ed<number>('e.view.zoom');
+    const zone = await ed<string | null>('e.pkg.seaZones[0]?.id ?? null');
+    const at = zone ? await ed<{ x: number; y: number } | null>(`e.zoneScreenOf('${zone}')`) : null;
+    let shown = 'no sea zone';
+    if (at) {
+      await page.mouse.click(at.x, at.y);
+      await page.waitForTimeout(200);
+      shown = `${await ed<string | null>('e.view.selectedZone')} selected, inspector ${await page.locator(`[data-zone="${zone}"]`).count()}`;
+    }
+    record(
+      'Map editor: zoom buttons and keys, fit, and a selected sea zone outlined on the map',
+      z1 > z0 && z2 > z1 && Math.abs(z3 - z0) < z0 * 0.05 && shown === `${zone} selected, inspector 1`,
+      `zoom ${z0.toFixed(4)} → button ${z1.toFixed(4)} → + ${z2.toFixed(4)} → 0 (fit) ${z3.toFixed(4)}; ${shown}`,
+    );
+  }
+
+  // ── starting treaties: added in the Realms tab, kept by the validator
+  {
+    await page.locator('[data-tab=realms]').click();
+    const [ta, tb] = await ed<string[]>('e.pkg.nations.slice(0, 2).map((n) => n.id)');
+    await page.locator('[data-f=treaty-type]').selectOption('nap');
+    await page.locator('[data-f=treaty-a]').selectOption(ta);
+    await page.locator('[data-f=treaty-b]').selectOption(tb);
+    await page.locator('[data-fk=ed-add-treaty]').click();
+    await page.waitForTimeout(300);
+    const treaties = await ed<Array<{ type: string; a: string; b: string }>>('e.pkg.treaties ?? []');
+    const listed = await page.locator(`.ed-row[data-treaty="nap:${ta}:${tb}"]`).count();
+    record('Map editor: a treaty in force at the start is added and listed', treaties.some((t) => t.type === 'nap' && t.a === ta && t.b === tb) && listed === 1 && (await ed<number>('e.check.errors.length')) === 0, JSON.stringify(treaties));
+  }
+
   // ── save and export
   await page.locator('[data-fk=ed-save]').click();
   await page.waitForTimeout(400);
@@ -459,6 +500,56 @@ async function mapEditorFlow(browser: Browser, base: string): Promise<void> {
   const live = JSON.parse(await ed<string>('JSON.stringify(e.pkg)')) as MapPackage;
   const same = !!exported.pkg && mapChecksum(exported.pkg) === mapChecksum(live);
   record('Map editor: saves to the library and exports a file that passes the validator', saved && exported.check.ok && same, `library ${saved ? 'has' : 'lacks'} ${made.id}; file ${exported.check.ok ? 'valid' : exported.check.errors[0]?.message}; checksum ${same ? 'matches' : 'differs'}`);
+
+  // ── an unfinished map: exported with an error, opened again from the file, the error
+  // outlined on the map, fixed, then saved over the library's copy only when asked
+  {
+    // the realm with the least land: every province of it given away with the Realms tool
+    const victim = await ed<string>('[...e.pkg.nations].sort((a, b) => e.pkg.provinces.filter((p) => p.owner === a.id).length - e.pkg.provinces.filter((p) => p.owner === b.id).length)[0].id');
+    await page.locator('[data-tool=owner]').click();
+    await page.locator(`.ed-choice[data-choice="${await ed<string>(`e.pkg.nations.find((n) => n.id !== '${victim}').id`)}"]`).click();
+    // every province of the realm whose label point is on the open canvas
+    const lands = (await page.evaluate(`(() => {
+      const e = window.cnfEditor;
+      return e.pkg.provinces.filter((p) => p.owner === '${victim}').map((p) => e.screenOf(p.id)).filter((s) => s && document.elementFromPoint(s.x, s.y)?.classList.contains('ed-canvas'));
+    })()`)) as Array<{ x: number; y: number }>;
+    const all = await ed<number>(`e.pkg.provinces.filter((p) => p.owner === '${victim}').length`);
+    for (const l of lands) await page.mouse.click(l.x, l.y);
+    await page.waitForTimeout(400);
+    const left = await ed<number>(`e.pkg.provinces.filter((p) => p.owner === '${victim}').length`);
+    const warned = (await page.locator('.ed-hint').innerText()).includes('no land left');
+    let detail2 = `${victim} kept ${left} of ${all} provinces in view`;
+    let ok2 = false;
+    if (left === 0) {
+      const [dl] = await Promise.all([
+        page.waitForEvent('download'),
+        page.locator('[data-fk=ed-export]').click().then(() => page.locator('.modal-layer:not(.hidden) button', { hasText: 'Export anyway' }).click()),
+      ]);
+      const unfinished = join('reports', 'tmp', 'unfinished.map.json');
+      await dl.saveAs(unfinished);
+      const refusedByLibrary = !parseMapPackage(readFileSync(unfinished, 'utf8')).pkg;
+      const [chooser] = await Promise.all([page.waitForEvent('filechooser'), page.locator('[data-fk=ed-open]').click()]);
+      await chooser.setFiles(unfinished);
+      await page.waitForTimeout(800);
+      const errs = await ed<number>('e.check.errors.length');
+      const flagged = await ed<string[]>('e.view.flagged');
+      const onCheck = (await page.locator('.tab.active[data-tab=check]').count()) === 1;
+      await page.locator('[data-tab=realms]').click();
+      await page.locator(`.ed-row[data-realm="${victim}"] button[title^="Remove"]`).click();
+      await page.locator('.modal-layer:not(.hidden) button', { hasText: 'Remove' }).click();
+      await page.waitForTimeout(400);
+      const fixed = await ed<number>('e.check.errors.length');
+      await page.locator('[data-fk=ed-save]').click();
+      await page.waitForSelector('[data-fk=ed-save-replace]', { timeout: 5000 }).catch(() => undefined);
+      const asked = (await page.locator('[data-fk=ed-save-replace]').count()) === 1;
+      if (asked) await page.locator('[data-fk=ed-save-replace]').click();
+      await page.waitForTimeout(500);
+      const stored = await page.evaluate(([id, v]) => !!(window as any).cnf.maps.get(id) && !(window as any).cnf.maps.get(id).pkg.nations.some((n: { id: string }) => n.id === v), [made.id, victim]);
+      ok2 = warned && refusedByLibrary && errs > 0 && flagged.length > 0 && onCheck && fixed === 0 && asked && stored;
+      detail2 = `warned ${warned}; library refuses the file ${refusedByLibrary}; reopened with ${errs} error(s), ${flagged.length} outlined, Check tab ${onCheck}; fixed → ${fixed} errors; asked before replacing ${asked}; stored ${stored}`;
+    }
+    record('Map editor: an unfinished map exported with errors opens again from its file, shows where the errors are, and is saved once fixed', ok2, detail2);
+  }
 
   // ── library: delete, import again, refuse broken files, play
   await page.locator('[data-fk=ed-back]').click();
@@ -490,6 +581,20 @@ async function mapEditorFlow(browser: Browser, base: string): Promise<void> {
     gone && back && /cannot be imported/.test(refusal) && /not readable JSON/.test(refusal) && inert.imgs === 0 && !inert.pwned && inert.title.startsWith('<img'),
     `deleted ${gone}, re-imported ${back}; refusal "${refusal.replace(/\s+/g, ' ').slice(0, 90)}…"; markup shown as text: ${inert.title.slice(0, 30)}`,
   );
+  // an unfinished map (exported with errors) is refused by the library, which offers the editor to fix it
+  await importFile(join('reports', 'tmp', 'unfinished.map.json'));
+  const offer = await page.locator('[data-fk=refused-edit]').count();
+  let reopened = 0;
+  if (offer) {
+    await page.locator('[data-fk=refused-edit]').click();
+    await page.waitForSelector('.ed-canvas');
+    await page.waitForTimeout(600);
+    reopened = await ed<number>('e.check.errors.length');
+    await page.locator('[data-fk=ed-back]').click();
+    await page.locator('.modal-layer:not(.hidden) button', { hasText: 'Leave' }).click();
+    await page.waitForSelector(`.lib-card[data-map="${made.id}"]`);
+  }
+  record('Map library: an unfinished map is refused, with the editor offered to fix it', offer === 1 && reopened > 0, `offer ${offer}; opened in the editor with ${reopened} error(s)`);
   await page.locator(`[data-fk="play-${made.id}"]`).click();
   await page.waitForSelector(`.map-card.selected[data-map="${made.id}"]`);
   await page.locator('button:visible', { hasText: 'Begin campaign' }).first().click();

@@ -484,18 +484,20 @@ export function validateMapPackage(pkg: MapPackage): MapCheck {
   // routes
   const routes = new Set<string>();
   for (const p of pkg.provinces) for (const nb of p.neighbors) routes.add(key(p.id, nb));
+  /** a province's name for a finding (its id if it has none) */
+  const pname = (id: string) => provById.get(id)?.name || id;
   const straitSet = new Set<string>();
   for (const [a, b] of pkg.straits) {
     if (!provById.has(a) || !provById.has(b)) {
       err('reference', `A strait joins unknown provinces "${a}" and "${b}".`);
       continue;
     }
-    if (!routes.has(key(a, b))) err('adjacency', `The strait ${a}–${b} must also be listed as a neighbour on both sides.`, a);
+    if (!routes.has(key(a, b))) err('adjacency', `The strait ${pname(a)}–${pname(b)} must also be listed as a neighbour on both sides.`, a);
     straitSet.add(key(a, b));
   }
   for (const [a, b] of pkg.rivers) {
-    if (!routes.has(key(a, b))) err('adjacency', `The river border ${a}–${b} is not a border between neighbours.`, a);
-    else if (straitSet.has(key(a, b))) err('adjacency', `${a}–${b} cannot be both a river and a strait.`, a);
+    if (!routes.has(key(a, b))) err('adjacency', `The river border ${pname(a)}–${pname(b)} is not a border between neighbours.`, a);
+    else if (straitSet.has(key(a, b))) err('adjacency', `${pname(a)}–${pname(b)} cannot be both a river and a strait.`, a);
   }
 
   // geometry: every province drawn, outlines closable, borders consistent with routes
@@ -510,7 +512,7 @@ export function validateMapPackage(pkg: MapPackage): MapCheck {
     }
     if (e.a === e.b) err('geometry', `A border has the same province "${e.a}" on both sides.`, e.a);
     if (e.pts.length < 4) err('geometry', `The border ${e.a}–${e.b} needs at least two points.`, e.a);
-    else if (degenerate(e.pts)) warn('geometry', `The border ${e.a}–${e.b} has zero length and is ignored.`, e.a);
+    else if (degenerate(e.pts)) warn('geometry', `The border ${pname(e.a)}–${pname(e.b)} has zero length and is ignored.`, e.a);
     for (const s of [e.a, e.b]) if (provById.has(s)) (edgesOf.get(s) ?? edgesOf.set(s, []).get(s)!).push(e);
     if (provById.has(e.a) && provById.has(e.b)) {
       const k = key(e.a, e.b);
@@ -522,7 +524,7 @@ export function validateMapPackage(pkg: MapPackage): MapCheck {
     if (routes.has(k)) continue;
     const [a, b] = k.split('|');
     if (len >= minBorder) err('route', `${provById.get(a)?.name ?? a} and ${provById.get(b)?.name ?? b} share a visible border (${Math.round(len)} units) but are not neighbours: a visible border must be a route.`, a);
-    else warn('route', `${a} and ${b} touch along a sliver of border (${len.toFixed(1)} units) that is drawn but is not a route.`, a);
+    else warn('route', `${pname(a)} and ${pname(b)} touch along a sliver of border (${len.toFixed(1)} units) that is drawn but is not a route.`, a);
   }
   for (const k of routes) {
     if (borderLen.has(k) || straitSet.has(k)) continue;
@@ -657,6 +659,32 @@ export function checkMapObject(raw: unknown): { pkg: MapPackage | null; check: M
     check = validateMapPackage(pkg);
   }
   return { pkg: check.ok ? pkg : null, check };
+}
+
+/**
+ * Reads a map file for editing: a package that is sound in structure is returned
+ * even when the validator finds errors in it (a map exported unfinished from the
+ * editor), so the editor can open it and point at what to fix. `pkg` is null only
+ * when the file cannot be read as a map at all.
+ */
+export function parseMapPackageForEditing(text: string): { pkg: MapPackage | null; check: MapCheck } {
+  if (text.length > MAP_LIMITS.bytes) return parseMapPackage(text);
+  let raw: unknown;
+  try {
+    raw = JSON.parse(text);
+  } catch {
+    return parseMapPackage(text);
+  }
+  const { pkg, errors, fromVersion } = normalizeMapPackage(raw);
+  if (errors.length) return { pkg: null, check: { ok: false, errors, warnings: [] } };
+  if (fromVersion < 3) {
+    try {
+      addSeaZones(pkg);
+    } catch {
+      // a coastline too damaged for sea zones: the validator says what is wrong
+    }
+  }
+  return { pkg, check: validateMapPackage(pkg) };
 }
 
 /** Generates sea zones, starting ports and their drawing for a package without them. */

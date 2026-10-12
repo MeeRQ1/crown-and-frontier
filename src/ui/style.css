@@ -1057,6 +1057,9 @@ details.more[open] > summary::before { content: '− '; }
 .ed-overlay > * { pointer-events: auto; }
 .ed-hint { position: absolute; left: var(--s3); right: var(--s3); bottom: var(--s3); display: flex; flex-direction: column; gap: 6px; pointer-events: none; }
 .ed-hint .callout { pointer-events: auto; max-width: 560px; --bg-raised: var(--cf-ivory-raised); --text: var(--cf-ink); --text-2: var(--cf-muted-on-ivory); --line: var(--cf-line-on-ivory); --bad: var(--cf-danger-on-ivory); --warn: var(--cf-warning-on-ivory); --good: var(--cf-positive-on-ivory); --info: var(--cf-route); color: var(--text); }
+.ed-nav { position: absolute; right: var(--s3); bottom: var(--s3); display: flex; flex-direction: column; align-items: stretch; gap: 4px; z-index: 1; }
+.ed-nav button { justify-content: center; background: var(--cf-ivory-raised); color: var(--cf-ink); border: 1px solid var(--cf-line-on-ivory); }
+.ed-nav button:hover { background: var(--cf-ivory); }
 .ed-help { align-self: flex-start; padding: 4px 10px; background: var(--cf-ivory-raised); border: 1px solid var(--cf-line-on-ivory); color: var(--cf-ink); font-size: var(--fs-sm); }
 .ed-panel { display: flex; flex-direction: column; min-height: 0; border-left: 1px solid var(--cf-slate-inset); background: var(--cf-ivory); --bg: var(--cf-ivory); --bg-raised: var(--cf-ivory-raised); --bg-inset: var(--cf-ivory-inset); --text: var(--cf-ink); --text-2: var(--cf-muted-on-ivory); --text-3: var(--cf-muted-on-ivory); --line: var(--cf-line-on-ivory); --line-soft: rgba(37, 51, 50, 0.13); --good: var(--cf-positive-on-ivory); --bad: var(--cf-danger-on-ivory); --warn: var(--cf-warning-on-ivory); --info: var(--cf-route); --hover: rgba(37, 51, 50, 0.06); --selected: rgba(194, 171, 114, 0.32); --focus: var(--cf-ink); color: var(--text); }
 .ed-panel .tabs { padding: 0 var(--s4); flex: none; background: var(--cf-ivory-inset); }
