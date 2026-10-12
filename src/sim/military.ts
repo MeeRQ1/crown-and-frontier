@@ -338,9 +338,17 @@ export function nationPotential(sim: Sim, nid: NationId): number {
 
 /** Weekly after control changes: supply level, attrition, morale recovery, reinforcement. */
 export function weeklyArmyCare(sim: Sim): void {
+  const steps = weeklyArmyCareSteps(sim);
+  while (!steps.next().done);
+}
+
+/** Army care sixteen armies at a time (yielding between, for weekSlices); the result is exactly weeklyArmyCare's. */
+export function* weeklyArmyCareSteps(sim: Sim): Generator<void, void, void> {
   const st = sim.state;
   const ids = Object.keys(st.armies).sort();
+  let done = 0;
   for (const id of ids) {
+    if (++done % 16 === 0) yield;
     const a = st.armies[id];
     if (!a) continue;
     if (a.embarked) {

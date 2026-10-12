@@ -384,11 +384,22 @@ export function blocSolidarity(sim: Sim, lossOf: (nid: NationId) => number): Map
 // ───────────────────────────── Monthly upkeep ───────────────────────────────
 
 export function monthlyInfluence(sim: Sim): void {
+  const steps = monthlyInfluenceSteps(sim);
+  while (!steps.next().done);
+}
+
+/**
+ * The monthly influence a realm at a time: the gains are worked out from the state
+ * at the start (it yields after each realm's), then applied together, so the result
+ * is exactly monthlyInfluence's.
+ */
+export function* monthlyInfluenceSteps(sim: Sim): Generator<void, void, void> {
   const st = sim.state;
   const alive = aliveNations(sim);
   // influence: every pair with a source or a value
   const gains: Array<[NationId, NationId, number]> = [];
   for (const h of alive) {
+    yield;
     for (const t of alive) {
       if (h === t) continue;
       const has = (st.influence[h]?.[t] ?? 0) > 0;

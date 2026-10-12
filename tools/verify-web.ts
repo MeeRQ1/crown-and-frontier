@@ -382,7 +382,7 @@ async function mapEditorFlow(browser: Browser, base: string): Promise<void> {
     if (d) for (let i = 0; i < d.length; i += 4 * 211) seen.add((d[i] << 16) | (d[i + 1] << 8) | d[i + 2]);
     return { cards: cards.map((x) => x.getAttribute('data-map')), colours: seen.size };
   });
-  record('Map library lists every built-in map with a drawn preview', ['aldmere', 'reach', 'isles', 'steppe', 'midsea', 'hesperia', 'baltic', 'europe', 'earth'].every((id) => lib.cards.includes(id)) && lib.colours > 12, `${lib.cards.join(', ')}; preview colours ${lib.colours}`);
+  record('Map library lists every built-in map with a drawn preview', ['aldmere', 'reach', 'isles', 'steppe', 'midsea', 'hesperia', 'baltic', 'europe', 'earth', 'europe-1936', 'earth-1936'].every((id) => lib.cards.includes(id)) && lib.colours > 12, `${lib.cards.join(', ')}; preview colours ${lib.colours}`);
 
   // ── create
   await page.locator('[data-fk="new-map"]').click();
@@ -447,6 +447,47 @@ async function mapEditorFlow(browser: Browser, base: string): Promise<void> {
   }
   record('Map editor: a realm left without land is reported with a way to find it, and undo repairs it', finding, detail);
 
+  // ── navigation without a wheel: zoom buttons and keys, fit; a sea zone selected is outlined
+  {
+    await page.locator('[data-tool=select]').click();
+    const z0 = await ed<number>('e.view.zoom');
+    await page.locator('[data-fk=ed-zoom-in]').click();
+    const z1 = await ed<number>('e.view.zoom');
+    await page.keyboard.press('+');
+    const z2 = await ed<number>('e.view.zoom');
+    await page.keyboard.press('ArrowLeft');
+    await page.keyboard.press('0');
+    await page.waitForTimeout(700);
+    const z3 = await ed<number>('e.view.zoom');
+    const zone = await ed<string | null>('e.pkg.seaZones[0]?.id ?? null');
+    const at = zone ? await ed<{ x: number; y: number } | null>(`e.zoneScreenOf('${zone}')`) : null;
+    let shown = 'no sea zone';
+    if (at) {
+      await page.mouse.click(at.x, at.y);
+      await page.waitForTimeout(200);
+      shown = `${await ed<string | null>('e.view.selectedZone')} selected, inspector ${await page.locator(`[data-zone="${zone}"]`).count()}`;
+    }
+    record(
+      'Map editor: zoom buttons and keys, fit, and a selected sea zone outlined on the map',
+      z1 > z0 && z2 > z1 && Math.abs(z3 - z0) < z0 * 0.05 && shown === `${zone} selected, inspector 1`,
+      `zoom ${z0.toFixed(4)} → button ${z1.toFixed(4)} → + ${z2.toFixed(4)} → 0 (fit) ${z3.toFixed(4)}; ${shown}`,
+    );
+  }
+
+  // ── starting treaties: added in the Realms tab, kept by the validator
+  {
+    await page.locator('[data-tab=realms]').click();
+    const [ta, tb] = await ed<string[]>('e.pkg.nations.slice(0, 2).map((n) => n.id)');
+    await page.locator('[data-f=treaty-type]').selectOption('nap');
+    await page.locator('[data-f=treaty-a]').selectOption(ta);
+    await page.locator('[data-f=treaty-b]').selectOption(tb);
+    await page.locator('[data-fk=ed-add-treaty]').click();
+    await page.waitForTimeout(300);
+    const treaties = await ed<Array<{ type: string; a: string; b: string }>>('e.pkg.treaties ?? []');
+    const listed = await page.locator(`.ed-row[data-treaty="nap:${ta}:${tb}"]`).count();
+    record('Map editor: a treaty in force at the start is added and listed', treaties.some((t) => t.type === 'nap' && t.a === ta && t.b === tb) && listed === 1 && (await ed<number>('e.check.errors.length')) === 0, JSON.stringify(treaties));
+  }
+
   // ── save and export
   await page.locator('[data-fk=ed-save]').click();
   await page.waitForTimeout(400);
@@ -459,6 +500,56 @@ async function mapEditorFlow(browser: Browser, base: string): Promise<void> {
   const live = JSON.parse(await ed<string>('JSON.stringify(e.pkg)')) as MapPackage;
   const same = !!exported.pkg && mapChecksum(exported.pkg) === mapChecksum(live);
   record('Map editor: saves to the library and exports a file that passes the validator', saved && exported.check.ok && same, `library ${saved ? 'has' : 'lacks'} ${made.id}; file ${exported.check.ok ? 'valid' : exported.check.errors[0]?.message}; checksum ${same ? 'matches' : 'differs'}`);
+
+  // ── an unfinished map: exported with an error, opened again from the file, the error
+  // outlined on the map, fixed, then saved over the library's copy only when asked
+  {
+    // the realm with the least land: every province of it given away with the Realms tool
+    const victim = await ed<string>('[...e.pkg.nations].sort((a, b) => e.pkg.provinces.filter((p) => p.owner === a.id).length - e.pkg.provinces.filter((p) => p.owner === b.id).length)[0].id');
+    await page.locator('[data-tool=owner]').click();
+    await page.locator(`.ed-choice[data-choice="${await ed<string>(`e.pkg.nations.find((n) => n.id !== '${victim}').id`)}"]`).click();
+    // every province of the realm whose label point is on the open canvas
+    const lands = (await page.evaluate(`(() => {
+      const e = window.cnfEditor;
+      return e.pkg.provinces.filter((p) => p.owner === '${victim}').map((p) => e.screenOf(p.id)).filter((s) => s && document.elementFromPoint(s.x, s.y)?.classList.contains('ed-canvas'));
+    })()`)) as Array<{ x: number; y: number }>;
+    const all = await ed<number>(`e.pkg.provinces.filter((p) => p.owner === '${victim}').length`);
+    for (const l of lands) await page.mouse.click(l.x, l.y);
+    await page.waitForTimeout(400);
+    const left = await ed<number>(`e.pkg.provinces.filter((p) => p.owner === '${victim}').length`);
+    const warned = (await page.locator('.ed-hint').innerText()).includes('no land left');
+    let detail2 = `${victim} kept ${left} of ${all} provinces in view`;
+    let ok2 = false;
+    if (left === 0) {
+      const [dl] = await Promise.all([
+        page.waitForEvent('download'),
+        page.locator('[data-fk=ed-export]').click().then(() => page.locator('.modal-layer:not(.hidden) button', { hasText: 'Export anyway' }).click()),
+      ]);
+      const unfinished = join('reports', 'tmp', 'unfinished.map.json');
+      await dl.saveAs(unfinished);
+      const refusedByLibrary = !parseMapPackage(readFileSync(unfinished, 'utf8')).pkg;
+      const [chooser] = await Promise.all([page.waitForEvent('filechooser'), page.locator('[data-fk=ed-open]').click()]);
+      await chooser.setFiles(unfinished);
+      await page.waitForTimeout(800);
+      const errs = await ed<number>('e.check.errors.length');
+      const flagged = await ed<string[]>('e.view.flagged');
+      const onCheck = (await page.locator('.tab.active[data-tab=check]').count()) === 1;
+      await page.locator('[data-tab=realms]').click();
+      await page.locator(`.ed-row[data-realm="${victim}"] button[title^="Remove"]`).click();
+      await page.locator('.modal-layer:not(.hidden) button', { hasText: 'Remove' }).click();
+      await page.waitForTimeout(400);
+      const fixed = await ed<number>('e.check.errors.length');
+      await page.locator('[data-fk=ed-save]').click();
+      await page.waitForSelector('[data-fk=ed-save-replace]', { timeout: 5000 }).catch(() => undefined);
+      const asked = (await page.locator('[data-fk=ed-save-replace]').count()) === 1;
+      if (asked) await page.locator('[data-fk=ed-save-replace]').click();
+      await page.waitForTimeout(500);
+      const stored = await page.evaluate(([id, v]) => !!(window as any).cnf.maps.get(id) && !(window as any).cnf.maps.get(id).pkg.nations.some((n: { id: string }) => n.id === v), [made.id, victim]);
+      ok2 = warned && refusedByLibrary && errs > 0 && flagged.length > 0 && onCheck && fixed === 0 && asked && stored;
+      detail2 = `warned ${warned}; library refuses the file ${refusedByLibrary}; reopened with ${errs} error(s), ${flagged.length} outlined, Check tab ${onCheck}; fixed → ${fixed} errors; asked before replacing ${asked}; stored ${stored}`;
+    }
+    record('Map editor: an unfinished map exported with errors opens again from its file, shows where the errors are, and is saved once fixed', ok2, detail2);
+  }
 
   // ── library: delete, import again, refuse broken files, play
   await page.locator('[data-fk=ed-back]').click();
@@ -490,6 +581,20 @@ async function mapEditorFlow(browser: Browser, base: string): Promise<void> {
     gone && back && /cannot be imported/.test(refusal) && /not readable JSON/.test(refusal) && inert.imgs === 0 && !inert.pwned && inert.title.startsWith('<img'),
     `deleted ${gone}, re-imported ${back}; refusal "${refusal.replace(/\s+/g, ' ').slice(0, 90)}…"; markup shown as text: ${inert.title.slice(0, 30)}`,
   );
+  // an unfinished map (exported with errors) is refused by the library, which offers the editor to fix it
+  await importFile(join('reports', 'tmp', 'unfinished.map.json'));
+  const offer = await page.locator('[data-fk=refused-edit]').count();
+  let reopened = 0;
+  if (offer) {
+    await page.locator('[data-fk=refused-edit]').click();
+    await page.waitForSelector('.ed-canvas');
+    await page.waitForTimeout(600);
+    reopened = await ed<number>('e.check.errors.length');
+    await page.locator('[data-fk=ed-back]').click();
+    await page.locator('.modal-layer:not(.hidden) button', { hasText: 'Leave' }).click();
+    await page.waitForSelector(`.lib-card[data-map="${made.id}"]`);
+  }
+  record('Map library: an unfinished map is refused, with the editor offered to fix it', offer === 1 && reopened > 0, `offer ${offer}; opened in the editor with ${reopened} error(s)`);
   await page.locator(`[data-fk="play-${made.id}"]`).click();
   await page.waitForSelector(`.map-card.selected[data-map="${made.id}"]`);
   await page.locator('button:visible', { hasText: 'Begin campaign' }).first().click();
@@ -899,6 +1004,248 @@ async function tutorialFlow(browser: Browser, base: string): Promise<void> {
   await page.close();
 }
 
+/**
+ * The map's ground cache must show exactly what drawing the ground directly shows:
+ * after panning (the cache shifts), zooming, a change of owner or occupation (the
+ * provinces repainted where they lie), every map mode, a diplomacy focus and another
+ * campaign. Offsets are whole pixels, so the two must match pixel for pixel. Then an
+ * idle map must stop drawing: on a large high-density screen, and with a battle off
+ * screen (its pulse animates only while it is visible).
+ */
+async function groundCacheFlow(browser: Browser, base: string): Promise<void> {
+  const page = await browser.newPage({ viewport: { width: 1366, height: 768 } });
+  // tsx names the helpers inside page.evaluate with a __name function the page lacks
+  await page.addInitScript('window.__name = (f) => f;');
+  const problems = await watch(page);
+  await page.goto(base);
+  await page.waitForFunction(() => !!(window as any).cnf);
+  const start = async (scenario: string, player: string) => {
+    await page.evaluate(([sc, pl]) => (window as any).cnf.newGame({ scenario: sc, seed: 5, playerNation: pl, difficulty: 'normal' }, false), [scenario, player]);
+    await page.waitForFunction((sc) => (window as any).cnf.sim?.state.scenarioId === sc && !!(window as any).cnf.renderer, scenario);
+    await page.evaluate(() => {
+      const app = (window as any).cnf;
+      app.setSpeed(0);
+      app.updateSettings({ reducedMotion: true });
+    });
+  };
+  /** Waits for the cache to finish, then compares it with direct drawing; returns the share of pixels that differ. */
+  const compare = async (label: string): Promise<void> => {
+    await page.mouse.move(5, 400); // over the rail: no hover highlight
+    const r = await page.evaluate(async () => {
+      const app = (window as any).cnf;
+      const R = app.renderer;
+      const cam = R.camera;
+      const frame = () => new Promise((res) => requestAnimationFrame(res));
+      cam.offX = Math.round(cam.offX);
+      cam.offY = Math.round(cam.offY);
+      app.mapChanged();
+      for (let i = 0; i < 600; i++) {
+        await frame();
+        if (R.ground && !R.ground.dirty.some((d: number) => d) && !R.pending && !cam.animating && R.ground.z === cam.zoom) break;
+      }
+      const settled = !!R.ground && !R.ground.dirty.some((d: number) => d) && !R.pending;
+      const snap = () => R.canvas.getContext('2d').getImageData(0, 0, R.canvas.width, R.canvas.height).data as Uint8ClampedArray;
+      const direct = async () => {
+        R.lod = false;
+        for (let i = 0; i < 600; i++) {
+          app.mapChanged();
+          await frame();
+          if (!R.pending) break;
+        }
+        app.mapChanged();
+        await frame();
+        await frame();
+        const d = snap();
+        R.lod = true;
+        app.mapChanged();
+        await frame();
+        await frame();
+        return d;
+      };
+      // once each way first, so art that loads on first use (counter frames, landmarks) is in both
+      await direct();
+      await document.fonts.ready;
+      app.mapChanged();
+      await frame();
+      await frame();
+      const a = snap();
+      const b = await direct();
+      let diff = 0;
+      let worst = 0;
+      for (let i = 0; i < a.length; i += 4) {
+        const d = Math.max(Math.abs(a[i] - b[i]), Math.abs(a[i + 1] - b[i + 1]), Math.abs(a[i + 2] - b[i + 2]));
+        if (d > 2) diff++;
+        if (d > worst) worst = d;
+      }
+      return { settled, share: diff / (a.length / 4), worst, tier: R.tier(), px: Math.round(cam.provincePx) };
+    });
+    // A stale or misplaced province differs over its whole area (over 1,000 pixels even
+    // at the far zoom); what may differ otherwise is antialiasing at the edge of a
+    // painted cell and the phase of a dashed line clipped there.
+    record(`Map ground cache matches direct drawing: ${label}`, r.settled && r.share < 0.0005, `${(r.share * 100).toFixed(3)}% of pixels differ (largest channel difference ${r.worst}); ${r.tier} tier, ${r.px} px provinces${r.settled ? '' : '; the cache did not finish'}`);
+  };
+  const zoomTo = (px: number) =>
+    page.evaluate((p) => {
+      const app = (window as any).cnf;
+      const cam = app.renderer.camera;
+      const c = app.renderer.provinceCenter(app.sim.state.nations[app.player].capital);
+      cam.centerOn(c.x, c.y, cam.zoomForProvincePx(p), false);
+      app.mapChanged();
+    }, px);
+
+  await start('europe', 'ita');
+  await zoomTo(96);
+  await compare('Europe at the start');
+  // a drag far enough that the cache shifts and paints the uncovered strips
+  await page.mouse.move(700, 420);
+  await page.mouse.down();
+  for (let i = 1; i <= 30; i++) await page.mouse.move(700 - i * 14, 420 - i * 9);
+  await page.mouse.up();
+  await compare('after a long drag');
+  await page.mouse.move(700, 400);
+  await page.mouse.wheel(0, -240);
+  await page.waitForTimeout(400);
+  await compare('after a wheel zoom');
+  await zoomTo(170);
+  await compare('close view (railways)');
+  await zoomTo(40);
+  await compare('far view');
+  // owners change and a province is occupied: repainted where they lie
+  const changed = await page.evaluate(() => {
+    const app = (window as any).cnf;
+    const sim = app.sim;
+    const st = sim.state;
+    const me = app.player;
+    const mine = sim.world.provIds.filter((p: string) => st.provinces[p].owner === me);
+    const border = mine.filter((p: string) => sim.world.prov[p].neighbors.some((n: string) => st.provinces[n].owner && st.provinces[n].owner !== me));
+    const out: string[] = [];
+    for (const p of border.slice(0, 3)) {
+      const other = sim.world.prov[p].neighbors.map((n: string) => st.provinces[n].owner).find((o: string | null) => o && o !== me);
+      st.provinces[p].owner = other;
+      st.provinces[p].controller = other;
+      out.push(`${p}→${other}`);
+    }
+    const occ = border[4];
+    if (occ) {
+      const enemy = sim.world.prov[occ].neighbors.map((n: string) => st.provinces[n].owner).find((o: string | null) => o && o !== me);
+      st.provinces[occ].controller = enemy;
+      out.push(`${occ} occupied by ${enemy}`);
+    }
+    st.rev++;
+    app.mapChanged();
+    return out.join(', ');
+  });
+  await compare(`after changes of owner (${changed})`);
+  await zoomTo(96);
+  for (const mode of ['terrain', 'economy', 'supply', 'military', 'sea', 'diplomacy']) {
+    await page.evaluate((m) => (window as any).cnf.setMode(m), mode);
+    await compare(`${mode} mode`);
+  }
+  await page.evaluate(() => {
+    const app = (window as any).cnf;
+    app.focusNation = 'fra';
+    app.mapChanged();
+  });
+  await compare('diplomacy mode, focused on France');
+  // fleets move: in the sea mode only the zones whose colour changed are repainted
+  const moved = await page.evaluate(() => {
+    const app = (window as any).cnf;
+    app.setMode('sea');
+    const sim = app.sim;
+    const fleets = Object.values(sim.state.fleets as Record<string, { id: string; zone: string }>);
+    const out: string[] = [];
+    for (const f of fleets.slice(0, 4)) {
+      const to = sim.world.zoneIds?.find?.((z: string) => z !== f.zone && !fleets.some((g) => g.zone === z)) ?? app.renderer.geo.zoneIds.find((z: string) => z !== f.zone && !fleets.some((g) => g.zone === z));
+      if (!to) continue;
+      out.push(`${f.id} ${f.zone}→${to}`);
+      f.zone = to;
+    }
+    sim.state.rev++;
+    app.mapChanged();
+    return out.join(', ');
+  });
+  await compare(`sea mode after fleets moved (${moved})`);
+  await page.evaluate(() => (window as any).cnf.setMode('political'));
+  await start('aldmere', 'aur');
+  await zoomTo(96);
+  await compare('another campaign (Aldmere)');
+  // a march ordered while a week is half done waits for the end of that week (instead of
+  // freezing the map to finish it at once), and is then given, not lost
+  const order = await page.evaluate(async () => {
+    const app = (window as any).cnf;
+    const sim = app.sim;
+    const me = app.player;
+    const army = Object.values(sim.state.armies as Record<string, { id: string; nation: string; location: string; path: string[] }>).find((a) => a.nation === me);
+    const dest = army && sim.world.prov[army.location].neighbors.find((n: string) => sim.state.provinces[n].owner === me);
+    if (!army || !dest) return { midWeek: false, calls: [] as number[], applied: false, detail: 'no army with a neighbouring province' };
+    const frame = () => new Promise((res) => requestAnimationFrame(res));
+    const calls: number[] = [];
+    const orderMove = app.orderMove;
+    app.orderMove = (...args: unknown[]) => (calls.push(sim.state.tick), orderMove.apply(app, args));
+    app.selectArmy(army.id);
+    app.setSpeed(4);
+    for (let i = 0; i < 600 && !app.week; i++) await frame();
+    const midWeek = !!app.week;
+    app.orderMove(dest, army.id);
+    const queued = app.atWeekEnd.length;
+    for (let i = 0; i < 600 && app.atWeekEnd.length; i++) await frame();
+    app.setSpeed(0);
+    app.orderMove = orderMove;
+    const a = sim.state.armies[army.id];
+    const applied = !!a && (a.path.includes(dest) || a.location === dest);
+    return { midWeek, calls, applied, detail: `queued ${queued}; ordered at week ${calls[0]}, given at week ${calls[1]}; ${a ? `${a.location} → ${a.path.join(' ')}` : 'army gone'}` };
+  });
+  record('A march ordered mid-week is given when that week ends', order.midWeek && order.calls.length === 2 && order.calls[1] === order.calls[0] + 1 && order.applied, order.detail);
+  record('Map ground cache checks: no page errors', problems.length === 0, problems.slice(0, 3).join('; '));
+  await page.close();
+
+  // an idle map stops drawing, on a large high-density screen and with a battle off screen
+  const hi = await browser.newPage({ viewport: { width: 1920, height: 1080 }, deviceScaleFactor: 2 });
+  await hi.addInitScript('window.__name = (f) => f;');
+  const hiProblems = await watch(hi);
+  await hi.goto(base);
+  await hi.waitForFunction(() => !!(window as any).cnf);
+  await hi.evaluate(() => (window as any).cnf.newGame({ scenario: 'aldmere', seed: 5, playerNation: 'aur', difficulty: 'normal' }, false));
+  await hi.waitForFunction(() => !!(window as any).cnf.renderer);
+  const idle = await hi.evaluate(async () => {
+    const app = (window as any).cnf;
+    app.setSpeed(0);
+    const R = app.renderer;
+    const cam = R.camera;
+    const c = R.provinceCenter(app.sim.state.nations.aur.capital);
+    cam.centerOn(c.x, c.y, cam.zoomForProvincePx(40), false);
+    app.mapChanged();
+    let draws = 0;
+    const d = app.drawMap.bind(app);
+    app.drawMap = (...a: unknown[]) => (draws++, d(...a));
+    const wait = (ms: number) => new Promise((res) => setTimeout(res, ms));
+    let settledAfter = -1;
+    for (let s = 0; s < 30; s++) {
+      draws = 0;
+      await wait(1000);
+      if (draws === 0) {
+        settledAfter = s;
+        break;
+      }
+    }
+    // a battle far off screen
+    const far = app.sim.world.provIds.map((p: string) => ({ p, c: R.provinceCenter(p) })).sort((a: any, b: any) => Math.hypot(b.c.x - c.x, b.c.y - c.y) - Math.hypot(a.c.x - c.x, a.c.y - c.y))[0].p;
+    app.sim.state.battles.__check = { id: '__check', province: far, attackerNations: ['aur'], defenderNations: ['mor'] };
+    app.mapChanged();
+    await wait(300);
+    draws = 0;
+    await wait(1500);
+    const offscreen = draws;
+    delete app.sim.state.battles.__check;
+    app.mapChanged();
+    return { settledAfter, offscreen, tiles: R.base.tiles.size };
+  });
+  record('Idle map stops drawing on a 1920×1080 screen at pixel ratio 2', idle.settledAfter >= 0, idle.settledAfter >= 0 ? `no frame drawn after ${idle.settledAfter + 1} s (${idle.tiles} base tiles cached)` : 'still drawing after 30 s');
+  record('A battle off screen does not keep the map drawing', idle.offscreen === 0, `${idle.offscreen} frames drawn in 1.5 s`);
+  record('High-density checks: no page errors', hiProblems.length === 0, hiProblems.slice(0, 3).join('; '));
+  await hi.close();
+}
+
 async function main(): Promise<void> {
   if (!existsSync(join(DIST, 'index.html'))) throw new Error('dist/ missing: run npm run build');
   const zipFiles = existsSync(ZIP) ? unzip(ZIP) : null;
@@ -924,6 +1271,10 @@ async function main(): Promise<void> {
       await tutorialFlow(browser, `${origin}/`);
       return;
     }
+    if (process.env.ONLY === 'ground') {
+      await groundCacheFlow(browser, `${origin}/`);
+      return;
+    }
     await flow(browser, `${origin}/`, 'Site root');
     await flow(browser, `${origin}${SUB}`, 'Project subpath');
     await mapChoice(browser, `${origin}/`);
@@ -931,6 +1282,7 @@ async function main(): Promise<void> {
     await mapEditorFlow(browser, `${origin}/`);
     await diplomacyFlow(browser, `${origin}/`);
     await tutorialFlow(browser, `${origin}/`);
+    await groundCacheFlow(browser, `${origin}/`);
     if (zipFiles) {
       record('Release ZIP has index.html at its root', zipFiles.has('index.html'), `${zipFiles.size} files`);
       await flow(browser, `${origin}/zip/`, 'Unpacked release ZIP');

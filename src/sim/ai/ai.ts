@@ -33,6 +33,8 @@ export function* aiSlices(sim: Sim, prof?: PhaseProfile): Generator<void, void, 
       planned = true;
     }
     if (st.nations[nid].alive && st.tick >= n.ai.nextOperational) {
+      // strategic and operational planning in one week: a slice each
+      if (planned) yield;
       n.ai.nextOperational = st.tick + d.opEvery;
       timed('ai.operational', () => operational(sim, nid));
       planned = true;

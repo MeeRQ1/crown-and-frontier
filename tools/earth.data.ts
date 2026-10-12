@@ -189,15 +189,15 @@ const inList = (name: string, list: string) => list.split('|').includes(name);
 const EU_REALM = new Map(EU_REGIONS.map((r) => [r.id, r.realm]));
 const EU_NAME = new Map(EU_REGIONS.map((r) => [r.id, r.name]));
 /** Countries the Europe map classifies (its frame covers them whole). */
-const EUROPE = new Set('GBR IMN GGY JEY IRL CYP CYN ESB WSB MLT GIB FRA MCO ESP AND PRT DEU DNK POL LTU LVA EST BLR UKR MDA ROU BGR SRB KOS MNE ALB MKD GRC TUR BIH HRV SVN AUT CZE SVK HUN ITA SMR VAT CHE LIE LUX BEL NLD NOR SWE FIN ALD GEO ARM AZE MAR TUN ISR PSX LBN SYR JOR IRQ EGY'.split(' '));
+export const EUROPE = new Set('GBR IMN GGY JEY IRL CYP CYN ESB WSB MLT GIB FRA MCO ESP AND PRT DEU DNK POL LTU LVA EST BLR UKR MDA ROU BGR SRB KOS MNE ALB MKD GRC TUR BIH HRV SVN AUT CZE SVK HUN ITA SMR VAT CHE LIE LUX BEL NLD NOR SWE FIN ALD GEO ARM AZE MAR TUN ISR PSX LBN SYR JOR IRQ EGY'.split(' '));
 /** Where the Europe map leaves a division off (beyond its frame), whose it was. */
-const OVERSEAS: Record<string, string> = { FRA: 'fra', ESP: 'spa', PRT: 'por' };
+export const OVERSEAS: Record<string, string> = { FRA: 'fra', ESP: 'spa', PRT: 'por' };
 
 /** German New Guinea: north of the line from 5° S on the Dutch border to 8° S on the east coast. */
-const germanNewGuinea = (lon: number, lat: number) => lat > -5 - ((lon - 141) * 3) / 6.9;
+export const germanNewGuinea = (lon: number, lat: number) => lat > -5 - ((lon - 141) * 3) / 6.9;
 
 /** Colonies, protectorates and states outside Europe: the realm that held them in mid-1914. */
-const HELD: Record<string, string> = {
+export const HELD: Record<string, string> = {
   // Africa
   SAH: 'spa', MRT: 'fra', SEN: 'fra', GMB: 'gbr', GNB: 'por', GIN: 'fra', SLE: 'gbr', LBR: 'lbr', CIV: 'fra', BFA: 'fra', MLI: 'fra', NER: 'fra', BEN: 'fra', TGO: 'ger', NGA: 'gbr', CMR: 'ger', TCD: 'fra', CAF: 'fra', GAB: 'fra', COG: 'fra', GNQ: 'spa', STP: 'por', COD: 'bel', AGO: 'por', NAM: 'ger', ZAF: 'saf', BWA: 'gbr', LSO: 'gbr', SWZ: 'gbr', ZWE: 'gbr', ZMB: 'gbr', MWI: 'gbr', MOZ: 'por', RWA: 'ger', BDI: 'ger', UGA: 'gbr', KEN: 'gbr', ETH: 'eth', ERI: 'ita', DJI: 'fra', SOM: 'ita', SOL: 'gbr', SDN: 'gbr', SDS: 'gbr', DZA: 'fra', LBY: 'ita', MDG: 'fra', COM: 'fra', MUS: 'gbr', SYC: 'gbr', CPV: 'por', SHN: 'gbr',
   // Asia
@@ -266,7 +266,7 @@ export function realmOf(d: Division, lon: number, lat: number): string | null | 
 // ───────────────────────────── lands and region names ──────────────────────
 
 /** Europe-map regions grouped into the lands a world map divides further. */
-const EU_LAND: Record<string, string> = {
+export const EU_LAND: Record<string, string> = {
   ulster: 'Ireland', leinster: 'Ireland', munster: 'Ireland', connacht: 'Ireland',
   egypt: 'Egypt', sinai: 'Egypt', westerndesert: 'Egypt', cyprus: 'Cyprus', malta: 'Malta',
   algiers: 'Algeria', oran: 'Algeria', constantine: 'Algeria', algsahara: 'Algeria', tunis: 'Tunisia', southtunisia: 'Tunisia',
@@ -278,7 +278,7 @@ const EU_LAND: Record<string, string> = {
   volhynia: 'Little Russia', podolia: 'Little Russia', kiev: 'Little Russia', chernigov: 'Little Russia', poltava: 'Little Russia', donets: 'Little Russia', ekaterinoslav: 'Little Russia', kherson: 'Little Russia', taurida: 'Little Russia', bessarabia: 'Little Russia', don: 'Little Russia',
   aleppo: 'Syria', syria: 'Syria', beirut: 'Syria', jerusalem: 'Syria', transjordan: 'Syria', zor: 'Syria', mosul: 'Iraq', baghdad: 'Iraq', basra: 'Iraq', arabia: 'Jabal Shammar',
 };
-const EU_REALM_LAND: Record<string, string> = {
+export const EU_REALM_LAND: Record<string, string> = {
   gbr: 'Britain', fra: 'France', ger: 'Germany', aus: 'Austria-Hungary', rus: 'Great Russia', ita: 'Italy', ott: 'Anatolia', spa: 'Spain', por: 'Portugal', ned: 'Netherlands', bel: 'Belgium', swi: 'Switzerland', den: 'Denmark', swe: 'Sweden', nor: 'Norway', rom: 'Romania', bul: 'Bulgaria', ser: 'Serbia', gre: 'Greece', alb: 'Albania', per: 'Persia',
 };
 
@@ -291,7 +291,7 @@ function euRegionOf(d: Division): string | null | undefined {
   return euCache.get(key);
 }
 
-const INDONESIA: Array<[string, RegExp]> = [
+export const INDONESIA: Array<[string, RegExp]> = [
   ['Java', /^(Jawa|Banten|Jakarta|Yogyakarta)/],
   ['Lesser Sunda Islands', /^(Bali|Nusa Tenggara)/],
   ['Dutch Borneo', /^Kalimantan/],
@@ -403,13 +403,13 @@ export function landOf(d: Division, realm: string): string {
 }
 
 /** Overseas parts of European countries Natural Earth counts as divisions. */
-const OVERSEAS_LAND: Record<string, string> = {
+export const OVERSEAS_LAND: Record<string, string> = {
   'Guyane française': 'French Guiana', Guyane: 'French Guiana', 'La Réunion': 'Réunion', Réunion: 'Réunion', Martinique: 'Martinique', Guadeloupe: 'Guadeloupe', Mayotte: 'Comoros',
   Canarias: 'Canary Islands', 'Las Palmas': 'Canary Islands', 'Santa Cruz de Tenerife': 'Canary Islands', Azores: 'Azores', Madeira: 'Madeira',
 };
 
 /** Lands named after the country or colony of 1914. */
-const COLONY: Record<string, string> = {
+export const COLONY: Record<string, string> = {
   SAH: 'Río de Oro', MRT: 'Mauritania', SEN: 'Senegal', GMB: 'Gambia', GNB: 'Portuguese Guinea', GIN: 'French Guinea', SLE: 'Sierra Leone', LBR: 'Liberia', CIV: 'Ivory Coast', NER: 'Niger Territory', BEN: 'Dahomey', TGO: 'Togoland', NGA: 'Nigeria', CMR: 'Kamerun', TCD: 'Chad', CAF: 'Ubangi-Shari', GAB: 'Gabon', COG: 'Middle Congo', GNQ: 'Spanish Guinea', STP: 'São Tomé', COD: 'Belgian Congo', AGO: 'Angola', NAM: 'German South West Africa', BWA: 'Bechuanaland', LSO: 'Basutoland', SWZ: 'Swaziland', ZWE: 'Southern Rhodesia', ZMB: 'Northern Rhodesia', MWI: 'Nyasaland', MOZ: 'Mozambique', UGA: 'Uganda', KEN: 'British East Africa', ETH: 'Abyssinia', ERI: 'Eritrea', DJI: 'French Somaliland', SOL: 'British Somaliland', DZA: 'Algeria', LBY: 'Libya', MDG: 'Madagascar', COM: 'Comoros', MUS: 'Mauritius', SYC: 'Seychelles', CPV: 'Cape Verde',
   AFG: 'Afghanistan', NPL: 'Nepal', THA: 'Siam', LAO: 'Laos', KHM: 'Cambodia', TLS: 'Portuguese Timor', PHL: 'Philippines', MNG: 'Mongolia', OMN: 'Oman', ARE: 'Trucial Coast', QAT: 'Qatar', BHR: 'Bahrain', KWT: 'Kuwait',
   AUS: 'Australia', NZL: 'New Zealand', SLB: 'Solomon Islands', VUT: 'New Hebrides', NCL: 'New Caledonia', FJI: 'Fiji',
@@ -417,7 +417,7 @@ const COLONY: Record<string, string> = {
 };
 
 /** Present-day divisions → the province, state or territory of 1914 they lay in (or its name then). */
-const PERIOD: Record<string, string> = {
+export const PERIOD: Record<string, string> = {
   // China: the provinces in the postal romanisation of the time
   'CHN/Hebei': 'Chihli', 'CHN/Beijing': 'Chihli', 'CHN/Tianjin': 'Chihli', 'CHN/Shandong': 'Shantung', 'CHN/Henan': 'Honan', 'CHN/Shanxi': 'Shansi', 'CHN/Shaanxi': 'Shensi', 'CHN/Gansu': 'Kansu', 'CHN/Ningxia': 'Kansu', 'CHN/Sichuan': 'Szechwan', 'CHN/Chongqing': 'Szechwan', 'CHN/Hubei': 'Hupeh', 'CHN/Hunan': 'Hunan', 'CHN/Jiangxi': 'Kiangsi', 'CHN/Anhui': 'Anhwei', 'CHN/Jiangsu': 'Kiangsu', 'CHN/Shanghai': 'Kiangsu', 'CHN/Zhejiang': 'Chekiang', 'CHN/Fujian': 'Fukien', 'CHN/Guangdong': 'Kwangtung', 'CHN/Hainan': 'Kwangtung', 'CHN/Guangxi': 'Kwangsi', 'CHN/Guizhou': 'Kweichow', 'CHN/Yunnan': 'Yunnan', 'CHN/Heilongjiang': 'Heilungkiang', 'CHN/Jilin': 'Kirin', 'CHN/Liaoning': 'Fengtien', 'CHN/Xinjiang': 'Sinkiang', 'CHN/Qinghai': 'Kokonor', 'CHN/Inner Mongol': 'Inner Mongolia', 'CHN/Xizang': 'Tibet',
   // British India: the provinces and the largest princely states
@@ -446,8 +446,8 @@ const PERIOD: Record<string, string> = {
   'NZL/': 'New Zealand',
 };
 /** Divisions named by the larger region Natural Earth gives (Japan's regions, Thailand's, New Zealand's islands). */
-const BY_GROUP = new Set(['JPN', 'THA', 'NZL', 'KOR', 'PRK']);
-const THAI: Record<string, string> = { Northern: 'Northern Siam', Northeastern: 'Isan', Central: 'Central Siam', Eastern: 'Eastern Siam', Western: 'Western Siam', Southern: 'Southern Siam' };
+export const BY_GROUP = new Set(['JPN', 'THA', 'NZL', 'KOR', 'PRK']);
+export const THAI: Record<string, string> = { Northern: 'Northern Siam', Northeastern: 'Isan', Central: 'Central Siam', Eastern: 'Eastern Siam', Western: 'Western Siam', Southern: 'Southern Siam' };
 
 function periodName(d: Division): string {
   const hit = PERIOD[`${d.adm0}/${d.name}`] ?? PERIOD[`${d.adm0}/`];
@@ -466,43 +466,52 @@ function periodName(d: Division): string {
 }
 
 /** Lands whose regions are named after the land alone (one name, with directions where there are several). */
-const BY_LAND = new Set(['Upper Senegal and Niger', 'Nigeria', 'Kamerun', 'Belgian Congo', 'Angola', 'German East Africa', 'Sudan', 'Abyssinia', 'Mozambique', 'Madagascar', 'Chad', 'Niger Territory', 'Mauritania', 'Algeria', 'Libya', 'Egypt', 'Río de Oro', 'Italian Somaliland', 'British East Africa', 'Northern Rhodesia', 'Southern Rhodesia', 'Bechuanaland', 'German South West Africa', 'Ubangi-Shari', 'Middle Congo', 'Gabon', 'French Guinea', 'Ivory Coast', 'Gold Coast', 'Senegal', 'Dahomey', 'Uganda', 'Tunisia', 'Hejaz', 'Yemen', 'Aden', 'Oman', 'Trucial Coast', 'Afghanistan', 'Mongolia', 'Inner Mongolia', 'Sinkiang', 'Kokonor', 'Tibet', 'Dutch Borneo', 'Sumatra', 'Celebes', 'Java', 'Moluccas', 'Dutch New Guinea', 'Lesser Sunda Islands', 'Kaiser-Wilhelmsland', 'Papua', 'Sarawak', 'North Borneo', 'Malaya', 'Laos', 'Cambodia', 'Tonkin', 'Annam', 'Cochinchina', 'Formosa', 'Karafuto', 'Greenland', 'Iceland', 'Alaska', 'Newfoundland', 'Northern Territories', 'Turkestan', 'Steppe', 'Burma', 'Ceylon', 'Nepal', 'Najd', 'Jabal Shammar', 'Asir', 'Hasa', 'Bolivia', 'Paraguay', 'Uruguay', 'Ecuador', 'Venezuela', 'Colombia', 'Guatemala', 'Honduras', 'Nicaragua', 'Costa Rica', 'Panama', 'Cuba', 'Haiti', 'Santo Domingo', 'El Salvador', 'British Guiana', 'Dutch Guiana', 'French Guiana', 'Peru']);
+export const BY_LAND = new Set(['Upper Senegal and Niger', 'Nigeria', 'Kamerun', 'Belgian Congo', 'Angola', 'German East Africa', 'Sudan', 'Abyssinia', 'Mozambique', 'Madagascar', 'Chad', 'Niger Territory', 'Mauritania', 'Algeria', 'Libya', 'Egypt', 'Río de Oro', 'Italian Somaliland', 'British East Africa', 'Northern Rhodesia', 'Southern Rhodesia', 'Bechuanaland', 'German South West Africa', 'Ubangi-Shari', 'Middle Congo', 'Gabon', 'French Guinea', 'Ivory Coast', 'Gold Coast', 'Senegal', 'Dahomey', 'Uganda', 'Tunisia', 'Hejaz', 'Yemen', 'Aden', 'Oman', 'Trucial Coast', 'Afghanistan', 'Mongolia', 'Inner Mongolia', 'Sinkiang', 'Kokonor', 'Tibet', 'Dutch Borneo', 'Sumatra', 'Celebes', 'Java', 'Moluccas', 'Dutch New Guinea', 'Lesser Sunda Islands', 'Kaiser-Wilhelmsland', 'Papua', 'Sarawak', 'North Borneo', 'Malaya', 'Laos', 'Cambodia', 'Tonkin', 'Annam', 'Cochinchina', 'Formosa', 'Karafuto', 'Greenland', 'Iceland', 'Alaska', 'Newfoundland', 'Northern Territories', 'Turkestan', 'Steppe', 'Burma', 'Ceylon', 'Nepal', 'Najd', 'Jabal Shammar', 'Asir', 'Hasa', 'Bolivia', 'Paraguay', 'Uruguay', 'Ecuador', 'Venezuela', 'Colombia', 'Guatemala', 'Honduras', 'Nicaragua', 'Costa Rica', 'Panama', 'Cuba', 'Haiti', 'Santo Domingo', 'El Salvador', 'British Guiana', 'Dutch Guiana', 'French Guiana', 'Peru']);
 
 const ENGLAND = new Set(['London', 'South East England', 'East Anglia', 'Midlands', 'West Country', 'Yorkshire', 'Lancashire and Cheshire', 'Northumbria']);
 const PARIS_BASIN = new Set(['Île-de-France', 'Picardy and Flanders', 'Normandy', 'Orléanais and Berry', 'Champagne and Lorraine', 'Anjou and Maine']);
 
-export function regionName(land: string, _realm: string, divisions: Division[], single: boolean, shares: number[], capital?: number): string {
-  if (single || BY_LAND.has(land)) return land;
-  const names: Array<[string, number]> = [];
-  divisions.forEach((d, i) => {
-    const n = periodName(d);
-    const hit = names.find((x) => x[0] === n);
-    if (hit) hit[1] += shares[i];
-    else names.push([n, shares[i]]);
-  });
-  names.sort((a, b) => b[1] - a[1]);
-  // a region spread over many of the finer names takes the larger historical unit
-  // they belong to: England (and Wales) rather than its largest county group, the
-  // Paris basin rather than the province that happens to be largest
-  const share = (set: Set<string>) => names.filter(([n]) => set.has(n)).reduce((a, [, v]) => a + v, 0);
-  if (names[0][1] < 0.4) {
-    const english = share(ENGLAND);
-    if (english >= 0.6) return share(new Set(['Wales'])) >= 0.1 ? 'England and Wales' : 'England';
-    if (names.some(([n]) => n === 'Île-de-France') && share(PARIS_BASIN) >= 0.6) return 'Paris Basin';
-  }
-  // a region with no dominant part that holds the capital is named for the capital's own land
-  // (Rome's region is Lazio, not the larger Sardinia that shares it), unless that land is
-  // the city alone (Washington's region is not the District of Columbia)
-  const home = capital === undefined ? undefined : names.find(([n]) => n === periodName(divisions[capital]));
-  if (home && home[1] >= 0.02 && names[0][1] < 0.5) return home[0];
-  // two names joined, unless either is already a pair (Fez and Meknes)
-  if (names.length > 1 && names[1][1] >= 0.3 && !/ and /.test(names[0][0] + names[1][0])) return `${names[0][0]} and ${names[1][0]}`;
-  return names[0][0];
+/**
+ * Names a region from its land and its divisions, given the names of the time
+ * for the divisions and the lands named after the land alone (shared with
+ * the 1936 world, tools/earth1936.data.ts).
+ */
+export function regionNamer(periodName: (d: Division) => string, byLand: Set<string>) {
+  return (land: string, _realm: string, divisions: Division[], single: boolean, shares: number[], capital?: number): string => {
+    if (single || byLand.has(land)) return land;
+    const names: Array<[string, number]> = [];
+    divisions.forEach((d, i) => {
+      const n = periodName(d);
+      const hit = names.find((x) => x[0] === n);
+      if (hit) hit[1] += shares[i];
+      else names.push([n, shares[i]]);
+    });
+    names.sort((a, b) => b[1] - a[1]);
+    // a region spread over many of the finer names takes the larger historical unit
+    // they belong to: England (and Wales) rather than its largest county group, the
+    // Paris basin rather than the province that happens to be largest
+    const share = (set: Set<string>) => names.filter(([n]) => set.has(n)).reduce((a, [, v]) => a + v, 0);
+    if (names[0][1] < 0.4) {
+      const english = share(ENGLAND);
+      if (english >= 0.6) return share(new Set(['Wales'])) >= 0.1 ? 'England and Wales' : 'England';
+      if (names.some(([n]) => n === 'Île-de-France') && share(PARIS_BASIN) >= 0.6) return 'Paris Basin';
+    }
+    // a region with no dominant part that holds the capital is named for the capital's own land
+    // (Rome's region is Lazio, not the larger Sardinia that shares it), unless that land is
+    // the city alone (Washington's region is not the District of Columbia)
+    const home = capital === undefined ? undefined : names.find(([n]) => n === periodName(divisions[capital]));
+    if (home && home[1] >= 0.02 && names[0][1] < 0.5) return home[0];
+    // two names joined, unless either is already a pair (Fez and Meknes)
+    if (names.length > 1 && names[1][1] >= 0.3 && !/ and /.test(names[0][0] + names[1][0])) return `${names[0][0]} and ${names[1][0]}`;
+    return names[0][0];
+  };
 }
+
+export const regionName = regionNamer(periodName, BY_LAND);
 
 // ───────────────────────────── climate, terrain and density ────────────────
 
-type Zone = 'polar' | 'icecap' | 'boreal' | 'temperate' | 'steppe' | 'desert' | 'med' | 'mountain' | 'highland' | 'rainforest' | 'savanna' | 'monsoon' | 'river';
+export type Zone = 'polar' | 'icecap' | 'boreal' | 'temperate' | 'steppe' | 'desert' | 'med' | 'mountain' | 'highland' | 'rainforest' | 'savanna' | 'monsoon' | 'river';
 const box = (lon: number, lat: number, w: number, e: number, s: number, n: number) => lon >= w && lon <= e && lat >= s && lat <= n;
 
 /** The climate of a place, from boxes drawn round the world's great landscapes. */
@@ -534,7 +543,7 @@ export function zoneOf(lat: number, lon: number): Zone {
   return 'temperate';
 }
 
-const BIOME: Record<Zone, Partial<Record<Terrain, number>>> = {
+export const BIOME: Record<Zone, Partial<Record<Terrain, number>>> = {
   polar: { marsh: 2.2, hills: 1.6, forest: 0.6, plains: 0.3 },
   icecap: { mountains: 2.4, hills: 1.6, marsh: 0.6 },
   boreal: { forest: 3.4, marsh: 2, plains: 0.5, hills: 0.4 },
@@ -551,7 +560,7 @@ const BIOME: Record<Zone, Partial<Record<Terrain, number>>> = {
 };
 
 /** How thinly settled each land was: its provinces are this many times the standard area. */
-const LAND_SPARSE: Record<string, number> = {
+export const LAND_SPARSE: Record<string, number> = {
   Britain: 0.2, Ireland: 0.32, France: 0.24, Germany: 0.2, 'Austria-Hungary': 0.26, Italy: 0.24, Spain: 0.38, Portugal: 0.32, Netherlands: 0.22, Belgium: 0.22, Switzerland: 0.26, Denmark: 0.3, Sweden: 0.55, Norway: 0.6, Finland: 0.6, Poland: 0.24, 'Baltic Provinces': 0.36, 'Great Russia': 0.5, 'Little Russia': 0.36, Caucasus: 0.4, Romania: 0.3, Bulgaria: 0.3, Serbia: 0.3, Greece: 0.3, Albania: 0.32,
   Anatolia: 0.45, Syria: 0.6, Iraq: 0.8, Persia: 1.2, Egypt: 0.6, Cyprus: 0.4, Algeria: 0.9, Tunisia: 0.6, Morocco: 0.6, 'Spanish Morocco': 0.4, Libya: 1.4,
   Siberia: 4, 'Russian Far East': 5, Steppe: 2.4, Turkestan: 1.3, Mongolia: 4, Tibet: 3.5, Sinkiang: 3.5, Kokonor: 3.5, 'Inner Mongolia': 2.2, Manchuria: 0.9, 'China Proper': 0.45, Korea: 0.42, Japan: 0.36, Formosa: 0.45, Karafuto: 2,
@@ -573,7 +582,7 @@ const sparseOf = (land: string, lat: number, lon: number): number => {
 };
 
 /** Regional wealth about 1914, relative to western Europe: scales town populations for density. */
-const WEALTH: Record<string, number> = {
+export const WEALTH: Record<string, number> = {
   GBR: 1.2, FRA: 1, DEU: 1.1, BEL: 1.1, NLD: 1.1, CHE: 1, DNK: 1, SWE: 0.9, NOR: 0.8, USA: 1.2, CAN: 1, AUS: 1, NZL: 1, ARG: 0.8, URY: 0.7, AUT: 0.8, CZE: 0.8, ITA: 0.7, ESP: 0.6, PRT: 0.5, IRL: 0.6, HUN: 0.6, POL: 0.6, RUS: 0.45, FIN: 0.5, JPN: 0.6, ZAF: 0.6, CHL: 0.6, MEX: 0.35, BRA: 0.35, CUB: 0.5,
 };
 const wealthOf = (adm0: string, lon: number, lat: number): number => {
@@ -587,7 +596,7 @@ const wealthOf = (adm0: string, lon: number, lat: number): number => {
 // ───────────────────────────── towns about 1914 ────────────────────────────
 
 /** Towns of about 1914 (Natural Earth name, country, population in thousands; a longitude where the name repeats). */
-const TOWNS: Array<[string, string, number, number?]> = [
+export const TOWNS: Array<[string, string, number, number?]> = [
   // Europe
   ['London', 'GBR', 7200], ['Paris', 'FRA', 2900], ['Berlin', 'DEU', 3700], ['Vienna', 'AUT', 2030], ['St. Petersburg', 'RUS', 2100], ['Moscow', 'RUS', 1600], ['Istanbul', 'TUR', 1000], ['Glasgow', 'GBR', 1000], ['Manchester', 'GBR', 2000], ['Birmingham', 'GBR', 1100], ['Liverpool', 'GBR', 750], ['Leeds', 'GBR', 450], ['Sheffield', 'GBR', 455], ['Newcastle', 'GBR', 270], ['Hamburg', 'DEU', 1000], ['Budapest', 'HUN', 880], ['Warsaw', 'POL', 850], ['Łódź', 'POL', 480], ['Naples', 'ITA', 720], ['Milan', 'ITA', 600], ['Rome', 'ITA', 540], ['Turin', 'ITA', 430], ['Palermo', 'ITA', 340], ['Genoa', 'ITA', 270], ['Madrid', 'ESP', 600], ['Barcelona', 'ESP', 590], ['Brussels', 'BEL', 720], ['Antwerp', 'BEL', 300], ['Amsterdam', 'NLD', 570], ['Rotterdam', 'NLD', 420], ['Lyon', 'FRA', 520], ['Marseille', 'FRA', 550], ['Bordeaux', 'FRA', 260], ['Lille', 'FRA', 400], ['Munich', 'DEU', 600], ['Leipzig', 'DEU', 590], ['Dresden', 'DEU', 550], ['Cologne', 'DEU', 520], ['Frankfurt', 'DEU', 415], ['Essen', 'DEU', 1200], ['Hannover', 'DEU', 300], ['Nürnberg', 'DEU', 330], ['Stuttgart', 'DEU', 290], ['Wroclaw', 'POL', 510], ['Kaliningrad', 'RUS', 250], ['København', 'DNK', 560], ['Stockholm', 'SWE', 340], ['Oslo', 'NOR', 250], ['Helsinki', 'FIN', 160], ['Lisbon', 'PRT', 435], ['Odesa', 'UKR', 630], ['Kiev', 'UKR', 610], ['Kharkiv', 'UKR', 250], ['Riga', 'LVA', 520], ['Prague', 'CZE', 620], ['Dublin', 'IRL', 400], ['Belfast', 'GBR', 390], ['Edinburgh', 'GBR', 400], ['Bucharest', 'ROU', 340], ['Athens', 'GRC', 170], ['Sofia', 'BGR', 100], ['Belgrade', 'SRB', 90], ['Thessaloniki', 'GRC', 160], ['Izmir', 'TUR', 300], ['Bern', 'CHE', 90], ['Zürich', 'CHE', 200], ['Durrës', 'ALB', 10], ['Kazan', 'RUS', 190], ['Saratov', 'RUS', 240], ['Baku', 'AZE', 230], ['Tbilisi', 'GEO', 300], ['Rostov', 'RUS', 200], ['Nizhny Novgorod', 'RUS', 110],
   // the Near East and Africa
@@ -636,18 +645,18 @@ export const NOT_YET = [
 
 // ───────────────────────────── geography ───────────────────────────────────
 
-const RIDGES: RealMapDef['ridges'] = [
+export const RIDGES: RealMapDef['ridges'] = [
   ...EU_RIDGES.filter((r) => inList(r.name, 'Pyrenees|Western Alps|Central Alps|Greater Caucasus')),
   { name: 'Himalaya', halfKm: 40, pts: [[73.5, 35.3], [75.5, 34.3], [77.5, 32.9], [79.2, 31.0], [81.0, 29.9], [83.5, 28.9], [86.0, 28.0], [88.3, 27.9], [90.5, 28.0], [92.5, 27.9], [94.5, 28.7], [96.5, 28.8]] },
   { name: 'Andes', halfKm: 34, pts: [[-69.6, -18.0], [-68.9, -20.5], [-68.2, -23.5], [-68.6, -26.5], [-69.5, -29.0], [-70.0, -31.5], [-70.0, -33.0], [-70.2, -35.0], [-70.8, -37.5], [-71.4, -40.0], [-71.8, -43.0]] },
 ];
-const PASSES: RealMapDef['passes'] = [
+export const PASSES: RealMapDef['passes'] = [
   ...EU_PASSES.filter((p) => inList(p.name, 'Roncesvalles|Brenner|St Gotthard|Mont Cenis|Darial')),
   { name: 'Nathu La', lon: 88.83, lat: 27.39 },
   { name: 'Uspallata Pass', lon: -70.07, lat: -32.82 },
 ];
 
-const STRAITS: RealMapDef['straits'] = [
+export const STRAITS: RealMapDef['straits'] = [
   { name: 'Strait of Dover', a: [1.5, 51.1], b: [1.85, 50.95] },
   { name: 'Strait of Gibraltar', a: [-5.6, 36.1], b: [-5.6, 35.8] },
   { name: 'Bosporus', a: [28.98, 41.05], b: [29.05, 41.0] },
@@ -672,13 +681,13 @@ const STRAITS: RealMapDef['straits'] = [
   { name: 'Strait of Magellan', a: [-70.6, -52.9], b: [-70.4, -53.3] },
 ];
 
-const LAKES: Record<string, string> = {
+export const LAKES: Record<string, string> = {
   'Lake Superior': 'Lake Superior', 'Lake Michigan': 'Lake Michigan', 'Lake Huron': 'Lake Huron', 'Lake Erie': 'Lake Erie', 'Lake Ontario': 'Lake Ontario', 'Lake Winnipeg': 'Lake Winnipeg', 'Great Slave Lake': 'Great Slave Lake', 'Great Bear Lake': 'Great Bear Lake', 'Lake Athabasca': 'Lake Athabasca', 'Reindeer Lake': 'Reindeer Lake', 'Lake Manitoba': 'Lake Manitoba', 'Lake Winnipegosis': 'Lake Winnipegosis', 'Great Salt Lake': 'Great Salt Lake', 'Lago de Nicaragua': 'Lake Nicaragua', 'Lago Titicaca': 'Lake Titicaca',
   'Lake Victoria': 'Lake Victoria', 'Lake Tanganyika': 'Lake Tanganyika', 'Lake Malawi': 'Lake Nyasa', 'Lake Chad': 'Lake Chad', 'Lake Turkana': 'Lake Rudolf', 'Lake Albert': 'Lake Albert', 'Lake Tana': 'Lake Tana', 'Lac Moeru': 'Lake Mweru', 'Lake Rukwa': 'Lake Rukwa', 'Lake Bangweulu': 'Lake Bangweulu',
   'Lake Baikal': 'Lake Baikal', 'Lake Balkhash': 'Lake Balkhash', 'South Aral Sea': 'Aral Sea', 'North Aral Sea': 'Aral Sea', 'Issyk-Kul': 'Issyk-Kul', 'Lake Ladoga': 'Lake Ladoga', 'Lake Onega': 'Lake Onega', 'Lake Urmia': 'Lake Urmia', 'Qinghai Hu': 'Kokonor', 'Khövsgöl Nuur': 'Lake Khövsgöl', 'Tonlé Sap': 'Tonlé Sap', 'Lake Van': 'Lake Van', 'Vänern': 'Lake Vänern', 'Lake Eyre North': 'Lake Eyre',
 };
 
-const RIVERS: Record<string, string> = {
+export const RIVERS: Record<string, string> = {
   Mississippi: 'Mississippi', Missouri: 'Missouri', Ohio: 'Ohio', 'Rio Grande': 'Rio Grande', Colorado: 'Colorado', Columbia: 'Columbia', Yukon: 'Yukon', Mackenzie: 'Mackenzie', 'Saint Lawrence': 'St Lawrence', 'St. Lawrence': 'St Lawrence',
   Amazonas: 'Amazon', Paraná: 'Paraná', Orinoco: 'Orinoco', 'São  Francisco': 'São Francisco', Uruguay: 'Uruguay', Madeira: 'Madeira', Magdalena: 'Magdalena',
   Nile: 'Nile', Niger: 'Niger', Congo: 'Congo', Zambezi: 'Zambezi', Orange: 'Orange', Limpopo: 'Limpopo', Sénégal: 'Senegal',
@@ -687,7 +696,7 @@ const RIVERS: Record<string, string> = {
   Murray: 'Murray', Darling: 'Darling',
 };
 
-const ISLAND_NAMES: Array<[string, number, number]> = [
+export const ISLAND_NAMES: Array<[string, number, number]> = [
   ['The Americas', -100, 40], ['Australia', 134, -25],
   ...EU_ISLANDS.filter(([n]) => n !== 'Crimea'),
   ['Greenland', -42, 72], ['Newfoundland', -56, 48.8], ['Vancouver Island', -125.5, 49.6], ['Cuba', -79, 21.7], ['Hispaniola', -71.5, 19], ['Jamaica', -77.3, 18.1], ['Puerto Rico', -66.5, 18.2], ['Trinidad', -61.3, 10.4], ['Tierra del Fuego', -68.5, -54], ['Falkland Islands', -59.5, -51.7], ['Chiloé', -73.9, -42.6], ['Baffin Island', -71, 68], ['Victoria Island', -110, 71], ['Banks Island', -121, 72.8], ['Southampton Island', -84, 64.3], ['Long Island', -73, 40.8], ['Hawaii', -155.5, 19.6], ['Cape Breton', -60.8, 46.2], ['Prince Edward Island', -63.2, 46.4], ['Anticosti', -63, 49.4], ['Kodiak', -153.5, 57.4],
@@ -703,13 +712,13 @@ const ISLAND_NAMES: Array<[string, number, number]> = [
   ['Tasmania', 146.6, -42], ['North Island', 175.5, -38.5], ['South Island', 171, -43.5], ['Novaya Zemlya', 56, 73], ['Spitsbergen', 16, 77.5], ['Wrangel Island', -179.5, 71.2], ['New Siberian Islands', 140, 75], ['Severny Island', 57, 74.5],
 ];
 
-const SEAS: Array<[string, number, number, number?]> = [
+export const SEAS: Array<[string, number, number, number?]> = [
   ['North Atlantic Ocean', -40, 35, 44], ['South Atlantic Ocean', -15, -25, 44], ['North Pacific Ocean', -150, 30, 48], ['South Pacific Ocean', -130, -30, 48], ['Indian Ocean', 75, -20, 46], ['Arctic Ocean', 0, 77, 30],
   ['North Sea', 3.5, 56.0, 22], ['Baltic Sea', 19.0, 57, 20], ['Norwegian Sea', 3.0, 67.0, 24], ['Barents Sea', 40.0, 72, 24], ['Kara Sea', 70, 74.5, 22], ['Laptev Sea', 125, 75, 22], ['East Siberian Sea', 160, 73.5, 22], ['Chukchi Sea', -170, 69.5, 18], ['Bay of Biscay', -5.0, 45.3, 18], ['Mediterranean Sea', 18.0, 34.5, 26], ['Black Sea', 34.5, 43.2, 22], ['Caspian Sea', 50.5, 42.0, 22], ['Red Sea', 38.5, 20.5, 20], ['Persian Gulf', 51, 27.3, 18], ['Arabian Sea', 64, 15, 30], ['Bay of Bengal', 88, 15, 28], ['Andaman Sea', 96.5, 11, 18], ['South China Sea', 114, 13, 28], ['East China Sea', 125.5, 29.5, 22], ['Yellow Sea', 123, 36, 18], ['Sea of Japan', 135, 40.5, 22], ['Sea of Okhotsk', 148, 54, 24], ['Bering Sea', 178, 58, 26], ['Gulf of Alaska', -145, 57, 22], ['Philippine Sea', 132, 20, 26], ['Java Sea', 111, -5, 20], ['Celebes Sea', 122, 4, 18], ['Banda Sea', 127, -6, 18], ['Arafura Sea', 135, -9.5, 20], ['Coral Sea', 154, -16, 26], ['Tasman Sea', 160, -38, 26], ['Great Australian Bight', 131, -36, 20], ['Timor Sea', 127, -11.5, 18],
   ['Gulf of Mexico', -90, 25, 24], ['Caribbean Sea', -75, 15, 26], ['Hudson Bay', -85, 59, 24], ['Labrador Sea', -55, 58, 22], ['Gulf of St Lawrence', -62, 48.3, 16], ['Gulf of Guinea', 3, 2, 22], ['Mozambique Channel', 41.5, -18, 18], ['Gulf of Aden', 48, 12.3, 16], ['Baffin Bay', -66, 74, 20], ['Gulf of California', -111, 28, 16], ['Sargasso Sea', -60, 30, 24], ['Greenland Sea', -5, 75, 20], ['Irish Sea', -5.0, 53.7, 14], ['English Channel', -2.3, 50.0, 14], ['Aegean Sea', 25.0, 38.8, 16], ['Adriatic Sea', 15.8, 42.8, 14], ['Gulf of Bothnia', 20.5, 62.8, 14], ['White Sea', 37.5, 65.6, 14],
 ];
 
-const DEPOSIT_HINTS: RealMapDef['depositHints'] = [
+export const DEPOSIT_HINTS: RealMapDef['depositHints'] = [
   // coal
   { kind: 'coal', lon: 7.2, lat: 51.45, km: 150, weight: 6 }, { kind: 'coal', lon: 18.9, lat: 50.3, km: 150, weight: 5 }, { kind: 'coal', lon: 3.2, lat: 50.4, km: 150, weight: 4 }, { kind: 'coal', lon: -2.0, lat: 53.0, km: 250, weight: 6 }, { kind: 'coal', lon: 38.0, lat: 48.0, km: 200, weight: 5 },
   { kind: 'coal', lon: -79.5, lat: 40.0, km: 350, weight: 7 }, { kind: 'coal', lon: -88.5, lat: 38.5, km: 300, weight: 4 }, { kind: 'coal', lon: 112.5, lat: 37.5, km: 300, weight: 5 }, { kind: 'coal', lon: 123.9, lat: 41.9, km: 200, weight: 4 }, { kind: 'coal', lon: 130.7, lat: 33.7, km: 150, weight: 4 }, { kind: 'coal', lon: 86.4, lat: 23.7, km: 200, weight: 4 }, { kind: 'coal', lon: 30.0, lat: -28.0, km: 250, weight: 3 }, { kind: 'coal', lon: 151.5, lat: -32.9, km: 200, weight: 4 }, { kind: 'coal', lon: 86.5, lat: 54.5, km: 300, weight: 2 },
@@ -809,4 +818,4 @@ export function earthDef(): RealMapDef {
   };
 }
 
-const PROV_KM2 = 90000;
+export const PROV_KM2 = 90000;

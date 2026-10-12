@@ -1,7 +1,7 @@
 # Crown & Frontier
 
 A single-player grand strategy game for the browser. You rule a young crown at the dawn of the
-industrial age, on one of nine maps or one you make yourself. Grow by
+industrial age, on one of eleven maps or one you make yourself. Grow by
 settlement, investment or conquest, but every province you gain
 beyond your heartland is **raw frontier**: it pays little, raises no troops and supplies no
 armies until you integrate it. Outlast your AI rivals and win by territorial dominance,
@@ -9,7 +9,7 @@ economic prosperity or diplomatic leadership.
 
 ![Crown & Frontier: Aldmere, the standard campaign](docs/screenshots/after-aldmere/laptop-03-map-overview.jpg)
 
-- **Nine maps.**
+- **Eleven maps.**
   - *Aldmere*, the standard campaign: 298 provinces, 14 realms, four mountain ranges with
     six passes, six rivers, 34 unclaimed frontier provinces and 30 sea zones.
   - *The Reach*, the quick campaign: 99 provinces and 9 realms.
@@ -19,16 +19,22 @@ economic prosperity or diplomatic leadership.
   - *Hesperia, 1890*, a large original world from authored geography: 754 provinces and 22
     realms on two continents facing each other across the Narrows, with three unclaimed
     frontiers.
-  - Three historical maps built from Natural Earth (public domain), with the borders of the
+  - Five historical maps built from Natural Earth (public domain), with the borders of the
     time approximated from present-day divisions; Europe and the World start with the
-    alliances, ententes and claims of 1914:
+    treaties and claims of their year:
     - *The Baltic, 1906*: Sweden, Norway, Denmark, the German Empire and the Russian Empire.
     - *Europe, 1914*: 686 provinces and 23 realms, from Ireland to the Volga.
     - *The World, 1914*: 1,225 provinces and 57 realms, colonial empires on every continent.
+    - *Europe, 1936*: 689 provinces and 32 realms on 1 January 1936: the successor states of
+      1918, the Soviet Union, a rearming Germany ringed by French alliances.
+    - *The World, 1936*: 1,231 provinces and 69 realms: the League mandates, Manchukuo,
+      Saudi Arabia, Italy at war in Ethiopia.
 - **Map library and editor.** Keep your own maps in the browser. Generate a new map from a
   seed, size, number of realms, shape and climate, then edit it by hand. Paint realms,
-  regions, terrain and deposits; edit straits, rivers and ports; merge provinces. A
-  validator points at anything to fix. Export and import map files, and play any map.
+  regions, terrain and deposits; edit straits, rivers, ports, capitals, claims and the
+  treaties in force at the start; merge provinces. A validator outlines every error on the
+  map and takes you to it. Export and import map files (an unfinished map reopens in the
+  editor to be finished), and play any map.
 - **An ivory atlas in slate furniture.** The map is ivory land and blue-grey water, with
   muted realm washes, inked borders, terrain motifs, counters, and landmarks at local zoom.
   One collision registry places every name and marker. Ledgers are opaque ivory registers in
@@ -127,7 +133,7 @@ npm run genworld       # regenerate Aldmere from tools/aldmere.spec.ts (determin
 npm run genmap         # regenerate the Reach's geometry (byte-identical to the checked-in file)
 npm run genmaps        # regenerate the Isles, the Steppe and the Middle Sea from their recipes
 npm run genbaltic      # rebuild The Baltic, 1906 from Natural Earth (downloads and checks the data)
-npm run genreal -- --map europe   # rebuild Europe, 1914 (or earth, or hesperia) through tools/realmap.ts
+npm run genreal -- --map europe   # rebuild Europe, 1914 (or earth, europe-1936, earth-1936, hesperia) through tools/realmap.ts
 npm run atlas:assets   # bring the atlas pack's art and fonts in from the committed handoff zip
 npm run check          # typecheck + tests + build + package + verify:web
 npm run fuzz -- --scenario aldmere --seeds 1-3 --years 8   # random legal/illegal commands + invariants
@@ -242,13 +248,14 @@ that the final state matches.
   - A format-4 campaign keeps its running trade exchanges as 12-month contracts at list price.
   - A format-3 campaign keeps each realm's national policy as the matching completed focus.
   - Format-3 saves written before Stage C load with empty navies and air arms.
-- **The World, 1914 runs slower than the clock's setting:**
-  - At the fastest speed (6 weeks a second) it gives about three quarters of that in
-    peacetime in headless Chromium on a 4-core machine, and about a quarter in a world
-    war, where a week can take several hundred milliseconds to work out.
-  - The week is worked out in slices between frames, so the map and controls keep
-    responding, though a single slice can take up to about 400 ms.
-  - Measurements are in `docs/atlas/MAPS.md`.
+- **The World maps at the fastest speed:** in a world war (week 280) the World, 1914 gives
+  5.8 of the 6 weeks a second and the World, 1936 (69 realms) 4.6, in headless Chromium with
+  software rendering on a 4-core machine; the map and controls keep responding (frame p95
+  33 ms). One AI realm's planning can still take about 40 ms in a single slice. Measurements
+  are in `reports/perf/lag-diagnosis.md` and `docs/atlas/MAPS.md`.
+- **The 1936 maps start late in the research tree:** a 1936 start knows every technology
+  up to 1931, so six remain to research; there are no technologies, units or rules beyond
+  1936 (no Second World War mechanics).
 - **The historical maps end on score:** in AI-only campaigns no realm completes a
   victory within 30 years, and the largest starting realm (Britain on the World, Russia
   on Europe) leads on score (`reports/ai/`).

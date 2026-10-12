@@ -77,6 +77,19 @@ function breakdown(title: string, rows: Array<[string, number, string?]>, foot?:
   );
 }
 
+/**
+ * The player's monthly ledger as the HUD last worked it out (about 7 ms on the
+ * largest map, and the HUD is rebuilt several times a second while the clock runs):
+ * again each week, after a change of owner or treaty, and after anything the player does.
+ */
+let hudLedger: { sim: unknown; key: string; ledger: ReturnType<typeof computeLedger> } | null = null;
+function playerLedger(app: App, pid: string): ReturnType<typeof computeLedger> {
+  const sim = app.sim!;
+  const key = `${pid}|${sim.state.tick}|${sim.state.rev}|${app.actions}`;
+  if (!hudLedger || hudLedger.sim !== sim || hudLedger.key !== key) hudLedger = { sim, key, ledger: computeLedger(sim, pid) };
+  return hudLedger.ledger;
+}
+
 export function renderHud(app: App): void {
   const sim = app.sim!;
   const st = sim.state;
@@ -90,7 +103,7 @@ export function renderHud(app: App): void {
       const realm = h('button', { class: 'hud-realm', type: 'button', 'aria-label': `${def.name}: open the Realm ledger`, 'data-fk': 'realm' }, shield(app, pid, 'lg'), h('span', { class: 'stack', style: 'gap:0' }, h('span', { class: 'nm' }, def.short), h('span', { class: 'title' }, def.name.replace(def.short, '').replace(/ of\s*$/, '').trim() || def.adjective)));
       realm.addEventListener('click', () => app.openLedger('realm'));
       parts.push(realm);
-      const l = computeLedger(sim, pid);
+      const l = playerLedger(app, pid);
       const gross = grossIncome(l);
       const costs = Object.values(l.expenses).reduce((a, b) => a + b, 0);
       const stage = debtStage(sim, pid);

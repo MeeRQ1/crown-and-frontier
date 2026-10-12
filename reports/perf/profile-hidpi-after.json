@@ -1,0 +1,753 @@
+{
+ "env": "Intel(R) Xeon(R) Processor @ 2.10GHz ×4, 16 GB, headless Chromium 141.0.7390.37 (software rendering), 1920×1080 at device pixel ratio 2, base /",
+ "label": "this branch (after), 1920×1080 at pixel ratio 2",
+ "results": [
+  {
+   "name": "aldmere-idle",
+   "what": "paused, no input, 3 s",
+   "map": "aldmere",
+   "tick": [
+    0,
+    0
+   ],
+   "seconds": 3,
+   "frames": 34,
+   "frameMs": {
+    "p50": 83.3,
+    "p95": 116.6,
+    "p99": 116.6,
+    "max": 116.7
+   },
+   "slow": {
+    "over17": 34,
+    "over33": 34,
+    "over50": 34,
+    "over100": 6
+   },
+   "long": {
+    "count": 35,
+    "totalMs": 3041,
+    "maxMs": 119
+   },
+   "js": {
+    "r.ensureRealms": 0,
+    "r.modeContext": 0.2,
+    "r.diffGround": 0,
+    "r.tile": 37.1,
+    "r.baseRegion": 138.4,
+    "r.paintRealmLayers": 20.4,
+    "r.drawSeaZones": 2,
+    "r.drawStraits": 0.7,
+    "r.drawGround": 831.4,
+    "r.drawFleetRoutes": 0,
+    "r.drawAirMissions": 0,
+    "r.drawBattles": 0,
+    "r.drawArmies": 2.8,
+    "r.drawFleets": 1,
+    "r.drawWings": 0,
+    "r.drawSites": 1,
+    "r.drawZoneNames": 0,
+    "r.drawLabels": 16.1,
+    "draw": 947.6,
+    "minimap": 0.3,
+    "frame": 948.1
+   },
+   "counts": {
+    "r.ensureRealms": 36,
+    "r.modeContext": 36,
+    "r.diffGround": 36,
+    "r.tile": 77,
+    "r.baseRegion": 142,
+    "r.paintRealmLayers": 142,
+    "r.drawSeaZones": 142,
+    "r.drawStraits": 142,
+    "r.drawGround": 36,
+    "r.drawFleetRoutes": 36,
+    "r.drawAirMissions": 36,
+    "r.drawBattles": 36,
+    "r.drawArmies": 36,
+    "r.drawFleets": 36,
+    "r.drawWings": 36,
+    "r.drawSites": 36,
+    "r.drawZoneNames": 36,
+    "r.drawLabels": 36,
+    "draw": 36,
+    "minimap": 18,
+    "frame": 36
+   },
+   "main": {
+    "taskMs": 1077.1,
+    "scriptMs": 974.3,
+    "styleMs": 0,
+    "layoutMs": 0,
+    "layouts": 0,
+    "styles": 0
+   },
+   "input": [],
+   "inputWorst": 0,
+   "moveAck": null,
+   "heapMB": [
+    7.4,
+    12.5
+   ],
+   "domNodes": [
+    2774,
+    2851
+   ]
+  },
+  {
+   "name": "aldmere-pan",
+   "what": "paused, dragging the map, 6 s",
+   "map": "aldmere",
+   "tick": [
+    0,
+    0
+   ],
+   "seconds": 22.2,
+   "frames": 1147,
+   "frameMs": {
+    "p50": 16.7,
+    "p95": 49.9,
+    "p99": 66.7,
+    "max": 183.3
+   },
+   "slow": {
+    "over17": 81,
+    "over33": 62,
+    "over50": 37,
+    "over100": 3
+   },
+   "long": {
+    "count": 48,
+    "totalMs": 2918,
+    "maxMs": 87
+   },
+   "js": {
+    "r.ensureRealms": 0,
+    "r.modeContext": 0.1,
+    "r.diffGround": 0,
+    "r.tile": 8.1,
+    "r.baseRegion": 28.2,
+    "r.paintRealmLayers": 1.4,
+    "r.drawSeaZones": 0.2,
+    "r.drawStraits": 0.2,
+    "r.drawGround": 109.5,
+    "r.drawFleetRoutes": 0.1,
+    "r.drawAirMissions": 0,
+    "r.drawBattles": 0,
+    "r.drawArmies": 2.7,
+    "r.drawFleets": 1.6,
+    "r.drawWings": 0,
+    "r.drawSites": 1.7,
+    "r.drawZoneNames": 0,
+    "r.drawLabels": 22.1,
+    "draw": 303.3,
+    "frame": 304.1,
+    "minimap": 0.3,
+    "hover": 0
+   },
+   "counts": {
+    "r.ensureRealms": 416,
+    "r.modeContext": 416,
+    "r.diffGround": 416,
+    "r.tile": 119,
+    "r.baseRegion": 170,
+    "r.paintRealmLayers": 170,
+    "r.drawSeaZones": 170,
+    "r.drawStraits": 170,
+    "r.drawGround": 416,
+    "r.drawFleetRoutes": 416,
+    "r.drawAirMissions": 416,
+    "r.drawBattles": 416,
+    "r.drawArmies": 416,
+    "r.drawFleets": 416,
+    "r.drawWings": 416,
+    "r.drawSites": 416,
+    "r.drawZoneNames": 416,
+    "r.drawLabels": 416,
+    "draw": 416,
+    "frame": 1149,
+    "minimap": 143,
+    "hover": 4
+   },
+   "main": {
+    "taskMs": 496.1,
+    "scriptMs": 310.3,
+    "styleMs": 2,
+    "layoutMs": 3.8,
+    "layouts": 4.9,
+    "styles": 5.4
+   },
+   "input": [
+    {
+     "name": "mousedown",
+     "delay": 78.9,
+     "proc": 0,
+     "dur": 160
+    },
+    {
+     "name": "pointerdown",
+     "delay": 58.1,
+     "proc": 20.8,
+     "dur": 160
+    },
+    {
+     "name": "mousedown",
+     "delay": 0.4,
+     "proc": 0,
+     "dur": 48
+    },
+    {
+     "name": "pointerdown",
+     "delay": 0.3,
+     "proc": 0.1,
+     "dur": 48
+    },
+    {
+     "name": "mousedown",
+     "delay": 0.7,
+     "proc": 0,
+     "dur": 48
+    },
+    {
+     "name": "pointerdown",
+     "delay": 0.4,
+     "proc": 0.3,
+     "dur": 48
+    }
+   ],
+   "inputWorst": 160,
+   "moveAck": {
+    "n": 376,
+    "p50": 33.7,
+    "p95": 88.1,
+    "max": 462
+   },
+   "heapMB": [
+    7.5,
+    13.2
+   ],
+   "domNodes": [
+    2857,
+    3618
+   ]
+  },
+  {
+   "name": "aldmere-max",
+   "what": "running at the fastest speed (6 weeks/s), no input, 8 s",
+   "map": "aldmere",
+   "tick": [
+    0,
+    47
+   ],
+   "seconds": 8,
+   "frames": 474,
+   "frameMs": {
+    "p50": 16.7,
+    "p95": 16.8,
+    "p99": 33.3,
+    "max": 33.4
+   },
+   "slow": {
+    "over17": 6,
+    "over33": 0,
+    "over50": 0,
+    "over100": 0
+   },
+   "long": {
+    "count": 0,
+    "totalMs": 0,
+    "maxMs": 0
+   },
+   "js": {
+    "frame": 166.4,
+    "r.ensureRealms": 2.5,
+    "r.modeContext": 0.1,
+    "r.diffGround": 0.7,
+    "r.drawGround": 7.6,
+    "r.drawFleetRoutes": 0,
+    "r.drawAirMissions": 0,
+    "r.drawBattles": 0,
+    "r.drawArmies": 1,
+    "r.drawFleets": 0.6,
+    "r.drawWings": 0,
+    "r.drawSites": 0.7,
+    "r.drawZoneNames": 0,
+    "r.drawLabels": 7.2,
+    "draw": 77.5,
+    "minimap": 4.2,
+    "ui.renderRail": 1.8,
+    "ui.renderAttention": 0.1,
+    "ui.renderBanner": 0,
+    "ui.updateInsets": 7.8,
+    "ui": 33.4,
+    "r.baseRegion": 0.3,
+    "r.paintRealmLayers": 0.6,
+    "r.drawSeaZones": 0,
+    "r.drawStraits": 0
+   },
+   "counts": {
+    "frame": 475,
+    "r.ensureRealms": 50,
+    "r.modeContext": 50,
+    "r.diffGround": 50,
+    "r.drawGround": 50,
+    "r.drawFleetRoutes": 50,
+    "r.drawAirMissions": 50,
+    "r.drawBattles": 50,
+    "r.drawArmies": 50,
+    "r.drawFleets": 50,
+    "r.drawWings": 50,
+    "r.drawSites": 50,
+    "r.drawZoneNames": 50,
+    "r.drawLabels": 50,
+    "draw": 50,
+    "minimap": 48,
+    "ui.renderRail": 44,
+    "ui.renderAttention": 44,
+    "ui.renderBanner": 44,
+    "ui.updateInsets": 44,
+    "ui": 44,
+    "r.baseRegion": 13,
+    "r.paintRealmLayers": 13,
+    "r.drawSeaZones": 13,
+    "r.drawStraits": 13
+   },
+   "main": {
+    "taskMs": 293.5,
+    "scriptMs": 153.8,
+    "styleMs": 7.6,
+    "layoutMs": 12.6,
+    "layouts": 15.2,
+    "styles": 17.2
+   },
+   "input": [
+    {
+     "name": "keydown",
+     "delay": 0.4,
+     "proc": 0.5,
+     "dur": 64
+    },
+    {
+     "name": "keyup",
+     "delay": 0.3,
+     "proc": 0,
+     "dur": 64
+    }
+   ],
+   "inputWorst": 64,
+   "moveAck": null,
+   "heapMB": [
+    7.7,
+    21.4
+   ],
+   "domNodes": [
+    3021,
+    5511
+   ]
+  },
+  {
+   "name": "world-idle",
+   "what": "the World at war, paused, no input, 3 s",
+   "map": "earth",
+   "tick": [
+    280,
+    280
+   ],
+   "seconds": 3,
+   "frames": 14,
+   "frameMs": {
+    "p50": 216.6,
+    "p95": 250,
+    "p99": 250,
+    "max": 250
+   },
+   "slow": {
+    "over17": 14,
+    "over33": 14,
+    "over50": 14,
+    "over100": 14
+   },
+   "long": {
+    "count": 15,
+    "totalMs": 3164,
+    "maxMs": 248
+   },
+   "js": {
+    "r.ensureRealms": 0.1,
+    "r.modeContext": 0,
+    "r.diffGround": 0,
+    "r.tile": 36.1,
+    "r.baseRegion": 156.3,
+    "r.paintRealmLayers": 40.6,
+    "r.drawSeaZones": 1.5,
+    "r.drawStraits": 1,
+    "r.drawGround": 1021.4,
+    "r.drawRoute": 0.6,
+    "r.drawFleetRoutes": 0.1,
+    "r.drawAirMissions": 0,
+    "r.drawBattles": 0,
+    "r.drawArmies": 1.3,
+    "r.drawFleets": 0.9,
+    "r.drawWings": 0,
+    "r.drawSites": 2.5,
+    "r.drawZoneNames": 0,
+    "r.drawLabels": 14,
+    "draw": 1088.2,
+    "minimap": 0.2,
+    "frame": 1088.5
+   },
+   "counts": {
+    "r.ensureRealms": 16,
+    "r.modeContext": 16,
+    "r.diffGround": 16,
+    "r.tile": 17,
+    "r.baseRegion": 60,
+    "r.paintRealmLayers": 60,
+    "r.drawSeaZones": 60,
+    "r.drawStraits": 60,
+    "r.drawGround": 16,
+    "r.drawRoute": 16,
+    "r.drawFleetRoutes": 16,
+    "r.drawAirMissions": 16,
+    "r.drawBattles": 16,
+    "r.drawArmies": 16,
+    "r.drawFleets": 16,
+    "r.drawWings": 16,
+    "r.drawSites": 16,
+    "r.drawZoneNames": 16,
+    "r.drawLabels": 16,
+    "draw": 16,
+    "minimap": 16,
+    "frame": 16
+   },
+   "main": {
+    "taskMs": 1152.4,
+    "scriptMs": 1101,
+    "styleMs": 0.3,
+    "layoutMs": 0.1,
+    "layouts": 0.7,
+    "styles": 0.7
+   },
+   "input": [],
+   "inputWorst": 0,
+   "moveAck": null,
+   "heapMB": [
+    23.8,
+    35.9
+   ],
+   "domNodes": [
+    2788,
+    2805
+   ]
+  },
+  {
+   "name": "world-pan",
+   "what": "the World at war, paused, dragging at regional zoom (far tier), 6 s",
+   "map": "earth",
+   "tick": [
+    280,
+    280
+   ],
+   "seconds": 30.9,
+   "frames": 1156,
+   "frameMs": {
+    "p50": 16.7,
+    "p95": 99.9,
+    "p99": 183.3,
+    "max": 283.3
+   },
+   "slow": {
+    "over17": 143,
+    "over33": 118,
+    "over50": 100,
+    "over100": 54
+   },
+   "long": {
+    "count": 103,
+    "totalMs": 12548,
+    "maxMs": 295
+   },
+   "js": {
+    "r.ensureRealms": 0.1,
+    "r.modeContext": 0.1,
+    "r.diffGround": 0,
+    "r.tile": 18.4,
+    "r.baseRegion": 63.6,
+    "r.paintRealmLayers": 15.4,
+    "r.drawSeaZones": 0.6,
+    "r.drawStraits": 0.6,
+    "r.drawGround": 362.3,
+    "r.drawRoute": 0.9,
+    "r.drawFleetRoutes": 0.1,
+    "r.drawAirMissions": 0,
+    "r.drawBattles": 0,
+    "r.drawArmies": 3,
+    "r.drawFleets": 2.2,
+    "r.drawWings": 0,
+    "r.drawSites": 5.4,
+    "r.drawZoneNames": 0,
+    "r.drawLabels": 27.8,
+    "draw": 534.3,
+    "minimap": 0.4,
+    "frame": 535.1,
+    "hover": 0.2
+   },
+   "counts": {
+    "r.ensureRealms": 456,
+    "r.modeContext": 456,
+    "r.diffGround": 456,
+    "r.tile": 159,
+    "r.baseRegion": 357,
+    "r.paintRealmLayers": 357,
+    "r.drawSeaZones": 357,
+    "r.drawStraits": 357,
+    "r.drawGround": 456,
+    "r.drawRoute": 456,
+    "r.drawFleetRoutes": 456,
+    "r.drawAirMissions": 456,
+    "r.drawBattles": 456,
+    "r.drawArmies": 456,
+    "r.drawFleets": 456,
+    "r.drawWings": 456,
+    "r.drawSites": 456,
+    "r.drawZoneNames": 456,
+    "r.drawLabels": 456,
+    "draw": 456,
+    "minimap": 194,
+    "frame": 1158,
+    "hover": 4
+   },
+   "main": {
+    "taskMs": 708.2,
+    "scriptMs": 543.1,
+    "styleMs": 1.5,
+    "layoutMs": 2.8,
+    "layouts": 3.7,
+    "styles": 3.9
+   },
+   "input": [
+    {
+     "name": "mousedown",
+     "delay": 230.4,
+     "proc": 0,
+     "dur": 424
+    },
+    {
+     "name": "pointerdown",
+     "delay": 227.8,
+     "proc": 2.3,
+     "dur": 424
+    },
+    {
+     "name": "pointerup",
+     "delay": 0.3,
+     "proc": 0.2,
+     "dur": 16
+    },
+    {
+     "name": "mouseup",
+     "delay": 0.5,
+     "proc": 0,
+     "dur": 16
+    },
+    {
+     "name": "click",
+     "delay": 0.8,
+     "proc": 0,
+     "dur": 16
+    },
+    {
+     "name": "mousedown",
+     "delay": 6.3,
+     "proc": 0,
+     "dur": 48
+    },
+    {
+     "name": "pointerdown",
+     "delay": 5.8,
+     "proc": 0.5,
+     "dur": 48
+    },
+    {
+     "name": "pointerup",
+     "delay": 0.1,
+     "proc": 0.1,
+     "dur": 24
+    },
+    {
+     "name": "mouseup",
+     "delay": 0.2,
+     "proc": 0,
+     "dur": 24
+    },
+    {
+     "name": "click",
+     "delay": 0.5,
+     "proc": 0,
+     "dur": 24
+    },
+    {
+     "name": "mousedown",
+     "delay": 6.5,
+     "proc": 0,
+     "dur": 48
+    },
+    {
+     "name": "pointerdown",
+     "delay": 6.4,
+     "proc": 0.1,
+     "dur": 48
+    },
+    {
+     "name": "mousedown",
+     "delay": 5.4,
+     "proc": 0,
+     "dur": 56
+    },
+    {
+     "name": "pointerdown",
+     "delay": 5.2,
+     "proc": 0.2,
+     "dur": 56
+    }
+   ],
+   "inputWorst": 424,
+   "moveAck": {
+    "n": 376,
+    "p50": 34.8,
+    "p95": 232.6,
+    "max": 721.7
+   },
+   "heapMB": [
+    24.7,
+    35.7
+   ],
+   "domNodes": [
+    2802,
+    3087
+   ]
+  },
+  {
+   "name": "world-max",
+   "what": "the World at war, fastest speed, no input, 8 s",
+   "map": "earth",
+   "tick": [
+    280,
+    314
+   ],
+   "seconds": 8.1,
+   "frames": 365,
+   "frameMs": {
+    "p50": 16.7,
+    "p95": 33.4,
+    "p99": 50,
+    "max": 166.7
+   },
+   "slow": {
+    "over17": 94,
+    "over33": 18,
+    "over50": 3,
+    "over100": 1
+   },
+   "long": {
+    "count": 7,
+    "totalMs": 485,
+    "maxMs": 161
+   },
+   "js": {
+    "r.ensureRealms": 2.7,
+    "r.modeContext": 0,
+    "r.diffGround": 2.2,
+    "r.tile": 6.6,
+    "r.baseRegion": 18.3,
+    "r.paintRealmLayers": 6.1,
+    "r.drawSeaZones": 0.3,
+    "r.drawStraits": 0.5,
+    "r.drawGround": 47.1,
+    "r.drawRoute": 0.5,
+    "r.drawFleetRoutes": 0.3,
+    "r.drawAirMissions": 0,
+    "r.drawBattles": 0,
+    "r.drawArmies": 3.2,
+    "r.drawFleets": 2.4,
+    "r.drawWings": 0,
+    "r.drawSites": 3,
+    "r.drawZoneNames": 0,
+    "r.drawLabels": 25.1,
+    "draw": 213.2,
+    "frame": 767,
+    "minimap": 2.4,
+    "ui.renderRail": 1.5,
+    "ui.renderAttention": 0.1,
+    "ui.renderBanner": 0,
+    "ui.updateInsets": 6.1,
+    "ui": 56.4
+   },
+   "counts": {
+    "r.ensureRealms": 122,
+    "r.modeContext": 122,
+    "r.diffGround": 122,
+    "r.tile": 16,
+    "r.baseRegion": 81,
+    "r.paintRealmLayers": 81,
+    "r.drawSeaZones": 81,
+    "r.drawStraits": 81,
+    "r.drawGround": 122,
+    "r.drawRoute": 87,
+    "r.drawFleetRoutes": 122,
+    "r.drawAirMissions": 122,
+    "r.drawBattles": 122,
+    "r.drawArmies": 122,
+    "r.drawFleets": 122,
+    "r.drawWings": 122,
+    "r.drawSites": 122,
+    "r.drawZoneNames": 122,
+    "r.drawLabels": 122,
+    "draw": 122,
+    "frame": 367,
+    "minimap": 46,
+    "ui.renderRail": 33,
+    "ui.renderAttention": 33,
+    "ui.renderBanner": 33,
+    "ui.updateInsets": 33,
+    "ui": 33
+   },
+   "main": {
+    "taskMs": 943.3,
+    "scriptMs": 755.1,
+    "styleMs": 6.8,
+    "layoutMs": 11.4,
+    "layouts": 12.6,
+    "styles": 16.1
+   },
+   "input": [
+    {
+     "name": "keydown",
+     "delay": 26.7,
+     "proc": 0.5,
+     "dur": 80
+    },
+    {
+     "name": "keyup",
+     "delay": 29.8,
+     "proc": 0,
+     "dur": 56
+    }
+   ],
+   "inputWorst": 80,
+   "moveAck": null,
+   "heapMB": [
+    25.1,
+    105
+   ],
+   "domNodes": [
+    3000,
+    16955
+   ]
+  }
+ ],
+ "ledgers": [],
+ "soak": [],
+ "errors": []
+}

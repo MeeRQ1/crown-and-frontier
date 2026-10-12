@@ -27,6 +27,9 @@ const runs: Array<{ scenario: string; seed: number; difficulty: 'easy' | 'normal
   { scenario: 'reach', seed: 3, difficulty: 'easy', years: 15 },
   { scenario: 'aldmere', seed: 1, difficulty: 'normal', years: 10 },
   { scenario: 'aldmere', seed: 2, difficulty: 'hard', years: 10 },
+  // the largest maps, where the browser splits weeks most finely
+  { scenario: 'europe', seed: 1, difficulty: 'normal', years: 3 },
+  { scenario: 'earth', seed: 1, difficulty: 'normal', years: 2 },
 ];
 const mapFile = get('map');
 if (mapFile) {

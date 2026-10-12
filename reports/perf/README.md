@@ -1,5 +1,9 @@
 # Performance and rule-equivalence records
 
+The performance and stability update (the ground cache, the frame budget and the sliced
+phases) is documented in `lag-diagnosis.md`, with its own same-machine before/after
+records listed below.
+
 Stages A–C ran on one machine (4-core Xeon @ 2.1 GHz, Node 22, headless
 Chromium with software rendering); Stage D ran on a 4-core Xeon @ 2.8 GHz and Stage E on a
 4-core Xeon @ 2.1 GHz, with the same software (Stage E includes a same-machine run of the
@@ -21,6 +25,12 @@ real-device numbers.
 | `atlas-before-*.md/json`, `web-atlas-before.md` | The atlas update's audit: `main` at 99e0322 on a 4-core Xeon @ 2.1 GHz (not comparable with the final run, which used another machine) | `npm run bench -- --scenario aldmere --seeds 1-2 --years 30 --label "atlas before"` from a checkout of 99e0322 |
 | `atlas-final-main-*.md/json`, `atlas-final-branch-*.md/json` | The atlas update's final simulation benchmarks: `main` (99e0322) and this branch (6153e86, the final simulation code), alternating per map on one 4-core Xeon @ 2.8 GHz with nothing else running; the Reach, Aldmere and the Middle Sea for both (30 years), Europe, Hesperia and the World for the branch (10 years); each run ends by timing a save and a load | `npx tsx tools/bench.ts --scenario <map> --seeds 1-2 --years 30` in each checkout (`main` with this branch's save-timing lines in `tools/bench.ts`); `--years 10` for the new maps |
 | `web-atlas-final-main.md`, `web-atlas-final-branch.md` | The same machine in the browser: `main` on the Reach and Aldmere; the branch on those and the three new maps, plus a late-game run on the World (seed 1, week 280) comparing whole weeks per frame with weeks in slices | `npm run build`, then `npx tsx tools/bench-web.ts --maps reach,aldmere` (`main`) and `--maps reach,aldmere,europe,hesperia,earth --stress earth:1:280` (branch) |
+| `lag-diagnosis.md` | The performance and stability update: how the lag was reproduced, its measured causes, the fixes, and before/after tables from the files below | — |
+| `profile-before.md/json`, `profile-after.md/json` | Real gameplay workloads in production builds (`tools/profile-web.ts`): pan, zoom, select and ledgers paused; normal and fastest speed; a developed campaign; the World at war (orders, military mode, dragging while running); the editor; a leak soak. `main` 8ba06c6 and this branch, one after the other on a 4-core Xeon @ 2.1 GHz, headless Chromium with software rendering, 1366×800 | `npm run build`, then `npx tsx tools/profile-web.ts --dist <dist> --label <label> --out reports/perf/profile-<x>.md --json reports/perf/profile-<x>.json` in each checkout |
+| `profile-hidpi-before.md/json`, `profile-hidpi-after.md/json` | The same at 1920×1080, pixel ratio 2 (idle, drag and fastest speed on Aldmere and the World) | as above with `--only aldmere-idle,aldmere-pan,aldmere-max,world-idle,world-pan,world-max --size 1920x1080 --dpr 2` |
+| `profile-1936.md/json` | The two 1936 maps beside the World, 1914 on this branch's production build, each after five years of AI play from seed 1 (drag, zoom, select, ledgers, normal and fastest speed, dragging while running) | `npx tsx tools/profile-web.ts --dist dist --only world-idle,…,e36-…,w36-… --out reports/perf/profile-1936.md` (the 1936 workloads run only when named) |
+| `profile-subpath.md` | This branch served under `/crown-and-frontier/`, as on GitHub Pages | `--base /crown-and-frontier/ --only aldmere-pan,aldmere-max,editor-pan` |
+| `rulecheck-8ba06c6.json` | Yearly state checksums of fixed-seed AI campaigns on `main` 8ba06c6 (the Reach, Aldmere, Europe, the World); this branch's sliced phases match them | `npm run rulecheck -- --compare reports/perf/rulecheck-8ba06c6.json` |
 | `rulecheck-stageC-speedups.json` | Checksums recorded with three Stage C speed-ups reverted; the current code matches them | revert the strait pre-check, the per-controller friendliness cache and the one-pass slipway count, `npm run rulecheck -- --record x.json`, restore, `--compare x.json` |
 | `rulecheck-2246696.json` | Yearly state checksums of six fixed-seed AI campaigns on 2246696 | `npm run rulecheck -- --compare reports/perf/rulecheck-2246696.json --map .scratch/stress-900.map.json` |
 

@@ -963,7 +963,7 @@ export function proceduralSpec(P: ProceduralParams, salt = 0): { spec: WorldSpec
     ...P.meta,
   };
   const rules: MapRules = {
-    startYear: clamp(Math.round(P.startYear), 1870, 1930),
+    startYear: clamp(Math.round(P.startYear), 1870, 1936),
     campaignYears: years,
     victory: { ...scaledVictory(regionDefs.length, realms), ...P.victory },
     researchCostMul: researchCostFor(provinces, realms),

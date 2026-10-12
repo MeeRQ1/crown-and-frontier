@@ -35,6 +35,14 @@ export class EditorView {
   hover: string | null = null;
   /** provinces or zones named by a validator finding */
   flagged = new Set<string>();
+  /** the sea zone being inspected */
+  selectedZone: string | null = null;
+  /**
+   * Provinces painted by the stroke in progress: drawn over the cached scene, which
+   * is redrawn once when the stroke ends (a full redraw per province is slow on a
+   * large map).
+   */
+  painting: Set<string> | null = null;
   private geometryRef: unknown = null;
   /** where each coastal province's port is drawn: the middle of its longest sea shore */
   private portSpots = new Map<string, { x: number; y: number }>();
@@ -50,6 +58,8 @@ export class EditorView {
   /** Shows a package; the outlines are rebuilt only when its drawn geometry changed. */
   setMap(pkg: MapPackage): void {
     this.pkg = pkg;
+    // an edit: owners, regions, colours or rivers may have changed
+    this.version++;
     if (pkg.geometry !== this.geometryRef) {
       const sameBounds = this.geo && JSON.stringify(this.geo.bounds) === JSON.stringify(pkg.geometry.bounds);
       this.geo = new GeoIndex(drawnFromPackage(pkg));
@@ -151,19 +161,102 @@ export class EditorView {
 
   private provIndex = new Map<string, MapPackage['provinces'][number]>();
   private colorIndex = new Map<string, string>();
+  /** bumped by every setMap (an edit); part of the content key */
+  private version = 0;
+  private bordersKey = '';
+  private borders: { thin: Path2D; thick: Path2D } = { thin: new Path2D(), thick: new Path2D() };
+  /** the map drawn once, a little larger than the screen, and copied while the view only pans */
+  private scene: { canvas: HTMLCanvasElement; key: string; offX: number; offY: number; m: number } | null = null;
+
+  /**
+   * What the drawing shows, as a string: an edit made without setMap (a paint
+   * stroke changes the package as it goes) still changes it. About a millisecond
+   * on the largest map.
+   */
+  private contentKey(): string {
+    const { pkg } = this;
+    let s = `${this.version}|${this.layer}|${pkg.provinces.length}|${pkg.rivers.length}|${pkg.straits.length}|${pkg.seaZones.length}|`;
+    for (const p of pkg.provinces) s += `${p.id},${p.owner},${p.region},${p.terrain},${p.resource},${p.port},${p.name};`;
+    for (const n of pkg.nations) s += `${n.id},${n.color},${n.capital};`;
+    return s;
+  }
+
+  /** The province and colour indexes. */
+  private ensureIndexes(): void {
+    const { pkg } = this;
+    this.provIndex = new Map(pkg.provinces.map((p) => [p.id, p]));
+    this.colorIndex = new Map(pkg.nations.map((n) => [n.id, n.color]));
+  }
+
+  /** The border paths, when owners or regions changed. */
+  private ensureBorders(): void {
+    const { geo, pkg } = this;
+    const key = `${this.layer}|${this.geometryRef === pkg.geometry}|${this.layer === 'regions' ? pkg.provinces.map((p) => p.region).join() : this.layer === 'realms' ? pkg.provinces.map((p) => p.owner).join() : ''}|${this.version}`;
+    if (key === this.bordersKey) return;
+    this.bordersKey = key;
+    // province borders, and realm or region borders
+    const thin = new Path2D();
+    const thick = new Path2D();
+    for (const e of geo.edges) {
+      if (e.coast) continue;
+      const a = this.provIndex.get(e.a);
+      const b = this.provIndex.get(e.b);
+      const differ = this.layer === 'regions' ? a?.region !== b?.region : this.layer === 'realms' ? a?.owner !== b?.owner : false;
+      (differ ? thick : thin).addPath(e.path);
+    }
+    this.borders = { thin, thick };
+  }
 
   draw(): void {
     const { ctx, camera: cam, geo, pkg } = this;
     if (!pkg || !geo) return;
-    this.provIndex = new Map(pkg.provinces.map((p) => [p.id, p]));
-    this.colorIndex = new Map(pkg.nations.map((n) => [n.id, n.color]));
+    this.ensureIndexes();
+    const W = this.canvas.width;
+    const H = this.canvas.height;
+    const dpr = this.dpr;
+    // the scene: drawn again when its content, the zoom or the size changes, or when
+    // a pan leaves its margin; otherwise copied at the new offset
+    let sc = this.scene;
+    // while a stroke is painted, the scene is kept (if the view did not change) and the painted provinces drawn over it
+    const view = `${cam.zoom}|${dpr}|${W}x${H}`;
+    const key = this.painting && sc && sc.key.endsWith(`|${view}`) ? sc.key : `${this.contentKey()}|${view}`;
+    const bx = sc ? Math.round(dpr * (cam.offX - sc.offX)) : 0;
+    const by = sc ? Math.round(dpr * (cam.offY - sc.offY)) : 0;
+    if (!sc || sc.key !== key || Math.abs(bx) > sc.m || Math.abs(by) > sc.m) {
+      const m = Math.round(Math.min(W, H) * 0.25);
+      const canvas = sc && sc.canvas.width === W + 2 * m && sc.canvas.height === H + 2 * m ? sc.canvas : document.createElement('canvas');
+      canvas.width = W + 2 * m;
+      canvas.height = H + 2 * m;
+      sc = this.scene = { canvas, key, offX: cam.offX, offY: cam.offY, m };
+      this.ensureBorders();
+      this.drawScene(canvas.getContext('2d')!, cam.offX + m / dpr, cam.offY + m / dpr, m / dpr);
+    }
+    ctx.setTransform(1, 0, 0, 1, 0, 0);
+    const dx = Math.round(dpr * (cam.offX - sc.offX));
+    const dy = Math.round(dpr * (cam.offY - sc.offY));
+    ctx.drawImage(sc.canvas, sc.m - dx, sc.m - dy, W, H, 0, 0, W, H);
+    this.drawOverlays();
+  }
+
+  /**
+   * Everything but the highlights, for a camera offset (CSS pixels) and a margin
+   * around the screen, into the scene canvas.
+   */
+  private drawScene(ctx: CanvasRenderingContext2D, offX: number, offY: number, margin: number): void {
+    const { camera: cam, geo, pkg } = this;
     const z = cam.zoom;
     const px = 1 / z;
+    const dpr = this.dpr;
+    const toScreen = (x: number, y: number) => ({ x: x * z + offX, y: y * z + offY });
     ctx.setTransform(1, 0, 0, 1, 0, 0);
     ctx.fillStyle = PALETTE.seaMid;
-    ctx.fillRect(0, 0, this.canvas.width, this.canvas.height);
-    ctx.setTransform(this.dpr * z, 0, 0, this.dpr * z, this.dpr * cam.offX, this.dpr * cam.offY);
-    const [x0, y0, x1, y1] = cam.viewRect(40);
+    ctx.fillRect(0, 0, ctx.canvas.width, ctx.canvas.height);
+    ctx.setTransform(dpr * z, 0, 0, dpr * z, dpr * offX, dpr * offY);
+    const pad = 40 + margin;
+    const x0 = (-pad - offX + margin) / z;
+    const y0 = (-pad - offY + margin) / z;
+    const x1 = (cam.vw + pad - offX + margin) / z;
+    const y1 = (cam.vh + pad - offY + margin) / z;
     const visible = geo.provincesIn(x0, y0, x1, y1);
 
     // sea zones
@@ -196,15 +289,7 @@ export class EditorView {
       ctx.fill(pk.path);
     }
     // province borders, then realm or region borders
-    const thin = new Path2D();
-    const thick = new Path2D();
-    for (const e of geo.edges) {
-      if (e.coast) continue;
-      const a = this.provIndex.get(e.a);
-      const b = this.provIndex.get(e.b);
-      const differ = this.layer === 'regions' ? a?.region !== b?.region : this.layer === 'realms' ? a?.owner !== b?.owner : false;
-      (differ ? thick : thin).addPath(e.path);
-    }
+    const { thin, thick } = this.borders;
     ctx.lineJoin = 'round';
     ctx.strokeStyle = 'rgba(53, 47, 39, 0.35)';
     ctx.lineWidth = 0.8 * px;
@@ -236,23 +321,9 @@ export class EditorView {
       ctx.stroke();
     }
     ctx.setLineDash([]);
-    // highlights
-    const outline = (id: string | null, color: string, width: number, dash?: number[]) => {
-      const p = id ? geo.provs.get(id) : null;
-      if (!p) return;
-      ctx.setLineDash(dash ? dash.map((d) => d * px) : []);
-      ctx.strokeStyle = color;
-      ctx.lineWidth = width * px;
-      ctx.stroke(p.path);
-      ctx.setLineDash([]);
-    };
-    for (const id of this.flagged) outline(id, '#e0533d', 3);
-    outline(this.hover, 'rgba(255, 255, 255, 0.85)', 2);
-    outline(this.pending, '#f2d48a', 3, [6, 4]);
-    outline(this.selected, '#f2d48a', 3.2);
 
     // marks drawn at screen size
-    ctx.setTransform(this.dpr, 0, 0, this.dpr, 0, 0);
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
     const caps = new Set(pkg.nations.map((n) => n.capital));
     const showNames = cam.provincePx > 70;
     ctx.textAlign = 'center';
@@ -260,11 +331,11 @@ export class EditorView {
     for (const p of visible) {
       const def = this.provIndex.get(p.id);
       if (!def) continue;
-      const s = cam.toScreen(p.lx, p.ly);
+      const s = toScreen(p.lx, p.ly);
       if (caps.has(p.id)) star(ctx, s.x, s.y - (showNames ? 10 : 0), 6);
       const spot = def.port ? this.portSpot(p.id) : null;
       if (spot) {
-        const q = cam.toScreen(spot.x, spot.y);
+        const q = toScreen(spot.x, spot.y);
         ctx.fillStyle = '#1d3f57';
         ctx.beginPath();
         ctx.arc(q.x, q.y, 4.2, 0, Math.PI * 2);
@@ -294,14 +365,53 @@ export class EditorView {
       for (const zd of pkg.seaZones) {
         const a = geo.zoneAnchors.get(zd.id);
         if (!a) continue;
-        const s = cam.toScreen(a.x, a.y);
+        const s = toScreen(a.x, a.y);
         ctx.fillText(zd.name, s.x, s.y);
-        if (this.flagged.has(zd.id) || this.selected === zd.id) {
-          ctx.strokeStyle = this.selected === zd.id ? '#f2d48a' : '#e0533d';
-          ctx.lineWidth = 2;
-          ctx.strokeRect(s.x - 50, s.y - 10, 100, 20);
-        }
       }
+    }
+  }
+
+  /** Validator findings, the hovered, pending and selected province, and a flagged or selected sea zone. */
+  private drawOverlays(): void {
+    const { ctx, camera: cam, geo, pkg } = this;
+    const z = cam.zoom;
+    const px = 1 / z;
+    ctx.setTransform(this.dpr * z, 0, 0, this.dpr * z, this.dpr * cam.offX, this.dpr * cam.offY);
+    ctx.lineJoin = 'round';
+    const outline = (id: string | null, color: string, width: number, dash?: number[]) => {
+      const p = id ? geo.provs.get(id) : null;
+      if (!p) return;
+      ctx.setLineDash(dash ? dash.map((d) => d * px) : []);
+      ctx.strokeStyle = color;
+      ctx.lineWidth = width * px;
+      ctx.stroke(p.path);
+      ctx.setLineDash([]);
+    };
+    // provinces painted by the stroke in progress
+    if (this.painting?.size) {
+      ctx.strokeStyle = 'rgba(53, 47, 39, 0.35)';
+      ctx.lineWidth = 0.8 * px;
+      for (const id of this.painting) {
+        const p = geo.provs.get(id);
+        if (!p) continue;
+        ctx.fillStyle = this.fillOf(id);
+        ctx.fill(p.path);
+        ctx.stroke(p.path);
+      }
+    }
+    for (const id of this.flagged) outline(id, '#e0533d', 3);
+    outline(this.hover, 'rgba(255, 255, 255, 0.85)', 2);
+    outline(this.pending, '#f2d48a', 3, [6, 4]);
+    outline(this.selected, '#f2d48a', 3.2);
+    // a flagged or selected sea zone: its own outline, in any layer
+    for (const zd of pkg.seaZones) {
+      const selected = this.selectedZone === zd.id;
+      if (!selected && !this.flagged.has(zd.id)) continue;
+      const path = geo.zonePath(zd.id);
+      if (!path) continue;
+      ctx.strokeStyle = selected ? '#f2d48a' : '#e0533d';
+      ctx.lineWidth = (selected ? 3.2 : 3) * px;
+      ctx.stroke(path);
     }
   }
 
