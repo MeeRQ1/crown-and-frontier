@@ -1,0 +1,5362 @@
+{
+ "env": "Intel(R) Xeon(R) Processor @ 2.10GHz ×4, 16 GB, headless Chromium 141.0.7390.37 (software rendering), 1366×800 at device pixel ratio 1, base /",
+ "label": "this branch: the 1936 maps beside the World 1914",
+ "results": [
+  {
+   "name": "world-idle",
+   "what": "the World at war, paused, no input, 3 s",
+   "map": "earth",
+   "tick": [
+    280,
+    280
+   ],
+   "seconds": 3,
+   "frames": 77,
+   "frameMs": {
+    "p50": 16.7,
+    "p95": 116.7,
+    "p99": 150,
+    "max": 166.7
+   },
+   "slow": {
+    "over17": 25,
+    "over33": 21,
+    "over50": 17,
+    "over100": 10
+   },
+   "long": {
+    "count": 19,
+    "totalMs": 1952,
+    "maxMs": 176
+   },
+   "js": {
+    "r.ensureRealms": 0,
+    "r.modeContext": 0,
+    "r.diffGround": 0,
+    "r.tile": 78.9,
+    "r.baseRegion": 290.4,
+    "r.paintRealmLayers": 44.2,
+    "r.drawSeaZones": 1.2,
+    "r.drawStraits": 1.2,
+    "r.drawGround": 688.1,
+    "r.drawRoute": 0.8,
+    "r.drawFleetRoutes": 0.1,
+    "r.drawAirMissions": 0,
+    "r.drawBattles": 0,
+    "r.drawArmies": 4,
+    "r.drawFleets": 1.4,
+    "r.drawWings": 0,
+    "r.drawSites": 2.9,
+    "r.drawZoneNames": 0,
+    "r.drawLabels": 26.9,
+    "draw": 728.8,
+    "minimap": 0.3,
+    "frame": 729.7
+   },
+   "counts": {
+    "r.ensureRealms": 31,
+    "r.modeContext": 31,
+    "r.diffGround": 31,
+    "r.tile": 28,
+    "r.baseRegion": 78,
+    "r.paintRealmLayers": 78,
+    "r.drawSeaZones": 78,
+    "r.drawStraits": 78,
+    "r.drawGround": 31,
+    "r.drawRoute": 31,
+    "r.drawFleetRoutes": 31,
+    "r.drawAirMissions": 31,
+    "r.drawBattles": 31,
+    "r.drawArmies": 31,
+    "r.drawFleets": 31,
+    "r.drawWings": 31,
+    "r.drawSites": 31,
+    "r.drawZoneNames": 31,
+    "r.drawLabels": 31,
+    "draw": 31,
+    "minimap": 14,
+    "frame": 79
+   },
+   "main": {
+    "taskMs": 820.3,
+    "scriptMs": 767.1,
+    "styleMs": 0.5,
+    "layoutMs": 0.4,
+    "layouts": 1,
+    "styles": 1.3
+   },
+   "input": [],
+   "inputWorst": 0,
+   "moveAck": null,
+   "heapMB": [
+    29.8,
+    43.6
+   ],
+   "domNodes": [
+    2810,
+    2939
+   ]
+  },
+  {
+   "name": "world-pan",
+   "what": "the World at war, paused, dragging at regional zoom (far tier), 6 s",
+   "map": "earth",
+   "tick": [
+    280,
+    280
+   ],
+   "seconds": 13.8,
+   "frames": 802,
+   "frameMs": {
+    "p50": 16.7,
+    "p95": 16.8,
+    "p99": 33.4,
+    "max": 66.7
+   },
+   "slow": {
+    "over17": 15,
+    "over33": 6,
+    "over50": 2,
+    "over100": 0
+   },
+   "long": {
+    "count": 5,
+    "totalMs": 316,
+    "maxMs": 79
+   },
+   "js": {
+    "hover": 0.3,
+    "frame": 139.8,
+    "r.ensureRealms": 0.2,
+    "r.modeContext": 0.2,
+    "r.diffGround": 0.1,
+    "r.drawGround": 54.1,
+    "r.drawRoute": 2.1,
+    "r.drawFleetRoutes": 0.2,
+    "r.drawAirMissions": 0,
+    "r.drawBattles": 0,
+    "r.drawArmies": 5.7,
+    "r.drawFleets": 4.2,
+    "r.drawWings": 0,
+    "r.drawSites": 6.7,
+    "r.drawZoneNames": 0,
+    "r.drawLabels": 51.1,
+    "draw": 138.8,
+    "minimap": 0.4,
+    "r.baseRegion": 13.1,
+    "r.paintRealmLayers": 4.2,
+    "r.drawSeaZones": 0.1,
+    "r.drawStraits": 0.2,
+    "r.tile": 4.8
+   },
+   "counts": {
+    "hover": 4,
+    "frame": 803,
+    "r.ensureRealms": 381,
+    "r.modeContext": 381,
+    "r.diffGround": 381,
+    "r.drawGround": 381,
+    "r.drawRoute": 381,
+    "r.drawFleetRoutes": 381,
+    "r.drawAirMissions": 381,
+    "r.drawBattles": 381,
+    "r.drawArmies": 381,
+    "r.drawFleets": 381,
+    "r.drawWings": 381,
+    "r.drawSites": 381,
+    "r.drawZoneNames": 381,
+    "r.drawLabels": 381,
+    "draw": 381,
+    "minimap": 98,
+    "r.baseRegion": 38,
+    "r.paintRealmLayers": 38,
+    "r.drawSeaZones": 38,
+    "r.drawStraits": 38,
+    "r.tile": 7
+   },
+   "main": {
+    "taskMs": 308.8,
+    "scriptMs": 146.4,
+    "styleMs": 4,
+    "layoutMs": 7,
+    "layouts": 8.8,
+    "styles": 9.5
+   },
+   "input": [
+    {
+     "name": "mousedown",
+     "delay": 24.1,
+     "proc": 0,
+     "dur": 24
+    },
+    {
+     "name": "pointerdown",
+     "delay": 0.7,
+     "proc": 23.4,
+     "dur": 24
+    },
+    {
+     "name": "mousedown",
+     "delay": 1,
+     "proc": 0,
+     "dur": 32
+    },
+    {
+     "name": "pointerdown",
+     "delay": 0.8,
+     "proc": 0.2,
+     "dur": 32
+    },
+    {
+     "name": "mousedown",
+     "delay": 1.1,
+     "proc": 0,
+     "dur": 24
+    },
+    {
+     "name": "pointerdown",
+     "delay": 1,
+     "proc": 0.1,
+     "dur": 24
+    },
+    {
+     "name": "pointerup",
+     "delay": 0.3,
+     "proc": 0.1,
+     "dur": 16
+    },
+    {
+     "name": "mouseup",
+     "delay": 0.4,
+     "proc": 0,
+     "dur": 16
+    },
+    {
+     "name": "click",
+     "delay": 0.6,
+     "proc": 0.1,
+     "dur": 16
+    },
+    {
+     "name": "mousedown",
+     "delay": 1.2,
+     "proc": 0,
+     "dur": 24
+    },
+    {
+     "name": "pointerdown",
+     "delay": 1.1,
+     "proc": 0.1,
+     "dur": 24
+    }
+   ],
+   "inputWorst": 32,
+   "moveAck": {
+    "n": 376,
+    "p50": 17.3,
+    "p95": 32.1,
+    "max": 154.1
+   },
+   "heapMB": [
+    30.6,
+    44.4
+   ],
+   "domNodes": [
+    2832,
+    3915
+   ]
+  },
+  {
+   "name": "world-pan-mid",
+   "what": "the World at war, paused, dragging at the medium tier, 6 s",
+   "map": "earth",
+   "tick": [
+    280,
+    280
+   ],
+   "seconds": 16.7,
+   "frames": 944,
+   "frameMs": {
+    "p50": 16.7,
+    "p95": 16.8,
+    "p99": 50,
+    "max": 116.6
+   },
+   "slow": {
+    "over17": 29,
+    "over33": 16,
+    "over50": 10,
+    "over100": 1
+   },
+   "long": {
+    "count": 15,
+    "totalMs": 1025,
+    "maxMs": 120
+   },
+   "js": {
+    "r.ensureRealms": 0.1,
+    "r.modeContext": 0.1,
+    "r.diffGround": 0.1,
+    "r.tile": 6.5,
+    "r.baseRegion": 30.6,
+    "r.paintRealmLayers": 7.4,
+    "r.drawSeaZones": 0.3,
+    "r.drawStraits": 0.3,
+    "r.drawGround": 82.2,
+    "r.drawRoute": 1.1,
+    "r.drawFleetRoutes": 0.2,
+    "r.drawAirMissions": 2.3,
+    "r.drawBattles": 0,
+    "r.drawArmies": 21.9,
+    "r.drawFleets": 12.3,
+    "r.drawWings": 1.8,
+    "r.drawSites": 2.9,
+    "r.drawZoneNames": 11.6,
+    "r.drawLabels": 75.8,
+    "draw": 223.6,
+    "minimap": 0.3,
+    "frame": 224.7,
+    "hover": 0.3
+   },
+   "counts": {
+    "r.ensureRealms": 395,
+    "r.modeContext": 395,
+    "r.diffGround": 395,
+    "r.tile": 34,
+    "r.baseRegion": 79,
+    "r.paintRealmLayers": 79,
+    "r.drawSeaZones": 79,
+    "r.drawStraits": 79,
+    "r.drawGround": 395,
+    "r.drawRoute": 395,
+    "r.drawFleetRoutes": 395,
+    "r.drawAirMissions": 395,
+    "r.drawBattles": 395,
+    "r.drawArmies": 395,
+    "r.drawFleets": 395,
+    "r.drawWings": 395,
+    "r.drawSites": 395,
+    "r.drawZoneNames": 395,
+    "r.drawLabels": 395,
+    "draw": 395,
+    "minimap": 114,
+    "frame": 946,
+    "hover": 4
+   },
+   "main": {
+    "taskMs": 416.9,
+    "scriptMs": 232.3,
+    "styleMs": 3,
+    "layoutMs": 5.6,
+    "layouts": 7.3,
+    "styles": 7.8
+   },
+   "input": [
+    {
+     "name": "mousedown",
+     "delay": 82.6,
+     "proc": 0.1,
+     "dur": 152
+    },
+    {
+     "name": "pointerdown",
+     "delay": 82.3,
+     "proc": 0.3,
+     "dur": 152
+    },
+    {
+     "name": "mousedown",
+     "delay": 1,
+     "proc": 0,
+     "dur": 32
+    },
+    {
+     "name": "pointerdown",
+     "delay": 0.9,
+     "proc": 0.1,
+     "dur": 32
+    },
+    {
+     "name": "mousedown",
+     "delay": 0.5,
+     "proc": 0,
+     "dur": 32
+    },
+    {
+     "name": "pointerdown",
+     "delay": 0.3,
+     "proc": 0.2,
+     "dur": 32
+    },
+    {
+     "name": "mousedown",
+     "delay": 0.7,
+     "proc": 0,
+     "dur": 32
+    },
+    {
+     "name": "pointerdown",
+     "delay": 0.6,
+     "proc": 0.1,
+     "dur": 32
+    }
+   ],
+   "inputWorst": 152,
+   "moveAck": {
+    "n": 376,
+    "p50": 23.8,
+    "p95": 39.4,
+    "max": 183.8
+   },
+   "heapMB": [
+    31.1,
+    45.6
+   ],
+   "domNodes": [
+    2870,
+    3974
+   ]
+  },
+  {
+   "name": "world-zoom",
+   "what": "the World at war, paused, 12 wheel steps",
+   "map": "earth",
+   "tick": [
+    280,
+    280
+   ],
+   "seconds": 2.5,
+   "frames": 99,
+   "frameMs": {
+    "p50": 16.7,
+    "p95": 66.7,
+    "p99": 133.3,
+    "max": 149.9
+   },
+   "slow": {
+    "over17": 17,
+    "over33": 9,
+    "over50": 7,
+    "over100": 3
+   },
+   "long": {
+    "count": 9,
+    "totalMs": 837,
+    "maxMs": 147
+   },
+   "js": {
+    "frame": 533.3,
+    "hover": 6,
+    "r.ensureRealms": 0,
+    "r.modeContext": 0.1,
+    "r.drawGround": 371.2,
+    "r.drawRoute": 1.7,
+    "r.drawFleetRoutes": 0.2,
+    "r.drawAirMissions": 3.4,
+    "r.drawBattles": 0,
+    "r.drawArmies": 32,
+    "r.drawFleets": 12.5,
+    "r.drawWings": 2.7,
+    "r.drawSites": 5.1,
+    "r.drawZoneNames": 18.2,
+    "r.drawLabels": 70,
+    "draw": 526.6,
+    "minimap": 0.3,
+    "r.diffGround": 3.3,
+    "r.tile": 17.8,
+    "r.baseRegion": 59,
+    "r.paintRealmLayers": 28.1,
+    "r.drawSeaZones": 1.1,
+    "r.drawStraits": 0.7,
+    "r.worldLayer": 14.2,
+    "r.drawRoads": 0.4
+   },
+   "counts": {
+    "frame": 100,
+    "hover": 14,
+    "r.ensureRealms": 96,
+    "r.modeContext": 96,
+    "r.drawGround": 96,
+    "r.drawRoute": 96,
+    "r.drawFleetRoutes": 96,
+    "r.drawAirMissions": 96,
+    "r.drawBattles": 96,
+    "r.drawArmies": 96,
+    "r.drawFleets": 96,
+    "r.drawWings": 96,
+    "r.drawSites": 96,
+    "r.drawZoneNames": 96,
+    "r.drawLabels": 96,
+    "draw": 96,
+    "minimap": 17,
+    "r.diffGround": 13,
+    "r.tile": 16,
+    "r.baseRegion": 16,
+    "r.paintRealmLayers": 16,
+    "r.drawSeaZones": 16,
+    "r.drawStraits": 16,
+    "r.worldLayer": 67,
+    "r.drawRoads": 7
+   },
+   "main": {
+    "taskMs": 795.8,
+    "scriptMs": 531.6,
+    "styleMs": 1.6,
+    "layoutMs": 2.2,
+    "layouts": 6.1,
+    "styles": 6.1
+   },
+   "input": [],
+   "inputWorst": 0,
+   "moveAck": null,
+   "heapMB": [
+    31.3,
+    45
+   ],
+   "domNodes": [
+    2911,
+    3301
+   ]
+  },
+  {
+   "name": "world-select",
+   "what": "the World at war, paused, 12 clicks",
+   "map": "earth",
+   "tick": [
+    280,
+    280
+   ],
+   "seconds": 3.1,
+   "frames": 177,
+   "frameMs": {
+    "p50": 16.7,
+    "p95": 16.8,
+    "p99": 33.3,
+    "max": 33.4
+   },
+   "slow": {
+    "over17": 6,
+    "over33": 0,
+    "over50": 0,
+    "over100": 0
+   },
+   "long": {
+    "count": 0,
+    "totalMs": 0,
+    "maxMs": 0
+   },
+   "js": {
+    "frame": 68.7,
+    "hover": 3.3,
+    "r.ensureRealms": 0.1,
+    "r.modeContext": 0,
+    "r.diffGround": 0,
+    "r.drawGround": 0.4,
+    "r.drawRoute": 0.3,
+    "r.drawFleetRoutes": 0,
+    "r.drawAirMissions": 0,
+    "r.drawBattles": 0,
+    "r.drawArmies": 0.7,
+    "r.drawFleets": 0.7,
+    "r.drawWings": 0,
+    "r.drawSites": 1.3,
+    "r.drawZoneNames": 0,
+    "r.drawLabels": 6.8,
+    "draw": 16.3,
+    "minimap": 0.4,
+    "ui.renderRail": 2.1,
+    "ui.renderAttention": 0,
+    "ui.renderBanner": 0,
+    "ui.updateInsets": 6.6,
+    "ui": 50.6
+   },
+   "counts": {
+    "frame": 179,
+    "hover": 12,
+    "r.ensureRealms": 12,
+    "r.modeContext": 12,
+    "r.diffGround": 12,
+    "r.drawGround": 12,
+    "r.drawRoute": 12,
+    "r.drawFleetRoutes": 12,
+    "r.drawAirMissions": 12,
+    "r.drawBattles": 12,
+    "r.drawArmies": 12,
+    "r.drawFleets": 12,
+    "r.drawWings": 12,
+    "r.drawSites": 12,
+    "r.drawZoneNames": 12,
+    "r.drawLabels": 12,
+    "draw": 12,
+    "minimap": 12,
+    "ui.renderRail": 12,
+    "ui.renderAttention": 12,
+    "ui.renderBanner": 12,
+    "ui.updateInsets": 12,
+    "ui": 12
+   },
+   "main": {
+    "taskMs": 213.2,
+    "scriptMs": 82.8,
+    "styleMs": 9.3,
+    "layoutMs": 17.5,
+    "layouts": 30,
+    "styles": 38.1
+   },
+   "input": [
+    {
+     "name": "pointerdown",
+     "delay": 2.5,
+     "proc": 0.2,
+     "dur": 64
+    },
+    {
+     "name": "mousedown",
+     "delay": 2.7,
+     "proc": 0,
+     "dur": 64
+    },
+    {
+     "name": "pointerup",
+     "delay": 3.1,
+     "proc": 0.2,
+     "dur": 64
+    },
+    {
+     "name": "mouseup",
+     "delay": 3.3,
+     "proc": 0,
+     "dur": 64
+    },
+    {
+     "name": "click",
+     "delay": 3.5,
+     "proc": 0,
+     "dur": 64
+    },
+    {
+     "name": "pointerdown",
+     "delay": 2.2,
+     "proc": 0.3,
+     "dur": 64
+    },
+    {
+     "name": "mousedown",
+     "delay": 2.5,
+     "proc": 0,
+     "dur": 64
+    },
+    {
+     "name": "pointerup",
+     "delay": 2.6,
+     "proc": 0.1,
+     "dur": 64
+    },
+    {
+     "name": "mouseup",
+     "delay": 2.7,
+     "proc": 0,
+     "dur": 64
+    },
+    {
+     "name": "click",
+     "delay": 2.9,
+     "proc": 0,
+     "dur": 64
+    },
+    {
+     "name": "pointerdown",
+     "delay": 1.6,
+     "proc": 0.2,
+     "dur": 56
+    },
+    {
+     "name": "mousedown",
+     "delay": 1.8,
+     "proc": 0,
+     "dur": 56
+    },
+    {
+     "name": "pointerup",
+     "delay": 1.9,
+     "proc": 0,
+     "dur": 56
+    },
+    {
+     "name": "mouseup",
+     "delay": 1.9,
+     "proc": 0,
+     "dur": 56
+    },
+    {
+     "name": "click",
+     "delay": 2,
+     "proc": 0,
+     "dur": 56
+    },
+    {
+     "name": "pointerdown",
+     "delay": 1.6,
+     "proc": 0,
+     "dur": 48
+    },
+    {
+     "name": "mousedown",
+     "delay": 1.6,
+     "proc": 0,
+     "dur": 48
+    },
+    {
+     "name": "pointerup",
+     "delay": 1.7,
+     "proc": 0.1,
+     "dur": 48
+    },
+    {
+     "name": "mouseup",
+     "delay": 1.8,
+     "proc": 0,
+     "dur": 48
+    },
+    {
+     "name": "click",
+     "delay": 1.8,
+     "proc": 0.1,
+     "dur": 48
+    },
+    {
+     "name": "pointerdown",
+     "delay": 1.5,
+     "proc": 0.1,
+     "dur": 40
+    },
+    {
+     "name": "mousedown",
+     "delay": 1.6,
+     "proc": 0,
+     "dur": 40
+    },
+    {
+     "name": "pointerup",
+     "delay": 1.7,
+     "proc": 0.1,
+     "dur": 40
+    },
+    {
+     "name": "mouseup",
+     "delay": 1.8,
+     "proc": 0,
+     "dur": 40
+    },
+    {
+     "name": "click",
+     "delay": 1.8,
+     "proc": 0,
+     "dur": 40
+    },
+    {
+     "name": "pointerdown",
+     "delay": 1.7,
+     "proc": 0.1,
+     "dur": 48
+    },
+    {
+     "name": "mousedown",
+     "delay": 1.8,
+     "proc": 0,
+     "dur": 48
+    },
+    {
+     "name": "pointerup",
+     "delay": 1.8,
+     "proc": 0.1,
+     "dur": 48
+    },
+    {
+     "name": "mouseup",
+     "delay": 1.9,
+     "proc": 0,
+     "dur": 48
+    },
+    {
+     "name": "click",
+     "delay": 1.9,
+     "proc": 0,
+     "dur": 48
+    },
+    {
+     "name": "pointerdown",
+     "delay": 1.7,
+     "proc": 0.1,
+     "dur": 56
+    },
+    {
+     "name": "mousedown",
+     "delay": 1.8,
+     "proc": 0,
+     "dur": 56
+    },
+    {
+     "name": "pointerup",
+     "delay": 1.8,
+     "proc": 0.2,
+     "dur": 56
+    },
+    {
+     "name": "mouseup",
+     "delay": 2,
+     "proc": 0,
+     "dur": 56
+    },
+    {
+     "name": "click",
+     "delay": 2,
+     "proc": 0,
+     "dur": 56
+    },
+    {
+     "name": "pointerdown",
+     "delay": 1.6,
+     "proc": 0.1,
+     "dur": 56
+    },
+    {
+     "name": "mousedown",
+     "delay": 1.7,
+     "proc": 0,
+     "dur": 56
+    },
+    {
+     "name": "pointerup",
+     "delay": 1.6,
+     "proc": 0.2,
+     "dur": 56
+    },
+    {
+     "name": "mouseup",
+     "delay": 1.8,
+     "proc": 0,
+     "dur": 56
+    },
+    {
+     "name": "click",
+     "delay": 1.8,
+     "proc": 0,
+     "dur": 56
+    },
+    {
+     "name": "pointerdown",
+     "delay": 2.5,
+     "proc": 0.1,
+     "dur": 72
+    },
+    {
+     "name": "mousedown",
+     "delay": 2.6,
+     "proc": 0,
+     "dur": 72
+    },
+    {
+     "name": "pointerup",
+     "delay": 3,
+     "proc": 0.2,
+     "dur": 64
+    },
+    {
+     "name": "mouseup",
+     "delay": 3.2,
+     "proc": 0,
+     "dur": 64
+    },
+    {
+     "name": "click",
+     "delay": 3.2,
+     "proc": 0,
+     "dur": 64
+    },
+    {
+     "name": "pointerdown",
+     "delay": 1.9,
+     "proc": 0.1,
+     "dur": 56
+    },
+    {
+     "name": "mousedown",
+     "delay": 2,
+     "proc": 0,
+     "dur": 56
+    },
+    {
+     "name": "pointerup",
+     "delay": 2.1,
+     "proc": 0.1,
+     "dur": 56
+    },
+    {
+     "name": "mouseup",
+     "delay": 2.2,
+     "proc": 0,
+     "dur": 56
+    },
+    {
+     "name": "click",
+     "delay": 2.3,
+     "proc": 0,
+     "dur": 56
+    },
+    {
+     "name": "pointerdown",
+     "delay": 1.7,
+     "proc": 0,
+     "dur": 40
+    },
+    {
+     "name": "mousedown",
+     "delay": 1.7,
+     "proc": 0,
+     "dur": 40
+    },
+    {
+     "name": "pointerup",
+     "delay": 1.9,
+     "proc": 0.1,
+     "dur": 40
+    },
+    {
+     "name": "mouseup",
+     "delay": 2,
+     "proc": 0,
+     "dur": 40
+    },
+    {
+     "name": "click",
+     "delay": 2,
+     "proc": 0,
+     "dur": 40
+    },
+    {
+     "name": "pointerdown",
+     "delay": 2,
+     "proc": 0.1,
+     "dur": 48
+    },
+    {
+     "name": "mousedown",
+     "delay": 2.1,
+     "proc": 0,
+     "dur": 48
+    },
+    {
+     "name": "pointerup",
+     "delay": 2.2,
+     "proc": 0.2,
+     "dur": 48
+    },
+    {
+     "name": "mouseup",
+     "delay": 2.4,
+     "proc": 0,
+     "dur": 48
+    },
+    {
+     "name": "click",
+     "delay": 2.4,
+     "proc": 0,
+     "dur": 48
+    }
+   ],
+   "inputWorst": 72,
+   "moveAck": null,
+   "heapMB": [
+    31.6,
+    43.3
+   ],
+   "domNodes": [
+    2952,
+    7207
+   ]
+  },
+  {
+   "name": "world-panels",
+   "what": "the World at war, paused, each ledger by its key",
+   "map": "earth",
+   "tick": [
+    280,
+    280
+   ],
+   "seconds": 4.7,
+   "frames": 247,
+   "frameMs": {
+    "p50": 16.7,
+    "p95": 16.8,
+    "p99": 83.3,
+    "max": 166.7
+   },
+   "slow": {
+    "over17": 11,
+    "over33": 8,
+    "over50": 5,
+    "over100": 2
+   },
+   "long": {
+    "count": 4,
+    "totalMs": 437,
+    "maxMs": 144
+   },
+   "js": {
+    "ui.updateInsets": 23.2,
+    "r.ensureRealms": 0,
+    "r.modeContext": 0.3,
+    "r.diffGround": 0.9,
+    "r.drawGround": 54.7,
+    "r.drawRoute": 0.1,
+    "r.drawFleetRoutes": 0,
+    "r.drawAirMissions": 0,
+    "r.drawBattles": 0,
+    "r.drawArmies": 0.6,
+    "r.drawFleets": 0.4,
+    "r.drawWings": 0,
+    "r.drawSites": 0.6,
+    "r.drawZoneNames": 0,
+    "r.drawLabels": 6.8,
+    "draw": 64.6,
+    "minimap": 0.1,
+    "ui.renderRail": 0.7,
+    "ui.renderAttention": 0,
+    "ui.renderBanner": 0,
+    "ui": 17.5,
+    "frame": 83.2,
+    "r.baseRegion": 0.2,
+    "r.paintRealmLayers": 6,
+    "r.drawSeaZones": 1.7,
+    "r.drawStraits": 0
+   },
+   "counts": {
+    "ui.updateInsets": 20,
+    "r.ensureRealms": 11,
+    "r.modeContext": 11,
+    "r.diffGround": 11,
+    "r.drawGround": 11,
+    "r.drawRoute": 11,
+    "r.drawFleetRoutes": 11,
+    "r.drawAirMissions": 11,
+    "r.drawBattles": 11,
+    "r.drawArmies": 11,
+    "r.drawFleets": 11,
+    "r.drawWings": 11,
+    "r.drawSites": 11,
+    "r.drawZoneNames": 11,
+    "r.drawLabels": 11,
+    "draw": 11,
+    "minimap": 11,
+    "ui.renderRail": 10,
+    "ui.renderAttention": 10,
+    "ui.renderBanner": 10,
+    "ui": 10,
+    "frame": 248,
+    "r.baseRegion": 3,
+    "r.paintRealmLayers": 3,
+    "r.drawSeaZones": 3,
+    "r.drawStraits": 3
+   },
+   "main": {
+    "taskMs": 207.6,
+    "scriptMs": 117.3,
+    "styleMs": 19.2,
+    "layoutMs": 17.3,
+    "layouts": 10,
+    "styles": 17.2
+   },
+   "input": [
+    {
+     "name": "keydown",
+     "delay": 0.2,
+     "proc": 32.9,
+     "dur": 80
+    },
+    {
+     "name": "keyup",
+     "delay": 29.9,
+     "proc": 0,
+     "dur": 64
+    },
+    {
+     "name": "keydown",
+     "delay": 0.2,
+     "proc": 82.1,
+     "dur": 128
+    },
+    {
+     "name": "keyup",
+     "delay": 20.5,
+     "proc": 0,
+     "dur": 40
+    },
+    {
+     "name": "keydown",
+     "delay": 0.4,
+     "proc": 38.7,
+     "dur": 72
+    },
+    {
+     "name": "keyup",
+     "delay": 21.5,
+     "proc": 0.1,
+     "dur": 32
+    },
+    {
+     "name": "keydown",
+     "delay": 0.3,
+     "proc": 30.3,
+     "dur": 88
+    },
+    {
+     "name": "keyup",
+     "delay": 31.4,
+     "proc": 0,
+     "dur": 56
+    },
+    {
+     "name": "keydown",
+     "delay": 0.4,
+     "proc": 15.8,
+     "dur": 72
+    },
+    {
+     "name": "keyup",
+     "delay": 16.8,
+     "proc": 0,
+     "dur": 48
+    },
+    {
+     "name": "keydown",
+     "delay": 0.5,
+     "proc": 36.3,
+     "dur": 200
+    },
+    {
+     "name": "keyup",
+     "delay": 143.8,
+     "proc": 0,
+     "dur": 160
+    },
+    {
+     "name": "keydown",
+     "delay": 0.3,
+     "proc": 16,
+     "dur": 128
+    },
+    {
+     "name": "keyup",
+     "delay": 103.6,
+     "proc": 0,
+     "dur": 112
+    },
+    {
+     "name": "keydown",
+     "delay": 0.3,
+     "proc": 41.6,
+     "dur": 160
+    },
+    {
+     "name": "keyup",
+     "delay": 103.8,
+     "proc": 0,
+     "dur": 128
+    },
+    {
+     "name": "keydown",
+     "delay": 0.3,
+     "proc": 9.1,
+     "dur": 40
+    },
+    {
+     "name": "keyup",
+     "delay": 17.8,
+     "proc": 0,
+     "dur": 32
+    },
+    {
+     "name": "keydown",
+     "delay": 0.3,
+     "proc": 9.3,
+     "dur": 48
+    },
+    {
+     "name": "keyup",
+     "delay": 31.2,
+     "proc": 0,
+     "dur": 32
+    }
+   ],
+   "inputWorst": 200,
+   "moveAck": null,
+   "heapMB": [
+    31.6,
+    48.2
+   ],
+   "domNodes": [
+    2951,
+    15264
+   ]
+  },
+  {
+   "name": "world-normal",
+   "what": "the World at war, normal speed, no input, 8 s",
+   "map": "earth",
+   "tick": [
+    280,
+    287
+   ],
+   "seconds": 8,
+   "frames": 468,
+   "frameMs": {
+    "p50": 16.7,
+    "p95": 16.8,
+    "p99": 33.4,
+    "max": 50
+   },
+   "slow": {
+    "over17": 9,
+    "over33": 3,
+    "over50": 0,
+    "over100": 0
+   },
+   "long": {
+    "count": 3,
+    "totalMs": 157,
+    "maxMs": 54
+   },
+   "js": {
+    "frame": 174.9,
+    "r.ensureRealms": 0.3,
+    "r.modeContext": 0,
+    "r.diffGround": 0.6,
+    "r.drawGround": 4.4,
+    "r.drawRoute": 0.1,
+    "r.drawFleetRoutes": 0,
+    "r.drawAirMissions": 0,
+    "r.drawBattles": 0,
+    "r.drawArmies": 0.2,
+    "r.drawFleets": 0.2,
+    "r.drawWings": 0,
+    "r.drawSites": 0.2,
+    "r.drawZoneNames": 0,
+    "r.drawLabels": 1.9,
+    "draw": 8.9,
+    "minimap": 0.2,
+    "ui.renderRail": 0.4,
+    "ui.renderAttention": 0,
+    "ui.renderBanner": 0,
+    "ui.updateInsets": 1.7,
+    "ui": 19.6,
+    "r.baseRegion": 0,
+    "r.paintRealmLayers": 0.6,
+    "r.drawSeaZones": 0,
+    "r.drawStraits": 0
+   },
+   "counts": {
+    "frame": 470,
+    "r.ensureRealms": 8,
+    "r.modeContext": 8,
+    "r.diffGround": 8,
+    "r.drawGround": 8,
+    "r.drawRoute": 8,
+    "r.drawFleetRoutes": 8,
+    "r.drawAirMissions": 8,
+    "r.drawBattles": 8,
+    "r.drawArmies": 8,
+    "r.drawFleets": 8,
+    "r.drawWings": 8,
+    "r.drawSites": 8,
+    "r.drawZoneNames": 8,
+    "r.drawLabels": 8,
+    "draw": 8,
+    "minimap": 8,
+    "ui.renderRail": 8,
+    "ui.renderAttention": 8,
+    "ui.renderBanner": 8,
+    "ui.updateInsets": 8,
+    "ui": 8,
+    "r.baseRegion": 3,
+    "r.paintRealmLayers": 3,
+    "r.drawSeaZones": 3,
+    "r.drawStraits": 3
+   },
+   "main": {
+    "taskMs": 205.4,
+    "scriptMs": 173.6,
+    "styleMs": 1.9,
+    "layoutMs": 4.3,
+    "layouts": 3.4,
+    "styles": 3.4
+   },
+   "input": [
+    {
+     "name": "keydown",
+     "delay": 0.3,
+     "proc": 0.2,
+     "dur": 32
+    },
+    {
+     "name": "keyup",
+     "delay": 0.2,
+     "proc": 0,
+     "dur": 32
+    }
+   ],
+   "inputWorst": 32,
+   "moveAck": null,
+   "heapMB": [
+    34.7,
+    65.2
+   ],
+   "domNodes": [
+    3007,
+    5377
+   ]
+  },
+  {
+   "name": "world-max",
+   "what": "the World at war, fastest speed, no input, 8 s",
+   "map": "earth",
+   "tick": [
+    287,
+    333
+   ],
+   "seconds": 8,
+   "frames": 414,
+   "frameMs": {
+    "p50": 16.7,
+    "p95": 33.4,
+    "p99": 33.4,
+    "max": 66.8
+   },
+   "slow": {
+    "over17": 65,
+    "over33": 1,
+    "over50": 1,
+    "over100": 0
+   },
+   "long": {
+    "count": 1,
+    "totalMs": 68,
+    "maxMs": 68
+   },
+   "js": {
+    "r.ensureRealms": 3.4,
+    "r.modeContext": 0.1,
+    "r.diffGround": 3.4,
+    "r.drawGround": 17.7,
+    "r.drawRoute": 0.4,
+    "r.drawFleetRoutes": 0.5,
+    "r.drawAirMissions": 0,
+    "r.drawBattles": 0.1,
+    "r.drawArmies": 3.8,
+    "r.drawFleets": 2.7,
+    "r.drawWings": 0,
+    "r.drawSites": 2.5,
+    "r.drawZoneNames": 0,
+    "r.drawLabels": 32.9,
+    "draw": 72.9,
+    "minimap": 2.2,
+    "frame": 835.2,
+    "ui.renderRail": 1.8,
+    "ui.renderAttention": 0,
+    "ui.renderBanner": 0,
+    "ui.updateInsets": 9.3,
+    "ui": 76,
+    "r.baseRegion": 0.1,
+    "r.paintRealmLayers": 2.9,
+    "r.drawSeaZones": 0.1,
+    "r.drawStraits": 0
+   },
+   "counts": {
+    "r.ensureRealms": 148,
+    "r.modeContext": 148,
+    "r.diffGround": 148,
+    "r.drawGround": 148,
+    "r.drawRoute": 46,
+    "r.drawFleetRoutes": 148,
+    "r.drawAirMissions": 148,
+    "r.drawBattles": 148,
+    "r.drawArmies": 148,
+    "r.drawFleets": 148,
+    "r.drawWings": 148,
+    "r.drawSites": 148,
+    "r.drawZoneNames": 148,
+    "r.drawLabels": 148,
+    "draw": 148,
+    "minimap": 47,
+    "frame": 415,
+    "ui.renderRail": 41,
+    "ui.renderAttention": 41,
+    "ui.renderBanner": 41,
+    "ui.updateInsets": 41,
+    "ui": 41,
+    "r.baseRegion": 9,
+    "r.paintRealmLayers": 9,
+    "r.drawSeaZones": 9,
+    "r.drawStraits": 9
+   },
+   "main": {
+    "taskMs": 955.8,
+    "scriptMs": 814,
+    "styleMs": 10.8,
+    "layoutMs": 19.5,
+    "layouts": 24.4,
+    "styles": 29.3
+   },
+   "input": [
+    {
+     "name": "keydown",
+     "delay": 0.5,
+     "proc": 0.1,
+     "dur": 16
+    },
+    {
+     "name": "keyup",
+     "delay": 7.6,
+     "proc": 0,
+     "dur": 32
+    }
+   ],
+   "inputWorst": 32,
+   "moveAck": null,
+   "heapMB": [
+    37.2,
+    65.8
+   ],
+   "domNodes": [
+    2952,
+    5796
+   ]
+  },
+  {
+   "name": "world-max-pan",
+   "what": "the World at war, fastest speed while dragging and clicking, 6 s",
+   "map": "earth",
+   "tick": [
+    333,
+    411
+   ],
+   "seconds": 17.9,
+   "frames": 1000,
+   "frameMs": {
+    "p50": 16.7,
+    "p95": 33.3,
+    "p99": 33.4,
+    "max": 50
+   },
+   "slow": {
+    "over17": 67,
+    "over33": 4,
+    "over50": 0,
+    "over100": 0
+   },
+   "long": {
+    "count": 3,
+    "totalMs": 160,
+    "maxMs": 58
+   },
+   "js": {
+    "frame": 677.7,
+    "hover": 0.3,
+    "r.ensureRealms": 3.6,
+    "r.modeContext": 0.3,
+    "r.diffGround": 2.7,
+    "r.drawGround": 31.7,
+    "r.drawRoute": 0.2,
+    "r.drawFleetRoutes": 0.8,
+    "r.drawAirMissions": 0,
+    "r.drawBattles": 0.1,
+    "r.drawArmies": 6.7,
+    "r.drawFleets": 5.2,
+    "r.drawWings": 0,
+    "r.drawSites": 4.6,
+    "r.drawZoneNames": 0,
+    "r.drawLabels": 60,
+    "draw": 127.6,
+    "minimap": 2.7,
+    "r.baseRegion": 0.2,
+    "r.paintRealmLayers": 3.1,
+    "r.drawSeaZones": 0.1,
+    "r.drawStraits": 0.2,
+    "ui.renderRail": 0.2,
+    "ui.renderAttention": 0,
+    "ui.renderBanner": 0,
+    "ui.updateInsets": 1.1,
+    "ui": 12.4
+   },
+   "counts": {
+    "frame": 1002,
+    "hover": 7,
+    "r.ensureRealms": 665,
+    "r.modeContext": 665,
+    "r.diffGround": 665,
+    "r.drawGround": 665,
+    "r.drawRoute": 62,
+    "r.drawFleetRoutes": 665,
+    "r.drawAirMissions": 665,
+    "r.drawBattles": 665,
+    "r.drawArmies": 665,
+    "r.drawFleets": 665,
+    "r.drawWings": 665,
+    "r.drawSites": 665,
+    "r.drawZoneNames": 665,
+    "r.drawLabels": 665,
+    "draw": 665,
+    "minimap": 121,
+    "r.baseRegion": 37,
+    "r.paintRealmLayers": 37,
+    "r.drawSeaZones": 37,
+    "r.drawStraits": 37,
+    "ui.renderRail": 12,
+    "ui.renderAttention": 12,
+    "ui.renderBanner": 12,
+    "ui.updateInsets": 12,
+    "ui": 12
+   },
+   "main": {
+    "taskMs": 872.5,
+    "scriptMs": 680.2,
+    "styleMs": 5.8,
+    "layoutMs": 8.3,
+    "layouts": 12.7,
+    "styles": 18.8
+   },
+   "input": [
+    {
+     "name": "keydown",
+     "delay": 1.5,
+     "proc": 0.2,
+     "dur": 32
+    },
+    {
+     "name": "keyup",
+     "delay": 0.2,
+     "proc": 0,
+     "dur": 24
+    },
+    {
+     "name": "mousedown",
+     "delay": 6.2,
+     "proc": 0,
+     "dur": 32
+    },
+    {
+     "name": "pointerdown",
+     "delay": 5.8,
+     "proc": 0.4,
+     "dur": 32
+    },
+    {
+     "name": "pointerup",
+     "delay": 10.8,
+     "proc": 0,
+     "dur": 48
+    },
+    {
+     "name": "mouseup",
+     "delay": 10.8,
+     "proc": 0,
+     "dur": 48
+    },
+    {
+     "name": "click",
+     "delay": 11,
+     "proc": 0,
+     "dur": 48
+    },
+    {
+     "name": "mousedown",
+     "delay": 9.9,
+     "proc": 0,
+     "dur": 24
+    },
+    {
+     "name": "pointerdown",
+     "delay": 9.8,
+     "proc": 0.1,
+     "dur": 24
+    },
+    {
+     "name": "pointerup",
+     "delay": 9.8,
+     "proc": 0.1,
+     "dur": 40
+    },
+    {
+     "name": "mouseup",
+     "delay": 9.9,
+     "proc": 0,
+     "dur": 40
+    },
+    {
+     "name": "click",
+     "delay": 10.1,
+     "proc": 0.1,
+     "dur": 40
+    },
+    {
+     "name": "mousedown",
+     "delay": 18.1,
+     "proc": 0,
+     "dur": 40
+    },
+    {
+     "name": "pointerdown",
+     "delay": 17.9,
+     "proc": 0.2,
+     "dur": 40
+    },
+    {
+     "name": "pointerup",
+     "delay": 5.4,
+     "proc": 0.3,
+     "dur": 40
+    },
+    {
+     "name": "mouseup",
+     "delay": 5.7,
+     "proc": 0,
+     "dur": 40
+    },
+    {
+     "name": "click",
+     "delay": 6,
+     "proc": 0,
+     "dur": 40
+    },
+    {
+     "name": "pointerdown",
+     "delay": 20.8,
+     "proc": 0.1,
+     "dur": 72
+    },
+    {
+     "name": "mousedown",
+     "delay": 20.9,
+     "proc": 0,
+     "dur": 72
+    },
+    {
+     "name": "pointerup",
+     "delay": 21,
+     "proc": 0,
+     "dur": 72
+    },
+    {
+     "name": "mouseup",
+     "delay": 21,
+     "proc": 0,
+     "dur": 72
+    },
+    {
+     "name": "click",
+     "delay": 21,
+     "proc": 0,
+     "dur": 72
+    },
+    {
+     "name": "pointerdown",
+     "delay": 1.3,
+     "proc": 0.1,
+     "dur": 56
+    },
+    {
+     "name": "mousedown",
+     "delay": 1.4,
+     "proc": 0,
+     "dur": 56
+    },
+    {
+     "name": "pointerup",
+     "delay": 1.8,
+     "proc": 0,
+     "dur": 56
+    },
+    {
+     "name": "mouseup",
+     "delay": 1.8,
+     "proc": 0,
+     "dur": 56
+    },
+    {
+     "name": "click",
+     "delay": 1.9,
+     "proc": 0,
+     "dur": 56
+    },
+    {
+     "name": "pointerdown",
+     "delay": 9.8,
+     "proc": 0.1,
+     "dur": 64
+    },
+    {
+     "name": "mousedown",
+     "delay": 9.9,
+     "proc": 0,
+     "dur": 64
+    },
+    {
+     "name": "pointerup",
+     "delay": 10.1,
+     "proc": 0.1,
+     "dur": 64
+    },
+    {
+     "name": "mouseup",
+     "delay": 10.2,
+     "proc": 0,
+     "dur": 64
+    },
+    {
+     "name": "click",
+     "delay": 10.2,
+     "proc": 0,
+     "dur": 64
+    },
+    {
+     "name": "pointerdown",
+     "delay": 1.8,
+     "proc": 0.1,
+     "dur": 64
+    },
+    {
+     "name": "mousedown",
+     "delay": 1.9,
+     "proc": 0.1,
+     "dur": 64
+    },
+    {
+     "name": "pointerup",
+     "delay": 1.9,
+     "proc": 0.1,
+     "dur": 64
+    },
+    {
+     "name": "mouseup",
+     "delay": 2,
+     "proc": 0,
+     "dur": 64
+    },
+    {
+     "name": "click",
+     "delay": 2.1,
+     "proc": 0,
+     "dur": 64
+    }
+   ],
+   "inputWorst": 72,
+   "moveAck": {
+    "n": 282,
+    "p50": 40,
+    "p95": 71.3,
+    "max": 128.6
+   },
+   "heapMB": [
+    39,
+    69.4
+   ],
+   "domNodes": [
+    3034,
+    4106
+   ]
+  },
+  {
+   "name": "e36-idle",
+   "what": "Europe, 1936 at week 280 (as Germany), paused, no input, 3 s",
+   "map": "europe-1936",
+   "tick": [
+    280,
+    280
+   ],
+   "seconds": 3,
+   "frames": 179,
+   "frameMs": {
+    "p50": 16.7,
+    "p95": 16.7,
+    "p99": 16.8,
+    "max": 16.8
+   },
+   "slow": {
+    "over17": 0,
+    "over33": 0,
+    "over50": 0,
+    "over100": 0
+   },
+   "long": {
+    "count": 0,
+    "totalMs": 0,
+    "maxMs": 0
+   },
+   "js": {
+    "frame": 0.7
+   },
+   "counts": {
+    "frame": 180
+   },
+   "main": {
+    "taskMs": 17.7,
+    "scriptMs": 3.7,
+    "styleMs": 0.3,
+    "layoutMs": 0.1,
+    "layouts": 0.7,
+    "styles": 3.3
+   },
+   "input": [],
+   "inputWorst": 0,
+   "moveAck": null,
+   "heapMB": [
+    20.1,
+    28.3
+   ],
+   "domNodes": [
+    2766,
+    2766
+   ]
+  },
+  {
+   "name": "e36-pan",
+   "what": "Europe, 1936 at week 280 (as Germany), paused, dragging at regional zoom, 6 s",
+   "map": "europe-1936",
+   "tick": [
+    280,
+    280
+   ],
+   "seconds": 13.3,
+   "frames": 787,
+   "frameMs": {
+    "p50": 16.7,
+    "p95": 16.8,
+    "p99": 33.3,
+    "max": 50
+   },
+   "slow": {
+    "over17": 9,
+    "over33": 2,
+    "over50": 0,
+    "over100": 0
+   },
+   "long": {
+    "count": 2,
+    "totalMs": 120,
+    "maxMs": 64
+   },
+   "js": {
+    "frame": 112.4,
+    "hover": 0.4,
+    "r.ensureRealms": 0.1,
+    "r.modeContext": 0.1,
+    "r.diffGround": 0.1,
+    "r.drawGround": 36,
+    "r.drawFleetRoutes": 0.2,
+    "r.drawAirMissions": 0,
+    "r.drawBattles": 0.1,
+    "r.drawArmies": 4.2,
+    "r.drawFleets": 3.1,
+    "r.drawWings": 0,
+    "r.drawSites": 6.8,
+    "r.drawZoneNames": 0,
+    "r.drawLabels": 49.3,
+    "draw": 111.5,
+    "minimap": 0.4,
+    "r.baseRegion": 0.1,
+    "r.paintRealmLayers": 3,
+    "r.drawSeaZones": 0.1,
+    "r.drawStraits": 0.1
+   },
+   "counts": {
+    "frame": 788,
+    "hover": 4,
+    "r.ensureRealms": 377,
+    "r.modeContext": 377,
+    "r.diffGround": 377,
+    "r.drawGround": 377,
+    "r.drawFleetRoutes": 377,
+    "r.drawAirMissions": 377,
+    "r.drawBattles": 377,
+    "r.drawArmies": 377,
+    "r.drawFleets": 377,
+    "r.drawWings": 377,
+    "r.drawSites": 377,
+    "r.drawZoneNames": 377,
+    "r.drawLabels": 377,
+    "draw": 377,
+    "minimap": 96,
+    "r.baseRegion": 33,
+    "r.paintRealmLayers": 33,
+    "r.drawSeaZones": 33,
+    "r.drawStraits": 33
+   },
+   "main": {
+    "taskMs": 285.1,
+    "scriptMs": 117.5,
+    "styleMs": 3.6,
+    "layoutMs": 6.3,
+    "layouts": 8.5,
+    "styles": 9.1
+   },
+   "input": [
+    {
+     "name": "mousedown",
+     "delay": 7.6,
+     "proc": 0,
+     "dur": 40
+    },
+    {
+     "name": "pointerdown",
+     "delay": 5.7,
+     "proc": 1.9,
+     "dur": 40
+    },
+    {
+     "name": "pointerup",
+     "delay": 0.4,
+     "proc": 0.3,
+     "dur": 16
+    },
+    {
+     "name": "mouseup",
+     "delay": 0.7,
+     "proc": 0,
+     "dur": 16
+    },
+    {
+     "name": "click",
+     "delay": 1,
+     "proc": 0,
+     "dur": 16
+    },
+    {
+     "name": "mousedown",
+     "delay": 1.1,
+     "proc": 0,
+     "dur": 32
+    },
+    {
+     "name": "pointerdown",
+     "delay": 1,
+     "proc": 0.1,
+     "dur": 32
+    },
+    {
+     "name": "pointerup",
+     "delay": 0.7,
+     "proc": 0,
+     "dur": 24
+    },
+    {
+     "name": "mouseup",
+     "delay": 0.7,
+     "proc": 0,
+     "dur": 24
+    },
+    {
+     "name": "click",
+     "delay": 1,
+     "proc": 0,
+     "dur": 24
+    },
+    {
+     "name": "mousedown",
+     "delay": 2.1,
+     "proc": 0,
+     "dur": 32
+    },
+    {
+     "name": "pointerdown",
+     "delay": 2,
+     "proc": 0.1,
+     "dur": 32
+    },
+    {
+     "name": "pointerup",
+     "delay": 0.5,
+     "proc": 0,
+     "dur": 16
+    },
+    {
+     "name": "mouseup",
+     "delay": 0.6,
+     "proc": 0,
+     "dur": 16
+    },
+    {
+     "name": "click",
+     "delay": 0.8,
+     "proc": 0.1,
+     "dur": 16
+    },
+    {
+     "name": "mousedown",
+     "delay": 1,
+     "proc": 0,
+     "dur": 32
+    }
+   ],
+   "inputWorst": 40,
+   "moveAck": {
+    "n": 376,
+    "p50": 17,
+    "p95": 27.4,
+    "max": 82.1
+   },
+   "heapMB": [
+    20.1,
+    30.1
+   ],
+   "domNodes": [
+    2760,
+    3636
+   ]
+  },
+  {
+   "name": "e36-pan-mid",
+   "what": "Europe, 1936 at week 280 (as Germany), paused, dragging at the medium tier, 6 s",
+   "map": "europe-1936",
+   "tick": [
+    280,
+    280
+   ],
+   "seconds": 16.7,
+   "frames": 897,
+   "frameMs": {
+    "p50": 16.7,
+    "p95": 33.2,
+    "p99": 66.7,
+    "max": 100
+   },
+   "slow": {
+    "over17": 46,
+    "over33": 27,
+    "over50": 19,
+    "over100": 0
+   },
+   "long": {
+    "count": 27,
+    "totalMs": 1909,
+    "maxMs": 105
+   },
+   "js": {
+    "r.ensureRealms": 0.1,
+    "r.modeContext": 0.1,
+    "r.diffGround": 0.1,
+    "r.tile": 7.3,
+    "r.baseRegion": 37.4,
+    "r.paintRealmLayers": 7.7,
+    "r.drawSeaZones": 0.5,
+    "r.drawStraits": 0.2,
+    "r.drawGround": 131,
+    "r.drawFleetRoutes": 0.1,
+    "r.drawAirMissions": 2.3,
+    "r.drawBattles": 0,
+    "r.drawArmies": 10.4,
+    "r.drawFleets": 8.3,
+    "r.drawWings": 2.3,
+    "r.drawSites": 2.4,
+    "r.drawZoneNames": 12.5,
+    "r.drawLabels": 76.2,
+    "draw": 254.6,
+    "minimap": 0.4,
+    "frame": 255.6,
+    "hover": 0.3
+   },
+   "counts": {
+    "r.ensureRealms": 403,
+    "r.modeContext": 403,
+    "r.diffGround": 403,
+    "r.tile": 50,
+    "r.baseRegion": 108,
+    "r.paintRealmLayers": 108,
+    "r.drawSeaZones": 108,
+    "r.drawStraits": 108,
+    "r.drawGround": 403,
+    "r.drawFleetRoutes": 403,
+    "r.drawAirMissions": 403,
+    "r.drawBattles": 403,
+    "r.drawArmies": 403,
+    "r.drawFleets": 403,
+    "r.drawWings": 403,
+    "r.drawSites": 403,
+    "r.drawZoneNames": 403,
+    "r.drawLabels": 403,
+    "draw": 403,
+    "minimap": 112,
+    "frame": 899,
+    "hover": 4
+   },
+   "main": {
+    "taskMs": 458.1,
+    "scriptMs": 263.9,
+    "styleMs": 3,
+    "layoutMs": 5.9,
+    "layouts": 7.5,
+    "styles": 8
+   },
+   "input": [
+    {
+     "name": "mousedown",
+     "delay": 69.2,
+     "proc": 0,
+     "dur": 184
+    },
+    {
+     "name": "pointerdown",
+     "delay": 69,
+     "proc": 0.2,
+     "dur": 184
+    },
+    {
+     "name": "pointerup",
+     "delay": 0.4,
+     "proc": 0,
+     "dur": 16
+    },
+    {
+     "name": "mouseup",
+     "delay": 0.4,
+     "proc": 0,
+     "dur": 16
+    },
+    {
+     "name": "click",
+     "delay": 0.7,
+     "proc": 0,
+     "dur": 16
+    },
+    {
+     "name": "mousedown",
+     "delay": 1.2,
+     "proc": 0,
+     "dur": 32
+    },
+    {
+     "name": "pointerdown",
+     "delay": 1,
+     "proc": 0.2,
+     "dur": 32
+    },
+    {
+     "name": "pointerup",
+     "delay": 0.5,
+     "proc": 0.1,
+     "dur": 16
+    },
+    {
+     "name": "mouseup",
+     "delay": 0.6,
+     "proc": 0.1,
+     "dur": 16
+    },
+    {
+     "name": "click",
+     "delay": 0.9,
+     "proc": 0,
+     "dur": 16
+    },
+    {
+     "name": "mousedown",
+     "delay": 1.7,
+     "proc": 0,
+     "dur": 32
+    },
+    {
+     "name": "pointerdown",
+     "delay": 1.5,
+     "proc": 0.2,
+     "dur": 32
+    },
+    {
+     "name": "mousedown",
+     "delay": 1.7,
+     "proc": 0,
+     "dur": 32
+    }
+   ],
+   "inputWorst": 184,
+   "moveAck": {
+    "n": 376,
+    "p50": 19.8,
+    "p95": 45,
+    "max": 296.2
+   },
+   "heapMB": [
+    20.5,
+    31.7
+   ],
+   "domNodes": [
+    2788,
+    3055
+   ]
+  },
+  {
+   "name": "e36-zoom",
+   "what": "Europe, 1936 at week 280 (as Germany), paused, 12 wheel steps",
+   "map": "europe-1936",
+   "tick": [
+    280,
+    280
+   ],
+   "seconds": 2.5,
+   "frames": 105,
+   "frameMs": {
+    "p50": 16.7,
+    "p95": 50,
+    "p99": 100,
+    "max": 116.7
+   },
+   "slow": {
+    "over17": 22,
+    "over33": 12,
+    "over50": 6,
+    "over100": 1
+   },
+   "long": {
+    "count": 12,
+    "totalMs": 877,
+    "maxMs": 129
+   },
+   "js": {
+    "hover": 5.2,
+    "frame": 483,
+    "r.ensureRealms": 0.2,
+    "r.modeContext": 0.1,
+    "r.drawGround": 354.6,
+    "r.drawFleetRoutes": 0.1,
+    "r.drawAirMissions": 3.2,
+    "r.drawBattles": 0,
+    "r.drawArmies": 13.8,
+    "r.drawFleets": 5.9,
+    "r.drawWings": 2.6,
+    "r.drawSites": 4.8,
+    "r.drawZoneNames": 11.6,
+    "r.drawLabels": 75.3,
+    "draw": 477.5,
+    "minimap": 0.3,
+    "r.diffGround": 0.9,
+    "r.tile": 19.7,
+    "r.baseRegion": 76.4,
+    "r.paintRealmLayers": 18.5,
+    "r.drawSeaZones": 0.5,
+    "r.drawStraits": 0.2,
+    "r.worldLayer": 16.9,
+    "r.drawRoads": 1.9
+   },
+   "counts": {
+    "hover": 14,
+    "frame": 106,
+    "r.ensureRealms": 103,
+    "r.modeContext": 103,
+    "r.drawGround": 103,
+    "r.drawFleetRoutes": 103,
+    "r.drawAirMissions": 103,
+    "r.drawBattles": 103,
+    "r.drawArmies": 103,
+    "r.drawFleets": 103,
+    "r.drawWings": 103,
+    "r.drawSites": 103,
+    "r.drawZoneNames": 103,
+    "r.drawLabels": 103,
+    "draw": 103,
+    "minimap": 17,
+    "r.diffGround": 14,
+    "r.tile": 25,
+    "r.baseRegion": 22,
+    "r.paintRealmLayers": 22,
+    "r.drawSeaZones": 22,
+    "r.drawStraits": 22,
+    "r.worldLayer": 73,
+    "r.drawRoads": 12
+   },
+   "main": {
+    "taskMs": 781.7,
+    "scriptMs": 483,
+    "styleMs": 1.6,
+    "layoutMs": 2.1,
+    "layouts": 5.9,
+    "styles": 5.9
+   },
+   "input": [],
+   "inputWorst": 0,
+   "moveAck": null,
+   "heapMB": [
+    20.7,
+    31.3
+   ],
+   "domNodes": [
+    2841,
+    2897
+   ]
+  },
+  {
+   "name": "e36-select",
+   "what": "Europe, 1936 at week 280 (as Germany), paused, 12 clicks",
+   "map": "europe-1936",
+   "tick": [
+    280,
+    280
+   ],
+   "seconds": 3.1,
+   "frames": 182,
+   "frameMs": {
+    "p50": 16.7,
+    "p95": 16.7,
+    "p99": 16.8,
+    "max": 33.5
+   },
+   "slow": {
+    "over17": 2,
+    "over33": 0,
+    "over50": 0,
+    "over100": 0
+   },
+   "long": {
+    "count": 0,
+    "totalMs": 0,
+    "maxMs": 0
+   },
+   "js": {
+    "frame": 69.6,
+    "hover": 4.4,
+    "r.ensureRealms": 0,
+    "r.modeContext": 0,
+    "r.diffGround": 0,
+    "r.drawGround": 0.5,
+    "r.drawFleetRoutes": 0,
+    "r.drawAirMissions": 0,
+    "r.drawBattles": 0,
+    "r.drawArmies": 0.8,
+    "r.drawFleets": 0.5,
+    "r.drawWings": 0,
+    "r.drawSites": 1.2,
+    "r.drawZoneNames": 0,
+    "r.drawLabels": 8.9,
+    "draw": 14.9,
+    "minimap": 0.4,
+    "ui.renderRail": 1.9,
+    "ui.renderAttention": 0.1,
+    "ui.renderBanner": 0.1,
+    "ui.updateInsets": 7.3,
+    "ui": 53.1
+   },
+   "counts": {
+    "frame": 184,
+    "hover": 12,
+    "r.ensureRealms": 13,
+    "r.modeContext": 13,
+    "r.diffGround": 13,
+    "r.drawGround": 13,
+    "r.drawFleetRoutes": 13,
+    "r.drawAirMissions": 13,
+    "r.drawBattles": 13,
+    "r.drawArmies": 13,
+    "r.drawFleets": 13,
+    "r.drawWings": 13,
+    "r.drawSites": 13,
+    "r.drawZoneNames": 13,
+    "r.drawLabels": 13,
+    "draw": 13,
+    "minimap": 13,
+    "ui.renderRail": 13,
+    "ui.renderAttention": 13,
+    "ui.renderBanner": 13,
+    "ui.updateInsets": 13,
+    "ui": 13
+   },
+   "main": {
+    "taskMs": 167.3,
+    "scriptMs": 76.5,
+    "styleMs": 9.8,
+    "layoutMs": 16.7,
+    "layouts": 30,
+    "styles": 38.2
+   },
+   "input": [
+    {
+     "name": "pointerdown",
+     "delay": 1.8,
+     "proc": 0.3,
+     "dur": 80
+    },
+    {
+     "name": "mousedown",
+     "delay": 2.1,
+     "proc": 0,
+     "dur": 80
+    },
+    {
+     "name": "pointerup",
+     "delay": 2.2,
+     "proc": 0.5,
+     "dur": 80
+    },
+    {
+     "name": "mouseup",
+     "delay": 2.7,
+     "proc": 0,
+     "dur": 80
+    },
+    {
+     "name": "click",
+     "delay": 2.8,
+     "proc": 0,
+     "dur": 80
+    },
+    {
+     "name": "pointerdown",
+     "delay": 1.8,
+     "proc": 0.2,
+     "dur": 64
+    },
+    {
+     "name": "mousedown",
+     "delay": 2,
+     "proc": 0,
+     "dur": 64
+    },
+    {
+     "name": "pointerup",
+     "delay": 2.1,
+     "proc": 0.1,
+     "dur": 64
+    },
+    {
+     "name": "mouseup",
+     "delay": 2.2,
+     "proc": 0,
+     "dur": 64
+    },
+    {
+     "name": "click",
+     "delay": 2.2,
+     "proc": 0.1,
+     "dur": 64
+    },
+    {
+     "name": "pointerdown",
+     "delay": 2.2,
+     "proc": 0.2,
+     "dur": 32
+    },
+    {
+     "name": "mousedown",
+     "delay": 2.4,
+     "proc": 0,
+     "dur": 32
+    },
+    {
+     "name": "pointerup",
+     "delay": 2.5,
+     "proc": 0,
+     "dur": 32
+    },
+    {
+     "name": "mouseup",
+     "delay": 2.5,
+     "proc": 0,
+     "dur": 32
+    },
+    {
+     "name": "click",
+     "delay": 2.5,
+     "proc": 0.1,
+     "dur": 32
+    },
+    {
+     "name": "pointerdown",
+     "delay": 2,
+     "proc": 0.1,
+     "dur": 40
+    },
+    {
+     "name": "mousedown",
+     "delay": 2.1,
+     "proc": 0,
+     "dur": 40
+    },
+    {
+     "name": "pointerup",
+     "delay": 2.2,
+     "proc": 0,
+     "dur": 40
+    },
+    {
+     "name": "mouseup",
+     "delay": 2.2,
+     "proc": 0.1,
+     "dur": 40
+    },
+    {
+     "name": "click",
+     "delay": 2.3,
+     "proc": 0,
+     "dur": 40
+    },
+    {
+     "name": "pointerdown",
+     "delay": 2,
+     "proc": 0.1,
+     "dur": 40
+    },
+    {
+     "name": "mousedown",
+     "delay": 2.1,
+     "proc": 0,
+     "dur": 40
+    },
+    {
+     "name": "pointerup",
+     "delay": 2.2,
+     "proc": 0.1,
+     "dur": 40
+    },
+    {
+     "name": "mouseup",
+     "delay": 2.3,
+     "proc": 0,
+     "dur": 40
+    },
+    {
+     "name": "click",
+     "delay": 2.3,
+     "proc": 0,
+     "dur": 40
+    },
+    {
+     "name": "pointerdown",
+     "delay": 1.7,
+     "proc": 0.2,
+     "dur": 48
+    },
+    {
+     "name": "mousedown",
+     "delay": 1.9,
+     "proc": 0,
+     "dur": 48
+    },
+    {
+     "name": "pointerup",
+     "delay": 1.9,
+     "proc": 0.1,
+     "dur": 48
+    },
+    {
+     "name": "mouseup",
+     "delay": 2,
+     "proc": 0,
+     "dur": 48
+    },
+    {
+     "name": "click",
+     "delay": 2.4,
+     "proc": 0,
+     "dur": 48
+    },
+    {
+     "name": "pointerdown",
+     "delay": 2.7,
+     "proc": 0.3,
+     "dur": 40
+    },
+    {
+     "name": "mousedown",
+     "delay": 3,
+     "proc": 0,
+     "dur": 40
+    },
+    {
+     "name": "pointerup",
+     "delay": 3,
+     "proc": 0.1,
+     "dur": 40
+    },
+    {
+     "name": "mouseup",
+     "delay": 3.1,
+     "proc": 0,
+     "dur": 40
+    },
+    {
+     "name": "click",
+     "delay": 3.1,
+     "proc": 0.1,
+     "dur": 40
+    },
+    {
+     "name": "pointerdown",
+     "delay": 2.6,
+     "proc": 0.1,
+     "dur": 48
+    },
+    {
+     "name": "mousedown",
+     "delay": 2.7,
+     "proc": 0,
+     "dur": 48
+    },
+    {
+     "name": "pointerup",
+     "delay": 2.8,
+     "proc": 0.1,
+     "dur": 48
+    },
+    {
+     "name": "mouseup",
+     "delay": 2.9,
+     "proc": 0,
+     "dur": 48
+    },
+    {
+     "name": "click",
+     "delay": 2.9,
+     "proc": 0,
+     "dur": 48
+    },
+    {
+     "name": "pointerdown",
+     "delay": 2.2,
+     "proc": 0.1,
+     "dur": 40
+    },
+    {
+     "name": "mousedown",
+     "delay": 2.3,
+     "proc": 0,
+     "dur": 40
+    },
+    {
+     "name": "pointerup",
+     "delay": 2.7,
+     "proc": 0.1,
+     "dur": 40
+    },
+    {
+     "name": "mouseup",
+     "delay": 2.8,
+     "proc": 0,
+     "dur": 40
+    },
+    {
+     "name": "click",
+     "delay": 3,
+     "proc": 0,
+     "dur": 40
+    },
+    {
+     "name": "pointerdown",
+     "delay": 2,
+     "proc": 0.1,
+     "dur": 32
+    },
+    {
+     "name": "mousedown",
+     "delay": 2.1,
+     "proc": 0,
+     "dur": 32
+    },
+    {
+     "name": "pointerup",
+     "delay": 2.2,
+     "proc": 0.1,
+     "dur": 32
+    },
+    {
+     "name": "mouseup",
+     "delay": 2.3,
+     "proc": 0.1,
+     "dur": 32
+    },
+    {
+     "name": "click",
+     "delay": 2.4,
+     "proc": 0,
+     "dur": 32
+    },
+    {
+     "name": "pointerdown",
+     "delay": 2.3,
+     "proc": 0.2,
+     "dur": 48
+    },
+    {
+     "name": "mousedown",
+     "delay": 2.5,
+     "proc": 0,
+     "dur": 48
+    },
+    {
+     "name": "pointerup",
+     "delay": 2.4,
+     "proc": 0.1,
+     "dur": 48
+    },
+    {
+     "name": "mouseup",
+     "delay": 2.5,
+     "proc": 0,
+     "dur": 48
+    },
+    {
+     "name": "click",
+     "delay": 2.5,
+     "proc": 0,
+     "dur": 48
+    },
+    {
+     "name": "pointerdown",
+     "delay": 2.4,
+     "proc": 0.1,
+     "dur": 40
+    },
+    {
+     "name": "mousedown",
+     "delay": 2.5,
+     "proc": 0,
+     "dur": 40
+    },
+    {
+     "name": "pointerup",
+     "delay": 2.5,
+     "proc": 0.1,
+     "dur": 40
+    },
+    {
+     "name": "mouseup",
+     "delay": 2.6,
+     "proc": 0,
+     "dur": 40
+    },
+    {
+     "name": "click",
+     "delay": 2.6,
+     "proc": 0,
+     "dur": 40
+    }
+   ],
+   "inputWorst": 80,
+   "moveAck": null,
+   "heapMB": [
+    21,
+    29.9
+   ],
+   "domNodes": [
+    2875,
+    9663
+   ]
+  },
+  {
+   "name": "e36-panels",
+   "what": "Europe, 1936 at week 280 (as Germany), paused, each ledger by its key",
+   "map": "europe-1936",
+   "tick": [
+    280,
+    280
+   ],
+   "seconds": 4.5,
+   "frames": 246,
+   "frameMs": {
+    "p50": 16.7,
+    "p95": 16.8,
+    "p99": 50.1,
+    "max": 116.7
+   },
+   "slow": {
+    "over17": 4,
+    "over33": 4,
+    "over50": 4,
+    "over100": 3
+   },
+   "long": {
+    "count": 3,
+    "totalMs": 332,
+    "maxMs": 117
+   },
+   "js": {
+    "ui.updateInsets": 16.2,
+    "r.ensureRealms": 0,
+    "r.modeContext": 0.1,
+    "r.diffGround": 0.6,
+    "r.drawGround": 58.3,
+    "r.drawFleetRoutes": 0,
+    "r.drawAirMissions": 0,
+    "r.drawBattles": 0,
+    "r.drawArmies": 0.5,
+    "r.drawFleets": 0.3,
+    "r.drawWings": 0,
+    "r.drawSites": 0.6,
+    "r.drawZoneNames": 0,
+    "r.drawLabels": 4.3,
+    "draw": 64.6,
+    "ui.renderRail": 0.8,
+    "ui.renderAttention": 0,
+    "ui.renderBanner": 0,
+    "ui": 14.4,
+    "frame": 80,
+    "minimap": 0.2,
+    "r.baseRegion": 0,
+    "r.paintRealmLayers": 4.6,
+    "r.drawSeaZones": 2,
+    "r.drawStraits": 0.1
+   },
+   "counts": {
+    "ui.updateInsets": 20,
+    "r.ensureRealms": 11,
+    "r.modeContext": 11,
+    "r.diffGround": 11,
+    "r.drawGround": 11,
+    "r.drawFleetRoutes": 11,
+    "r.drawAirMissions": 11,
+    "r.drawBattles": 11,
+    "r.drawArmies": 11,
+    "r.drawFleets": 11,
+    "r.drawWings": 11,
+    "r.drawSites": 11,
+    "r.drawZoneNames": 11,
+    "r.drawLabels": 11,
+    "draw": 11,
+    "ui.renderRail": 10,
+    "ui.renderAttention": 10,
+    "ui.renderBanner": 10,
+    "ui": 10,
+    "frame": 247,
+    "minimap": 9,
+    "r.baseRegion": 3,
+    "r.paintRealmLayers": 3,
+    "r.drawSeaZones": 3,
+    "r.drawStraits": 3
+   },
+   "main": {
+    "taskMs": 172.8,
+    "scriptMs": 97.9,
+    "styleMs": 14.5,
+    "layoutMs": 12,
+    "layouts": 10.5,
+    "styles": 19.1
+   },
+   "input": [
+    {
+     "name": "keydown",
+     "delay": 0.3,
+     "proc": 13.6,
+     "dur": 40
+    },
+    {
+     "name": "keyup",
+     "delay": 17.6,
+     "proc": 0,
+     "dur": 40
+    },
+    {
+     "name": "keydown",
+     "delay": 0.3,
+     "proc": 43.8,
+     "dur": 80
+    },
+    {
+     "name": "keyup",
+     "delay": 18.8,
+     "proc": 0.1,
+     "dur": 32
+    },
+    {
+     "name": "keydown",
+     "delay": 0.4,
+     "proc": 17.3,
+     "dur": 40
+    },
+    {
+     "name": "keyup",
+     "delay": 14.6,
+     "proc": 0,
+     "dur": 24
+    },
+    {
+     "name": "keydown",
+     "delay": 0.4,
+     "proc": 21.7,
+     "dur": 64
+    },
+    {
+     "name": "keyup",
+     "delay": 22.5,
+     "proc": 0,
+     "dur": 40
+    },
+    {
+     "name": "keydown",
+     "delay": 0.4,
+     "proc": 11.5,
+     "dur": 56
+    },
+    {
+     "name": "keyup",
+     "delay": 0.2,
+     "proc": 0,
+     "dur": 40
+    },
+    {
+     "name": "keydown",
+     "delay": 0.2,
+     "proc": 22.9,
+     "dur": 152
+    },
+    {
+     "name": "keyup",
+     "delay": 117.2,
+     "proc": 0,
+     "dur": 128
+    },
+    {
+     "name": "keydown",
+     "delay": 0.4,
+     "proc": 12.9,
+     "dur": 136
+    },
+    {
+     "name": "keyup",
+     "delay": 110.9,
+     "proc": 0,
+     "dur": 120
+    },
+    {
+     "name": "keydown",
+     "delay": 0.4,
+     "proc": 25.7,
+     "dur": 136
+    },
+    {
+     "name": "keyup",
+     "delay": 103.5,
+     "proc": 0,
+     "dur": 120
+    },
+    {
+     "name": "keydown",
+     "delay": 0.4,
+     "proc": 5.5,
+     "dur": 32
+    },
+    {
+     "name": "keyup",
+     "delay": 13.7,
+     "proc": 0,
+     "dur": 24
+    },
+    {
+     "name": "keydown",
+     "delay": 0.4,
+     "proc": 2.6,
+     "dur": 32
+    },
+    {
+     "name": "keyup",
+     "delay": 0.1,
+     "proc": 0.1,
+     "dur": 32
+    }
+   ],
+   "inputWorst": 152,
+   "moveAck": null,
+   "heapMB": [
+    21.2,
+    32.5
+   ],
+   "domNodes": [
+    2875,
+    5942
+   ]
+  },
+  {
+   "name": "e36-normal",
+   "what": "Europe, 1936 at week 280 (as Germany), normal speed, no input, 8 s",
+   "map": "europe-1936",
+   "tick": [
+    280,
+    287
+   ],
+   "seconds": 8,
+   "frames": 474,
+   "frameMs": {
+    "p50": 16.7,
+    "p95": 16.8,
+    "p99": 16.8,
+    "max": 49.9
+   },
+   "slow": {
+    "over17": 5,
+    "over33": 1,
+    "over50": 0,
+    "over100": 0
+   },
+   "long": {
+    "count": 0,
+    "totalMs": 0,
+    "maxMs": 0
+   },
+   "js": {
+    "r.ensureRealms": 1.1,
+    "r.modeContext": 0,
+    "r.diffGround": 0.3,
+    "r.drawGround": 7.4,
+    "r.drawFleetRoutes": 0,
+    "r.drawAirMissions": 0,
+    "r.drawBattles": 0,
+    "r.drawArmies": 0.3,
+    "r.drawFleets": 0.2,
+    "r.drawWings": 0,
+    "r.drawSites": 0.4,
+    "r.drawZoneNames": 0,
+    "r.drawLabels": 3.6,
+    "draw": 14.3,
+    "minimap": 1,
+    "ui.renderRail": 0.9,
+    "ui.renderAttention": 0,
+    "ui.renderBanner": 0,
+    "ui.updateInsets": 1.7,
+    "ui": 13.4,
+    "frame": 93.7,
+    "r.baseRegion": 0.1,
+    "r.paintRealmLayers": 2.3,
+    "r.drawSeaZones": 0.1,
+    "r.drawStraits": 0.1
+   },
+   "counts": {
+    "r.ensureRealms": 12,
+    "r.modeContext": 12,
+    "r.diffGround": 12,
+    "r.drawGround": 12,
+    "r.drawFleetRoutes": 12,
+    "r.drawAirMissions": 12,
+    "r.drawBattles": 12,
+    "r.drawArmies": 12,
+    "r.drawFleets": 12,
+    "r.drawWings": 12,
+    "r.drawSites": 12,
+    "r.drawZoneNames": 12,
+    "r.drawLabels": 12,
+    "draw": 12,
+    "minimap": 9,
+    "ui.renderRail": 9,
+    "ui.renderAttention": 9,
+    "ui.renderBanner": 9,
+    "ui.updateInsets": 9,
+    "ui": 9,
+    "frame": 475,
+    "r.baseRegion": 13,
+    "r.paintRealmLayers": 13,
+    "r.drawSeaZones": 13,
+    "r.drawStraits": 13
+   },
+   "main": {
+    "taskMs": 122.9,
+    "scriptMs": 92.2,
+    "styleMs": 1.6,
+    "layoutMs": 2.8,
+    "layouts": 3.4,
+    "styles": 5.1
+   },
+   "input": [
+    {
+     "name": "keydown",
+     "delay": 0.3,
+     "proc": 0.2,
+     "dur": 32
+    },
+    {
+     "name": "keyup",
+     "delay": 0.2,
+     "proc": 0,
+     "dur": 24
+    }
+   ],
+   "inputWorst": 32,
+   "moveAck": null,
+   "heapMB": [
+    22.7,
+    35.8
+   ],
+   "domNodes": [
+    2876,
+    3310
+   ]
+  },
+  {
+   "name": "e36-max",
+   "what": "Europe, 1936 at week 280 (as Germany), fastest speed, no input, 8 s",
+   "map": "europe-1936",
+   "tick": [
+    287,
+    334
+   ],
+   "seconds": 8,
+   "frames": 480,
+   "frameMs": {
+    "p50": 16.7,
+    "p95": 16.8,
+    "p99": 16.8,
+    "max": 33.4
+   },
+   "slow": {
+    "over17": 1,
+    "over33": 0,
+    "over50": 0,
+    "over100": 0
+   },
+   "long": {
+    "count": 0,
+    "totalMs": 0,
+    "maxMs": 0
+   },
+   "js": {
+    "r.ensureRealms": 1.2,
+    "r.modeContext": 0.1,
+    "r.diffGround": 1.9,
+    "r.drawGround": 13.4,
+    "r.drawFleetRoutes": 0.2,
+    "r.drawAirMissions": 0,
+    "r.drawBattles": 0.1,
+    "r.drawArmies": 3.2,
+    "r.drawFleets": 1.2,
+    "r.drawWings": 0,
+    "r.drawSites": 2.3,
+    "r.drawZoneNames": 0,
+    "r.drawLabels": 20.6,
+    "draw": 48.7,
+    "minimap": 1.7,
+    "frame": 371.8,
+    "ui.renderRail": 1.7,
+    "ui.renderAttention": 0,
+    "ui.renderBanner": 0,
+    "ui.updateInsets": 8.6,
+    "ui": 62.7,
+    "r.baseRegion": 0.2,
+    "r.paintRealmLayers": 2.2,
+    "r.drawSeaZones": 0.1,
+    "r.drawStraits": 0.1
+   },
+   "counts": {
+    "r.ensureRealms": 105,
+    "r.modeContext": 105,
+    "r.diffGround": 105,
+    "r.drawGround": 105,
+    "r.drawFleetRoutes": 105,
+    "r.drawAirMissions": 105,
+    "r.drawBattles": 105,
+    "r.drawArmies": 105,
+    "r.drawFleets": 105,
+    "r.drawWings": 105,
+    "r.drawSites": 105,
+    "r.drawZoneNames": 105,
+    "r.drawLabels": 105,
+    "draw": 105,
+    "minimap": 49,
+    "frame": 481,
+    "ui.renderRail": 44,
+    "ui.renderAttention": 44,
+    "ui.renderBanner": 44,
+    "ui.updateInsets": 44,
+    "ui": 44,
+    "r.baseRegion": 26,
+    "r.paintRealmLayers": 26,
+    "r.drawSeaZones": 26,
+    "r.drawStraits": 26
+   },
+   "main": {
+    "taskMs": 489.2,
+    "scriptMs": 355.2,
+    "styleMs": 10.2,
+    "layoutMs": 16.7,
+    "layouts": 20.2,
+    "styles": 25.9
+   },
+   "input": [
+    {
+     "name": "keydown",
+     "delay": 6.4,
+     "proc": 0.2,
+     "dur": 16
+    },
+    {
+     "name": "keyup",
+     "delay": 11.6,
+     "proc": 0,
+     "dur": 16
+    }
+   ],
+   "inputWorst": 16,
+   "moveAck": null,
+   "heapMB": [
+    25,
+    77.1
+   ],
+   "domNodes": [
+    2876,
+    13846
+   ]
+  },
+  {
+   "name": "e36-max-pan",
+   "what": "Europe, 1936 at week 280 (as Germany), fastest speed while dragging and clicking, 6 s",
+   "map": "europe-1936",
+   "tick": [
+    335,
+    430
+   ],
+   "seconds": 15.9,
+   "frames": 915,
+   "frameMs": {
+    "p50": 16.7,
+    "p95": 16.8,
+    "p99": 33.4,
+    "max": 50.1
+   },
+   "slow": {
+    "over17": 36,
+    "over33": 3,
+    "over50": 1,
+    "over100": 0
+   },
+   "long": {
+    "count": 3,
+    "totalMs": 167,
+    "maxMs": 57
+   },
+   "js": {
+    "r.ensureRealms": 2.8,
+    "r.modeContext": 0.3,
+    "r.diffGround": 2.2,
+    "r.drawGround": 55.3,
+    "r.drawFleetRoutes": 0.6,
+    "r.drawAirMissions": 0,
+    "r.drawBattles": 0.9,
+    "r.drawArmies": 7,
+    "r.drawFleets": 4.8,
+    "r.drawWings": 0,
+    "r.drawSites": 6,
+    "r.drawZoneNames": 0,
+    "r.drawLabels": 66.4,
+    "draw": 158.1,
+    "minimap": 3.3,
+    "ui.renderRail": 0.3,
+    "ui.renderAttention": 0,
+    "ui.renderBanner": 0,
+    "ui.updateInsets": 1,
+    "ui": 9.3,
+    "frame": 479,
+    "hover": 0.4,
+    "r.baseRegion": 0.1,
+    "r.paintRealmLayers": 5,
+    "r.drawSeaZones": 0.1,
+    "r.drawStraits": 0.1
+   },
+   "counts": {
+    "r.ensureRealms": 693,
+    "r.modeContext": 693,
+    "r.diffGround": 693,
+    "r.drawGround": 693,
+    "r.drawFleetRoutes": 693,
+    "r.drawAirMissions": 693,
+    "r.drawBattles": 693,
+    "r.drawArmies": 693,
+    "r.drawFleets": 693,
+    "r.drawWings": 693,
+    "r.drawSites": 693,
+    "r.drawZoneNames": 693,
+    "r.drawLabels": 693,
+    "draw": 693,
+    "minimap": 113,
+    "ui.renderRail": 11,
+    "ui.renderAttention": 11,
+    "ui.renderBanner": 11,
+    "ui.updateInsets": 11,
+    "ui": 11,
+    "frame": 917,
+    "hover": 6,
+    "r.baseRegion": 62,
+    "r.paintRealmLayers": 62,
+    "r.drawSeaZones": 62,
+    "r.drawStraits": 62
+   },
+   "main": {
+    "taskMs": 725.3,
+    "scriptMs": 481.6,
+    "styleMs": 5.4,
+    "layoutMs": 9,
+    "layouts": 12.5,
+    "styles": 19.4
+   },
+   "input": [
+    {
+     "name": "keydown",
+     "delay": 2.4,
+     "proc": 0.1,
+     "dur": 32
+    },
+    {
+     "name": "keyup",
+     "delay": 0.2,
+     "proc": 0,
+     "dur": 32
+    },
+    {
+     "name": "mousedown",
+     "delay": 7.7,
+     "proc": 0,
+     "dur": 32
+    },
+    {
+     "name": "pointerdown",
+     "delay": 7.3,
+     "proc": 0.4,
+     "dur": 32
+    },
+    {
+     "name": "pointerup",
+     "delay": 0.4,
+     "proc": 0,
+     "dur": 40
+    },
+    {
+     "name": "mouseup",
+     "delay": 0.5,
+     "proc": 0,
+     "dur": 40
+    },
+    {
+     "name": "click",
+     "delay": 0.7,
+     "proc": 0,
+     "dur": 40
+    },
+    {
+     "name": "mousedown",
+     "delay": 17.1,
+     "proc": 0.1,
+     "dur": 48
+    },
+    {
+     "name": "pointerdown",
+     "delay": 16.9,
+     "proc": 0.2,
+     "dur": 48
+    },
+    {
+     "name": "pointerup",
+     "delay": 6.3,
+     "proc": 0.1,
+     "dur": 32
+    },
+    {
+     "name": "mouseup",
+     "delay": 6.4,
+     "proc": 0,
+     "dur": 32
+    },
+    {
+     "name": "click",
+     "delay": 6.7,
+     "proc": 0,
+     "dur": 32
+    },
+    {
+     "name": "mousedown",
+     "delay": 14.7,
+     "proc": 0,
+     "dur": 24
+    },
+    {
+     "name": "pointerdown",
+     "delay": 14.6,
+     "proc": 0.1,
+     "dur": 24
+    },
+    {
+     "name": "pointerup",
+     "delay": 0.3,
+     "proc": 0.1,
+     "dur": 56
+    },
+    {
+     "name": "mouseup",
+     "delay": 0.4,
+     "proc": 0,
+     "dur": 56
+    },
+    {
+     "name": "click",
+     "delay": 0.6,
+     "proc": 0,
+     "dur": 56
+    },
+    {
+     "name": "pointerdown",
+     "delay": 1.7,
+     "proc": 0.2,
+     "dur": 48
+    },
+    {
+     "name": "mousedown",
+     "delay": 1.9,
+     "proc": 0,
+     "dur": 48
+    },
+    {
+     "name": "pointerup",
+     "delay": 1.9,
+     "proc": 0,
+     "dur": 48
+    },
+    {
+     "name": "mouseup",
+     "delay": 1.9,
+     "proc": 0,
+     "dur": 48
+    },
+    {
+     "name": "click",
+     "delay": 1.9,
+     "proc": 0,
+     "dur": 48
+    },
+    {
+     "name": "pointerdown",
+     "delay": 1.4,
+     "proc": 0.1,
+     "dur": 48
+    },
+    {
+     "name": "mousedown",
+     "delay": 1.5,
+     "proc": 0,
+     "dur": 48
+    },
+    {
+     "name": "pointerup",
+     "delay": 1.9,
+     "proc": 0.1,
+     "dur": 48
+    },
+    {
+     "name": "mouseup",
+     "delay": 2,
+     "proc": 0,
+     "dur": 48
+    },
+    {
+     "name": "click",
+     "delay": 2.1,
+     "proc": 0,
+     "dur": 48
+    },
+    {
+     "name": "pointerdown",
+     "delay": 11.4,
+     "proc": 0,
+     "dur": 48
+    },
+    {
+     "name": "mousedown",
+     "delay": 11.4,
+     "proc": 0,
+     "dur": 48
+    },
+    {
+     "name": "pointerup",
+     "delay": 12.1,
+     "proc": 0.1,
+     "dur": 48
+    },
+    {
+     "name": "mouseup",
+     "delay": 12.2,
+     "proc": 0,
+     "dur": 48
+    },
+    {
+     "name": "click",
+     "delay": 12.2,
+     "proc": 0,
+     "dur": 48
+    },
+    {
+     "name": "pointerdown",
+     "delay": 24.3,
+     "proc": 0.1,
+     "dur": 56
+    },
+    {
+     "name": "mousedown",
+     "delay": 24.4,
+     "proc": 0,
+     "dur": 56
+    },
+    {
+     "name": "pointerup",
+     "delay": 24.7,
+     "proc": 0,
+     "dur": 56
+    },
+    {
+     "name": "mouseup",
+     "delay": 24.7,
+     "proc": 0,
+     "dur": 56
+    },
+    {
+     "name": "click",
+     "delay": 24.8,
+     "proc": 0.1,
+     "dur": 56
+    }
+   ],
+   "inputWorst": 56,
+   "moveAck": {
+    "n": 282,
+    "p50": 28,
+    "p95": 78.7,
+    "max": 184.3
+   },
+   "heapMB": [
+    28,
+    97.5
+   ],
+   "domNodes": [
+    2896,
+    12316
+   ]
+  },
+  {
+   "name": "w36-idle",
+   "what": "the World, 1936 at week 280 (as Britain), paused, no input, 3 s",
+   "map": "earth-1936",
+   "tick": [
+    280,
+    280
+   ],
+   "seconds": 3,
+   "frames": 72,
+   "frameMs": {
+    "p50": 16.7,
+    "p95": 116.7,
+    "p99": 133.3,
+    "max": 183.3
+   },
+   "slow": {
+    "over17": 25,
+    "over33": 24,
+    "over50": 19,
+    "over100": 8
+   },
+   "long": {
+    "count": 23,
+    "totalMs": 2237,
+    "maxMs": 178
+   },
+   "js": {
+    "r.ensureRealms": 0.1,
+    "r.modeContext": 0.1,
+    "r.diffGround": 0,
+    "r.tile": 80.4,
+    "r.baseRegion": 294.5,
+    "r.paintRealmLayers": 49.3,
+    "r.drawSeaZones": 1.2,
+    "r.drawStraits": 1.5,
+    "r.drawGround": 728.6,
+    "r.drawRoute": 0.8,
+    "r.drawFleetRoutes": 0.1,
+    "r.drawAirMissions": 0,
+    "r.drawBattles": 0,
+    "r.drawArmies": 2.3,
+    "r.drawFleets": 1.6,
+    "r.drawWings": 0,
+    "r.drawSites": 1.9,
+    "r.drawZoneNames": 0,
+    "r.drawLabels": 26,
+    "draw": 764.5,
+    "minimap": 0.3,
+    "frame": 765.1
+   },
+   "counts": {
+    "r.ensureRealms": 31,
+    "r.modeContext": 31,
+    "r.diffGround": 31,
+    "r.tile": 28,
+    "r.baseRegion": 78,
+    "r.paintRealmLayers": 78,
+    "r.drawSeaZones": 78,
+    "r.drawStraits": 78,
+    "r.drawGround": 31,
+    "r.drawRoute": 31,
+    "r.drawFleetRoutes": 31,
+    "r.drawAirMissions": 31,
+    "r.drawBattles": 31,
+    "r.drawArmies": 31,
+    "r.drawFleets": 31,
+    "r.drawWings": 31,
+    "r.drawSites": 31,
+    "r.drawZoneNames": 31,
+    "r.drawLabels": 31,
+    "draw": 31,
+    "minimap": 15,
+    "frame": 74
+   },
+   "main": {
+    "taskMs": 851.2,
+    "scriptMs": 805.8,
+    "styleMs": 0.3,
+    "layoutMs": 0.3,
+    "layouts": 1,
+    "styles": 1.3
+   },
+   "input": [],
+   "inputWorst": 0,
+   "moveAck": null,
+   "heapMB": [
+    30.4,
+    43.5
+   ],
+   "domNodes": [
+    2809,
+    2944
+   ]
+  },
+  {
+   "name": "w36-pan",
+   "what": "the World, 1936 at week 280 (as Britain), paused, dragging at regional zoom, 6 s",
+   "map": "earth-1936",
+   "tick": [
+    280,
+    280
+   ],
+   "seconds": 14.1,
+   "frames": 822,
+   "frameMs": {
+    "p50": 16.7,
+    "p95": 16.8,
+    "p99": 33.4,
+    "max": 66.7
+   },
+   "slow": {
+    "over17": 15,
+    "over33": 7,
+    "over50": 4,
+    "over100": 0
+   },
+   "long": {
+    "count": 6,
+    "totalMs": 366,
+    "maxMs": 76
+   },
+   "js": {
+    "hover": 0.4,
+    "frame": 144.8,
+    "r.ensureRealms": 0.1,
+    "r.modeContext": 0.2,
+    "r.diffGround": 0.1,
+    "r.drawGround": 50.9,
+    "r.drawRoute": 1.7,
+    "r.drawFleetRoutes": 0.2,
+    "r.drawAirMissions": 0,
+    "r.drawBattles": 0,
+    "r.drawArmies": 5.3,
+    "r.drawFleets": 4.3,
+    "r.drawWings": 0,
+    "r.drawSites": 5.1,
+    "r.drawZoneNames": 0,
+    "r.drawLabels": 62.2,
+    "draw": 143.7,
+    "minimap": 0.3,
+    "r.baseRegion": 11.3,
+    "r.paintRealmLayers": 3.8,
+    "r.drawSeaZones": 0.1,
+    "r.drawStraits": 0.1,
+    "r.tile": 3.9
+   },
+   "counts": {
+    "hover": 4,
+    "frame": 823,
+    "r.ensureRealms": 381,
+    "r.modeContext": 381,
+    "r.diffGround": 381,
+    "r.drawGround": 381,
+    "r.drawRoute": 381,
+    "r.drawFleetRoutes": 381,
+    "r.drawAirMissions": 381,
+    "r.drawBattles": 381,
+    "r.drawArmies": 381,
+    "r.drawFleets": 381,
+    "r.drawWings": 381,
+    "r.drawSites": 381,
+    "r.drawZoneNames": 381,
+    "r.drawLabels": 381,
+    "draw": 381,
+    "minimap": 100,
+    "r.baseRegion": 38,
+    "r.paintRealmLayers": 38,
+    "r.drawSeaZones": 38,
+    "r.drawStraits": 38,
+    "r.tile": 7
+   },
+   "main": {
+    "taskMs": 318.3,
+    "scriptMs": 149.8,
+    "styleMs": 3.3,
+    "layoutMs": 7,
+    "layouts": 8.3,
+    "styles": 8.9
+   },
+   "input": [
+    {
+     "name": "mousedown",
+     "delay": 5.3,
+     "proc": 0,
+     "dur": 40
+    },
+    {
+     "name": "pointerdown",
+     "delay": 3.9,
+     "proc": 1.4,
+     "dur": 40
+    },
+    {
+     "name": "pointerup",
+     "delay": 0.3,
+     "proc": 0.3,
+     "dur": 16
+    },
+    {
+     "name": "mouseup",
+     "delay": 0.6,
+     "proc": 0.1,
+     "dur": 16
+    },
+    {
+     "name": "click",
+     "delay": 0.8,
+     "proc": 0,
+     "dur": 16
+    },
+    {
+     "name": "mousedown",
+     "delay": 1.4,
+     "proc": 0,
+     "dur": 24
+    },
+    {
+     "name": "pointerdown",
+     "delay": 1.3,
+     "proc": 0.1,
+     "dur": 24
+    },
+    {
+     "name": "pointerup",
+     "delay": 0.4,
+     "proc": 0.1,
+     "dur": 16
+    },
+    {
+     "name": "mouseup",
+     "delay": 0.5,
+     "proc": 0,
+     "dur": 16
+    },
+    {
+     "name": "click",
+     "delay": 0.7,
+     "proc": 0.1,
+     "dur": 16
+    },
+    {
+     "name": "mousedown",
+     "delay": 2.6,
+     "proc": 0,
+     "dur": 32
+    },
+    {
+     "name": "pointerdown",
+     "delay": 2,
+     "proc": 0.6,
+     "dur": 32
+    },
+    {
+     "name": "pointerup",
+     "delay": 0.9,
+     "proc": 0.1,
+     "dur": 16
+    },
+    {
+     "name": "mouseup",
+     "delay": 1,
+     "proc": 0,
+     "dur": 16
+    },
+    {
+     "name": "click",
+     "delay": 1.2,
+     "proc": 0,
+     "dur": 16
+    },
+    {
+     "name": "mousedown",
+     "delay": 1.3,
+     "proc": 0,
+     "dur": 24
+    }
+   ],
+   "inputWorst": 40,
+   "moveAck": {
+    "n": 376,
+    "p50": 17.9,
+    "p95": 36,
+    "max": 144.7
+   },
+   "heapMB": [
+    31.1,
+    45
+   ],
+   "domNodes": [
+    2831,
+    3593
+   ]
+  },
+  {
+   "name": "w36-pan-mid",
+   "what": "the World, 1936 at week 280 (as Britain), paused, dragging at the medium tier, 6 s",
+   "map": "earth-1936",
+   "tick": [
+    280,
+    280
+   ],
+   "seconds": 15.9,
+   "frames": 890,
+   "frameMs": {
+    "p50": 16.7,
+    "p95": 16.8,
+    "p99": 50.1,
+    "max": 83.4
+   },
+   "slow": {
+    "over17": 33,
+    "over33": 20,
+    "over50": 11,
+    "over100": 0
+   },
+   "long": {
+    "count": 17,
+    "totalMs": 1136,
+    "maxMs": 87
+   },
+   "js": {
+    "r.ensureRealms": 0.1,
+    "r.modeContext": 0.2,
+    "r.diffGround": 0.1,
+    "r.tile": 6.8,
+    "r.baseRegion": 33,
+    "r.paintRealmLayers": 7.9,
+    "r.drawSeaZones": 0.2,
+    "r.drawStraits": 0.3,
+    "r.drawGround": 91,
+    "r.drawRoute": 1.2,
+    "r.drawFleetRoutes": 0.2,
+    "r.drawAirMissions": 3,
+    "r.drawBattles": 0,
+    "r.drawArmies": 10,
+    "r.drawFleets": 13.2,
+    "r.drawWings": 2.9,
+    "r.drawSites": 2.7,
+    "r.drawZoneNames": 11,
+    "r.drawLabels": 90.3,
+    "draw": 237.3,
+    "minimap": 0.3,
+    "frame": 238.4,
+    "hover": 0.3
+   },
+   "counts": {
+    "r.ensureRealms": 396,
+    "r.modeContext": 396,
+    "r.diffGround": 396,
+    "r.tile": 35,
+    "r.baseRegion": 81,
+    "r.paintRealmLayers": 81,
+    "r.drawSeaZones": 81,
+    "r.drawStraits": 81,
+    "r.drawGround": 396,
+    "r.drawRoute": 396,
+    "r.drawFleetRoutes": 396,
+    "r.drawAirMissions": 396,
+    "r.drawBattles": 396,
+    "r.drawArmies": 396,
+    "r.drawFleets": 396,
+    "r.drawWings": 396,
+    "r.drawSites": 396,
+    "r.drawZoneNames": 396,
+    "r.drawLabels": 396,
+    "draw": 396,
+    "minimap": 112,
+    "frame": 892,
+    "hover": 4
+   },
+   "main": {
+    "taskMs": 428.8,
+    "scriptMs": 246.7,
+    "styleMs": 2.8,
+    "layoutMs": 5.3,
+    "layouts": 7,
+    "styles": 7.5
+   },
+   "input": [
+    {
+     "name": "mousedown",
+     "delay": 63.3,
+     "proc": 0,
+     "dur": 160
+    },
+    {
+     "name": "pointerdown",
+     "delay": 63.1,
+     "proc": 0.2,
+     "dur": 160
+    },
+    {
+     "name": "pointerup",
+     "delay": 0.3,
+     "proc": 0.1,
+     "dur": 16
+    },
+    {
+     "name": "mouseup",
+     "delay": 0.4,
+     "proc": 0,
+     "dur": 16
+    },
+    {
+     "name": "click",
+     "delay": 0.7,
+     "proc": 0,
+     "dur": 16
+    },
+    {
+     "name": "mousedown",
+     "delay": 1.9,
+     "proc": 0,
+     "dur": 32
+    },
+    {
+     "name": "pointerdown",
+     "delay": 1.8,
+     "proc": 0.1,
+     "dur": 32
+    },
+    {
+     "name": "mousedown",
+     "delay": 1.5,
+     "proc": 0,
+     "dur": 32
+    },
+    {
+     "name": "pointerdown",
+     "delay": 1.3,
+     "proc": 0.2,
+     "dur": 32
+    },
+    {
+     "name": "mousedown",
+     "delay": 1,
+     "proc": 0,
+     "dur": 80
+    },
+    {
+     "name": "pointerdown",
+     "delay": 0.9,
+     "proc": 0.1,
+     "dur": 80
+    }
+   ],
+   "inputWorst": 160,
+   "moveAck": {
+    "n": 376,
+    "p50": 19.1,
+    "p95": 40.8,
+    "max": 249.3
+   },
+   "heapMB": [
+    31.6,
+    48.6
+   ],
+   "domNodes": [
+    2868,
+    4403
+   ]
+  },
+  {
+   "name": "w36-zoom",
+   "what": "the World, 1936 at week 280 (as Britain), paused, 12 wheel steps",
+   "map": "earth-1936",
+   "tick": [
+    280,
+    280
+   ],
+   "seconds": 2.6,
+   "frames": 106,
+   "frameMs": {
+    "p50": 16.7,
+    "p95": 50,
+    "p99": 100,
+    "max": 166.6
+   },
+   "slow": {
+    "over17": 20,
+    "over33": 7,
+    "over50": 5,
+    "over100": 2
+   },
+   "long": {
+    "count": 7,
+    "totalMs": 700,
+    "maxMs": 162
+   },
+   "js": {
+    "frame": 526.6,
+    "hover": 5.7,
+    "r.ensureRealms": 0.2,
+    "r.modeContext": 0,
+    "r.drawGround": 368.1,
+    "r.drawRoute": 1.7,
+    "r.drawFleetRoutes": 0.2,
+    "r.drawAirMissions": 4.4,
+    "r.drawBattles": 0.1,
+    "r.drawArmies": 14.1,
+    "r.drawFleets": 11.8,
+    "r.drawWings": 4.3,
+    "r.drawSites": 4.8,
+    "r.drawZoneNames": 15.7,
+    "r.drawLabels": 86.2,
+    "draw": 520.5,
+    "minimap": 0.3,
+    "r.diffGround": 2.8,
+    "r.tile": 20.1,
+    "r.baseRegion": 69.8,
+    "r.paintRealmLayers": 25.5,
+    "r.drawSeaZones": 0.9,
+    "r.drawStraits": 0.3,
+    "r.worldLayer": 11,
+    "r.drawRoads": 3
+   },
+   "counts": {
+    "frame": 108,
+    "hover": 14,
+    "r.ensureRealms": 104,
+    "r.modeContext": 104,
+    "r.drawGround": 104,
+    "r.drawRoute": 104,
+    "r.drawFleetRoutes": 104,
+    "r.drawAirMissions": 104,
+    "r.drawBattles": 104,
+    "r.drawArmies": 104,
+    "r.drawFleets": 104,
+    "r.drawWings": 104,
+    "r.drawSites": 104,
+    "r.drawZoneNames": 104,
+    "r.drawLabels": 104,
+    "draw": 104,
+    "minimap": 18,
+    "r.diffGround": 15,
+    "r.tile": 18,
+    "r.baseRegion": 17,
+    "r.paintRealmLayers": 17,
+    "r.drawSeaZones": 17,
+    "r.drawStraits": 17,
+    "r.worldLayer": 72,
+    "r.drawRoads": 9
+   },
+   "main": {
+    "taskMs": 794.9,
+    "scriptMs": 526.5,
+    "styleMs": 1.6,
+    "layoutMs": 2.2,
+    "layouts": 5.8,
+    "styles": 5.8
+   },
+   "input": [],
+   "inputWorst": 0,
+   "moveAck": null,
+   "heapMB": [
+    31.7,
+    46.6
+   ],
+   "domNodes": [
+    2891,
+    3285
+   ]
+  },
+  {
+   "name": "w36-select",
+   "what": "the World, 1936 at week 280 (as Britain), paused, 12 clicks",
+   "map": "earth-1936",
+   "tick": [
+    280,
+    280
+   ],
+   "seconds": 3.1,
+   "frames": 175,
+   "frameMs": {
+    "p50": 16.7,
+    "p95": 16.8,
+    "p99": 33.4,
+    "max": 50
+   },
+   "slow": {
+    "over17": 7,
+    "over33": 1,
+    "over50": 0,
+    "over100": 0
+   },
+   "long": {
+    "count": 1,
+    "totalMs": 55,
+    "maxMs": 55
+   },
+   "js": {
+    "frame": 71.9,
+    "hover": 3.3,
+    "r.ensureRealms": 0,
+    "r.modeContext": 0,
+    "r.diffGround": 0,
+    "r.drawGround": 0.5,
+    "r.drawRoute": 0.2,
+    "r.drawFleetRoutes": 0,
+    "r.drawAirMissions": 0,
+    "r.drawBattles": 0,
+    "r.drawArmies": 0.8,
+    "r.drawFleets": 0.9,
+    "r.drawWings": 0,
+    "r.drawSites": 0.9,
+    "r.drawZoneNames": 0,
+    "r.drawLabels": 10,
+    "draw": 20.6,
+    "minimap": 0.3,
+    "ui.renderRail": 1.4,
+    "ui.renderAttention": 0,
+    "ui.renderBanner": 0,
+    "ui.updateInsets": 6.5,
+    "ui": 49.6
+   },
+   "counts": {
+    "frame": 177,
+    "hover": 12,
+    "r.ensureRealms": 12,
+    "r.modeContext": 12,
+    "r.diffGround": 12,
+    "r.drawGround": 12,
+    "r.drawRoute": 12,
+    "r.drawFleetRoutes": 12,
+    "r.drawAirMissions": 12,
+    "r.drawBattles": 12,
+    "r.drawArmies": 12,
+    "r.drawFleets": 12,
+    "r.drawWings": 12,
+    "r.drawSites": 12,
+    "r.drawZoneNames": 12,
+    "r.drawLabels": 12,
+    "draw": 12,
+    "minimap": 12,
+    "ui.renderRail": 12,
+    "ui.renderAttention": 12,
+    "ui.renderBanner": 12,
+    "ui.updateInsets": 12,
+    "ui": 12
+   },
+   "main": {
+    "taskMs": 214,
+    "scriptMs": 85.4,
+    "styleMs": 8.8,
+    "layoutMs": 15.7,
+    "layouts": 30.1,
+    "styles": 38.2
+   },
+   "input": [
+    {
+     "name": "pointerdown",
+     "delay": 1.8,
+     "proc": 0.2,
+     "dur": 72
+    },
+    {
+     "name": "mousedown",
+     "delay": 2,
+     "proc": 0,
+     "dur": 72
+    },
+    {
+     "name": "pointerup",
+     "delay": 2.1,
+     "proc": 0.3,
+     "dur": 72
+    },
+    {
+     "name": "mouseup",
+     "delay": 2.4,
+     "proc": 0,
+     "dur": 72
+    },
+    {
+     "name": "click",
+     "delay": 2.5,
+     "proc": 0,
+     "dur": 72
+    },
+    {
+     "name": "pointerdown",
+     "delay": 1.6,
+     "proc": 0.2,
+     "dur": 64
+    },
+    {
+     "name": "mousedown",
+     "delay": 1.8,
+     "proc": 0,
+     "dur": 64
+    },
+    {
+     "name": "pointerup",
+     "delay": 1.9,
+     "proc": 0.1,
+     "dur": 64
+    },
+    {
+     "name": "mouseup",
+     "delay": 2,
+     "proc": 0,
+     "dur": 64
+    },
+    {
+     "name": "click",
+     "delay": 2,
+     "proc": 0,
+     "dur": 64
+    },
+    {
+     "name": "pointerdown",
+     "delay": 2.2,
+     "proc": 0.2,
+     "dur": 48
+    },
+    {
+     "name": "mousedown",
+     "delay": 2.4,
+     "proc": 0,
+     "dur": 48
+    },
+    {
+     "name": "pointerup",
+     "delay": 2.5,
+     "proc": 0.1,
+     "dur": 48
+    },
+    {
+     "name": "mouseup",
+     "delay": 2.6,
+     "proc": 0,
+     "dur": 48
+    },
+    {
+     "name": "click",
+     "delay": 2.7,
+     "proc": 0,
+     "dur": 48
+    },
+    {
+     "name": "pointerdown",
+     "delay": 2.3,
+     "proc": 0.2,
+     "dur": 56
+    },
+    {
+     "name": "mousedown",
+     "delay": 2.5,
+     "proc": 0,
+     "dur": 56
+    },
+    {
+     "name": "pointerup",
+     "delay": 2.6,
+     "proc": 0.2,
+     "dur": 56
+    },
+    {
+     "name": "mouseup",
+     "delay": 2.8,
+     "proc": 0,
+     "dur": 56
+    },
+    {
+     "name": "click",
+     "delay": 2.8,
+     "proc": 0,
+     "dur": 56
+    },
+    {
+     "name": "pointerdown",
+     "delay": 2.2,
+     "proc": 0.2,
+     "dur": 56
+    },
+    {
+     "name": "mousedown",
+     "delay": 2.4,
+     "proc": 0.1,
+     "dur": 56
+    },
+    {
+     "name": "pointerup",
+     "delay": 2.6,
+     "proc": 0.1,
+     "dur": 56
+    },
+    {
+     "name": "mouseup",
+     "delay": 2.7,
+     "proc": 0,
+     "dur": 56
+    },
+    {
+     "name": "click",
+     "delay": 2.7,
+     "proc": 0.1,
+     "dur": 56
+    },
+    {
+     "name": "pointerdown",
+     "delay": 1.7,
+     "proc": 0.2,
+     "dur": 48
+    },
+    {
+     "name": "mousedown",
+     "delay": 1.9,
+     "proc": 0,
+     "dur": 48
+    },
+    {
+     "name": "pointerup",
+     "delay": 1.9,
+     "proc": 0.2,
+     "dur": 48
+    },
+    {
+     "name": "mouseup",
+     "delay": 2.1,
+     "proc": 0,
+     "dur": 48
+    },
+    {
+     "name": "click",
+     "delay": 2.1,
+     "proc": 0,
+     "dur": 48
+    },
+    {
+     "name": "pointerdown",
+     "delay": 2,
+     "proc": 0.1,
+     "dur": 48
+    },
+    {
+     "name": "mousedown",
+     "delay": 2.2,
+     "proc": 0,
+     "dur": 48
+    },
+    {
+     "name": "pointerup",
+     "delay": 2.4,
+     "proc": 0.1,
+     "dur": 48
+    },
+    {
+     "name": "mouseup",
+     "delay": 2.5,
+     "proc": 0,
+     "dur": 48
+    },
+    {
+     "name": "click",
+     "delay": 2.5,
+     "proc": 0.1,
+     "dur": 48
+    },
+    {
+     "name": "pointerdown",
+     "delay": 1.8,
+     "proc": 0.2,
+     "dur": 48
+    },
+    {
+     "name": "mousedown",
+     "delay": 2,
+     "proc": 0,
+     "dur": 48
+    },
+    {
+     "name": "pointerup",
+     "delay": 2.1,
+     "proc": 0.1,
+     "dur": 48
+    },
+    {
+     "name": "mouseup",
+     "delay": 2.2,
+     "proc": 0,
+     "dur": 48
+    },
+    {
+     "name": "click",
+     "delay": 2.2,
+     "proc": 0.1,
+     "dur": 48
+    },
+    {
+     "name": "pointerdown",
+     "delay": 1.5,
+     "proc": 0.2,
+     "dur": 48
+    },
+    {
+     "name": "mousedown",
+     "delay": 1.7,
+     "proc": 0,
+     "dur": 48
+    },
+    {
+     "name": "pointerup",
+     "delay": 1.8,
+     "proc": 0,
+     "dur": 48
+    },
+    {
+     "name": "mouseup",
+     "delay": 1.8,
+     "proc": 0,
+     "dur": 48
+    },
+    {
+     "name": "click",
+     "delay": 1.8,
+     "proc": 0,
+     "dur": 48
+    },
+    {
+     "name": "pointerdown",
+     "delay": 1.6,
+     "proc": 0.1,
+     "dur": 40
+    },
+    {
+     "name": "mousedown",
+     "delay": 1.7,
+     "proc": 0,
+     "dur": 40
+    },
+    {
+     "name": "pointerup",
+     "delay": 1.9,
+     "proc": 0,
+     "dur": 40
+    },
+    {
+     "name": "mouseup",
+     "delay": 1.9,
+     "proc": 0,
+     "dur": 40
+    },
+    {
+     "name": "click",
+     "delay": 2,
+     "proc": 0,
+     "dur": 40
+    },
+    {
+     "name": "pointerdown",
+     "delay": 2,
+     "proc": 0.1,
+     "dur": 48
+    },
+    {
+     "name": "mousedown",
+     "delay": 2.1,
+     "proc": 0,
+     "dur": 48
+    },
+    {
+     "name": "pointerup",
+     "delay": 2,
+     "proc": 0.2,
+     "dur": 48
+    },
+    {
+     "name": "mouseup",
+     "delay": 2.2,
+     "proc": 0,
+     "dur": 48
+    },
+    {
+     "name": "click",
+     "delay": 2.2,
+     "proc": 0,
+     "dur": 48
+    },
+    {
+     "name": "pointerdown",
+     "delay": 2.1,
+     "proc": 0.2,
+     "dur": 48
+    },
+    {
+     "name": "mousedown",
+     "delay": 2.3,
+     "proc": 0,
+     "dur": 48
+    },
+    {
+     "name": "pointerup",
+     "delay": 2.3,
+     "proc": 0.2,
+     "dur": 48
+    },
+    {
+     "name": "mouseup",
+     "delay": 2.5,
+     "proc": 0,
+     "dur": 48
+    },
+    {
+     "name": "click",
+     "delay": 2.5,
+     "proc": 0,
+     "dur": 48
+    }
+   ],
+   "inputWorst": 72,
+   "moveAck": null,
+   "heapMB": [
+    32.1,
+    45.1
+   ],
+   "domNodes": [
+    2936,
+    7282
+   ]
+  },
+  {
+   "name": "w36-panels",
+   "what": "the World, 1936 at week 280 (as Britain), paused, each ledger by its key",
+   "map": "earth-1936",
+   "tick": [
+    280,
+    280
+   ],
+   "seconds": 4.7,
+   "frames": 250,
+   "frameMs": {
+    "p50": 16.7,
+    "p95": 16.7,
+    "p99": 116.7,
+    "max": 133.4
+   },
+   "slow": {
+    "over17": 6,
+    "over33": 5,
+    "over50": 4,
+    "over100": 4
+   },
+   "long": {
+    "count": 4,
+    "totalMs": 453,
+    "maxMs": 119
+   },
+   "js": {
+    "ui.updateInsets": 23.3,
+    "r.ensureRealms": 0,
+    "r.modeContext": 0.3,
+    "r.diffGround": 0.7,
+    "r.drawGround": 56.6,
+    "r.drawRoute": 0.2,
+    "r.drawFleetRoutes": 0,
+    "r.drawAirMissions": 0,
+    "r.drawBattles": 0,
+    "r.drawArmies": 0.7,
+    "r.drawFleets": 0.4,
+    "r.drawWings": 0,
+    "r.drawSites": 0.6,
+    "r.drawZoneNames": 0,
+    "r.drawLabels": 7.5,
+    "draw": 67.2,
+    "minimap": 0.2,
+    "ui.renderRail": 0.9,
+    "ui.renderAttention": 0,
+    "ui.renderBanner": 0,
+    "ui": 16,
+    "frame": 84.3,
+    "r.baseRegion": 0.2,
+    "r.paintRealmLayers": 6.2,
+    "r.drawSeaZones": 1.9,
+    "r.drawStraits": 0.1
+   },
+   "counts": {
+    "ui.updateInsets": 20,
+    "r.ensureRealms": 11,
+    "r.modeContext": 11,
+    "r.diffGround": 11,
+    "r.drawGround": 11,
+    "r.drawRoute": 11,
+    "r.drawFleetRoutes": 11,
+    "r.drawAirMissions": 11,
+    "r.drawBattles": 11,
+    "r.drawArmies": 11,
+    "r.drawFleets": 11,
+    "r.drawWings": 11,
+    "r.drawSites": 11,
+    "r.drawZoneNames": 11,
+    "r.drawLabels": 11,
+    "draw": 11,
+    "minimap": 11,
+    "ui.renderRail": 10,
+    "ui.renderAttention": 10,
+    "ui.renderBanner": 10,
+    "ui": 10,
+    "frame": 251,
+    "r.baseRegion": 3,
+    "r.paintRealmLayers": 3,
+    "r.drawSeaZones": 3,
+    "r.drawStraits": 3
+   },
+   "main": {
+    "taskMs": 201,
+    "scriptMs": 119.6,
+    "styleMs": 18,
+    "layoutMs": 17.9,
+    "layouts": 10.1,
+    "styles": 18.2
+   },
+   "input": [
+    {
+     "name": "keydown",
+     "delay": 0.4,
+     "proc": 38.6,
+     "dur": 88
+    },
+    {
+     "name": "keyup",
+     "delay": 30.5,
+     "proc": 0,
+     "dur": 56
+    },
+    {
+     "name": "keydown",
+     "delay": 0.3,
+     "proc": 106.3,
+     "dur": 144
+    },
+    {
+     "name": "keyup",
+     "delay": 26.2,
+     "proc": 0,
+     "dur": 40
+    },
+    {
+     "name": "keydown",
+     "delay": 0.4,
+     "proc": 25,
+     "dur": 48
+    },
+    {
+     "name": "keyup",
+     "delay": 17.3,
+     "proc": 0,
+     "dur": 24
+    },
+    {
+     "name": "keydown",
+     "delay": 0.5,
+     "proc": 16.4,
+     "dur": 56
+    },
+    {
+     "name": "keyup",
+     "delay": 20.4,
+     "proc": 0,
+     "dur": 40
+    },
+    {
+     "name": "keydown",
+     "delay": 0.5,
+     "proc": 10.7,
+     "dur": 56
+    },
+    {
+     "name": "keyup",
+     "delay": 17.5,
+     "proc": 0,
+     "dur": 40
+    },
+    {
+     "name": "keydown",
+     "delay": 0.4,
+     "proc": 34.1,
+     "dur": 168
+    },
+    {
+     "name": "keyup",
+     "delay": 118.1,
+     "proc": 0,
+     "dur": 128
+    },
+    {
+     "name": "keydown",
+     "delay": 0.5,
+     "proc": 16.5,
+     "dur": 144
+    },
+    {
+     "name": "keyup",
+     "delay": 114.6,
+     "proc": 0,
+     "dur": 120
+    },
+    {
+     "name": "keydown",
+     "delay": 0.2,
+     "proc": 44,
+     "dur": 168
+    },
+    {
+     "name": "keyup",
+     "delay": 113.3,
+     "proc": 0,
+     "dur": 128
+    },
+    {
+     "name": "keydown",
+     "delay": 0.4,
+     "proc": 8.6,
+     "dur": 40
+    },
+    {
+     "name": "keyup",
+     "delay": 17.5,
+     "proc": 0,
+     "dur": 24
+    },
+    {
+     "name": "keydown",
+     "delay": 0.4,
+     "proc": 5.5,
+     "dur": 32
+    },
+    {
+     "name": "keyup",
+     "delay": 19.6,
+     "proc": 0,
+     "dur": 24
+    }
+   ],
+   "inputWorst": 168,
+   "moveAck": null,
+   "heapMB": [
+    32,
+    47.5
+   ],
+   "domNodes": [
+    2935,
+    16038
+   ]
+  },
+  {
+   "name": "w36-normal",
+   "what": "the World, 1936 at week 280 (as Britain), normal speed, no input, 8 s",
+   "map": "earth-1936",
+   "tick": [
+    280,
+    287
+   ],
+   "seconds": 8,
+   "frames": 458,
+   "frameMs": {
+    "p50": 16.7,
+    "p95": 16.8,
+    "p99": 33.4,
+    "max": 66.7
+   },
+   "slow": {
+    "over17": 17,
+    "over33": 4,
+    "over50": 1,
+    "over100": 0
+   },
+   "long": {
+    "count": 3,
+    "totalMs": 185,
+    "maxMs": 69
+   },
+   "js": {
+    "frame": 255.2,
+    "r.ensureRealms": 1.2,
+    "r.modeContext": 0,
+    "r.diffGround": 1,
+    "r.drawGround": 16.3,
+    "r.drawRoute": 0.6,
+    "r.drawFleetRoutes": 0.1,
+    "r.drawAirMissions": 0,
+    "r.drawBattles": 0.3,
+    "r.drawArmies": 1.8,
+    "r.drawFleets": 1.2,
+    "r.drawWings": 0,
+    "r.drawSites": 1.8,
+    "r.drawZoneNames": 0,
+    "r.drawLabels": 17.4,
+    "draw": 43.8,
+    "minimap": 1.3,
+    "ui.renderRail": 0.3,
+    "ui.renderAttention": 0,
+    "ui.renderBanner": 0,
+    "ui.updateInsets": 1.8,
+    "ui": 20.3,
+    "r.baseRegion": 0.1,
+    "r.paintRealmLayers": 3.2,
+    "r.drawSeaZones": 0.1,
+    "r.drawStraits": 0
+   },
+   "counts": {
+    "frame": 459,
+    "r.ensureRealms": 68,
+    "r.modeContext": 68,
+    "r.diffGround": 68,
+    "r.drawGround": 68,
+    "r.drawRoute": 67,
+    "r.drawFleetRoutes": 68,
+    "r.drawAirMissions": 68,
+    "r.drawBattles": 68,
+    "r.drawArmies": 68,
+    "r.drawFleets": 68,
+    "r.drawWings": 68,
+    "r.drawSites": 68,
+    "r.drawZoneNames": 68,
+    "r.drawLabels": 68,
+    "draw": 68,
+    "minimap": 16,
+    "ui.renderRail": 8,
+    "ui.renderAttention": 8,
+    "ui.renderBanner": 8,
+    "ui.updateInsets": 8,
+    "ui": 8,
+    "r.baseRegion": 13,
+    "r.paintRealmLayers": 13,
+    "r.drawSeaZones": 13,
+    "r.drawStraits": 13
+   },
+   "main": {
+    "taskMs": 305.7,
+    "scriptMs": 253.5,
+    "styleMs": 1.9,
+    "layoutMs": 3.4,
+    "layouts": 4.5,
+    "styles": 6.6
+   },
+   "input": [
+    {
+     "name": "keydown",
+     "delay": 0.3,
+     "proc": 0.2,
+     "dur": 48
+    },
+    {
+     "name": "keyup",
+     "delay": 0.2,
+     "proc": 0,
+     "dur": 48
+    }
+   ],
+   "inputWorst": 48,
+   "moveAck": null,
+   "heapMB": [
+    35,
+    68.3
+   ],
+   "domNodes": [
+    2936,
+    5463
+   ]
+  },
+  {
+   "name": "w36-max",
+   "what": "the World, 1936 at week 280 (as Britain), fastest speed, no input, 8 s",
+   "map": "earth-1936",
+   "tick": [
+    287,
+    324
+   ],
+   "seconds": 8,
+   "frames": 405,
+   "frameMs": {
+    "p50": 16.7,
+    "p95": 33.4,
+    "p99": 50.1,
+    "max": 66.7
+   },
+   "slow": {
+    "over17": 56,
+    "over33": 15,
+    "over50": 6,
+    "over100": 0
+   },
+   "long": {
+    "count": 9,
+    "totalMs": 519,
+    "maxMs": 69
+   },
+   "js": {
+    "frame": 828,
+    "r.ensureRealms": 2.4,
+    "r.modeContext": 0.1,
+    "r.diffGround": 2.3,
+    "r.drawGround": 46.1,
+    "r.drawRoute": 0.8,
+    "r.drawFleetRoutes": 0.3,
+    "r.drawAirMissions": 0,
+    "r.drawBattles": 0.1,
+    "r.drawArmies": 2.1,
+    "r.drawFleets": 1.6,
+    "r.drawWings": 0,
+    "r.drawSites": 1.7,
+    "r.drawZoneNames": 0,
+    "r.drawLabels": 20.6,
+    "draw": 81.4,
+    "minimap": 2.8,
+    "ui.renderRail": 1.4,
+    "ui.renderAttention": 0,
+    "ui.renderBanner": 0,
+    "ui.updateInsets": 7.6,
+    "ui": 71.6,
+    "r.baseRegion": 0.3,
+    "r.paintRealmLayers": 6.8,
+    "r.drawSeaZones": 0.2,
+    "r.drawStraits": 0.2
+   },
+   "counts": {
+    "frame": 407,
+    "r.ensureRealms": 79,
+    "r.modeContext": 79,
+    "r.diffGround": 79,
+    "r.drawGround": 79,
+    "r.drawRoute": 387,
+    "r.drawFleetRoutes": 79,
+    "r.drawAirMissions": 79,
+    "r.drawBattles": 79,
+    "r.drawArmies": 79,
+    "r.drawFleets": 79,
+    "r.drawWings": 79,
+    "r.drawSites": 79,
+    "r.drawZoneNames": 79,
+    "r.drawLabels": 79,
+    "draw": 79,
+    "minimap": 40,
+    "ui.renderRail": 38,
+    "ui.renderAttention": 38,
+    "ui.renderBanner": 38,
+    "ui.updateInsets": 38,
+    "ui": 38,
+    "r.baseRegion": 28,
+    "r.paintRealmLayers": 28,
+    "r.drawSeaZones": 28,
+    "r.drawStraits": 28
+   },
+   "main": {
+    "taskMs": 923.4,
+    "scriptMs": 810.2,
+    "styleMs": 9.5,
+    "layoutMs": 16.3,
+    "layouts": 25.8,
+    "styles": 34.6
+   },
+   "input": [
+    {
+     "name": "keydown",
+     "delay": 0.4,
+     "proc": 0.1,
+     "dur": 24
+    },
+    {
+     "name": "keyup",
+     "delay": 0.3,
+     "proc": 0,
+     "dur": 24
+    }
+   ],
+   "inputWorst": 24,
+   "moveAck": null,
+   "heapMB": [
+    37.7,
+    89.2
+   ],
+   "domNodes": [
+    3066,
+    8264
+   ]
+  },
+  {
+   "name": "w36-max-pan",
+   "what": "the World, 1936 at week 280 (as Britain), fastest speed while dragging and clicking, 6 s",
+   "map": "earth-1936",
+   "tick": [
+    325,
+    387
+   ],
+   "seconds": 18.3,
+   "frames": 995,
+   "frameMs": {
+    "p50": 16.7,
+    "p95": 33.3,
+    "p99": 50,
+    "max": 83.4
+   },
+   "slow": {
+    "over17": 78,
+    "over33": 17,
+    "over50": 9,
+    "over100": 0
+   },
+   "long": {
+    "count": 14,
+    "totalMs": 883,
+    "maxMs": 87
+   },
+   "js": {
+    "r.ensureRealms": 3.2,
+    "r.modeContext": 0.2,
+    "r.diffGround": 3,
+    "r.baseRegion": 0.2,
+    "r.paintRealmLayers": 4.2,
+    "r.drawSeaZones": 0.2,
+    "r.drawStraits": 0.2,
+    "r.drawGround": 38,
+    "r.drawRoute": 1.3,
+    "r.drawFleetRoutes": 0.7,
+    "r.drawAirMissions": 0,
+    "r.drawBattles": 0.2,
+    "r.drawArmies": 6.7,
+    "r.drawFleets": 4.7,
+    "r.drawWings": 0.1,
+    "r.drawSites": 5.3,
+    "r.drawZoneNames": 0.2,
+    "r.drawLabels": 77.8,
+    "draw": 152.7,
+    "minimap": 3,
+    "ui.renderRail": 0.2,
+    "ui.renderAttention": 0,
+    "ui.renderBanner": 0,
+    "ui.updateInsets": 1,
+    "ui": 12.6,
+    "frame": 689.6,
+    "hover": 0.6
+   },
+   "counts": {
+    "r.ensureRealms": 640,
+    "r.modeContext": 640,
+    "r.diffGround": 626,
+    "r.baseRegion": 43,
+    "r.paintRealmLayers": 43,
+    "r.drawSeaZones": 43,
+    "r.drawStraits": 43,
+    "r.drawGround": 640,
+    "r.drawRoute": 1624,
+    "r.drawFleetRoutes": 640,
+    "r.drawAirMissions": 640,
+    "r.drawBattles": 640,
+    "r.drawArmies": 640,
+    "r.drawFleets": 640,
+    "r.drawWings": 640,
+    "r.drawSites": 640,
+    "r.drawZoneNames": 640,
+    "r.drawLabels": 640,
+    "draw": 640,
+    "minimap": 125,
+    "ui.renderRail": 10,
+    "ui.renderAttention": 10,
+    "ui.renderBanner": 10,
+    "ui.updateInsets": 11,
+    "ui": 10,
+    "frame": 997,
+    "hover": 13
+   },
+   "main": {
+    "taskMs": 882.9,
+    "scriptMs": 690.1,
+    "styleMs": 6,
+    "layoutMs": 9,
+    "layouts": 13.5,
+    "styles": 21.8
+   },
+   "input": [
+    {
+     "name": "keydown",
+     "delay": 0.3,
+     "proc": 0,
+     "dur": 32
+    },
+    {
+     "name": "keyup",
+     "delay": 0.6,
+     "proc": 0,
+     "dur": 24
+    },
+    {
+     "name": "mousedown",
+     "delay": 6.4,
+     "proc": 0,
+     "dur": 32
+    },
+    {
+     "name": "pointerdown",
+     "delay": 5.3,
+     "proc": 1.1,
+     "dur": 32
+    },
+    {
+     "name": "pointerup",
+     "delay": 20.2,
+     "proc": 0,
+     "dur": 96
+    },
+    {
+     "name": "mouseup",
+     "delay": 20.3,
+     "proc": 0,
+     "dur": 96
+    },
+    {
+     "name": "click",
+     "delay": 20.5,
+     "proc": 0.1,
+     "dur": 96
+    },
+    {
+     "name": "mousedown",
+     "delay": 24.7,
+     "proc": 0,
+     "dur": 48
+    },
+    {
+     "name": "pointerdown",
+     "delay": 24.6,
+     "proc": 0.1,
+     "dur": 48
+    },
+    {
+     "name": "pointerup",
+     "delay": 0.2,
+     "proc": 0.1,
+     "dur": 40
+    },
+    {
+     "name": "mouseup",
+     "delay": 0.3,
+     "proc": 0,
+     "dur": 40
+    },
+    {
+     "name": "click",
+     "delay": 0.7,
+     "proc": 0,
+     "dur": 40
+    },
+    {
+     "name": "mousedown",
+     "delay": 10.6,
+     "proc": 0,
+     "dur": 80
+    },
+    {
+     "name": "pointerdown",
+     "delay": 10.5,
+     "proc": 0.1,
+     "dur": 80
+    },
+    {
+     "name": "pointerup",
+     "delay": 8.9,
+     "proc": 0.1,
+     "dur": 64
+    },
+    {
+     "name": "mouseup",
+     "delay": 9,
+     "proc": 0,
+     "dur": 64
+    },
+    {
+     "name": "click",
+     "delay": 9.1,
+     "proc": 0,
+     "dur": 64
+    },
+    {
+     "name": "pointerdown",
+     "delay": 1.4,
+     "proc": 0.1,
+     "dur": 56
+    },
+    {
+     "name": "mousedown",
+     "delay": 1.5,
+     "proc": 0,
+     "dur": 56
+    },
+    {
+     "name": "pointerup",
+     "delay": 1.6,
+     "proc": 0,
+     "dur": 56
+    },
+    {
+     "name": "mouseup",
+     "delay": 1.6,
+     "proc": 0,
+     "dur": 56
+    },
+    {
+     "name": "click",
+     "delay": 1.7,
+     "proc": 0,
+     "dur": 56
+    },
+    {
+     "name": "pointerdown",
+     "delay": 11.1,
+     "proc": 0.1,
+     "dur": 64
+    },
+    {
+     "name": "mousedown",
+     "delay": 11.2,
+     "proc": 0,
+     "dur": 64
+    },
+    {
+     "name": "pointerup",
+     "delay": 11.2,
+     "proc": 0.1,
+     "dur": 56
+    },
+    {
+     "name": "mouseup",
+     "delay": 11.3,
+     "proc": 0,
+     "dur": 56
+    },
+    {
+     "name": "click",
+     "delay": 11.3,
+     "proc": 0,
+     "dur": 56
+    },
+    {
+     "name": "pointerdown",
+     "delay": 37,
+     "proc": 0,
+     "dur": 96
+    },
+    {
+     "name": "mousedown",
+     "delay": 37,
+     "proc": 0,
+     "dur": 96
+    },
+    {
+     "name": "pointerup",
+     "delay": 37.5,
+     "proc": 0,
+     "dur": 96
+    },
+    {
+     "name": "mouseup",
+     "delay": 37.5,
+     "proc": 0,
+     "dur": 96
+    },
+    {
+     "name": "click",
+     "delay": 37.5,
+     "proc": 0.2,
+     "dur": 96
+    },
+    {
+     "name": "pointerdown",
+     "delay": 3.8,
+     "proc": 0,
+     "dur": 104
+    },
+    {
+     "name": "mousedown",
+     "delay": 3.8,
+     "proc": 0,
+     "dur": 104
+    },
+    {
+     "name": "pointerup",
+     "delay": 4,
+     "proc": 0.1,
+     "dur": 104
+    },
+    {
+     "name": "mouseup",
+     "delay": 4.1,
+     "proc": 0.1,
+     "dur": 104
+    },
+    {
+     "name": "click",
+     "delay": 4.2,
+     "proc": 0,
+     "dur": 104
+    }
+   ],
+   "inputWorst": 104,
+   "moveAck": {
+    "n": 282,
+    "p50": 37.1,
+    "p95": 78,
+    "max": 143.5
+   },
+   "heapMB": [
+    39.6,
+    68.9
+   ],
+   "domNodes": [
+    3061,
+    12775
+   ]
+  }
+ ],
+ "ledgers": [
+  {
+   "where": "the World, week 280",
+   "ms": {
+    "realm": 54,
+    "industry": 45,
+    "military": 43,
+    "research": 26,
+    "focus": 21,
+    "diplomacy": 115,
+    "wars": 95,
+    "victory": 54,
+    "log": 24,
+    "help": 17
+   }
+  }
+ ],
+ "soak": [],
+ "errors": []
+}

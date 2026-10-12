@@ -641,6 +641,42 @@ if (!only || ['world-idle', 'world-pan', 'world-pan-mid', 'world-pan-close', 'wo
   });
 }
 
+// 3b. the 1936 maps, after five years of AI play (on request: --only e36-…,w36-…)
+async function map1936(prefix: string, what: string, save: () => string): Promise<void> {
+  if (!only || ![...only].some((x) => x.startsWith(`${prefix}-`))) return;
+  await loadSave(save());
+  await zoomTo('regional');
+  await measure(`${prefix}-idle`, `${what}, paused, no input, 3 s`, () => wait(3000));
+  await measure(`${prefix}-pan`, `${what}, paused, dragging at regional zoom, 6 s`, () => panAround(6));
+  await zoomTo('medium');
+  await measure(`${prefix}-pan-mid`, `${what}, paused, dragging at the medium tier, 6 s`, () => panAround(6));
+  await zoomTo('regional');
+  await measure(`${prefix}-zoom`, `${what}, paused, 12 wheel steps`, async () => {
+    await wheel(6, -240);
+    await wheel(6, 240);
+  });
+  await measure(`${prefix}-select`, `${what}, paused, 12 clicks`, () => clickAround(12));
+  await measure(`${prefix}-panels`, `${what}, paused, each ledger by its key`, () => panels(ALL_KEYS));
+  await measure(`${prefix}-normal`, `${what}, normal speed, no input, 8 s`, async () => {
+    await setSpeed(2);
+    await wait(8000);
+    await page.evaluate(() => window.cnf.setSpeed(0));
+  });
+  await measure(`${prefix}-max`, `${what}, fastest speed, no input, 8 s`, async () => {
+    await setSpeed(4);
+    await wait(8000);
+    await page.evaluate(() => window.cnf.setSpeed(0));
+  });
+  await measure(`${prefix}-max-pan`, `${what}, fastest speed while dragging and clicking, 6 s`, async () => {
+    await setSpeed(4);
+    await panAround(4.5);
+    await clickAround(4);
+    await page.evaluate(() => window.cnf.setSpeed(0));
+  });
+}
+await map1936('e36', 'Europe, 1936 at week 280 (as Germany)', () => campaign('europe-1936-w280', 'europe-1936', 1, 280, 'ger'));
+await map1936('w36', 'the World, 1936 at week 280 (as Britain)', () => campaign('earth-1936-w280', 'earth-1936', 1, 280, 'gbr'));
+
 // 4. the map editor on the largest map: open a copy, drag, select and paint
 if (!only || ['editor-open', 'editor-pan', 'editor-click'].some((x) => only.has(x))) {
   await page.goto(origin);

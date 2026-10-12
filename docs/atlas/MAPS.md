@@ -7,7 +7,7 @@ map package format as the older built-in maps and the maps made in the editor, p
 validator and run on the same simulation and renderer. No campaign has its own rules or
 drawing code.
 
-## The nine campaigns
+## The campaigns
 
 Counts are taken from the shipped scenarios (`src/data/maps/*.scenario.json`, and
 `src/data/` for Aldmere and the Reach). Sea zones and river borders are listed where the
@@ -24,6 +24,8 @@ scenario file records them.
 | **Europe, 1914** | historical (Natural Earth) | **686** | **23** | 0 | 232 | 78 | 12 | 91 |
 | **Hesperia, 1890** | original (authored) | **754** | **22** | 35 | 93 | 53 | 5 | 184 |
 | **The World, 1914** | historical (Natural Earth) | **1,225** | **57** | 0 | 388 | 165 | 32 | 84 |
+| **Europe, 1936** | historical (Natural Earth) | **689** | **32** | 0 | 249 | 78 | 11 | 98 |
+| **The World, 1936** | historical (Natural Earth) | **1,231** | **69** | 0 | 397 | 167 | 33 | 83 |
 
 The World is 2.2 times the size of the previous largest campaign (the Middle Sea, 548
 provinces) and has 3.6 times as many realms.
@@ -100,6 +102,248 @@ game choices, not claims about the powers' real capabilities. The campaign setup
 map's size, setting, expected style of play and mechanics (for example *Colonial empires*,
 *Oceans that wrap around*, *Unclaimed frontier*).
 
+## The 1936 campaigns
+
+**Europe, 1936** and **The World, 1936** start on 1 January 1936. They were added by the
+performance and stability update, after the performance work was verified.
+
+### What they reuse and what they change
+
+**One geographic foundation.** Each 1936 map reuses its 1914 counterpart's geography
+unchanged (`tools/europe1936.data.ts`, `tools/earth1936.data.ts`):
+- the frame, projection and province density;
+- climate zones, mountain walls and passes;
+- straits, lakes, rivers, seas and deposit hints.
+
+Only what 1936 changed is authored:
+- realms and their colours and arms;
+- the realm and region of each present-day first-level division;
+- the names in use in 1936;
+- town populations of about 1936 (the World);
+- the treaties and claims of the day.
+
+The refactor that lets the World 1936 share the 1914 tables (exports, and a region namer
+parameterised by period names) leaves the 1914 maps byte-identical when regenerated.
+
+**Density, chosen deliberately.** The province density is the same as on the 1914 maps:
+- Europe: 12,500 km² per province before a region's sparseness;
+- the World: 90,000 km².
+
+Two reasons:
+- the measured performance of the 1914 maps carries over;
+- a player moving between 1914 and 1936 meets the same scale.
+
+The counts follow from the borders: 689 provinces against 686 for Europe, and 1,231
+against 1,225 for the World.
+
+**Realm count.** The realm count grows with the successor states: 32 against 23 on Europe,
+69 against 57 on the World. Two limits were raised for it:
+- the world generator's cell labels now take up to 126 realms;
+- imported maps may have up to 96 realms.
+
+### Realms and borders
+
+**Europe** has these realms:
+- the United Kingdom (with Malta, Cyprus and the mandates of Palestine and Transjordan);
+- the Irish Free State;
+- France (with North Africa and the mandates of Syria and Lebanon, Alexandretta included);
+- the German Reich (with the Saar, since March 1935);
+- Italy (with Venezia Giulia, Fiume, Libya and the Dodecanese);
+- the Soviet Union;
+- Poland, Czechoslovakia, Austria, Hungary, Romania, Yugoslavia, Bulgaria, Greece, Albania;
+- Turkey;
+- Spain and Portugal;
+- the Low Countries and Luxembourg, Switzerland;
+- the Scandinavian kingdoms, Finland, Estonia, Latvia and Lithuania;
+- Egypt, Iraq and Iran.
+
+Yugoslavia is divided into its nine banovinas of 1929.
+
+**The World** adds:
+- Saudi Arabia, Yemen and Oman;
+- Afghanistan and Nepal;
+- Nationalist China, Manchukuo (with Jehol), Tibet and the Mongolian People's Republic;
+- Japan (with Korea, Formosa, Karafuto and the South Seas mandate) and Siam;
+- Ethiopia and Liberia;
+- the dominions;
+- the American republics.
+
+The German colonies are League mandates:
+- Tanganyika, the British Cameroons and British Togoland to Britain;
+- Cameroun and Togo to France;
+- Ruanda-Urundi to Belgium;
+- South West Africa to South Africa;
+- New Guinea and Nauru to Australia;
+- Western Samoa to New Zealand;
+- the South Seas to Japan.
+
+Other changes on the World:
+- Jubaland is Italian;
+- Tacna is Peruvian again (1929) and Leticia Colombian (1934);
+- Ifni (occupied in 1934) is Spanish;
+- Svalbard is Norwegian.
+
+### Frontiers approximated
+
+Borders follow present-day first-level divisions where they match those of 1936. Where they
+do not, they are approximated with longitude and latitude lines inside a division. These
+are approximations at the scale of a cell (about 10 km on Europe), not surveyed lines:
+- **The Polish Corridor and the Free City of Danzig:** the Pomeranian voivodeship split
+  between German Pomerania, Danzig, Polish Pomorze and East Prussia's right bank of the
+  lower Vistula.
+- **East Upper Silesia:** Katowice Polish; Gleiwitz, Hindenburg and Ratibor German.
+- **The Grenzmark**, and Soldau and the Lubawa land.
+- **The Riga line** through the Minsk and Vitebsk oblasts.
+- **The Vilnius region:** Vilniaus county, with southern Alytus and eastern Utena.
+- **The Karelian Isthmus, Ladoga Karelia and Petsamo.**
+- **Petseri and Abrene.**
+- **The Budjak**, west of the Dniester estuary.
+- **Transnistria:** the Moldavian ASSR, Soviet.
+- **The Slovenian Littoral and the Karst**, Italian.
+- **Fiume, Abbazia, Cherso and Lussino.**
+- **Hatay**, in French Syria.
+- **Jehol and the eastern Mongol banners**, in Manchukuo.
+
+### Simplifications
+
+- **The Free City of Danzig** is a Polish region of its own, claimed by Germany. Poland held
+  its customs and foreign relations; on this scale it is one province.
+- **The Italo-Ethiopian war** (from October 1935) cannot be a starting war. Ethiopia is
+  independent and Italy claims it.
+- **China's warlord provinces and the Communist base** are drawn as Nationalist China.
+- **Folded into a neighbour:**
+  - Tannu Tuva into the Soviet Union;
+  - Iceland, in personal union, into Denmark;
+  - Newfoundland, under a commission from London, into Britain;
+  - on the World, Luxembourg, in economic union, into Belgium.
+- **Left off Europe:** northern Arabia and Kuwait, whose capitals lie beyond the frame, as
+  Kuwait was in 1914.
+- **The Rhineland** is German (remilitarised only in March 1936). The game has no
+  demilitarised zones.
+
+### Treaties and claims of the day
+
+**Alliances:**
+- France with Poland, Czechoslovakia and Belgium;
+- the Little Entente;
+- the Polish-Romanian alliance;
+- the Balkan Pact (Greece, Romania, Turkey, Yugoslavia);
+- the Soviet-Czechoslovak pact;
+- Britain with Portugal and Iraq;
+- Italy with Albania;
+- Estonia with Latvia;
+- on the World also: Britain with the dominions, Japan with Manchukuo, the Soviet Union
+  with Mongolia.
+
+**Non-aggression pacts:**
+- Locarno;
+- the German-Polish declaration;
+- the Soviet pacts with its neighbours and France;
+- the Treaty of Berlin;
+- the Italo-Soviet pact;
+- on the World also: the treaty of Taif.
+
+**Trade agreements:**
+- the Rome Protocols;
+- the Oslo states;
+- the Belgian-Luxembourg union;
+- Germany's clearing agreements with Hungary and Yugoslavia.
+
+**Left out**, because they come later in 1936:
+- the Franco-Soviet mutual assistance treaty (in force from March 1936);
+- the Anglo-Egyptian treaty;
+- the Axis;
+- the Anti-Comintern Pact.
+
+**Claims:**
+- Germany on Danzig, the Corridor, East Upper Silesia and Memel;
+- Hungary on southern Slovakia and Ruthenia, Transylvania and the Bačka;
+- Bulgaria on Southern Dobruja, Vardar Macedonia and Western Thrace;
+- Lithuania on Vilnius;
+- Poland on Zaolzie;
+- the Soviet Union on Bessarabia;
+- Greece on the Dodecanese;
+- Ireland on Northern Ireland;
+- Turkey on the Sanjak of Alexandretta;
+- on the World also: Italy on Ethiopia, China on Manchuria and Jehol, Bolivia on the Chaco
+  Boreal, Argentina on the Falklands.
+
+On the World's scale a claim lands on the province that holds the claimed land. That
+province may be named after a larger town nearby (the Bessarabia claim falls on the province
+named Iași). Lithuania there is a single province, its capital, so Germany's claim on
+Memel has no province to fall on.
+
+### Sources
+
+- The frontiers come from:
+  - the peace treaties of 1919–23 (Versailles, Saint-Germain, Trianon, Neuilly, Lausanne);
+  - the later frontier treaties (Tartu and Riga, Kars, the Memel Convention);
+  - the Saar plebiscite of 1935;
+  - as summarised in standard historical atlases (the Times Atlas of European History,
+    Magocsi's Historical Atlas of Central Europe).
+- The alliances and pacts come from the League of Nations Treaty Series.
+- Town populations come from the censuses of the early 1930s for the larger cities. Smaller
+  towns grow from their 1914 figure by their country's urban growth.
+- Nothing invented is presented as fact: the description and the map report
+  (`reports/maps/*-1936-map.md`) say the borders are approximated, and arms are simplified,
+  in national colours, with no political emblems.
+
+### Validation
+
+- The validator finds no errors on either map. The warnings are those of the 1914 maps:
+  islands reached by transports, straits that coincide with a land border.
+- Each map's report lists:
+  - every realm's provinces, development and capital;
+  - every region;
+  - the treaties;
+  - every claimed province.
+- `tests/campaign-starts.test.ts` checks both maps on top of the checks every built-in map
+  passes (capitals owned, controlled and supplied, forces at home and in supply, every
+  resource present, victory reachable, four weeks of AI play keeping the invariants, research
+  at the calibrated pace):
+  - the treaties of 1 January 1936, and none of the later ones;
+  - the claims;
+  - the realms of 1936 and none of 1914's;
+  - for Europe, fifteen towns whose frontier moved since 1914, each in the realm that held
+    it (Danzig, Wilno and Lwów Polish, Klaipėda Lithuanian, Cluj and Chișinău Romanian,
+    Trieste Italian, Alexandretta French, Kars Turkish, Enso and Kolosjoki Finnish…);
+  - for the World, the mandates (Windhoek South African, Madang Australian) and Manchukuo.
+- **AI batches** (`reports/ai/1936-*.md`): AI-only campaigns of ten years from fixed seeds
+  (`npm run sim -- --scenario <map> --seeds 1-4 --years 10`):
+
+| Map | Seeds | Winners | Wars per campaign | Battles per campaign | Realms eliminated | Invariant failures | ms per week (Node, average / worst) |
+|---|---|---|---|---|---|---|---|
+| Europe, 1936 | 1–4 | Soviet Union ×4, on score | 24.3 | 150 | 0 | 0 | 43 / 123 |
+| The World, 1936 | 1–3 | Britain ×3, on score | 44.7 | 189 | 0 | 0 | 161 / 410 |
+
+  The largest starting realm leads on score, as on the 1914 maps. Every realm built
+  factories, ships where coastal, and air wings. Realms finished about 97% of the research
+  tree within the ten years, since a 1936 start leaves six technologies.
+
+### Performance
+
+`reports/perf/profile-1936.md` compares the 1936 maps with the World, 1914, on this
+branch's production build:
+- same machine, same workloads;
+- each map after five years of AI play from seed 1;
+- run with nothing else busy.
+
+| Workload | The World, 1914 | Europe, 1936 | The World, 1936 |
+|---|---|---|---|
+| Drag at regional zoom: frame p95, drag acknowledged p50 | 16.8 ms, 17.3 ms | 16.8 ms, 17.0 ms | 16.8 ms, 17.9 ms |
+| Drag at the medium tier: frames over 33 ms | 16 of 944 | 27 of 897 | 20 of 890 |
+| Twelve wheel steps: frame p95, worst | 66.7, 150 ms | 50, 117 ms | 50, 167 ms |
+| Ledgers: worst input | 200 ms | 152 ms | 168 ms |
+| Fastest speed: weeks a second (of 6), frame p95 | 5.8, 33.4 ms | 5.9, 16.8 ms | 4.6, 33.4 ms |
+| Fastest speed while dragging: frames over 33 ms, drag p50 | 4 of 1000, 40 ms | 3 of 915, 28 ms | 17 of 995, 37 ms |
+
+Both maps meet the targets the World, 1914 meets: drags acknowledged within about
+a frame at regional zoom, no long freezes. Two costs remain:
+- **The World, 1936's clock** reaches 4.6 of 6 weeks a second at the fastest speed, against
+  5.8 on the World, 1914, because twelve more AI realms plan every week.
+- **Right after loading**, both World maps settle for a second or two while base tiles are
+  rasterised in software.
+
 ## Sources and attribution
 
 - **Natural Earth** v5.1.2 (naturalearthdata.com) supplies the World's and Europe's land,
@@ -109,7 +353,8 @@ map's size, setting, expected style of play and mechanics (for example *Colonial
   - The credit appears in the map library, the campaign setup, the in-game menu and
     [THIRD_PARTY_NOTICES.md](../../THIRD_PARTY_NOTICES.md).
 - **Authored in this project:**
-  - for the real maps, in `tools/europe.data.ts` and `tools/earth.data.ts`: which division
+  - for the real maps, in `tools/europe.data.ts` and `tools/earth.data.ts` (and for 1936 in
+    `tools/europe1936.data.ts` and `tools/earth1936.data.ts`): which division
     belonged to which realm in 1914, the names of the time, town populations of about 1914,
     mountain walls, passes, straits, seas and arms;
   - all of Hesperia, in `tools/hesperia.data.ts`.
@@ -336,7 +581,10 @@ hundred takes 270–300 ms. In a world war it is heavier (below).
 - **Europe**: the deserts at the frame's southern edge are thinly divided.
 - **Hesperia**: the Skerries and Pell have no land neighbours; they are reached only by sea.
 - **Editor**: it cannot split a province, draw a coastline by hand or reshape sea zones.
-  Opening a copy of the World in the editor takes several seconds (see the performance
-  section).
+  Opening a copy of the World in the editor takes about 0.7 s in software rendering
+  (`reports/perf/lag-diagnosis.md`).
+- **The 1936 maps** start late in the research tree: six technologies remain, and AI realms
+  finish nearly all of it within ten years. There are no technologies, units or rules
+  beyond 1936.
 - **Starting forces and AI temperaments** on the historical maps are game choices, not
   claims about 1914 armies.

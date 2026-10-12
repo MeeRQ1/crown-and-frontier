@@ -10,6 +10,18 @@ The batches ran three processes at once on a 4-core machine, so their ms/tick fi
 are not a performance measurement; [`reports/perf/`](../perf/) holds the isolated
 benchmarks.
 
+## The 1936 maps (`1936-europe.md`, `1936-earth.md`)
+
+Ten-year AI-only campaigns on Europe, 1936 (seeds 1–4) and the World, 1936 (seeds 1–3), on
+normal difficulty, run one map after the other with nothing else busy:
+
+    npm run sim -- --scenario europe-1936 --seeds 1-4 --years 10 --out reports/ai/1936-europe.md
+    npm run sim -- --scenario earth-1936 --seeds 1-3 --years 10 --out reports/ai/1936-earth.md
+
+No invariant failures and no realm eliminated. The Soviet Union leads Europe on score in every
+run, and Britain the World. A 1936 start leaves six technologies, so realms finish about
+97% of the tree within the ten years.
+
 ## The final batches (`atlas-final-<map>.md`)
 
 Run on the final simulation code of this branch (fdb4506; later commits change only
