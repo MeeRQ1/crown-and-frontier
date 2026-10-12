@@ -16,6 +16,8 @@ import midseaScenario from '../data/maps/midsea.scenario.json';
 import balticScenario from '../data/maps/baltic.scenario.json';
 import europeScenario from '../data/maps/europe.scenario.json';
 import earthScenario from '../data/maps/earth.scenario.json';
+import europe1936Scenario from '../data/maps/europe-1936.scenario.json';
+import earth1936Scenario from '../data/maps/earth-1936.scenario.json';
 import hesperiaScenario from '../data/maps/hesperia.scenario.json';
 import type { ProvinceDef, SeaZoneDef } from '../sim/types';
 import { MAP_FORMAT, MAP_FORMAT_VERSION, type MapGeometryData, type MapPackage, type MapScenarioPart, type SeaGeometry } from './format';
@@ -24,15 +26,25 @@ import { MAP_FORMAT, MAP_FORMAT_VERSION, type MapGeometryData, type MapPackage, 
 type SeaData = { zones: SeaZoneDef[]; ports: Record<string, number> };
 const withPorts = (provinces: ProvinceDef[], seas: SeaData): ProvinceDef[] => provinces.map((p) => (seas.ports[p.id] ? { ...p, port: seas.ports[p.id] } : p));
 
-export const BUILTIN_MAPS = ['aldmere', 'reach', 'isles', 'steppe', 'midsea', 'hesperia', 'baltic', 'europe', 'earth'] as const;
+export const BUILTIN_MAPS = ['aldmere', 'reach', 'isles', 'steppe', 'midsea', 'hesperia', 'baltic', 'europe', 'earth', 'europe-1936', 'earth-1936'] as const;
 export type BuiltinMapId = (typeof BUILTIN_MAPS)[number];
 
 /**
  * Built-in maps shipped as generated: the procedural maps (tools/genmaps.ts),
  * the real-world Baltic (tools/genbaltic.ts) and the real-world maps built by
- * tools/genreal.ts, all from Natural Earth.
+ * tools/genreal.ts (Europe and the World in 1914 and 1936), all from Natural Earth.
  */
-const GENERATED: Record<string, unknown> = { isles: islesScenario, steppe: steppeScenario, midsea: midseaScenario, baltic: balticScenario, europe: europeScenario, earth: earthScenario, hesperia: hesperiaScenario };
+const GENERATED: Record<string, unknown> = {
+  isles: islesScenario,
+  steppe: steppeScenario,
+  midsea: midseaScenario,
+  baltic: balticScenario,
+  europe: europeScenario,
+  earth: earthScenario,
+  hesperia: hesperiaScenario,
+  'europe-1936': europe1936Scenario,
+  'earth-1936': earth1936Scenario,
+};
 
 function generatedScenario(id: string): MapScenarioPart {
   // the checked-in file carries a "generated" note that is not part of the package
@@ -135,6 +147,8 @@ export async function builtinGeometry(id: BuiltinMapId): Promise<MapGeometryData
   if (id === 'baltic') return (await import('../data/maps/baltic.map.json')).default as unknown as MapGeometryData;
   if (id === 'europe') return (await import('../data/maps/europe.map.json')).default as unknown as MapGeometryData;
   if (id === 'earth') return (await import('../data/maps/earth.map.json')).default as unknown as MapGeometryData;
+  if (id === 'europe-1936') return (await import('../data/maps/europe-1936.map.json')).default as unknown as MapGeometryData;
+  if (id === 'earth-1936') return (await import('../data/maps/earth-1936.map.json')).default as unknown as MapGeometryData;
   if (id === 'hesperia') return (await import('../data/maps/hesperia.map.json')).default as unknown as MapGeometryData;
   if (id === 'aldmere') {
     const [{ default: g }, { default: seas }] = await Promise.all([import('../data/aldmere.map.json'), import('../data/aldmere.seamap.json')]);

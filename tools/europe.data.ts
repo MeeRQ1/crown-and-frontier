@@ -95,7 +95,7 @@ export const CAPITALS: Record<string, [string, string]> = {
 
 // ───────────────────────────── regions ─────────────────────────────────────
 
-const B = {
+export const B = {
   low: { plains: 4, forest: 1, marsh: 0.5 },
   mixed: { plains: 3, forest: 2, hills: 1, marsh: 0.4 },
   hill: { hills: 3, forest: 1.6, plains: 1.4, mountains: 0.4 },
@@ -109,9 +109,9 @@ const B = {
   marsh: { plains: 2.4, marsh: 2, forest: 1 },
 } as const satisfies Record<string, Partial<Record<Terrain, number>>>;
 
-const reg = (realm: string, id: string, name: string, biome: Partial<Record<Terrain, number>>, extra: Partial<RealRegion> = {}): RealRegion => ({ id, name, realm, biome, ...extra });
-const COLONY: [number, number] = [25, 55];
-const FRONTIER: [number, number] = [35, 70];
+export const reg = (realm: string, id: string, name: string, biome: Partial<Record<Terrain, number>>, extra: Partial<RealRegion> = {}): RealRegion => ({ id, name, realm, biome, ...extra });
+export const COLONY: [number, number] = [25, 55];
+export const FRONTIER: [number, number] = [35, 70];
 
 export const REGIONS: RealRegion[] = [
   // United Kingdom
@@ -364,11 +364,11 @@ export const REGIONS: RealRegion[] = [
 
 // ───────────────────────────── classification ──────────────────────────────
 
-const inList = (name: string, list: string) => list.split('|').includes(name);
+export const inList = (name: string, list: string) => list.split('|').includes(name);
 
 /** North Schleswig (German 1864–1920): Jutland south of the Kongeå, and Als. */
 const NORTH_SCHLESWIG: Array<[number, number]> = [[7.9, 55.47], [9.62, 55.47], [9.76, 55.22], [10.12, 55.0], [10.12, 54.84], [8.95, 54.78], [7.9, 54.85]];
-function inPoly(lon: number, lat: number, poly: Array<[number, number]>): boolean {
+export function inPoly(lon: number, lat: number, poly: Array<[number, number]>): boolean {
   let inside = false;
   for (let i = 0, j = poly.length - 1; i < poly.length; j = i++) {
     const [xi, yi] = poly[i];

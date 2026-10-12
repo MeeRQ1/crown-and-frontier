@@ -84,6 +84,67 @@ describe('the alliances and claims of 1914', () => {
   });
 });
 
+describe('the treaties, claims and frontiers of 1 January 1936', () => {
+  for (const id of ['europe-1936', 'earth-1936']) {
+    it(`${id}: starts with the alliances, pacts and grievances of its day`, () => {
+      const sim = createGame({ scenario: id, seed: 1, playerNation: null });
+      const st = sim.state;
+      // the French alliances, the Little Entente and the Balkan Pact; Locarno and the 1934 declaration as pacts
+      expect(hasTreaty(sim, 'alliance', 'fra', 'pol')).toBe(true);
+      expect(hasTreaty(sim, 'alliance', 'fra', 'cze')).toBe(true);
+      expect(hasTreaty(sim, 'alliance', 'cze', 'rom')).toBe(true);
+      expect(hasTreaty(sim, 'alliance', 'gre', 'tur')).toBe(true);
+      expect(hasTreaty(sim, 'alliance', 'cze', 'sov')).toBe(true);
+      expect(hasTreaty(sim, 'nap', 'ger', 'pol')).toBe(true);
+      expect(hasTreaty(sim, 'nap', 'fra', 'ger')).toBe(true);
+      // not yet: the Franco-Soviet treaty (March 1936), the Axis (October 1936)
+      expect(hasTreaty(sim, 'alliance', 'fra', 'sov')).toBe(false);
+      expect(hasTreaty(sim, 'alliance', 'ger', 'ita')).toBe(false);
+      const claimed = (by: string, owner: string) => sim.world.provIds.some((p) => st.provinces[p].owner === owner && st.provinces[p].claims.includes(by));
+      expect(claimed('ger', 'pol'), 'Germany claims Danzig and the Corridor').toBe(true);
+      // on the world map Lithuania is one province, its capital, which is never claimed
+      if (id === 'europe-1936') expect(claimed('ger', 'lit'), 'Germany claims Memel').toBe(true);
+      expect(claimed('hun', 'rom'), 'Hungary claims Transylvania').toBe(true);
+      expect(claimed('lit', 'pol'), 'Lithuania claims Vilnius').toBe(true);
+      expect(claimed('sov', 'rom'), 'the Soviet Union claims Bessarabia').toBe(true);
+      for (const nid of sim.world.nationIds) {
+        const capital = st.nations[nid].capital;
+        if (capital) expect(st.provinces[capital].claims, `${id}: no claim on ${nid}'s capital`).toEqual([]);
+      }
+      // the realms of 1936, and none of 1914's
+      for (const nid of ['ger', 'sov', 'pol', 'cze', 'aut', 'hun', 'yug', 'tur', 'fin', 'est', 'lat', 'lit', 'irl', 'egy', 'irq', 'irn']) expect(sim.world.nationIds, nid).toContain(nid);
+      for (const nid of ['aus', 'rus', 'ott', 'ser', 'mon', 'per']) expect(sim.world.nationIds, nid).not.toContain(nid);
+    });
+  }
+
+  it('europe-1936: the frontiers that moved since 1914 put each town in the realm that held it', () => {
+    const sim = createGame({ scenario: 'europe-1936', seed: 1, playerNation: null });
+    const held: Record<string, string> = { Danzig: 'pol', Wilno: 'pol', Lwów: 'pol', Breslau: 'ger', Stettin: 'ger', Klaipėda: 'lit', Cluj: 'rom', Cernăuți: 'rom', Chișinău: 'rom', Bazargic: 'rom', Trieste: 'ita', Alexandretta: 'fra', Kars: 'tur', Enso: 'fin', Kolosjoki: 'fin' };
+    for (const [name, nid] of Object.entries(held)) {
+      const p = sim.world.provIds.find((id) => sim.world.prov[id].name === name);
+      expect(p, `${name} is a province`).toBeTruthy();
+      expect(sim.state.provinces[p!].owner, name).toBe(nid);
+    }
+  });
+
+  it('earth-1936: the mandates and new states outside Europe', () => {
+    const sim = createGame({ scenario: 'earth-1936', seed: 1, playerNation: null });
+    for (const nid of ['sau', 'yem', 'man', 'mgl', 'chn', 'jpn', 'eth', 'usa']) expect(sim.world.nationIds, nid).toContain(nid);
+    expect(hasTreaty(sim, 'alliance', 'jpn', 'man')).toBe(true);
+    expect(hasTreaty(sim, 'alliance', 'gbr', 'can')).toBe(true);
+    const claimed = (by: string, owner: string) => sim.world.provIds.some((p) => sim.state.provinces[p].owner === owner && sim.state.provinces[p].claims.includes(by));
+    expect(claimed('ita', 'eth'), 'Italy claims Ethiopia').toBe(true);
+    expect(claimed('chn', 'man'), 'China claims Manchuria').toBe(true);
+    // the German colonies are mandates (South West Africa, New Guinea); Manchukuo holds Hsinking, China Peiping
+    const held: Record<string, string> = { Windhoek: 'saf', Madang: 'ast', Hsinking: 'man', Peiping: 'chn', Nanking: 'chn', 'Addis Ababa': 'eth' };
+    for (const [name, nid] of Object.entries(held)) {
+      const p = sim.world.provIds.find((id) => sim.world.prov[id].name === name);
+      expect(p, `${name} is a province`).toBeTruthy();
+      expect(sim.state.provinces[p!].owner, name).toBe(nid);
+    }
+  });
+});
+
 describe('the pace of research at the start', () => {
   // months per technology for a typical realm: 34–52 on the hand-made maps; the generated
   // maps are calibrated to RESEARCH_PACE_MONTHS, so a late start (the 1914 maps, where
@@ -93,7 +154,7 @@ describe('the pace of research at the start', () => {
       const pace = researchPace(createGame({ scenario: id, seed: 1, playerNation: null }));
       expect(pace, id).toBeGreaterThan(30);
       expect(pace, id).toBeLessThan(70);
-      if (['hesperia', 'europe', 'earth'].includes(id)) expect(Math.abs(pace - RESEARCH_PACE_MONTHS), id).toBeLessThan(1);
+      if (['hesperia', 'europe', 'earth', 'europe-1936', 'earth-1936'].includes(id)) expect(Math.abs(pace - RESEARCH_PACE_MONTHS), id).toBeLessThan(1);
     });
   }
 });

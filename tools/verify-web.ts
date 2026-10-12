@@ -382,7 +382,7 @@ async function mapEditorFlow(browser: Browser, base: string): Promise<void> {
     if (d) for (let i = 0; i < d.length; i += 4 * 211) seen.add((d[i] << 16) | (d[i + 1] << 8) | d[i + 2]);
     return { cards: cards.map((x) => x.getAttribute('data-map')), colours: seen.size };
   });
-  record('Map library lists every built-in map with a drawn preview', ['aldmere', 'reach', 'isles', 'steppe', 'midsea', 'hesperia', 'baltic', 'europe', 'earth'].every((id) => lib.cards.includes(id)) && lib.colours > 12, `${lib.cards.join(', ')}; preview colours ${lib.colours}`);
+  record('Map library lists every built-in map with a drawn preview', ['aldmere', 'reach', 'isles', 'steppe', 'midsea', 'hesperia', 'baltic', 'europe', 'earth', 'europe-1936', 'earth-1936'].every((id) => lib.cards.includes(id)) && lib.colours > 12, `${lib.cards.join(', ')}; preview colours ${lib.colours}`);
 
   // ── create
   await page.locator('[data-fk="new-map"]').click();

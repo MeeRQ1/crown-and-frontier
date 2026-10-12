@@ -175,6 +175,8 @@ export class WorldError extends Error {}
 /** Generates a world from its spec. `log` receives progress lines. */
 /** Land borders shorter than this are drawn as a corner and are not routes. */
 const MIN_BORDER = 14;
+/** Owner slots in a cell's label (region * OWNER_SLOTS + owner): no owner and up to 126 realms. */
+const OWNER_SLOTS = 128;
 
 export function generateWorld(S: WorldSpec, log: (line: string) => void = () => {}): WorldResult {
   const K = S.scale;
@@ -271,7 +273,7 @@ export function generateWorld(S: WorldSpec, log: (line: string) => void = () => 
   for (const r of S.regionDefs) if (!regIdx.has(r.id)) fail(`region ${r.id} has no spec`);
   for (const r of REG) if (!S.regionDefs.find((x) => x.id === r.id)) fail(`spec region ${r.id} is not declared`);
   const owners: Array<string | null> = [null, ...S.nations.map((n) => n.id)];
-  if (owners.length > 63) fail('at most 62 realms');
+  if (owners.length > OWNER_SLOTS - 1) fail(`at most ${OWNER_SLOTS - 2} realms`);
   const ownerIdx = (o: string | null) => owners.indexOf(o);
 
   const cellReg = new Int16Array(NX * NY).fill(-1);
@@ -279,12 +281,12 @@ export function generateWorld(S: WorldSpec, log: (line: string) => void = () => 
   {
     const dist = new Float64Array(NX * NY).fill(Infinity);
     const heap = new MinHeap<number>();
-    const label = new Int32Array(NX * NY).fill(-1); // region*64 + owner
+    const label = new Int32Array(NX * NY).fill(-1); // region * OWNER_SLOTS + owner
     const anyRegional = S.islands.some((i) => i.regional);
     const seedLabel = (x: number, y: number, r: number, o: string | null) => {
       const c = nearestCell(x, y, anyRegional ? -1 : 0);
       dist[c] = 0;
-      label[c] = r * 64 + ownerIdx(o);
+      label[c] = r * OWNER_SLOTS + ownerIdx(o);
       heap.push(0, c);
     };
     REG.forEach((r, ri) => r.anchors.forEach((a) => seedLabel(a.x, a.y, ri, a.owner)));
@@ -299,8 +301,8 @@ export function generateWorld(S: WorldSpec, log: (line: string) => void = () => 
       if (done[c]) continue;
       done[c] = 1;
       const lab = label[c];
-      cellReg[c] = Math.floor(lab / 64);
-      cellOwn[c] = lab % 64;
+      cellReg[c] = Math.floor(lab / OWNER_SLOTS);
+      cellOwn[c] = lab % OWNER_SLOTS;
       const w = REG[cellReg[c]].weight ?? 1;
       const i = c % NX;
       const j = Math.floor(c / NX);
