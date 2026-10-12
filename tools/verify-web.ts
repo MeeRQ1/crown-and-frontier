@@ -1064,6 +1064,33 @@ async function groundCacheFlow(browser: Browser, base: string): Promise<void> {
   await start('aldmere', 'aur');
   await zoomTo(96);
   await compare('another campaign (Aldmere)');
+  // a march ordered while a week is half done waits for the end of that week (instead of
+  // freezing the map to finish it at once), and is then given, not lost
+  const order = await page.evaluate(async () => {
+    const app = (window as any).cnf;
+    const sim = app.sim;
+    const me = app.player;
+    const army = Object.values(sim.state.armies as Record<string, { id: string; nation: string; location: string; path: string[] }>).find((a) => a.nation === me);
+    const dest = army && sim.world.prov[army.location].neighbors.find((n: string) => sim.state.provinces[n].owner === me);
+    if (!army || !dest) return { midWeek: false, calls: [] as number[], applied: false, detail: 'no army with a neighbouring province' };
+    const frame = () => new Promise((res) => requestAnimationFrame(res));
+    const calls: number[] = [];
+    const orderMove = app.orderMove;
+    app.orderMove = (...args: unknown[]) => (calls.push(sim.state.tick), orderMove.apply(app, args));
+    app.selectArmy(army.id);
+    app.setSpeed(4);
+    for (let i = 0; i < 600 && !app.week; i++) await frame();
+    const midWeek = !!app.week;
+    app.orderMove(dest, army.id);
+    const queued = app.atWeekEnd.length;
+    for (let i = 0; i < 600 && app.atWeekEnd.length; i++) await frame();
+    app.setSpeed(0);
+    app.orderMove = orderMove;
+    const a = sim.state.armies[army.id];
+    const applied = !!a && (a.path.includes(dest) || a.location === dest);
+    return { midWeek, calls, applied, detail: `queued ${queued}; ordered at week ${calls[0]}, given at week ${calls[1]}; ${a ? `${a.location} → ${a.path.join(' ')}` : 'army gone'}` };
+  });
+  record('A march ordered mid-week is given when that week ends', order.midWeek && order.calls.length === 2 && order.calls[1] === order.calls[0] + 1 && order.applied, order.detail);
   record('Map ground cache checks: no page errors', problems.length === 0, problems.slice(0, 3).join('; '));
   await page.close();
 
