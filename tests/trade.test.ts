@@ -3,7 +3,7 @@
 // invariants and the exploits they must close.
 
 import { describe, expect, it } from 'vitest';
-import { C, RESOURCE_INFO, STRATEGIC } from '../src/sim/config';
+import { C, RESOURCE_INFO, SCHEMA_VERSION, STRATEGIC } from '../src/sim/config';
 import { applyCommand, checkCommand } from '../src/sim/commands';
 import { signTreaty } from '../src/sim/diplomacy';
 import { computeLedger, monthlyEconomy, resourceCap, resourcePlan, stockpileCap } from '../src/sim/economy';
@@ -358,7 +358,7 @@ describe('save format 5', () => {
     obj.state.schema = 4;
     delete obj.state.counters.contract;
     const loaded = readSave(JSON.stringify(obj));
-    expect(loaded.sim.state.schema ?? 5).toBe(5);
+    expect(loaded.sim.state.schema).toBe(SCHEMA_VERSION);
     // Serrata's coal need is met by its partners' surplus, agreement by agreement
     const coalIn = loaded.sim.state.contracts.filter((c) => c.buyer === 'ser' && c.res === 'coal');
     expect(coalIn.length).toBeGreaterThan(0);

@@ -59,11 +59,38 @@ import type { NationId, PeaceTerms, ProvinceId, War, WarGoal } from './types';
 
 // ───────────────────────────── Goals & declaration ──────────────────────────
 
+/**
+ * Provinces of `target` that make sensible conquest goals for `attacker`, best first.
+ * Any province of the target may be a goal (no shared border is needed): those
+ * bordering our land come first, then coasts by the length of the sea route from
+ * our ports, then the rest by distance from our land; richer provinces first among
+ * equals. Whether our forces can reach them is the war-reach assessment's question
+ * (reach.ts), not a condition of the declaration.
+ */
 export function conquestTargets(sim: Sim, attacker: NationId, target: NationId): ProvinceId[] {
   const st = sim.state;
-  return sim.world.provIds
-    .filter((pid) => st.provinces[pid].owner === target && sim.world.prov[pid].neighbors.some((nb) => st.provinces[nb].owner === attacker))
-    .sort((a, b) => st.provinces[b].dev - st.provinces[a].dev || (a < b ? -1 : 1));
+  const w = sim.world;
+  const theirs = w.provIds.filter((pid) => st.provinces[pid].owner === target);
+  const ours = w.provIds.filter((pid) => st.provinces[pid].owner === attacker);
+  const ourZones = new Set<string>();
+  for (const pid of ours) if (st.provinces[pid].port > 0 && st.provinces[pid].controller === attacker) for (const z of w.provZones[pid] ?? []) ourZones.add(z);
+  const rank = new Map<ProvinceId, number>();
+  for (const pid of theirs) {
+    if (w.prov[pid].neighbors.some((nb) => st.provinces[nb].owner === attacker)) {
+      rank.set(pid, 0);
+      continue;
+    }
+    let sea = Infinity;
+    for (const z of w.provZones[pid] ?? []) for (const oz of ourZones) sea = Math.min(sea, w.zoneHop(oz, z) ?? Infinity);
+    if (sea < Infinity) {
+      rank.set(pid, 100 + sea);
+      continue;
+    }
+    let land = Infinity;
+    for (const q of ours) land = Math.min(land, w.hop(q, pid) ?? Infinity);
+    rank.set(pid, 1000 + (land < Infinity ? land : 9000));
+  }
+  return theirs.sort((a, b) => rank.get(a)! - rank.get(b)! || st.provinces[b].dev - st.provinces[a].dev || (a < b ? -1 : 1));
 }
 
 export function goalOptions(sim: Sim, attacker: NationId, target: NationId): WarGoal[] {
@@ -106,8 +133,7 @@ export function declareWarProblem(sim: Sim, attacker: NationId, target: NationId
     if (goal.provinces.some((pid) => !st.provinces[pid].claims.includes(attacker))) return 'We hold no claim on every goal province.';
   } else if (goal.type === 'conquest') {
     if (claimsOnlyPolicy(sim, attacker)) return 'The Concord of Nations focus allows wars only over claims.';
-    const ok = conquestTargets(sim, attacker, target);
-    if (goal.provinces.length > 2 || goal.provinces.some((pid) => !ok.includes(pid))) return 'Conquest goals must be up to two provinces bordering our land.';
+    if (goal.provinces.length > 2) return 'A war of conquest names at most two provinces.';
   } else if (goal.type === 'coalition') {
     if (!coalitionAgainst(sim, target)?.members.includes(attacker)) return 'Only coalition members may declare a coalition war.';
   } else return 'Unknown war goal.';

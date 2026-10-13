@@ -2,10 +2,13 @@
 //
 //  1. Proposal expiry            (calls to arms honoured by default)
 //  2. AI decisions               (same command path as the player)
-//  3. Standing orders; the navy (fleet movement, naval battles, landings,
-//     repair); then army movement & arrivals (id order; pinned armies stay)
-//  4. Air (rebasing, mission upkeep, air combat), then battle detection +
-//     one combat round per battle (retreats begin)
+//  3. Standing orders; the navy (fleet movement, air missions at sea, naval
+//     battles, landings, repair); then army movement & arrivals (id order;
+//     pinned armies stay) and battle detection (contact on arrival)
+//  4. Air over land (rebasing, ground support for this week's battles,
+//     interception, bombing, readiness), then one combat round per battle
+//     with its air and naval fire support (retreats begin); coastal forts fire
+//     back at the ships that shelled them
 //  5. Sieges & occupation        (control changes -> supply network invalidated)
 //  6. Army care                  (supply recomputed on the new map: attrition,
 //                                 morale recovery, reinforcement)
@@ -28,7 +31,7 @@ import { weeklyProposals } from './commands';
 import { weeklyConstruction } from './construction';
 import { weeklyAir, weeklyHangars } from './air';
 import { monthlyEconomySteps } from './economy';
-import { weeklyNaval, weeklyShipyards } from './naval';
+import { bombardFireBack, weeklyNaval, weeklyShipyards } from './naval';
 import { monthlyEvents } from './events';
 import { monthlyIntegration } from './integration';
 import { weeklyArmyCareSteps, weeklyRecruitment } from './military';
@@ -121,11 +124,15 @@ export function* weekSlices(sim: Sim, opts: StepOptions = {}): Generator<void, v
   }
   yield* phase('orders', () => weeklyOrders(sim));
   yield* phase('naval', () => weeklyNaval(sim));
-  yield* phase('movement', () => weeklyMovement(sim));
+  // contact is made on arrival: battles are known before the air phase plans support for them
+  yield* phase('movement', () => {
+    weeklyMovement(sim);
+    detectBattles(sim);
+  });
   yield* phase('air', () => weeklyAir(sim));
   yield* phase('battles', () => {
-    detectBattles(sim);
     weeklyCombat(sim);
+    bombardFireBack(sim);
   });
   yield* phase('sieges', () => weeklySieges(sim));
   yield* phaseSteps('armyCare', weeklyArmyCareSteps(sim));

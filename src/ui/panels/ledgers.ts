@@ -15,7 +15,8 @@ import { aliveNations, alliesOf, armiesOf, atWar, dateOf, hasTreaty, menOf, nati
 import { armySupplyInfo } from '../../sim/supply';
 import type { Army, Demand, DemandKind, NationId, PeaceTerms, StrategicResource, TreatyType, War } from '../../sim/types';
 import { buildSettlement, contributionShares, counterOffer, DEMAND_LABELS, demandCost, describeDemand, evaluateSettlement, settlementCost } from '../../sim/settlement';
-import { computeWarScore, evaluatePeace, goalOptions, provinceCost, scoreFor, termsCost, declareWarProblem } from '../../sim/war';
+import { computeWarScore, conquestTargets, evaluatePeace, goalOptions, provinceCost, scoreFor, termsCost, declareWarProblem } from '../../sim/war';
+import { warReach, type WarReach } from '../../sim/reach';
 import type { App } from '../app';
 import { action, bar, button, h, rebuild, row, setChildren } from '../dom';
 import { fmt, men, plural, signed } from '../format';
@@ -550,6 +551,17 @@ function economicTies(app: App, o: NationId): { section: HTMLElement; summary: {
   return { section: section_, summary, war };
 }
 
+/** The war-reach assessment: how our forces could reach a realm, and what is missing. */
+function reachView(r: WarReach): HTMLElement {
+  return h(
+    'div',
+    { class: 'reach', 'data-sk': 'war-reach' },
+    h('ul', { class: 'notes small' }, r.notes.map((n) => h('li', null, n))),
+    r.warnings.map((w) => h('div', { class: 'callout warn small' }, icon('alert'), h('span', null, w))),
+    h('p', { class: 'small muted' }, 'An assessment of the forces we have now, not a condition: war can be declared either way.'),
+  );
+}
+
 function nationDetail(app: App, o: NationId): HTMLElement {
   const sim = app.sim!;
   const me = app.player!;
@@ -574,12 +586,14 @@ function nationDetail(app: App, o: NationId): HTMLElement {
   };
   const envoyHere = st.envoys.find((e) => e.from === me && e.to === o);
   const goals = goalOptions(sim, me, o);
+  const reach = atWar(sim, me, o) ? null : warReach(sim, me, o);
   const warBlock = atWar(sim, me, o)
     ? h('div', { class: 'callout bad' }, icon('wars'), h('span', { class: 'grow' }, 'We are at war.'), button('Wars & Peace', () => app.openLedger('wars'), { cls: 'small' }))
     : goals.length
       ? h(
           'div',
           null,
+          reach ? reachView(reach) : null,
           goals.map((g) => {
             const prob = declareWarProblem(sim, me, o, g);
             // a realm bound to us by an alliance or a pact cannot join against us
@@ -598,10 +612,11 @@ function nationDetail(app: App, o: NationId): HTMLElement {
               ties.war,
             ].join(' ');
             const label = `${g.type === 'claim' ? 'Press claims' : g.type === 'coalition' ? 'Coalition war' : 'War of conquest'}: ${g.provinces.map((p) => provName(sim, p)).join(', ')}`;
-            return action(label, cons, () => confirmDialog(app, `Declare war on ${def.short}?`, cons, () => app.do(g.type === 'coalition' ? { type: 'coalitionWar', target: o } : { type: 'declareWar', target: o, goal: g })), prob, 'danger');
+            const confirm = [h('p', null, cons), ...(reach ? [h('div', { class: 'eyebrow', style: 'margin-top:8px' }, 'Can we reach them?'), reachView(reach)] : [])];
+            return action(label, cons, () => confirmDialog(app, `Declare war on ${def.short}?`, confirm, () => app.do(g.type === 'coalition' ? { type: 'coalitionWar', target: o } : { type: 'declareWar', target: o, goal: g })), prob, 'danger');
           }),
         )
-      : h('p', { class: 'small muted' }, 'No war goal: we need a claim on their land (fabricate one on a province bordering ours, or on a coast within one sea zone of one of our ports) or a shared border for a war of conquest.');
+      : h('p', { class: 'small muted' }, 'No war goal: the Concord of Nations focus allows wars only over claims, and we hold none on their land (fabricate one on a province bordering ours, or on a coast within one sea zone of one of our ports).');
   const coalAgainstThem = coalitionAgainst(sim, o);
   const myAlarm = st.alarm[me]?.[o] ?? 0;
   const theirAlarm = st.alarm[o]?.[me] ?? 0;
@@ -682,7 +697,8 @@ function warsLedger(app: App): HTMLElement {
     const rows = aliveNations(sim2)
       .filter((o) => o !== me)
       .map((o) => ({ o, goals: goalOptions(sim2, me, o), theirClaims: claimsOn(sim2, o, me).length, alarm: sim2.state.alarm[o]?.[me] ?? 0 }));
-    const targets = rows.filter((r) => r.goals.length);
+    // grounds that are more than the right every realm has to fight any other: claims, or a border
+    const targets = rows.filter((r) => r.goals.some((g) => g.type !== 'conquest' || conquestTargets(sim2, me, r.o).slice(0, 1).some((p) => sim2.world.prov[p].neighbors.some((q) => sim2.state.provinces[q].owner === me))));
     const threats = rows.filter((r) => r.theirClaims || r.alarm >= C.diplomacy.alarmCoalition * 0.8).sort((a, b) => b.theirClaims - a.theirClaims || b.alarm - a.alarm);
     const open = (o: NationId) => button('Diplomacy', () => app.openDiplomacy(o), { cls: 'small quiet', fk: `wars-dip-${o}` });
     peace.push(
@@ -704,6 +720,7 @@ function warsLedger(app: App): HTMLElement {
               ),
             )
           : h('p', { class: 'small muted' }, 'None yet. Fabricate a claim on a province bordering ours or on a coast within one sea zone of one of our ports, or share a border for a war of conquest.'),
+        h('p', { class: 'small muted' }, 'A war of conquest may also be declared on a realm we do not border. Open it in Diplomacy to see whether our armies, fleets and aircraft could reach it.'),
       ),
       section(
         'Who might come for us',

@@ -35,8 +35,10 @@ describe('worked examples — blockade', () => {
     expect(cruisers.values?.tradeWithNeighbour).toBe(1);
   });
 
-  it('one defending cruiser against two is enough to keep the port open', () => {
-    expect(contested.values).toMatchObject({ blockaded: false, crowns: peace.values!.crowns, tradeWithIsland: 1 });
+  it('one defending cruiser against two is enough to keep the port open; the raiders still take a share of what passes, less than unopposed', () => {
+    expect(contested.values).toMatchObject({ blockaded: false, crowns: peace.values!.crowns });
+    expect(contested.values!.tradeWithIsland as number).toBeLessThan(1);
+    expect(contested.values!.tradeWithIsland as number).toBeGreaterThan(cruisers.values!.tradeWithIsland as number);
   });
 
   it('submarines blockade without holding the surface', () => {
@@ -49,16 +51,19 @@ describe('worked examples — air superiority', () => {
 
   it('ground support turns a held line into an attacker’s win with even rolls', () => {
     expect(none.forecast!.outcomes[1]).toBe('defender');
-    expect(support.forecast!.factors).toContain('Attacker: Air support +40% (air superiority)');
+    expect(support.forecast!.factors).toContain('Attacker: Air support on call +40% (2 wings)');
     expect(support.forecast!.outcomes[1]).toBe('attacker');
     expect(support.forecast!.defLoss).toBeGreaterThan(none.forecast!.defLoss);
   });
 
-  it('enemy air superiority cuts the support to 40% of its value; contesting the sky restores it', () => {
+  it('enemy air superiority cuts the support to 40% of its value; contesting the sky brings it back to 75%', () => {
     const cut = Math.round(C.air.supportMax * C.air.contested * 100);
-    expect(enemySky.forecast!.factors).toContain(`Attacker: Air support +${cut}% (enemy holds the sky)`);
+    expect(enemySky.forecast!.factors).toContain(`Attacker: Air support on call +${cut}% (2 wings, the enemy holds the sky)`);
     expect(enemySky.forecast!.defLoss).toBeLessThan(support.forecast!.defLoss);
-    expect(contested.forecast!.factors).toContain('Attacker: Air support +40%');
-    expect(contested.forecast!.defLoss).toBe(support.forecast!.defLoss);
+    // fighters of our own contest the sky: the support comes back to 75% of its value
+    const back = Math.round(C.air.supportMax * C.air.disputed * 100);
+    expect(contested.forecast!.factors).toContain(`Attacker: Air support on call +${back}% (2 wings, contested sky)`);
+    expect(contested.forecast!.defLoss).toBeGreaterThan(enemySky.forecast!.defLoss);
+    expect(contested.forecast!.defLoss).toBeLessThan(support.forecast!.defLoss);
   });
 });

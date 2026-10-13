@@ -83,9 +83,14 @@ export interface Mods {
   landing: number;
   /** enemy blockades cost us this much less */
   blockadeResist: number;
+  /** naval strike of the wings flying from our carriers */
   carrierAir: number;
+  /** air wings each carrier can hold, beyond its own deck */
+  carrierDeck: number;
   airAttack: number;
   airRange: number;
+  /** upkeep of our air wings */
+  airUpkeep: number;
   /** enemy bombing over our land is this much weaker; flak this much stronger */
   airDefence: number;
   // diplomacy
@@ -169,9 +174,11 @@ export const MOD_LABELS: Record<keyof Mods, [string, 'pct' | 'flat' | 'neg']> = 
   oilFiring: ['Oil-fired boilers (ships burn oil, not coal)', 'flat'],
   landing: ['Amphibious landing penalty', 'neg'],
   blockadeResist: ['Losses to enemy blockades', 'neg'],
-  carrierAir: ['Carrier air strikes', 'pct'],
+  carrierAir: ['Strikes by carrier-borne aircraft', 'pct'],
+  carrierDeck: ['Air wings per carrier', 'flat'],
   airAttack: ['Air combat', 'pct'],
-  airRange: ['Air range (provinces)', 'flat'],
+  airRange: ['Air range (steps over land and sea)', 'flat'],
+  airUpkeep: ['Air wing upkeep', 'pct'],
   airDefence: ['Enemy bombing over our land', 'neg'],
   influenceGain: ['Influence gained', 'pct'],
   guarantees: ['Guarantees we may give', 'flat'],

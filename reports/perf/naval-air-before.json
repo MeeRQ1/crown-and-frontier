@@ -1,0 +1,2545 @@
+{
+ "env": "Intel(R) Xeon(R) Processor @ 2.80GHz ×4, 16 GB, headless Chromium 141.0.7390.37 (software rendering), 1366×800 at device pixel ratio 1, base /",
+ "label": "baseline 41108f3",
+ "results": [
+  {
+   "name": "w36-idle",
+   "what": "the World, 1936 at week 280 (as Britain), paused, no input, 3 s",
+   "map": "earth-1936",
+   "tick": [
+    280,
+    280
+   ],
+   "seconds": 3,
+   "frames": 27,
+   "frameMs": {
+    "p50": 116.6,
+    "p95": 150,
+    "p99": 183.3,
+    "max": 216.6
+   },
+   "slow": {
+    "over17": 27,
+    "over33": 27,
+    "over50": 25,
+    "over100": 17
+   },
+   "long": {
+    "count": 26,
+    "totalMs": 2978,
+    "maxMs": 210
+   },
+   "js": {
+    "r.ensureRealms": 0,
+    "r.modeContext": 0.1,
+    "r.diffGround": 0,
+    "r.tile": 84.9,
+    "r.baseRegion": 341,
+    "r.paintRealmLayers": 55.3,
+    "r.drawSeaZones": 1.3,
+    "r.drawStraits": 1.1,
+    "r.drawGround": 968.4,
+    "r.drawRoute": 0.8,
+    "r.drawFleetRoutes": 0.1,
+    "r.drawAirMissions": 0,
+    "r.drawBattles": 0,
+    "r.drawArmies": 2.3,
+    "r.drawFleets": 1.6,
+    "r.drawWings": 0.1,
+    "r.drawSites": 1.9,
+    "r.drawZoneNames": 0,
+    "r.drawLabels": 28.5,
+    "draw": 1007.2,
+    "minimap": 0.2,
+    "frame": 1007.6
+   },
+   "counts": {
+    "r.ensureRealms": 29,
+    "r.modeContext": 29,
+    "r.diffGround": 29,
+    "r.tile": 31,
+    "r.baseRegion": 69,
+    "r.paintRealmLayers": 69,
+    "r.drawSeaZones": 69,
+    "r.drawStraits": 69,
+    "r.drawGround": 29,
+    "r.drawRoute": 29,
+    "r.drawFleetRoutes": 29,
+    "r.drawAirMissions": 29,
+    "r.drawBattles": 29,
+    "r.drawArmies": 29,
+    "r.drawFleets": 29,
+    "r.drawWings": 29,
+    "r.drawSites": 29,
+    "r.drawZoneNames": 29,
+    "r.drawLabels": 29,
+    "draw": 29,
+    "minimap": 18,
+    "frame": 29
+   },
+   "main": {
+    "taskMs": 1093.4,
+    "scriptMs": 1057.3,
+    "styleMs": 0.2,
+    "layoutMs": 0.1,
+    "layouts": 0.7,
+    "styles": 1
+   },
+   "input": [],
+   "inputWorst": 0,
+   "moveAck": null,
+   "heapMB": [
+    30.5,
+    44.2
+   ],
+   "domNodes": [
+    2792,
+    2824
+   ]
+  },
+  {
+   "name": "w36-pan",
+   "what": "the World, 1936 at week 280 (as Britain), paused, dragging at regional zoom, 6 s",
+   "map": "earth-1936",
+   "tick": [
+    280,
+    280
+   ],
+   "seconds": 14.4,
+   "frames": 834,
+   "frameMs": {
+    "p50": 16.7,
+    "p95": 16.8,
+    "p99": 50,
+    "max": 83.3
+   },
+   "slow": {
+    "over17": 16,
+    "over33": 12,
+    "over50": 4,
+    "over100": 0
+   },
+   "long": {
+    "count": 12,
+    "totalMs": 757,
+    "maxMs": 85
+   },
+   "js": {
+    "r.ensureRealms": 0.1,
+    "r.modeContext": 0.1,
+    "r.diffGround": 0.1,
+    "r.baseRegion": 13.5,
+    "r.paintRealmLayers": 3.5,
+    "r.drawSeaZones": 0.1,
+    "r.drawStraits": 0.1,
+    "r.drawGround": 58.9,
+    "r.drawRoute": 2,
+    "r.drawFleetRoutes": 0.2,
+    "r.drawAirMissions": 0,
+    "r.drawBattles": 0,
+    "r.drawArmies": 6.3,
+    "r.drawFleets": 4.7,
+    "r.drawWings": 0,
+    "r.drawSites": 5.4,
+    "r.drawZoneNames": 0,
+    "r.drawLabels": 67.1,
+    "draw": 161.7,
+    "minimap": 0.3,
+    "frame": 163,
+    "hover": 0.3,
+    "r.tile": 4.2
+   },
+   "counts": {
+    "r.ensureRealms": 383,
+    "r.modeContext": 383,
+    "r.diffGround": 383,
+    "r.baseRegion": 42,
+    "r.paintRealmLayers": 42,
+    "r.drawSeaZones": 42,
+    "r.drawStraits": 42,
+    "r.drawGround": 383,
+    "r.drawRoute": 383,
+    "r.drawFleetRoutes": 383,
+    "r.drawAirMissions": 383,
+    "r.drawBattles": 383,
+    "r.drawArmies": 383,
+    "r.drawFleets": 383,
+    "r.drawWings": 383,
+    "r.drawSites": 383,
+    "r.drawZoneNames": 383,
+    "r.drawLabels": 383,
+    "draw": 383,
+    "minimap": 102,
+    "frame": 836,
+    "hover": 4,
+    "r.tile": 7
+   },
+   "main": {
+    "taskMs": 342.8,
+    "scriptMs": 175.2,
+    "styleMs": 3.7,
+    "layoutMs": 6.6,
+    "layouts": 8.1,
+    "styles": 8.7
+   },
+   "input": [
+    {
+     "name": "mousedown",
+     "delay": 82.7,
+     "proc": 0,
+     "dur": 88
+    },
+    {
+     "name": "pointerdown",
+     "delay": 1,
+     "proc": 81.6,
+     "dur": 88
+    },
+    {
+     "name": "mousedown",
+     "delay": 1.1,
+     "proc": 0,
+     "dur": 24
+    },
+    {
+     "name": "pointerdown",
+     "delay": 1,
+     "proc": 0.1,
+     "dur": 24
+    },
+    {
+     "name": "pointerup",
+     "delay": 0.4,
+     "proc": 0.1,
+     "dur": 16
+    },
+    {
+     "name": "mouseup",
+     "delay": 0.6,
+     "proc": 0,
+     "dur": 16
+    },
+    {
+     "name": "click",
+     "delay": 0.9,
+     "proc": 0,
+     "dur": 16
+    },
+    {
+     "name": "mousedown",
+     "delay": 1.6,
+     "proc": 0,
+     "dur": 32
+    },
+    {
+     "name": "pointerdown",
+     "delay": 1.4,
+     "proc": 0.2,
+     "dur": 32
+    },
+    {
+     "name": "pointerup",
+     "delay": 0.5,
+     "proc": 0.1,
+     "dur": 16
+    },
+    {
+     "name": "mouseup",
+     "delay": 0.6,
+     "proc": 0,
+     "dur": 16
+    },
+    {
+     "name": "click",
+     "delay": 0.8,
+     "proc": 0,
+     "dur": 16
+    },
+    {
+     "name": "mousedown",
+     "delay": 0.5,
+     "proc": 0.1,
+     "dur": 24
+    },
+    {
+     "name": "pointerdown",
+     "delay": 0.4,
+     "proc": 0.1,
+     "dur": 24
+    }
+   ],
+   "inputWorst": 88,
+   "moveAck": {
+    "n": 376,
+    "p50": 17.6,
+    "p95": 35.8,
+    "max": 129.2
+   },
+   "heapMB": [
+    31.3,
+    45.2
+   ],
+   "domNodes": [
+    2819,
+    3581
+   ]
+  },
+  {
+   "name": "w36-max",
+   "what": "the World, 1936 at week 280 (as Britain), fastest speed, no input, 8 s",
+   "map": "earth-1936",
+   "tick": [
+    280,
+    304
+   ],
+   "seconds": 8,
+   "frames": 375,
+   "frameMs": {
+    "p50": 16.7,
+    "p95": 50,
+    "p99": 66.7,
+    "max": 116.7
+   },
+   "slow": {
+    "over17": 65,
+    "over33": 23,
+    "over50": 15,
+    "over100": 1
+   },
+   "long": {
+    "count": 16,
+    "totalMs": 1088,
+    "maxMs": 116
+   },
+   "js": {
+    "r.ensureRealms": 3.7,
+    "r.modeContext": 0.1,
+    "r.diffGround": 2.7,
+    "r.drawGround": 48.7,
+    "r.drawRoute": 1.4,
+    "r.drawFleetRoutes": 0.2,
+    "r.drawAirMissions": 0,
+    "r.drawBattles": 0.4,
+    "r.drawArmies": 2.3,
+    "r.drawFleets": 1.9,
+    "r.drawWings": 0,
+    "r.drawSites": 2.3,
+    "r.drawZoneNames": 0,
+    "r.drawLabels": 24.3,
+    "draw": 91.3,
+    "minimap": 5.7,
+    "ui.renderRail": 1.2,
+    "ui.renderAttention": 0,
+    "ui.renderBanner": 0,
+    "ui.updateInsets": 5.8,
+    "ui": 66.4,
+    "frame": 850.3,
+    "r.baseRegion": 0.2,
+    "r.paintRealmLayers": 6.7,
+    "r.drawSeaZones": 0.1,
+    "r.drawStraits": 0.1
+   },
+   "counts": {
+    "r.ensureRealms": 78,
+    "r.modeContext": 78,
+    "r.diffGround": 78,
+    "r.drawGround": 78,
+    "r.drawRoute": 110,
+    "r.drawFleetRoutes": 78,
+    "r.drawAirMissions": 78,
+    "r.drawBattles": 78,
+    "r.drawArmies": 78,
+    "r.drawFleets": 78,
+    "r.drawWings": 78,
+    "r.drawSites": 78,
+    "r.drawZoneNames": 78,
+    "r.drawLabels": 78,
+    "draw": 78,
+    "minimap": 30,
+    "ui.renderRail": 25,
+    "ui.renderAttention": 25,
+    "ui.renderBanner": 25,
+    "ui.updateInsets": 25,
+    "ui": 25,
+    "frame": 376,
+    "r.baseRegion": 25,
+    "r.paintRealmLayers": 25,
+    "r.drawSeaZones": 25,
+    "r.drawStraits": 25
+   },
+   "main": {
+    "taskMs": 941.3,
+    "scriptMs": 835.5,
+    "styleMs": 7,
+    "layoutMs": 12.5,
+    "layouts": 15.8,
+    "styles": 22.2
+   },
+   "input": [
+    {
+     "name": "keydown",
+     "delay": 0.3,
+     "proc": 1.3,
+     "dur": 40
+    },
+    {
+     "name": "keyup",
+     "delay": 0.4,
+     "proc": 0,
+     "dur": 32
+    }
+   ],
+   "inputWorst": 40,
+   "moveAck": null,
+   "heapMB": [
+    31.8,
+    78.5
+   ],
+   "domNodes": [
+    2839,
+    3395
+   ]
+  },
+  {
+   "name": "w36-max-pan",
+   "what": "the World, 1936 at week 280 (as Britain), fastest speed while dragging and clicking, 6 s",
+   "map": "earth-1936",
+   "tick": [
+    304,
+    360
+   ],
+   "seconds": 19.8,
+   "frames": 1045,
+   "frameMs": {
+    "p50": 16.7,
+    "p95": 33.3,
+    "p99": 50.1,
+    "max": 116.7
+   },
+   "slow": {
+    "over17": 101,
+    "over33": 25,
+    "over50": 12,
+    "over100": 1
+   },
+   "long": {
+    "count": 17,
+    "totalMs": 1236,
+    "maxMs": 119
+   },
+   "js": {
+    "frame": 718.9,
+    "r.ensureRealms": 3.7,
+    "r.modeContext": 0.2,
+    "r.diffGround": 3.6,
+    "r.baseRegion": 0.2,
+    "r.paintRealmLayers": 3.5,
+    "r.drawSeaZones": 0.1,
+    "r.drawStraits": 0.1,
+    "r.drawGround": 41.2,
+    "r.drawFleetRoutes": 0.9,
+    "r.drawAirMissions": 0,
+    "r.drawBattles": 0.1,
+    "r.drawArmies": 7,
+    "r.drawFleets": 5.4,
+    "r.drawWings": 0,
+    "r.drawSites": 5.5,
+    "r.drawZoneNames": 0,
+    "r.drawLabels": 72,
+    "draw": 155.7,
+    "minimap": 2.2,
+    "ui.renderRail": 0.2,
+    "ui.renderAttention": 0,
+    "ui.renderBanner": 0,
+    "ui.updateInsets": 1.2,
+    "ui": 11.6,
+    "hover": 0.3,
+    "r.drawRoute": 2.9
+   },
+   "counts": {
+    "frame": 1047,
+    "r.ensureRealms": 579,
+    "r.modeContext": 579,
+    "r.diffGround": 579,
+    "r.baseRegion": 43,
+    "r.paintRealmLayers": 43,
+    "r.drawSeaZones": 43,
+    "r.drawStraits": 43,
+    "r.drawGround": 579,
+    "r.drawFleetRoutes": 579,
+    "r.drawAirMissions": 579,
+    "r.drawBattles": 579,
+    "r.drawArmies": 579,
+    "r.drawFleets": 579,
+    "r.drawWings": 579,
+    "r.drawSites": 579,
+    "r.drawZoneNames": 579,
+    "r.drawLabels": 579,
+    "draw": 579,
+    "minimap": 131,
+    "ui.renderRail": 9,
+    "ui.renderAttention": 9,
+    "ui.renderBanner": 9,
+    "ui.updateInsets": 9,
+    "ui": 9,
+    "hover": 6,
+    "r.drawRoute": 4659
+   },
+   "main": {
+    "taskMs": 915.4,
+    "scriptMs": 720.2,
+    "styleMs": 6.7,
+    "layoutMs": 9.9,
+    "layouts": 12.1,
+    "styles": 20.1
+   },
+   "input": [
+    {
+     "name": "keydown",
+     "delay": 1.1,
+     "proc": 0.2,
+     "dur": 80
+    },
+    {
+     "name": "keyup",
+     "delay": 69.4,
+     "proc": 0,
+     "dur": 72
+    },
+    {
+     "name": "mousedown",
+     "delay": 1,
+     "proc": 0,
+     "dur": 40
+    },
+    {
+     "name": "pointerdown",
+     "delay": 0.4,
+     "proc": 0.6,
+     "dur": 40
+    },
+    {
+     "name": "pointerup",
+     "delay": 4,
+     "proc": 0.1,
+     "dur": 56
+    },
+    {
+     "name": "mouseup",
+     "delay": 4.1,
+     "proc": 0.1,
+     "dur": 56
+    },
+    {
+     "name": "click",
+     "delay": 4.6,
+     "proc": 0,
+     "dur": 56
+    },
+    {
+     "name": "mousedown",
+     "delay": 39.4,
+     "proc": 0,
+     "dur": 72
+    },
+    {
+     "name": "pointerdown",
+     "delay": 39.2,
+     "proc": 0.2,
+     "dur": 72
+    },
+    {
+     "name": "pointerup",
+     "delay": 0.3,
+     "proc": 0.1,
+     "dur": 32
+    },
+    {
+     "name": "mouseup",
+     "delay": 0.4,
+     "proc": 0,
+     "dur": 32
+    },
+    {
+     "name": "click",
+     "delay": 0.6,
+     "proc": 0,
+     "dur": 32
+    },
+    {
+     "name": "mousedown",
+     "delay": 11,
+     "proc": 0,
+     "dur": 24
+    },
+    {
+     "name": "pointerdown",
+     "delay": 10.9,
+     "proc": 0.1,
+     "dur": 24
+    },
+    {
+     "name": "pointerup",
+     "delay": 4.6,
+     "proc": 0.2,
+     "dur": 144
+    },
+    {
+     "name": "mouseup",
+     "delay": 4.8,
+     "proc": 0,
+     "dur": 144
+    },
+    {
+     "name": "click",
+     "delay": 5,
+     "proc": 0,
+     "dur": 144
+    },
+    {
+     "name": "pointerdown",
+     "delay": 2.2,
+     "proc": 0.1,
+     "dur": 136
+    },
+    {
+     "name": "mousedown",
+     "delay": 2.3,
+     "proc": 0,
+     "dur": 136
+    },
+    {
+     "name": "pointerup",
+     "delay": 2.4,
+     "proc": 0.4,
+     "dur": 136
+    },
+    {
+     "name": "mouseup",
+     "delay": 2.8,
+     "proc": 0,
+     "dur": 136
+    },
+    {
+     "name": "click",
+     "delay": 2.8,
+     "proc": 0,
+     "dur": 136
+    },
+    {
+     "name": "pointerdown",
+     "delay": 8,
+     "proc": 0.1,
+     "dur": 56
+    },
+    {
+     "name": "mousedown",
+     "delay": 8.1,
+     "proc": 0,
+     "dur": 56
+    },
+    {
+     "name": "pointerup",
+     "delay": 8.1,
+     "proc": 0.1,
+     "dur": 56
+    },
+    {
+     "name": "mouseup",
+     "delay": 8.2,
+     "proc": 0,
+     "dur": 56
+    },
+    {
+     "name": "click",
+     "delay": 8.2,
+     "proc": 0,
+     "dur": 56
+    },
+    {
+     "name": "pointerdown",
+     "delay": 4.1,
+     "proc": 0,
+     "dur": 88
+    },
+    {
+     "name": "mousedown",
+     "delay": 4.1,
+     "proc": 0.1,
+     "dur": 88
+    },
+    {
+     "name": "pointerup",
+     "delay": 6.3,
+     "proc": 0,
+     "dur": 88
+    },
+    {
+     "name": "mouseup",
+     "delay": 6.3,
+     "proc": 0,
+     "dur": 88
+    },
+    {
+     "name": "click",
+     "delay": 6.3,
+     "proc": 0,
+     "dur": 88
+    },
+    {
+     "name": "pointerdown",
+     "delay": 7.2,
+     "proc": 0.2,
+     "dur": 128
+    },
+    {
+     "name": "mousedown",
+     "delay": 7.4,
+     "proc": 0.1,
+     "dur": 128
+    },
+    {
+     "name": "pointerup",
+     "delay": 7.8,
+     "proc": 0,
+     "dur": 128
+    },
+    {
+     "name": "mouseup",
+     "delay": 7.8,
+     "proc": 0,
+     "dur": 128
+    },
+    {
+     "name": "click",
+     "delay": 7.9,
+     "proc": 0,
+     "dur": 128
+    }
+   ],
+   "inputWorst": 144,
+   "moveAck": {
+    "n": 282,
+    "p50": 43.2,
+    "p95": 99,
+    "max": 143.1
+   },
+   "heapMB": [
+    38.3,
+    103.5
+   ],
+   "domNodes": [
+    2939,
+    14125
+   ]
+  },
+  {
+   "name": "na-idle",
+   "what": "the World 1936 at week 280, every realm at war flying front-line air missions (333 wings, 85 fleets; as Britain), paused, no input, 3 s",
+   "map": "earth-1936",
+   "tick": [
+    280,
+    280
+   ],
+   "seconds": 3,
+   "frames": 39,
+   "frameMs": {
+    "p50": 66.7,
+    "p95": 166.6,
+    "p99": 166.8,
+    "max": 233.2
+   },
+   "slow": {
+    "over17": 27,
+    "over33": 26,
+    "over50": 21,
+    "over100": 11
+   },
+   "long": {
+    "count": 24,
+    "totalMs": 2734,
+    "maxMs": 234
+   },
+   "js": {
+    "r.ensureRealms": 0,
+    "r.modeContext": 0,
+    "r.diffGround": 0,
+    "r.tile": 84.1,
+    "r.baseRegion": 334.4,
+    "r.paintRealmLayers": 52.5,
+    "r.drawSeaZones": 1.7,
+    "r.drawStraits": 1.1,
+    "r.drawGround": 903.9,
+    "r.drawRoute": 0.8,
+    "r.drawFleetRoutes": 0.1,
+    "r.drawAirMissions": 0,
+    "r.drawBattles": 0,
+    "r.drawArmies": 2.6,
+    "r.drawFleets": 2.3,
+    "r.drawWings": 0,
+    "r.drawSites": 1.9,
+    "r.drawZoneNames": 0,
+    "r.drawLabels": 33.2,
+    "draw": 948.9,
+    "minimap": 0.2,
+    "frame": 949.4
+   },
+   "counts": {
+    "r.ensureRealms": 33,
+    "r.modeContext": 33,
+    "r.diffGround": 33,
+    "r.tile": 30,
+    "r.baseRegion": 72,
+    "r.paintRealmLayers": 72,
+    "r.drawSeaZones": 72,
+    "r.drawStraits": 72,
+    "r.drawGround": 33,
+    "r.drawRoute": 33,
+    "r.drawFleetRoutes": 33,
+    "r.drawAirMissions": 33,
+    "r.drawBattles": 33,
+    "r.drawArmies": 33,
+    "r.drawFleets": 33,
+    "r.drawWings": 33,
+    "r.drawSites": 33,
+    "r.drawZoneNames": 33,
+    "r.drawLabels": 33,
+    "draw": 33,
+    "minimap": 18,
+    "frame": 41
+   },
+   "main": {
+    "taskMs": 1048.6,
+    "scriptMs": 999.5,
+    "styleMs": 0.3,
+    "layoutMs": 0.3,
+    "layouts": 1,
+    "styles": 1
+   },
+   "input": [],
+   "inputWorst": 0,
+   "moveAck": null,
+   "heapMB": [
+    30.4,
+    44.1
+   ],
+   "domNodes": [
+    2804,
+    2935
+   ]
+  },
+  {
+   "name": "na-pan",
+   "what": "the World 1936 at week 280, every realm at war flying front-line air missions (333 wings, 85 fleets; as Britain), paused, dragging at regional zoom, 6 s",
+   "map": "earth-1936",
+   "tick": [
+    280,
+    280
+   ],
+   "seconds": 14.2,
+   "frames": 821,
+   "frameMs": {
+    "p50": 16.7,
+    "p95": 16.8,
+    "p99": 49.9,
+    "max": 100
+   },
+   "slow": {
+    "over17": 15,
+    "over33": 11,
+    "over50": 4,
+    "over100": 0
+   },
+   "long": {
+    "count": 10,
+    "totalMs": 604,
+    "maxMs": 112
+   },
+   "js": {
+    "hover": 0.4,
+    "frame": 168.1,
+    "r.ensureRealms": 0.1,
+    "r.modeContext": 0.2,
+    "r.diffGround": 0.1,
+    "r.drawGround": 58.5,
+    "r.drawRoute": 2.1,
+    "r.drawFleetRoutes": 0.2,
+    "r.drawAirMissions": 0,
+    "r.drawBattles": 0.1,
+    "r.drawArmies": 5.9,
+    "r.drawFleets": 5.4,
+    "r.drawWings": 0,
+    "r.drawSites": 6.1,
+    "r.drawZoneNames": 0,
+    "r.drawLabels": 72.9,
+    "draw": 166.7,
+    "minimap": 0.3,
+    "r.baseRegion": 15,
+    "r.paintRealmLayers": 3.5,
+    "r.drawSeaZones": 0.1,
+    "r.drawStraits": 0.2,
+    "r.tile": 4.9
+   },
+   "counts": {
+    "hover": 4,
+    "frame": 822,
+    "r.ensureRealms": 381,
+    "r.modeContext": 381,
+    "r.diffGround": 381,
+    "r.drawGround": 381,
+    "r.drawRoute": 381,
+    "r.drawFleetRoutes": 381,
+    "r.drawAirMissions": 381,
+    "r.drawBattles": 381,
+    "r.drawArmies": 381,
+    "r.drawFleets": 381,
+    "r.drawWings": 381,
+    "r.drawSites": 381,
+    "r.drawZoneNames": 381,
+    "r.drawLabels": 381,
+    "draw": 381,
+    "minimap": 99,
+    "r.baseRegion": 38,
+    "r.paintRealmLayers": 38,
+    "r.drawSeaZones": 38,
+    "r.drawStraits": 38,
+    "r.tile": 7
+   },
+   "main": {
+    "taskMs": 353.1,
+    "scriptMs": 174.9,
+    "styleMs": 3.8,
+    "layoutMs": 7,
+    "layouts": 8.3,
+    "styles": 8.8
+   },
+   "input": [
+    {
+     "name": "mousedown",
+     "delay": 3.1,
+     "proc": 0,
+     "dur": 32
+    },
+    {
+     "name": "pointerdown",
+     "delay": 1.2,
+     "proc": 1.9,
+     "dur": 32
+    },
+    {
+     "name": "pointerup",
+     "delay": 0.3,
+     "proc": 0.3,
+     "dur": 16
+    },
+    {
+     "name": "mouseup",
+     "delay": 0.6,
+     "proc": 0,
+     "dur": 16
+    },
+    {
+     "name": "click",
+     "delay": 0.9,
+     "proc": 0,
+     "dur": 16
+    },
+    {
+     "name": "mousedown",
+     "delay": 1.4,
+     "proc": 0,
+     "dur": 32
+    },
+    {
+     "name": "pointerdown",
+     "delay": 1.3,
+     "proc": 0.1,
+     "dur": 32
+    },
+    {
+     "name": "pointerup",
+     "delay": 0.3,
+     "proc": 0.2,
+     "dur": 16
+    },
+    {
+     "name": "mouseup",
+     "delay": 0.5,
+     "proc": 0,
+     "dur": 16
+    },
+    {
+     "name": "click",
+     "delay": 0.8,
+     "proc": 0,
+     "dur": 16
+    },
+    {
+     "name": "mousedown",
+     "delay": 5,
+     "proc": 0,
+     "dur": 24
+    },
+    {
+     "name": "pointerdown",
+     "delay": 4.8,
+     "proc": 0.2,
+     "dur": 24
+    },
+    {
+     "name": "pointerup",
+     "delay": 0.3,
+     "proc": 0.1,
+     "dur": 16
+    },
+    {
+     "name": "mouseup",
+     "delay": 0.4,
+     "proc": 0,
+     "dur": 16
+    },
+    {
+     "name": "click",
+     "delay": 0.6,
+     "proc": 0.1,
+     "dur": 16
+    },
+    {
+     "name": "mousedown",
+     "delay": 1.3,
+     "proc": 0,
+     "dur": 32
+    }
+   ],
+   "inputWorst": 32,
+   "moveAck": {
+    "n": 376,
+    "p50": 17.3,
+    "p95": 35.9,
+    "max": 121.2
+   },
+   "heapMB": [
+    31.2,
+    43.3
+   ],
+   "domNodes": [
+    2828,
+    3804
+   ]
+  },
+  {
+   "name": "na-pan-mid",
+   "what": "the World 1936 at week 280, every realm at war flying front-line air missions (333 wings, 85 fleets; as Britain), paused, dragging at the medium tier, 6 s",
+   "map": "earth-1936",
+   "tick": [
+    280,
+    280
+   ],
+   "seconds": 19,
+   "frames": 1043,
+   "frameMs": {
+    "p50": 16.7,
+    "p95": 16.8,
+    "p99": 66.7,
+    "max": 166.7
+   },
+   "slow": {
+    "over17": 37,
+    "over33": 21,
+    "over50": 17,
+    "over100": 3
+   },
+   "long": {
+    "count": 18,
+    "totalMs": 1562,
+    "maxMs": 163
+   },
+   "js": {
+    "r.ensureRealms": 0.2,
+    "r.modeContext": 0.1,
+    "r.diffGround": 0.2,
+    "r.tile": 6.6,
+    "r.baseRegion": 37.6,
+    "r.paintRealmLayers": 7.5,
+    "r.drawSeaZones": 0.2,
+    "r.drawStraits": 0.3,
+    "r.drawGround": 100.2,
+    "r.drawRoute": 1.1,
+    "r.drawFleetRoutes": 0.2,
+    "r.drawAirMissions": 4.8,
+    "r.drawBattles": 0,
+    "r.drawArmies": 10.2,
+    "r.drawFleets": 16,
+    "r.drawWings": 3.6,
+    "r.drawSites": 2.9,
+    "r.drawZoneNames": 11.8,
+    "r.drawLabels": 91.3,
+    "draw": 254,
+    "minimap": 0.3,
+    "frame": 255.6,
+    "hover": 0.3
+   },
+   "counts": {
+    "r.ensureRealms": 398,
+    "r.modeContext": 398,
+    "r.diffGround": 398,
+    "r.tile": 37,
+    "r.baseRegion": 86,
+    "r.paintRealmLayers": 86,
+    "r.drawSeaZones": 86,
+    "r.drawStraits": 86,
+    "r.drawGround": 398,
+    "r.drawRoute": 398,
+    "r.drawFleetRoutes": 398,
+    "r.drawAirMissions": 398,
+    "r.drawBattles": 398,
+    "r.drawArmies": 398,
+    "r.drawFleets": 398,
+    "r.drawWings": 398,
+    "r.drawSites": 398,
+    "r.drawZoneNames": 398,
+    "r.drawLabels": 398,
+    "draw": 398,
+    "minimap": 128,
+    "frame": 1045,
+    "hover": 4
+   },
+   "main": {
+    "taskMs": 457.9,
+    "scriptMs": 264.9,
+    "styleMs": 2.6,
+    "layoutMs": 4.7,
+    "layouts": 5.8,
+    "styles": 6.2
+   },
+   "input": [
+    {
+     "name": "mousedown",
+     "delay": 81.5,
+     "proc": 0,
+     "dur": 160
+    },
+    {
+     "name": "pointerdown",
+     "delay": 81.3,
+     "proc": 0.1,
+     "dur": 160
+    },
+    {
+     "name": "mousedown",
+     "delay": 2,
+     "proc": 0,
+     "dur": 40
+    },
+    {
+     "name": "pointerdown",
+     "delay": 1.8,
+     "proc": 0.2,
+     "dur": 40
+    },
+    {
+     "name": "pointerup",
+     "delay": 0.3,
+     "proc": 0.1,
+     "dur": 16
+    },
+    {
+     "name": "mouseup",
+     "delay": 0.4,
+     "proc": 0,
+     "dur": 16
+    },
+    {
+     "name": "click",
+     "delay": 0.6,
+     "proc": 0,
+     "dur": 16
+    },
+    {
+     "name": "mousedown",
+     "delay": 1.1,
+     "proc": 0,
+     "dur": 40
+    },
+    {
+     "name": "pointerdown",
+     "delay": 1,
+     "proc": 0.1,
+     "dur": 40
+    },
+    {
+     "name": "mousedown",
+     "delay": 0.9,
+     "proc": 0,
+     "dur": 32
+    }
+   ],
+   "inputWorst": 160,
+   "moveAck": {
+    "n": 376,
+    "p50": 30.5,
+    "p95": 47.1,
+    "max": 382.7
+   },
+   "heapMB": [
+    31.6,
+    43.6
+   ],
+   "domNodes": [
+    2863,
+    3970
+   ]
+  },
+  {
+   "name": "na-zoom",
+   "what": "the World 1936 at week 280, every realm at war flying front-line air missions (333 wings, 85 fleets; as Britain), paused, 12 wheel steps",
+   "map": "earth-1936",
+   "tick": [
+    280,
+    280
+   ],
+   "seconds": 2.6,
+   "frames": 105,
+   "frameMs": {
+    "p50": 16.7,
+    "p95": 50,
+    "p99": 100,
+    "max": 166.7
+   },
+   "slow": {
+    "over17": 21,
+    "over33": 10,
+    "over50": 6,
+    "over100": 2
+   },
+   "long": {
+    "count": 8,
+    "totalMs": 752,
+    "maxMs": 164
+   },
+   "js": {
+    "hover": 5.4,
+    "frame": 557.5,
+    "r.ensureRealms": 0.2,
+    "r.modeContext": 0.1,
+    "r.drawGround": 378,
+    "r.drawRoute": 2.5,
+    "r.drawFleetRoutes": 0.1,
+    "r.drawAirMissions": 8.5,
+    "r.drawBattles": 0,
+    "r.drawArmies": 16.8,
+    "r.drawFleets": 14.2,
+    "r.drawWings": 5.5,
+    "r.drawSites": 5.7,
+    "r.drawZoneNames": 16.8,
+    "r.drawLabels": 92.6,
+    "draw": 551.5,
+    "minimap": 0.4,
+    "r.diffGround": 2.1,
+    "r.tile": 18.2,
+    "r.baseRegion": 79.9,
+    "r.paintRealmLayers": 27.3,
+    "r.drawSeaZones": 0.9,
+    "r.drawStraits": 0.8,
+    "r.worldLayer": 15.6,
+    "r.drawRoads": 1.1
+   },
+   "counts": {
+    "hover": 14,
+    "frame": 106,
+    "r.ensureRealms": 103,
+    "r.modeContext": 103,
+    "r.drawGround": 103,
+    "r.drawRoute": 103,
+    "r.drawFleetRoutes": 103,
+    "r.drawAirMissions": 103,
+    "r.drawBattles": 103,
+    "r.drawArmies": 103,
+    "r.drawFleets": 103,
+    "r.drawWings": 103,
+    "r.drawSites": 103,
+    "r.drawZoneNames": 103,
+    "r.drawLabels": 103,
+    "draw": 103,
+    "minimap": 17,
+    "r.diffGround": 16,
+    "r.tile": 17,
+    "r.baseRegion": 24,
+    "r.paintRealmLayers": 24,
+    "r.drawSeaZones": 24,
+    "r.drawStraits": 24,
+    "r.worldLayer": 70,
+    "r.drawRoads": 13
+   },
+   "main": {
+    "taskMs": 851.5,
+    "scriptMs": 558.2,
+    "styleMs": 1.5,
+    "layoutMs": 1.9,
+    "layouts": 5.7,
+    "styles": 5.7
+   },
+   "input": [],
+   "inputWorst": 0,
+   "moveAck": null,
+   "heapMB": [
+    31.8,
+    47.1
+   ],
+   "domNodes": [
+    2886,
+    3279
+   ]
+  },
+  {
+   "name": "na-select",
+   "what": "the World 1936 at week 280, every realm at war flying front-line air missions (333 wings, 85 fleets; as Britain), paused, 12 clicks",
+   "map": "earth-1936",
+   "tick": [
+    280,
+    280
+   ],
+   "seconds": 3.1,
+   "frames": 174,
+   "frameMs": {
+    "p50": 16.7,
+    "p95": 16.8,
+    "p99": 33.4,
+    "max": 33.4
+   },
+   "slow": {
+    "over17": 9,
+    "over33": 0,
+    "over50": 0,
+    "over100": 0
+   },
+   "long": {
+    "count": 0,
+    "totalMs": 0,
+    "maxMs": 0
+   },
+   "js": {
+    "frame": 73.1,
+    "hover": 3.2,
+    "r.ensureRealms": 0,
+    "r.modeContext": 0,
+    "r.diffGround": 0,
+    "r.drawGround": 0.3,
+    "r.drawRoute": 0.2,
+    "r.drawFleetRoutes": 0,
+    "r.drawAirMissions": 0,
+    "r.drawBattles": 0,
+    "r.drawArmies": 0.7,
+    "r.drawFleets": 0.8,
+    "r.drawWings": 0,
+    "r.drawSites": 0.8,
+    "r.drawZoneNames": 0,
+    "r.drawLabels": 10.8,
+    "draw": 20.1,
+    "minimap": 0.4,
+    "ui.renderRail": 1.6,
+    "ui.renderAttention": 0.1,
+    "ui.renderBanner": 0,
+    "ui.updateInsets": 5.8,
+    "ui": 50.1
+   },
+   "counts": {
+    "frame": 176,
+    "hover": 12,
+    "r.ensureRealms": 12,
+    "r.modeContext": 12,
+    "r.diffGround": 12,
+    "r.drawGround": 12,
+    "r.drawRoute": 12,
+    "r.drawFleetRoutes": 12,
+    "r.drawAirMissions": 12,
+    "r.drawBattles": 12,
+    "r.drawArmies": 12,
+    "r.drawFleets": 12,
+    "r.drawWings": 12,
+    "r.drawSites": 12,
+    "r.drawZoneNames": 12,
+    "r.drawLabels": 12,
+    "draw": 12,
+    "minimap": 12,
+    "ui.renderRail": 12,
+    "ui.renderAttention": 12,
+    "ui.renderBanner": 12,
+    "ui.updateInsets": 12,
+    "ui": 12
+   },
+   "main": {
+    "taskMs": 239.8,
+    "scriptMs": 99.8,
+    "styleMs": 9.1,
+    "layoutMs": 16.1,
+    "layouts": 30,
+    "styles": 38.2
+   },
+   "input": [
+    {
+     "name": "pointerdown",
+     "delay": 2,
+     "proc": 0.2,
+     "dur": 72
+    },
+    {
+     "name": "mousedown",
+     "delay": 2.2,
+     "proc": 0,
+     "dur": 72
+    },
+    {
+     "name": "pointerup",
+     "delay": 2.3,
+     "proc": 0.5,
+     "dur": 72
+    },
+    {
+     "name": "mouseup",
+     "delay": 2.8,
+     "proc": 0,
+     "dur": 72
+    },
+    {
+     "name": "click",
+     "delay": 2.9,
+     "proc": 0,
+     "dur": 72
+    },
+    {
+     "name": "pointerdown",
+     "delay": 2.4,
+     "proc": 0.3,
+     "dur": 48
+    },
+    {
+     "name": "mousedown",
+     "delay": 2.7,
+     "proc": 0,
+     "dur": 48
+    },
+    {
+     "name": "pointerup",
+     "delay": 2.8,
+     "proc": 0.1,
+     "dur": 48
+    },
+    {
+     "name": "mouseup",
+     "delay": 2.9,
+     "proc": 0,
+     "dur": 48
+    },
+    {
+     "name": "click",
+     "delay": 3.1,
+     "proc": 0,
+     "dur": 48
+    },
+    {
+     "name": "pointerdown",
+     "delay": 1.9,
+     "proc": 0.1,
+     "dur": 56
+    },
+    {
+     "name": "mousedown",
+     "delay": 2,
+     "proc": 0,
+     "dur": 56
+    },
+    {
+     "name": "pointerup",
+     "delay": 2.2,
+     "proc": 0.1,
+     "dur": 56
+    },
+    {
+     "name": "mouseup",
+     "delay": 2.3,
+     "proc": 0,
+     "dur": 56
+    },
+    {
+     "name": "click",
+     "delay": 2.3,
+     "proc": 0,
+     "dur": 56
+    },
+    {
+     "name": "pointerdown",
+     "delay": 2.1,
+     "proc": 0,
+     "dur": 56
+    },
+    {
+     "name": "mousedown",
+     "delay": 2.1,
+     "proc": 0,
+     "dur": 56
+    },
+    {
+     "name": "pointerup",
+     "delay": 2.6,
+     "proc": 0.1,
+     "dur": 56
+    },
+    {
+     "name": "mouseup",
+     "delay": 2.7,
+     "proc": 0,
+     "dur": 56
+    },
+    {
+     "name": "click",
+     "delay": 2.7,
+     "proc": 0,
+     "dur": 56
+    },
+    {
+     "name": "pointerdown",
+     "delay": 1.7,
+     "proc": 0.1,
+     "dur": 48
+    },
+    {
+     "name": "mousedown",
+     "delay": 1.8,
+     "proc": 0,
+     "dur": 48
+    },
+    {
+     "name": "pointerup",
+     "delay": 2,
+     "proc": 0,
+     "dur": 48
+    },
+    {
+     "name": "mouseup",
+     "delay": 2,
+     "proc": 0,
+     "dur": 48
+    },
+    {
+     "name": "click",
+     "delay": 2.1,
+     "proc": 0,
+     "dur": 48
+    },
+    {
+     "name": "pointerdown",
+     "delay": 1.5,
+     "proc": 0.1,
+     "dur": 64
+    },
+    {
+     "name": "mousedown",
+     "delay": 1.6,
+     "proc": 0,
+     "dur": 64
+    },
+    {
+     "name": "pointerup",
+     "delay": 1.7,
+     "proc": 0.1,
+     "dur": 64
+    },
+    {
+     "name": "mouseup",
+     "delay": 1.8,
+     "proc": 0,
+     "dur": 64
+    },
+    {
+     "name": "click",
+     "delay": 1.9,
+     "proc": 0,
+     "dur": 64
+    },
+    {
+     "name": "pointerdown",
+     "delay": 1.7,
+     "proc": 0.1,
+     "dur": 56
+    },
+    {
+     "name": "mousedown",
+     "delay": 1.8,
+     "proc": 0,
+     "dur": 56
+    },
+    {
+     "name": "pointerup",
+     "delay": 2,
+     "proc": 0,
+     "dur": 56
+    },
+    {
+     "name": "mouseup",
+     "delay": 2,
+     "proc": 0,
+     "dur": 56
+    },
+    {
+     "name": "click",
+     "delay": 2.1,
+     "proc": 0,
+     "dur": 56
+    },
+    {
+     "name": "pointerdown",
+     "delay": 2.4,
+     "proc": 0.2,
+     "dur": 56
+    },
+    {
+     "name": "mousedown",
+     "delay": 2.6,
+     "proc": 0,
+     "dur": 56
+    },
+    {
+     "name": "pointerup",
+     "delay": 2.4,
+     "proc": 0.2,
+     "dur": 56
+    },
+    {
+     "name": "mouseup",
+     "delay": 2.6,
+     "proc": 0,
+     "dur": 56
+    },
+    {
+     "name": "click",
+     "delay": 2.7,
+     "proc": 0,
+     "dur": 56
+    },
+    {
+     "name": "pointerdown",
+     "delay": 1.6,
+     "proc": 0,
+     "dur": 56
+    },
+    {
+     "name": "mousedown",
+     "delay": 1.6,
+     "proc": 0.1,
+     "dur": 56
+    },
+    {
+     "name": "pointerup",
+     "delay": 1.8,
+     "proc": 0.1,
+     "dur": 56
+    },
+    {
+     "name": "mouseup",
+     "delay": 1.9,
+     "proc": 0,
+     "dur": 56
+    },
+    {
+     "name": "click",
+     "delay": 1.9,
+     "proc": 0,
+     "dur": 56
+    },
+    {
+     "name": "pointerdown",
+     "delay": 1.8,
+     "proc": 0,
+     "dur": 56
+    },
+    {
+     "name": "mousedown",
+     "delay": 1.8,
+     "proc": 0,
+     "dur": 56
+    },
+    {
+     "name": "pointerup",
+     "delay": 1.8,
+     "proc": 0.1,
+     "dur": 56
+    },
+    {
+     "name": "mouseup",
+     "delay": 1.9,
+     "proc": 0,
+     "dur": 56
+    },
+    {
+     "name": "click",
+     "delay": 1.9,
+     "proc": 0,
+     "dur": 56
+    },
+    {
+     "name": "pointerdown",
+     "delay": 1.7,
+     "proc": 0.1,
+     "dur": 48
+    },
+    {
+     "name": "mousedown",
+     "delay": 1.8,
+     "proc": 0,
+     "dur": 48
+    },
+    {
+     "name": "pointerup",
+     "delay": 2,
+     "proc": 0.1,
+     "dur": 48
+    },
+    {
+     "name": "mouseup",
+     "delay": 2.1,
+     "proc": 0,
+     "dur": 48
+    },
+    {
+     "name": "click",
+     "delay": 2.2,
+     "proc": 0,
+     "dur": 48
+    },
+    {
+     "name": "pointerdown",
+     "delay": 2,
+     "proc": 0.1,
+     "dur": 40
+    },
+    {
+     "name": "mousedown",
+     "delay": 2.1,
+     "proc": 0,
+     "dur": 40
+    },
+    {
+     "name": "pointerup",
+     "delay": 2.2,
+     "proc": 0.2,
+     "dur": 40
+    },
+    {
+     "name": "mouseup",
+     "delay": 2.4,
+     "proc": 0,
+     "dur": 40
+    },
+    {
+     "name": "click",
+     "delay": 2.5,
+     "proc": 0,
+     "dur": 40
+    }
+   ],
+   "inputWorst": 72,
+   "moveAck": null,
+   "heapMB": [
+    32.1,
+    45.2
+   ],
+   "domNodes": [
+    2930,
+    7384
+   ]
+  },
+  {
+   "name": "na-panels",
+   "what": "the World 1936 at week 280, every realm at war flying front-line air missions (333 wings, 85 fleets; as Britain), paused, each ledger by its key",
+   "map": "earth-1936",
+   "tick": [
+    280,
+    280
+   ],
+   "seconds": 4.8,
+   "frames": 246,
+   "frameMs": {
+    "p50": 16.7,
+    "p95": 16.8,
+    "p99": 116.7,
+    "max": 216.6
+   },
+   "slow": {
+    "over17": 7,
+    "over33": 7,
+    "over50": 5,
+    "over100": 4
+   },
+   "long": {
+    "count": 6,
+    "totalMs": 633,
+    "maxMs": 164
+   },
+   "js": {
+    "ui.updateInsets": 29,
+    "r.ensureRealms": 0.1,
+    "r.modeContext": 0.3,
+    "r.diffGround": 0.9,
+    "r.drawGround": 64,
+    "r.drawRoute": 0.2,
+    "r.drawFleetRoutes": 0.1,
+    "r.drawAirMissions": 0,
+    "r.drawBattles": 0,
+    "r.drawArmies": 0.8,
+    "r.drawFleets": 0.8,
+    "r.drawWings": 0,
+    "r.drawSites": 0.8,
+    "r.drawZoneNames": 0,
+    "r.drawLabels": 7.9,
+    "draw": 76.2,
+    "minimap": 0.2,
+    "ui.renderRail": 0.8,
+    "ui.renderAttention": 0.1,
+    "ui.renderBanner": 0,
+    "ui": 21.8,
+    "frame": 99.8,
+    "r.baseRegion": 0.3,
+    "r.paintRealmLayers": 6.3,
+    "r.drawSeaZones": 2.1,
+    "r.drawStraits": 0.1
+   },
+   "counts": {
+    "ui.updateInsets": 20,
+    "r.ensureRealms": 13,
+    "r.modeContext": 13,
+    "r.diffGround": 13,
+    "r.drawGround": 13,
+    "r.drawRoute": 13,
+    "r.drawFleetRoutes": 13,
+    "r.drawAirMissions": 13,
+    "r.drawBattles": 13,
+    "r.drawArmies": 13,
+    "r.drawFleets": 13,
+    "r.drawWings": 13,
+    "r.drawSites": 13,
+    "r.drawZoneNames": 13,
+    "r.drawLabels": 13,
+    "draw": 13,
+    "minimap": 11,
+    "ui.renderRail": 10,
+    "ui.renderAttention": 10,
+    "ui.renderBanner": 10,
+    "ui": 10,
+    "frame": 247,
+    "r.baseRegion": 7,
+    "r.paintRealmLayers": 7,
+    "r.drawSeaZones": 7,
+    "r.drawStraits": 7
+   },
+   "main": {
+    "taskMs": 244.1,
+    "scriptMs": 139.5,
+    "styleMs": 24.5,
+    "layoutMs": 21.9,
+    "layouts": 9.8,
+    "styles": 17.8
+   },
+   "input": [
+    {
+     "name": "keydown",
+     "delay": 0.3,
+     "proc": 40.8,
+     "dur": 88
+    },
+    {
+     "name": "keyup",
+     "delay": 21.9,
+     "proc": 0,
+     "dur": 56
+    },
+    {
+     "name": "keydown",
+     "delay": 0.4,
+     "proc": 106.4,
+     "dur": 152
+    },
+    {
+     "name": "keyup",
+     "delay": 0.7,
+     "proc": 0.1,
+     "dur": 48
+    },
+    {
+     "name": "keydown",
+     "delay": 0.4,
+     "proc": 38.9,
+     "dur": 72
+    },
+    {
+     "name": "keyup",
+     "delay": 23.4,
+     "proc": 0,
+     "dur": 32
+    },
+    {
+     "name": "keydown",
+     "delay": 0.3,
+     "proc": 31.4,
+     "dur": 88
+    },
+    {
+     "name": "keyup",
+     "delay": 34,
+     "proc": 0,
+     "dur": 56
+    },
+    {
+     "name": "keydown",
+     "delay": 0.3,
+     "proc": 12.8,
+     "dur": 64
+    },
+    {
+     "name": "keyup",
+     "delay": 19.3,
+     "proc": 0.1,
+     "dur": 48
+    },
+    {
+     "name": "keydown",
+     "delay": 0.4,
+     "proc": 66.7,
+     "dur": 248
+    },
+    {
+     "name": "keyup",
+     "delay": 164,
+     "proc": 0,
+     "dur": 176
+    },
+    {
+     "name": "keydown",
+     "delay": 5.6,
+     "proc": 18.7,
+     "dur": 152
+    },
+    {
+     "name": "keyup",
+     "delay": 118.8,
+     "proc": 0,
+     "dur": 128
+    },
+    {
+     "name": "keydown",
+     "delay": 0.3,
+     "proc": 50.8,
+     "dur": 184
+    },
+    {
+     "name": "keyup",
+     "delay": 126.5,
+     "proc": 0,
+     "dur": 144
+    },
+    {
+     "name": "keydown",
+     "delay": 0.2,
+     "proc": 8.8,
+     "dur": 40
+    },
+    {
+     "name": "keyup",
+     "delay": 18,
+     "proc": 0,
+     "dur": 24
+    },
+    {
+     "name": "keydown",
+     "delay": 0.2,
+     "proc": 5.4,
+     "dur": 40
+    },
+    {
+     "name": "keyup",
+     "delay": 0.3,
+     "proc": 0,
+     "dur": 32
+    }
+   ],
+   "inputWorst": 248,
+   "moveAck": null,
+   "heapMB": [
+    32.1,
+    50.6
+   ],
+   "domNodes": [
+    2929,
+    10909
+   ]
+  },
+  {
+   "name": "na-normal",
+   "what": "the World 1936 at week 280, every realm at war flying front-line air missions (333 wings, 85 fleets; as Britain), normal speed, no input, 8 s",
+   "map": "earth-1936",
+   "tick": [
+    280,
+    287
+   ],
+   "seconds": 8,
+   "frames": 435,
+   "frameMs": {
+    "p50": 16.7,
+    "p95": 33.3,
+    "p99": 50,
+    "max": 116.6
+   },
+   "slow": {
+    "over17": 25,
+    "over33": 12,
+    "over50": 3,
+    "over100": 1
+   },
+   "long": {
+    "count": 6,
+    "totalMs": 447,
+    "maxMs": 115
+   },
+   "js": {
+    "frame": 361.5,
+    "r.ensureRealms": 1.1,
+    "r.modeContext": 0.2,
+    "r.diffGround": 1.5,
+    "r.drawGround": 16.9,
+    "r.drawRoute": 1.4,
+    "r.drawFleetRoutes": 0.5,
+    "r.drawAirMissions": 0,
+    "r.drawBattles": 0.7,
+    "r.drawArmies": 4.1,
+    "r.drawFleets": 2.7,
+    "r.drawWings": 0,
+    "r.drawSites": 4,
+    "r.drawZoneNames": 0,
+    "r.drawLabels": 38.6,
+    "draw": 76,
+    "minimap": 1.3,
+    "ui.renderRail": 0.6,
+    "ui.renderAttention": 0,
+    "ui.renderBanner": 0,
+    "ui.updateInsets": 2.9,
+    "ui": 27.8,
+    "r.baseRegion": 0.1,
+    "r.paintRealmLayers": 3.8,
+    "r.drawSeaZones": 0.1,
+    "r.drawStraits": 0.1
+   },
+   "counts": {
+    "frame": 437,
+    "r.ensureRealms": 117,
+    "r.modeContext": 117,
+    "r.diffGround": 117,
+    "r.drawGround": 117,
+    "r.drawRoute": 170,
+    "r.drawFleetRoutes": 117,
+    "r.drawAirMissions": 117,
+    "r.drawBattles": 117,
+    "r.drawArmies": 117,
+    "r.drawFleets": 117,
+    "r.drawWings": 117,
+    "r.drawSites": 117,
+    "r.drawZoneNames": 117,
+    "r.drawLabels": 117,
+    "draw": 117,
+    "minimap": 21,
+    "ui.renderRail": 8,
+    "ui.renderAttention": 8,
+    "ui.renderBanner": 8,
+    "ui.updateInsets": 8,
+    "ui": 8,
+    "r.baseRegion": 12,
+    "r.paintRealmLayers": 12,
+    "r.drawSeaZones": 12,
+    "r.drawStraits": 12
+   },
+   "main": {
+    "taskMs": 454.1,
+    "scriptMs": 358.5,
+    "styleMs": 2.8,
+    "layoutMs": 5.4,
+    "layouts": 4.9,
+    "styles": 7.6
+   },
+   "input": [
+    {
+     "name": "keydown",
+     "delay": 0.3,
+     "proc": 0.3,
+     "dur": 40
+    },
+    {
+     "name": "keyup",
+     "delay": 0.2,
+     "proc": 0,
+     "dur": 40
+    }
+   ],
+   "inputWorst": 40,
+   "moveAck": null,
+   "heapMB": [
+    35,
+    63.5
+   ],
+   "domNodes": [
+    2930,
+    3000
+   ]
+  },
+  {
+   "name": "na-max",
+   "what": "the World 1936 at week 280, every realm at war flying front-line air missions (333 wings, 85 fleets; as Britain), fastest speed, no input, 8 s",
+   "map": "earth-1936",
+   "tick": [
+    287,
+    312
+   ],
+   "seconds": 8,
+   "frames": 365,
+   "frameMs": {
+    "p50": 16.7,
+    "p95": 50,
+    "p99": 83.3,
+    "max": 133.3
+   },
+   "slow": {
+    "over17": 64,
+    "over33": 28,
+    "over50": 15,
+    "over100": 1
+   },
+   "long": {
+    "count": 23,
+    "totalMs": 1526,
+    "maxMs": 122
+   },
+   "js": {
+    "r.ensureRealms": 3.6,
+    "r.modeContext": 0.2,
+    "r.diffGround": 3.5,
+    "r.drawGround": 42.9,
+    "r.drawRoute": 1.8,
+    "r.drawFleetRoutes": 0.5,
+    "r.drawAirMissions": 0,
+    "r.drawBattles": 0.6,
+    "r.drawArmies": 4,
+    "r.drawFleets": 3.1,
+    "r.drawWings": 0,
+    "r.drawSites": 3.7,
+    "r.drawZoneNames": 0,
+    "r.drawLabels": 38.5,
+    "draw": 106.5,
+    "frame": 859.4,
+    "minimap": 4.7,
+    "ui.renderRail": 1.4,
+    "ui.renderAttention": 0,
+    "ui.renderBanner": 0.1,
+    "ui.updateInsets": 6.8,
+    "ui": 79.6,
+    "r.baseRegion": 0.3,
+    "r.paintRealmLayers": 6.1,
+    "r.drawSeaZones": 0.1,
+    "r.drawStraits": 0.2
+   },
+   "counts": {
+    "r.ensureRealms": 110,
+    "r.modeContext": 110,
+    "r.diffGround": 110,
+    "r.drawGround": 110,
+    "r.drawRoute": 217,
+    "r.drawFleetRoutes": 110,
+    "r.drawAirMissions": 110,
+    "r.drawBattles": 110,
+    "r.drawArmies": 110,
+    "r.drawFleets": 110,
+    "r.drawWings": 110,
+    "r.drawSites": 110,
+    "r.drawZoneNames": 110,
+    "r.drawLabels": 110,
+    "draw": 110,
+    "frame": 367,
+    "minimap": 37,
+    "ui.renderRail": 27,
+    "ui.renderAttention": 27,
+    "ui.renderBanner": 27,
+    "ui.updateInsets": 27,
+    "ui": 27,
+    "r.baseRegion": 22,
+    "r.paintRealmLayers": 22,
+    "r.drawSeaZones": 22,
+    "r.drawStraits": 22
+   },
+   "main": {
+    "taskMs": 965,
+    "scriptMs": 843,
+    "styleMs": 9,
+    "layoutMs": 14,
+    "layouts": 17.1,
+    "styles": 25.7
+   },
+   "input": [
+    {
+     "name": "keydown",
+     "delay": 0.3,
+     "proc": 0,
+     "dur": 24
+    },
+    {
+     "name": "keyup",
+     "delay": 0.1,
+     "proc": 0,
+     "dur": 24
+    }
+   ],
+   "inputWorst": 24,
+   "moveAck": null,
+   "heapMB": [
+    37.9,
+    96.4
+   ],
+   "domNodes": [
+    3000,
+    8592
+   ]
+  },
+  {
+   "name": "na-max-pan",
+   "what": "the World 1936 at week 280, every realm at war flying front-line air missions (333 wings, 85 fleets; as Britain), fastest speed while dragging and clicking, 6 s",
+   "map": "earth-1936",
+   "tick": [
+    312,
+    370
+   ],
+   "seconds": 20.8,
+   "frames": 1079,
+   "frameMs": {
+    "p50": 16.7,
+    "p95": 33.4,
+    "p99": 50,
+    "max": 100.1
+   },
+   "slow": {
+    "over17": 128,
+    "over33": 31,
+    "over50": 11,
+    "over100": 1
+   },
+   "long": {
+    "count": 22,
+    "totalMs": 1342,
+    "maxMs": 116
+   },
+   "js": {
+    "frame": 720.1,
+    "hover": 0.2,
+    "r.ensureRealms": 2.7,
+    "r.modeContext": 0.3,
+    "r.diffGround": 3.8,
+    "r.baseRegion": 0.2,
+    "r.paintRealmLayers": 3.9,
+    "r.drawSeaZones": 0.1,
+    "r.drawStraits": 0.1,
+    "r.drawGround": 38.8,
+    "r.drawRoute": 3,
+    "r.drawFleetRoutes": 1.1,
+    "r.drawAirMissions": 0,
+    "r.drawBattles": 0.1,
+    "r.drawArmies": 7.5,
+    "r.drawFleets": 5.5,
+    "r.drawWings": 0,
+    "r.drawSites": 6.3,
+    "r.drawZoneNames": 0,
+    "r.drawLabels": 78.8,
+    "draw": 160.5,
+    "minimap": 2,
+    "ui.renderRail": 0.2,
+    "ui.renderAttention": 0,
+    "ui.renderBanner": 0,
+    "ui.updateInsets": 0.8,
+    "ui": 11.3
+   },
+   "counts": {
+    "frame": 1081,
+    "hover": 5,
+    "r.ensureRealms": 620,
+    "r.modeContext": 620,
+    "r.diffGround": 620,
+    "r.baseRegion": 46,
+    "r.paintRealmLayers": 46,
+    "r.drawSeaZones": 46,
+    "r.drawStraits": 46,
+    "r.drawGround": 620,
+    "r.drawRoute": 5414,
+    "r.drawFleetRoutes": 620,
+    "r.drawAirMissions": 620,
+    "r.drawBattles": 620,
+    "r.drawArmies": 620,
+    "r.drawFleets": 620,
+    "r.drawWings": 620,
+    "r.drawSites": 620,
+    "r.drawZoneNames": 620,
+    "r.drawLabels": 620,
+    "draw": 620,
+    "minimap": 137,
+    "ui.renderRail": 9,
+    "ui.renderAttention": 9,
+    "ui.renderBanner": 9,
+    "ui.updateInsets": 9,
+    "ui": 9
+   },
+   "main": {
+    "taskMs": 925,
+    "scriptMs": 723.1,
+    "styleMs": 6.3,
+    "layoutMs": 8.7,
+    "layouts": 10.9,
+    "styles": 17.6
+   },
+   "input": [
+    {
+     "name": "keydown",
+     "delay": 6.4,
+     "proc": 0,
+     "dur": 152
+    },
+    {
+     "name": "keyup",
+     "delay": 0.2,
+     "proc": 0,
+     "dur": 144
+    },
+    {
+     "name": "mousedown",
+     "delay": 113.2,
+     "proc": 0,
+     "dur": 112
+    },
+    {
+     "name": "pointerdown",
+     "delay": 112.8,
+     "proc": 0.4,
+     "dur": 112
+    },
+    {
+     "name": "pointerup",
+     "delay": 3.9,
+     "proc": 0.1,
+     "dur": 64
+    },
+    {
+     "name": "mouseup",
+     "delay": 4,
+     "proc": 0,
+     "dur": 64
+    },
+    {
+     "name": "click",
+     "delay": 4.2,
+     "proc": 0,
+     "dur": 64
+    },
+    {
+     "name": "mousedown",
+     "delay": 14.1,
+     "proc": 0,
+     "dur": 40
+    },
+    {
+     "name": "pointerdown",
+     "delay": 14,
+     "proc": 0.1,
+     "dur": 40
+    },
+    {
+     "name": "pointerup",
+     "delay": 9.5,
+     "proc": 0.1,
+     "dur": 56
+    },
+    {
+     "name": "mouseup",
+     "delay": 9.7,
+     "proc": 0,
+     "dur": 56
+    },
+    {
+     "name": "click",
+     "delay": 9.9,
+     "proc": 0.1,
+     "dur": 56
+    },
+    {
+     "name": "mousedown",
+     "delay": 11.3,
+     "proc": 0,
+     "dur": 24
+    },
+    {
+     "name": "pointerdown",
+     "delay": 11.1,
+     "proc": 0.2,
+     "dur": 24
+    },
+    {
+     "name": "pointerup",
+     "delay": 8.5,
+     "proc": 0.1,
+     "dur": 80
+    },
+    {
+     "name": "mouseup",
+     "delay": 8.6,
+     "proc": 0,
+     "dur": 80
+    },
+    {
+     "name": "click",
+     "delay": 8.9,
+     "proc": 0,
+     "dur": 80
+    },
+    {
+     "name": "pointerdown",
+     "delay": 1.3,
+     "proc": 0.1,
+     "dur": 72
+    },
+    {
+     "name": "mousedown",
+     "delay": 1.4,
+     "proc": 0,
+     "dur": 72
+    },
+    {
+     "name": "pointerup",
+     "delay": 1.4,
+     "proc": 0.1,
+     "dur": 72
+    },
+    {
+     "name": "mouseup",
+     "delay": 1.5,
+     "proc": 0,
+     "dur": 72
+    },
+    {
+     "name": "click",
+     "delay": 1.5,
+     "proc": 0,
+     "dur": 72
+    },
+    {
+     "name": "pointerdown",
+     "delay": 4.8,
+     "proc": 0.1,
+     "dur": 88
+    },
+    {
+     "name": "mousedown",
+     "delay": 4.9,
+     "proc": 0,
+     "dur": 88
+    },
+    {
+     "name": "pointerup",
+     "delay": 5,
+     "proc": 0,
+     "dur": 88
+    },
+    {
+     "name": "mouseup",
+     "delay": 5,
+     "proc": 0,
+     "dur": 88
+    },
+    {
+     "name": "click",
+     "delay": 5,
+     "proc": 0.1,
+     "dur": 88
+    },
+    {
+     "name": "pointerdown",
+     "delay": 18.4,
+     "proc": 0.1,
+     "dur": 56
+    },
+    {
+     "name": "mousedown",
+     "delay": 18.5,
+     "proc": 0,
+     "dur": 56
+    },
+    {
+     "name": "pointerup",
+     "delay": 19.1,
+     "proc": 0,
+     "dur": 56
+    },
+    {
+     "name": "mouseup",
+     "delay": 19.1,
+     "proc": 0,
+     "dur": 56
+    },
+    {
+     "name": "click",
+     "delay": 19.1,
+     "proc": 0,
+     "dur": 56
+    },
+    {
+     "name": "pointerdown",
+     "delay": 11.5,
+     "proc": 0,
+     "dur": 56
+    },
+    {
+     "name": "mousedown",
+     "delay": 11.5,
+     "proc": 0,
+     "dur": 56
+    },
+    {
+     "name": "pointerup",
+     "delay": 12.1,
+     "proc": 0,
+     "dur": 56
+    },
+    {
+     "name": "mouseup",
+     "delay": 12.1,
+     "proc": 0,
+     "dur": 56
+    },
+    {
+     "name": "click",
+     "delay": 12.1,
+     "proc": 0.1,
+     "dur": 56
+    }
+   ],
+   "inputWorst": 152,
+   "moveAck": {
+    "n": 282,
+    "p50": 45.9,
+    "p95": 106.7,
+    "max": 198.5
+   },
+   "heapMB": [
+    39.7,
+    72.1
+   ],
+   "domNodes": [
+    3061,
+    6113
+   ]
+  }
+ ],
+ "ledgers": [],
+ "soak": [],
+ "errors": []
+}

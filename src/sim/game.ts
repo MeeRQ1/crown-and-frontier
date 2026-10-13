@@ -228,5 +228,5 @@ export function emptyTradeStats() {
 
 /** Navy and air counters of a realm's statistics (all zero). */
 export function emptyForceStats() {
-  return { shipsBuilt: 0, shipsSunk: 0, shipsLost: 0, navalBattles: 0, landings: 0, blockadeWeeks: 0, seaWeeks: 0, wingsBuilt: 0, airMissionWeeks: 0, bombingWeeks: 0 };
+  return { shipsBuilt: 0, shipsSunk: 0, shipsLost: 0, navalBattles: 0, landings: 0, blockadeWeeks: 0, seaWeeks: 0, wingsBuilt: 0, airMissionWeeks: 0, bombingWeeks: 0, supportWeeks: 0, airKills: 0, navalStrikeHits: 0, bombardWeeks: 0, raidWeeks: 0 };
 }

@@ -104,18 +104,26 @@ export interface ShipRules {
   /** fuel per month at sea: coal-fired until Oil-Fired Boilers, oil after (submarines and carriers always oil) */
   fuel: number;
   oil: boolean;
-  /** firepower against surface ships, torpedoes, anti-submarine, anti-aircraft and air strike */
+  /** firepower against surface ships, torpedoes, anti-submarine and anti-aircraft */
   gun: number;
   torpedo: number;
   antiSub: number;
   aa: number;
-  air: number;
+  /** support for a land battle on the coast it lies off (shore bombardment) */
+  bombard: number;
+  /** attack on enemy sea trade passing through its zone (raiding), and protection of our own (escort) */
+  raid: number;
+  escort: number;
   /** how much damage it takes to sink (and how big a target it is) */
   hull: number;
   /** zones per week */
   speed: number;
   /** regiments carried */
   capacity: number;
+  /** air wings it can carry and operate (carriers) */
+  deck: number;
+  /** what it is for, one line (interface) */
+  role: string;
   description: string;
 }
 
@@ -123,38 +131,44 @@ export const SHIPS: Record<ShipType, ShipRules> = {
   transport: {
     label: 'Transport', plural: 'Transports', abbr: 'Tr', requires: null,
     cost: 20, materiel: 15, resources: { iron: 2 }, weeks: 10, upkeep: 0.6, fuel: 0.1, oil: false,
-    gun: 0, torpedo: 0, antiSub: 0, aa: 0, air: 0, hull: 2, speed: 1, capacity: 2,
-    description: 'Carries two regiments across the sea. Defenceless: escort it.',
+    gun: 0, torpedo: 0, antiSub: 0, aa: 0, bombard: 0, raid: 0, escort: 0, hull: 2, speed: 1, capacity: 2, deck: 0,
+    role: 'Carries armies by sea',
+    description: 'Carries two regiments across the sea. Defenceless: escort it, and keep it out of reach of enemy submarines and aircraft.',
   },
   screen: {
     label: 'Torpedo boat', plural: 'Torpedo boats', abbr: 'Sc', requires: 'torpedo_boats',
     cost: 25, materiel: 20, resources: { iron: 3 }, weeks: 12, upkeep: 0.8, fuel: 0.15, oil: false,
-    gun: 1, torpedo: 1, antiSub: 3, aa: 0.5, air: 0, hull: 2, speed: 2, capacity: 0,
-    description: 'Screens (torpedo boats, later destroyers): hunt submarines and shield transports and carriers.',
+    gun: 1, torpedo: 1, antiSub: 3, aa: 1, bombard: 0, raid: 0, escort: 2, hull: 2, speed: 2, capacity: 0, deck: 0,
+    role: 'Escort: hunts submarines, shields convoys and carriers',
+    description: 'Screens (torpedo boats, later destroyers): hunt submarines, shield transports and carriers in battle, guard sea trade from raiders and add anti-aircraft fire.',
   },
   cruiser: {
     label: 'Cruiser', plural: 'Cruisers', abbr: 'Cr', requires: null,
     cost: 45, materiel: 40, resources: { iron: 6 }, weeks: 20, upkeep: 1.5, fuel: 0.3, oil: false,
-    gun: 3.5, torpedo: 0.5, antiSub: 1, aa: 1, air: 0, hull: 4, speed: 2, capacity: 0,
-    description: 'Fast and versatile: patrols, blockades and escorts.',
+    gun: 3.5, torpedo: 0.5, antiSub: 1, aa: 1.5, bombard: 3.5, raid: 1.5, escort: 1.5, hull: 4, speed: 2, capacity: 0, deck: 0,
+    role: 'Patrol, raiding, escort and light bombardment',
+    description: 'Fast and versatile: patrols and blockades, raids enemy trade, escorts convoys and shells coasts.',
   },
   capital: {
     label: 'Battleship', plural: 'Battleships', abbr: 'Bb', requires: null,
     cost: 90, materiel: 90, resources: { iron: 14 }, weeks: 36, upkeep: 3, fuel: 0.6, oil: false,
-    gun: 8, torpedo: 0, antiSub: 0, aa: 2, air: 0, hull: 12, speed: 1.5, capacity: 0,
-    description: 'Capital ships (ironclads, then dreadnoughts): the heaviest guns afloat, the decisive surface fight.',
+    gun: 8, torpedo: 0, antiSub: 0, aa: 2, bombard: 8, raid: 0, escort: 0.5, hull: 12, speed: 1.5, capacity: 0, deck: 0,
+    role: 'The decisive surface fight and heavy shore bombardment',
+    description: 'Capital ships (ironclads, then dreadnoughts): the heaviest guns afloat, for the decisive surface fight and for shelling a coast our armies are fighting on. A prize target for torpedoes and aircraft.',
   },
   submarine: {
     label: 'Submarine', plural: 'Submarines', abbr: 'Ss', requires: 'submarines',
     cost: 35, materiel: 30, resources: { iron: 4 }, weeks: 16, upkeep: 1, fuel: 0.15, oil: true,
-    gun: 0.3, torpedo: 4, antiSub: 0, aa: 0, air: 0, hull: 2, speed: 1.5, capacity: 0,
-    description: 'Unseen torpedoes against capital ships and transports; only screens and cruisers can hunt them. Blockades without holding the sea.',
+    gun: 0.3, torpedo: 4, antiSub: 0, aa: 0, bombard: 0, raid: 4, escort: 0, hull: 2, speed: 1.5, capacity: 0, deck: 0,
+    role: 'Raids enemy sea trade; ambushes big ships',
+    description: 'Raids enemy sea trade on the routes through its zone and torpedoes capital ships and transports. Only anti-submarine fire hurts it, and only patrols overhead let aircraft find it. Blockades at half weight.',
   },
   carrier: {
     label: 'Carrier', plural: 'Carriers', abbr: 'Cv', requires: 'naval_aviation',
     cost: 100, materiel: 100, resources: { iron: 12, rubber: 2 }, weeks: 40, upkeep: 3.5, fuel: 0.5, oil: true,
-    gun: 0.5, torpedo: 0, antiSub: 1, aa: 3, air: 7, hull: 9, speed: 1.5, capacity: 0,
-    description: 'Strikes first from the air before the guns can reach; needs screens around it.',
+    gun: 0.5, torpedo: 0, antiSub: 1, aa: 3, bombard: 0, raid: 0, escort: 0, hull: 9, speed: 1.5, capacity: 0, deck: 2,
+    role: 'Mobile air base: its aircraft fly from the fleet',
+    description: 'A mobile airfield for two air wings (three with Fleet Carriers): fighters, ground-attack or reconnaissance aircraft fly their missions from wherever the carrier lies. Without aircraft aboard it strikes nothing. Needs screens around it.',
   },
 };
 export const SHIP_TYPES = Object.keys(SHIPS) as ShipType[];
@@ -171,13 +185,19 @@ export interface WingRules {
   upkeep: number;
   /** oil per month */
   fuel: number;
-  /** air combat, ground attack and bombing value at full strength */
+  /** air combat, ground attack, bombing and anti-ship value at full strength */
   air: number;
   ground: number;
   bomb: number;
-  /** range in province hops from its base */
+  naval: number;
+  /** range in steps over land and sea from its airfield or carrier (reach.ts) */
   range: number;
-  missions: Array<'superiority' | 'support' | 'interdiction' | 'bombing' | 'recon'>;
+  missions: Array<'superiority' | 'support' | 'interdiction' | 'bombing' | 'naval' | 'recon'>;
+  /** can fly from a carrier's deck */
+  carrier: boolean;
+  /** losses it suffers when intercepted or shot at, relative to the others */
+  vulnerability: number;
+  role: string;
   description: string;
 }
 
@@ -185,26 +205,30 @@ export const WINGS: Record<WingType, WingRules> = {
   recon: {
     label: 'Reconnaissance wing', plural: 'Reconnaissance wings', abbr: 'Re', requires: 'aviation',
     cost: 20, materiel: 15, resources: { rubber: 1 }, weeks: 6, upkeep: 0.6, fuel: 0.05,
-    air: 0.5, ground: 0, bomb: 0, range: 3, missions: ['recon'],
-    description: 'Spotters over the front: better fire for our armies, and screens find submarines in nearby waters.',
+    air: 0.5, ground: 0, bomb: 0, naval: 0, range: 3, missions: ['recon'], carrier: true, vulnerability: 1,
+    role: 'Spotting and maritime patrol',
+    description: 'Spotters. Over land: our battles in the area fire 5% harder and our support and interdiction there strike 20% harder. Over the sea: our naval strikes always find their targets, and enemy submarines there lose their cover.',
   },
   fighter: {
     label: 'Fighter wing', plural: 'Fighter wings', abbr: 'Fi', requires: 'fighters',
     cost: 30, materiel: 25, resources: { rubber: 1, iron: 1 }, weeks: 8, upkeep: 1, fuel: 0.15,
-    air: 3, ground: 0.5, bomb: 0, range: 3, missions: ['superiority', 'support'],
-    description: 'Wins the sky: holds air superiority, shoots down bombers and halves enemy ground support.',
+    air: 3, ground: 0.5, bomb: 0, naval: 0, range: 3, missions: ['superiority', 'support'], carrier: true, vulnerability: 0.7,
+    role: 'Air superiority, interception and escort',
+    description: 'Wins the sky: intercepts enemy aircraft flying over its area, covers our own missions and fleets, and with superiority cuts what enemy aircraft achieve there. Weak in ground support.',
   },
   attack: {
     label: 'Ground-attack wing', plural: 'Ground-attack wings', abbr: 'At', requires: 'ground_attack',
     cost: 35, materiel: 30, resources: { rubber: 1, iron: 2 }, weeks: 10, upkeep: 1.2, fuel: 0.2,
-    air: 1, ground: 3, bomb: 0.5, range: 3, missions: ['support', 'interdiction'],
-    description: 'Close support for battles, or interdiction of enemy supply and movement.',
+    air: 1, ground: 3, bomb: 0.5, naval: 3, range: 3, missions: ['support', 'interdiction', 'naval'], carrier: true, vulnerability: 1.1,
+    role: 'Close support, interdiction and naval strike',
+    description: 'Dive and torpedo bombers: support one battle a week in its area, interdict enemy supply and movement, or strike ships at sea. Easy prey for fighters.',
   },
   bomber: {
     label: 'Bomber wing', plural: 'Bomber wings', abbr: 'Bo', requires: 'strategic_bombing',
     cost: 50, materiel: 45, resources: { rubber: 2, iron: 3 }, weeks: 14, upkeep: 1.8, fuel: 0.3,
-    air: 0.8, ground: 1, bomb: 3, range: 5, missions: ['bombing', 'interdiction'],
-    description: 'Strikes factories far behind the front; needs fighters to survive against defended skies.',
+    air: 0.8, ground: 1, bomb: 3, naval: 2, range: 5, missions: ['bombing', 'interdiction', 'naval'], carrier: false, vulnerability: 1.2,
+    role: 'Strategic and logistics bombing; long-range naval strike',
+    description: 'Long-range bombers: wreck factories, shipyards, ports and airfields far behind the front, interdict supply, or strike fleets at range. Too heavy for carriers; needs fighters to survive defended skies.',
   },
 };
 export const WING_TYPES = Object.keys(WINGS) as WingType[];
@@ -423,23 +447,36 @@ export const C = {
     landing: 0.75,
     unfuelled: 0.6,
     startFleetPorts: 3,
-    /** anti-aircraft fire halves a carrier strike at this many points */
+    /** anti-aircraft fire halves an air strike at this many points */
     aaScale: 20,
-    /** by round: guns fire at this share against a side with carrier aircraft when they have none (the strikes come before the guns close) */
+    /** by round: the guns of a fleet struck from the air this week with no air cover of its own (the enemy holds the sky over it) */
     outranged: [0.3, 0.6, 1] as number[],
+    /** shore bombardment: + share of firepower per point (cap); coastal forts hit bombarding ships for this much hull a week per level */
+    bombardPer: 0.02,
+    bombardMax: 0.25,
+    coastalGuns: 3,
+    /** air and naval fire support of a side together never exceeds this */
+    supportCap: 0.5,
+    /** raiding: share of sea trade lost per raid point in a zone on the route, after escorts (zone and route caps) */
+    raidRate: 0.06,
+    raidZoneMax: 0.4,
+    raidRouteMax: 0.75,
   },
 
   air: {
-    /** strength lost per week against enemy air power (scaled by the air balance) */
+    /** strength lost per week when intercepted: × enemy fighter power ÷ (theirs + our cover + 0.5) × vulnerability */
     combatLoss: 10,
     /** superiority: our air power at least this multiple of theirs */
     superiority: 1.5,
-    /** ground support: + share of firepower per point of support (cap) */
+    /** what missions achieve in skies the enemy holds, and in contested skies */
+    contested: 0.4,
+    disputed: 0.75,
+    /** ground support: + share of firepower per point of ground value (cap); one battle per wing a week */
     supportPer: 0.12,
     supportMax: 0.4,
-    /** enemy superiority cuts our support and interdiction to this share */
-    contested: 0.4,
+    /** reconnaissance over a battle, and its boost to support and interdiction in its area */
     recon: 0.05,
+    reconBoost: 0.2,
     interdictSupply: 0.15,
     interdictSupplyMax: 0.4,
     interdictMove: 0.1,
@@ -447,11 +484,30 @@ export const C = {
     /** industry lost in a bombed province per point of bombing (cap) */
     bombIndustry: 0.25,
     bombIndustryMax: 0.6,
-    /** anti-aircraft fire of forts: strength lost per week per fort level */
+    /** a port under this much bombing builds no ships and repairs at half rate; wings at a bombed airfield lose readiness per point */
+    bombPort: 1,
+    bombAirfield: 12,
+    /** anti-aircraft fire of forts: strength lost per week per fort level (bombing and interdiction) */
     flak: 2,
+    /** ground fire over a supported battle: strength lost per week */
+    groundFire: 1.5,
+    /** naval strike: hull damage per point (× 32 ÷ hull, like gunfire); chance to find ships without a patrol overhead */
+    navalStrike: 4,
+    detect: 0.6,
+    /** strike wings lose this much strength per point of the target's anti-aircraft fire (cap) */
+    aaLoss: 0.5,
+    aaLossMax: 20,
+    /** readiness: worn by each week flown, restored by rest (×(1 − readiness)); missions need this much */
+    wear: 10,
+    recover: 25,
+    minReady: 25,
+    /** readiness lost by rebasing */
+    rebase: 30,
     replenish: 8,
     replenishMateriel: 0.3,
     wingsPerAirfield: 2,
+    /** a carrier below this hull condition cannot operate aircraft */
+    deckHull: 40,
   },
 
   siege: {
@@ -646,4 +702,4 @@ export const C = {
  * guarantees, influence, loans and trade blocs. Older saves are migrated
  * (src/sim/migrate.ts).
  */
-export const SCHEMA_VERSION = 5;
+export const SCHEMA_VERSION = 6;

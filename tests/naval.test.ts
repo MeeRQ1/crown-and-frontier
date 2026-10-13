@@ -13,7 +13,7 @@ import { provinceCrowns } from '../src/sim/economy';
 import { armiesIn, nextMemoEpoch } from '../src/sim/index';
 import { checkInvariants } from '../src/sim/invariants';
 import { findPath } from '../src/sim/movement';
-import { blockadeShare, createFleet, newShip, provinceBlockaded, straitBlocked, touchFleets, tradeOpen, weeklyNaval } from '../src/sim/naval';
+import { blockadeShare, createFleet, newShip, provinceBlockaded, straitBlocked, touchFleets, raidLoss, tradeOpen, weeklyNaval } from '../src/sim/naval';
 import { readSave, serialize } from '../src/sim/save';
 import { bump, type Sim } from '../src/sim/state';
 import { runTicks, step } from '../src/sim/tick';
@@ -211,7 +211,11 @@ describe('sea control', () => {
     fleet(sim, 'b', 'zm', ['cruiser', 'cruiser']);
     fresh(sim);
     expect(blockadeShare(sim, 'a')).toBe(1);
-    expect(tradeOpen(sim, 'a', 'c')).toBeCloseTo(1 - 0.7, 9);
+    // the blockade holds back 70% of a's sea trade; the same cruisers lie on the route to c and raid the rest
+    const raid = raidLoss(sim, 'a', 'c');
+    expect(raid.share).toBeGreaterThan(0);
+    expect(raid.zones).toEqual(['zw', 'zm']);
+    expect(tradeOpen(sim, 'a', 'c')).toBeCloseTo((1 - 0.7) * (1 - raid.share), 9);
     // c reaches a only by sea; a land neighbour (were they at peace) would trade overland
     expect(tradeOpen(sim, 'a', 'b')).toBe(1);
   });

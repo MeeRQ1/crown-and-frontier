@@ -1,30 +1,39 @@
 // The navy: ports and shipyards, fleets moving between sea zones, naval
-// battles, sea control (straits and blockades), and armies carried by sea.
+// battles, sea control (straits, blockades and raiding), shore bombardment and
+// armies carried by sea.
 //
-// Weekly, before armies move (tick.ts): shipyards deliver ships; fleets move
-// one zone per movement point (a fleet entering a zone held by enemy warships
-// stops there); hostile fleets sharing a zone fight up to three rounds; carried
-// armies land on their target coast; fleets near a friendly port repair, and
-// fleets far from every friendly port wear down.
+// Weekly, before armies move (tick.ts): fleets move one zone per movement point
+// (a fleet entering a zone held by enemy warships stops there); aircraft fly
+// their sea missions (air.ts seaAir: air cover, patrols, naval strikes); hostile
+// fleets sharing a zone fight up to three rounds; carried armies land on their
+// target coast; fleets near a friendly port repair, and fleets far from every
+// friendly port wear down. Shipyards deliver ships later in the week.
 //
 // Battle round: both sides fire at once. Guns hit surface ships (transports and
 // carriers behind enough screens and cruisers are hard to hit), submarine
-// torpedoes go for the big ships, anti-submarine fire is the only thing that
-// hurts submarines, and carriers strike from the air (anti-aircraft fire blunts
-// them). A side without carrier aircraft facing a side with them is out-ranged:
-// its guns fire at 30% in the first round and 60% in the second. Damage is fire × 32 × roll ÷ the target's hull, spread over targets by
-// size. A side falling below half its starting fighting value withdraws
-// towards its home port.
+// torpedoes go for the big ships, and anti-submarine fire is the only thing that
+// hurts submarines (half as much again under a reconnaissance patrol of ours).
+// Aircraft take no part in the surface battle: carriers' wings strike in the air
+// phase before it, from wherever they reach; a side struck that week with no air
+// cover of its own is out-ranged (its guns fire at 30%, then 60%, then in full).
+// Damage is fire × 32 × roll ÷ the
+// target's hull, spread over targets by size. A side falling below half its
+// starting fighting value withdraws towards its home port.
 //
 // Sea control: a realm's crossing of a strait is closed while enemy surface
 // warships in the commanding zone outgun its own there. A coastal province is
 // blockaded when every zone on its coast holds enemy warships (submarines count
 // half) at least twice our surface power there: it loses a quarter of its
-// crowns, and the realm's sea trade shrinks with the blockaded share of its
-// coast.
+// crowns, its shipyard stops, and the realm's sea trade shrinks with the
+// blockaded share of its coast. Raiders (submarines, cruisers) in any zone on the
+// sea route between two trading realms take a share of what passes, less what
+// escorts there (screens, cruisers) stop. Gun ships lying still off a coast where
+// our armies fight shell the enemy (combat.ts reads bombardPlan); coastal forts
+// fire back.
 
+import { mergeAir, outrangedThisWeek, portBombed, relocateAir, reportFleet, seaAir, splitAir, subsExposed, wingsAboard } from './air';
 import { C, SHIPS, SHIP_TYPES } from './config';
-import { memoGeo, touchArmies } from './index';
+import { memoGeo, memoize, touchArmies } from './index';
 import { armyCap } from './influence';
 import { nationMods } from './modifiers';
 import { range } from './rng';
@@ -139,13 +148,13 @@ export function cargoRegiments(sim: Sim, f: Fleet): number {
   return n;
 }
 
-/** Surface fighting power (guns, torpedoes, air) of a fleet's warships. */
+/** Surface fighting power (guns and torpedoes) of a fleet's warships; a carrier's guns are light, its strength is its aircraft. */
 export function surfacePower(f: Fleet): number {
   let p = 0;
   for (const s of f.ships) {
     if (s.type === 'submarine' || s.type === 'transport') continue;
     const r = SHIPS[s.type];
-    p += (r.gun + r.torpedo + r.air) * (s.hp / 100);
+    p += (r.gun + r.torpedo) * (s.hp / 100);
   }
   return p;
 }
@@ -161,7 +170,7 @@ export function fleetValue(f: Fleet): number {
   let v = 0;
   for (const s of f.ships) {
     const r = SHIPS[s.type];
-    v += (r.gun + r.torpedo + 0.5 * r.antiSub + r.air + 0.1) * Math.sqrt(r.hull) * (s.hp / 100);
+    v += (r.gun + r.torpedo + 0.5 * r.antiSub + r.aa * 0.5 + 0.1) * Math.sqrt(r.hull) * (s.hp / 100);
   }
   return v;
 }
@@ -198,9 +207,14 @@ export function createFleet(sim: Sim, nid: NationId, zone: ZoneId, ships: Ship[]
   return f;
 }
 
-/** Removes a fleet; any armies aboard are lost with it. */
+/** Removes a fleet; any armies aboard are lost with it, and its air group flies ashore if it can. */
 export function removeFleet(sim: Sim, f: Fleet, drownCargo = true): void {
   const st = sim.state;
+  if (wingsAboard(sim, f.id).length) {
+    const zone = f.zone;
+    f.ships = [];
+    relocateAir(sim, f.id, zone);
+  }
   if (drownCargo) {
     for (const id of f.cargo) {
       const a = st.armies[id];
@@ -323,6 +337,7 @@ export function weeklyShipyards(sim: Sim): void {
         continue;
       }
       if (p.controller !== o.nation) continue; // work stops under occupation
+      if (portBombed(sim, pid) || provinceBlockaded(sim, pid)) continue; // and under the bombs, or a blockade
       o.weeksLeft--;
       if (o.weeksLeft > 0) continue;
       p.dock.splice(i, 1);
@@ -438,12 +453,93 @@ export function blockadeShare(sim: Sim, nid: NationId): number {
   });
 }
 
-/** How much of a trade agreement's flow still gets through (land neighbours trade overland). */
+/** How much of a trade agreement's flow still gets through (land neighbours trade overland): blockades of either coast, then raiders on the route. */
 export function tradeOpen(sim: Sim, a: NationId, b: NationId): number {
   if (borders(sim, a, b)) return 1;
   const ra = Math.max(0, 1 + nationMods(sim, a).blockadeResist);
   const rb = Math.max(0, 1 + nationMods(sim, b).blockadeResist);
-  return Math.max(0, 1 - blockadeShare(sim, a) * Math.min(1, ra * 0.7)) * Math.max(0, 1 - blockadeShare(sim, b) * Math.min(1, rb * 0.7));
+  const blockade = Math.max(0, 1 - blockadeShare(sim, a) * Math.min(1, ra * 0.7)) * Math.max(0, 1 - blockadeShare(sim, b) * Math.min(1, rb * 0.7));
+  return blockade * (1 - raidLoss(sim, a, b).share);
+}
+
+// ───────────────────────────── Raiding ──────────────────────────────────────
+
+/** The port a realm's sea trade leaves from: its capital if it is a port, else its biggest port (null: none). */
+export function tradePort(sim: Sim, nid: NationId): ProvinceId | null {
+  const st = sim.state;
+  const cap = st.nations[nid]?.capital;
+  if (cap && st.provinces[cap].port > 0 && st.provinces[cap].owner === nid && st.provinces[cap].controller === nid) return cap;
+  const ports = portsOf(sim, nid);
+  return ports.length ? [...ports].sort((x, y) => st.provinces[y].port - st.provinces[x].port || st.provinces[y].dev - st.provinces[x].dev || (x < y ? -1 : 1))[0] : null;
+}
+
+const routeCache = new WeakMap<object, Map<string, ZoneId[] | null>>();
+
+/** The sea route trade takes between two realms (zones from one trade port's water to the other's, both ends included). */
+export function tradeRoute(sim: Sim, a: NationId, b: NationId): ZoneId[] | null {
+  const pa = tradePort(sim, a);
+  const pb = tradePort(sim, b);
+  const za = pa ? portZone(sim, pa) : null;
+  const zb = pb ? portZone(sim, pb) : null;
+  if (!za || !zb) return null;
+  let per = routeCache.get(sim.world);
+  if (!per) routeCache.set(sim.world, (per = new Map()));
+  const k = za < zb ? `${za}|${zb}` : `${zb}|${za}`;
+  if (!per.has(k)) {
+    const path = zonePath(sim, za, zb);
+    per.set(k, path ? [za, ...path] : null);
+  }
+  return per.get(k)!;
+}
+
+/** Raiding and escort power in a zone against trade of realm `nid` (raiders: at war with it; escorts: its friends'). */
+export function raidBalance(sim: Sim, zone: ZoneId, nid: NationId): { raid: number; escort: number; raiders: NationId[] } {
+  return memoGeo(sim, 'raidBalance', `${zone}|${nid}|${fleetEpoch(sim)}`, () => {
+    let raid = 0;
+    let escort = 0;
+    const raiders: NationId[] = [];
+    for (const f of fleetsIn(sim, zone)) {
+      if (atWar(sim, nid, f.nation)) {
+        let r = 0;
+        for (const s of f.ships) r += SHIPS[s.type].raid * (s.hp / 100);
+        if (r > 0) {
+          raid += r;
+          if (!raiders.includes(f.nation)) raiders.push(f.nation);
+        }
+      } else if (isFriendly(sim, nid, f.nation)) {
+        const m = nationMods(sim, f.nation);
+        for (const s of f.ships) escort += SHIPS[s.type].escort * (s.hp / 100) * Math.max(0.2, 1 + m.antiSub * 0.5);
+      }
+    }
+    return { raid, escort, raiders };
+  });
+}
+
+/** Share of a zone's passing trade that raiders take from realm `nid`'s side (escorts there turn them away). */
+export function zoneRaid(sim: Sim, zone: ZoneId, nid: NationId): number {
+  const b = raidBalance(sim, zone, nid);
+  if (b.raid <= 0) return 0;
+  const through = b.raid * (b.raid / (b.raid + 1.5 * b.escort));
+  return Math.min(C.naval.raidZoneMax, C.naval.raidRate * through);
+}
+
+/** What raiders on the route take of the trade between two realms (0–0.75), and where. */
+export function raidLoss(sim: Sim, a: NationId, b: NationId): { share: number; zones: ZoneId[] } {
+  return memoGeo(sim, 'raidLoss', `${a < b ? a : b}|${a < b ? b : a}|${fleetEpoch(sim)}`, () => {
+    const route = tradeRoute(sim, a, b);
+    if (!route) return { share: 0, zones: [] };
+    let keep = 1;
+    const zones: ZoneId[] = [];
+    for (const z of route) {
+      // raiders at war with either partner prey on the convoy; the convoy's escorts are both partners' friends
+      const r = Math.max(zoneRaid(sim, z, a), zoneRaid(sim, z, b));
+      if (r <= 0) continue;
+      keep *= 1 - r;
+      zones.push(z);
+    }
+    const resist = Math.min(0.9, Math.max(nationMods(sim, a).blockadeResist, nationMods(sim, b).blockadeResist, 0));
+    return { share: Math.min(C.naval.raidRouteMax, (1 - keep) * (1 - resist)), zones };
+  });
 }
 
 // ───────────────────────────── Carrying armies ──────────────────────────────
@@ -569,12 +665,10 @@ interface ShipFire {
   gun: number;
   torpedo: number;
   antiSub: number;
-  air: number;
-  aa: number;
 }
 
-function sideFire(sim: Sim, fleets: Fleet[], round: number): ShipFire {
-  const out: ShipFire = { gun: 0, torpedo: 0, antiSub: 0, air: 0, aa: 0 };
+function sideFire(sim: Sim, fleets: Fleet[]): ShipFire {
+  const out: ShipFire = { gun: 0, torpedo: 0, antiSub: 0 };
   for (const f of fleets) {
     const m = nationMods(sim, f.nation);
     for (const s of f.ships) {
@@ -584,8 +678,6 @@ function sideFire(sim: Sim, fleets: Fleet[], round: number): ShipFire {
       out.gun += r.gun * q * Math.max(0.2, 1 + m.navalAttack + (s.type === 'capital' ? m.capitalAttack : 0));
       out.torpedo += r.torpedo * q * Math.max(0.2, 1 + m.navalAttack);
       out.antiSub += r.antiSub * q * Math.max(0.2, 1 + m.antiSub);
-      out.air += r.air * q * Math.max(0.2, 1 + m.carrierAir) * (round <= 1 ? 1.5 : 1);
-      out.aa += r.aa * q;
     }
   }
   return out;
@@ -603,25 +695,20 @@ function spread(targets: Array<{ s: Ship; w: number }>, power: number, roll: num
   }
 }
 
-function fireAt(sim: Sim, att: Fleet[], def: Fleet[], round: number, roll: number, hits: Map<Ship, number>): void {
-  const fire = sideFire(sim, att, round);
-  const defFire = sideFire(sim, def, round);
-  // carriers' aircraft strike before the guns close (submarines' torpedoes come unseen)
-  if (defFire.air > 0 && fire.air <= 0) fire.gun *= C.naval.outranged[Math.min(round, C.naval.outranged.length) - 1];
+function fireAt(sim: Sim, zone: ZoneId, att: Fleet[], def: Fleet[], round: number, roll: number, hits: Map<Ship, number>): void {
+  const fire = sideFire(sim, att);
+  // a side bombed this week with no air cover of its own is out-ranged: its guns find the range only late
+  if (att.length && att.every((f) => outrangedThisWeek(sim, f.id))) fire.gun *= C.naval.outranged[Math.min(round, C.naval.outranged.length) - 1];
+  // a reconnaissance patrol overhead shows the hunters where the submarines are
+  if (att.length && subsExposed(sim, zone, att[0].nation)) fire.antiSub *= 1.5;
   const live = def.flatMap((f) => f.ships.filter((s) => s.hp > 0));
   const escorts = live.filter((s) => s.type === 'screen' || s.type === 'cruiser').length;
   const valuables = live.filter((s) => s.type === 'transport' || s.type === 'carrier').length;
   const screened = escorts > 0 && escorts >= valuables;
   const surface = live.filter((s) => s.type !== 'submarine').map((s) => ({ s, w: Math.sqrt(SHIPS[s.type].hull) * (screened && (s.type === 'transport' || s.type === 'carrier') ? C.naval.screened : 1) }));
   const subs = live.filter((s) => s.type === 'submarine').map((s) => ({ s, w: 1 }));
-  // guns on the surface; carriers' aircraft first (blunted by anti-aircraft fire)
+  // guns on the surface (aircraft strike in the air phase before the battle, not here)
   spread(surface, fire.gun, roll, hits);
-  spread(
-    surface.map((t) => ({ s: t.s, w: t.w * (t.s.type === 'capital' || t.s.type === 'carrier' ? 2 : 1) })),
-    (fire.air * C.naval.aaScale) / (C.naval.aaScale + defFire.aa),
-    roll,
-    hits,
-  );
   // torpedoes go for the big ships; submarines are hit only by anti-submarine fire
   spread(
     surface.map((t) => ({ s: t.s, w: t.w * (t.s.type === 'capital' || t.s.type === 'carrier' || t.s.type === 'transport' ? 3 : 1) })),
@@ -638,6 +725,43 @@ function sideValue(fleets: Fleet[]): number {
   return v;
 }
 
+/** Regiments aboard that no longer fit in the transports afloat are lost, last aboard first. */
+export function drownExcess(sim: Sim, f: Fleet): void {
+  const st = sim.state;
+  if (!f.cargo.length) return;
+  let excess = cargoRegiments(sim, f) - fleetCapacity(f);
+  for (let i = f.cargo.length - 1; i >= 0 && excess > 0; i--) {
+    const a = st.armies[f.cargo[i]];
+    if (!a) continue;
+    while (excess > 0 && a.regiments.length) {
+      const reg = a.regiments.pop()!;
+      st.nations[a.nation].stats.menLost += reg.men;
+      excess--;
+    }
+    if (!a.regiments.length) {
+      delete st.armies[a.id];
+      f.cargo.splice(i, 1);
+      touchArmies(sim);
+    }
+  }
+}
+
+/** Fleets struck from the air: ships sunk are removed (troops aboard drown, air groups relocate), empty fleets go. */
+function sinkStruck(sim: Sim, fleets: Fleet[]): void {
+  for (const f of fleets) {
+    if (!sim.state.fleets[f.id]) continue;
+    const before = f.ships.length;
+    f.ships = f.ships.filter((s) => s.hp > 0.5);
+    const lost = before - f.ships.length;
+    if (!lost) continue;
+    sim.state.nations[f.nation].stats.shipsLost += lost;
+    drownExcess(sim, f);
+    if (!f.ships.length) removeFleet(sim, f);
+    else relocateAir(sim, f.id);
+  }
+  if (fleets.length) touchFleets(sim);
+}
+
 /** Fights one naval battle in a zone; returns the side that withdrew (or null). */
 function navalBattle(sim: Sim, zone: ZoneId, A: Fleet[], B: Fleet[]): void {
   const st = sim.state;
@@ -652,8 +776,8 @@ function navalBattle(sim: Sim, zone: ZoneId, A: Fleet[], B: Fleet[]): void {
     const rollA = range(st.rng, C.combat.rollMin, C.combat.rollMax);
     const rollB = range(st.rng, C.combat.rollMin, C.combat.rollMax);
     const hits = new Map<Ship, number>();
-    fireAt(sim, A, B, r, rollA, hits);
-    fireAt(sim, B, A, r, rollB, hits);
+    fireAt(sim, zone, A, B, r, rollA, hits);
+    fireAt(sim, zone, B, A, r, rollB, hits);
     for (const [s, d] of hits) s.hp = Math.max(0, s.hp - d);
     for (const f of [...A, ...B]) f.ships = f.ships.filter((s) => s.hp > 0.5);
     const va = sideValue(A);
@@ -663,25 +787,10 @@ function navalBattle(sim: Sim, zone: ZoneId, A: Fleet[], B: Fleet[]): void {
       break;
     }
   }
-  // regiments aboard sunk transports go down with them: whatever no longer fits
-  // in the transports still afloat is lost, last aboard first
+  // regiments aboard sunk transports go down with them; carriers sunk take their air groups' decks
   for (const f of [...A, ...B]) {
-    if (!f.cargo.length) continue;
-    let excess = cargoRegiments(sim, f) - fleetCapacity(f);
-    for (let i = f.cargo.length - 1; i >= 0 && excess > 0; i--) {
-      const a = st.armies[f.cargo[i]];
-      if (!a) continue;
-      while (excess > 0 && a.regiments.length) {
-        const reg = a.regiments.pop()!;
-        st.nations[a.nation].stats.menLost += reg.men;
-        excess--;
-      }
-      if (!a.regiments.length) {
-        delete st.armies[a.id];
-        f.cargo.splice(i, 1);
-        touchArmies(sim);
-      }
-    }
+    drownExcess(sim, f);
+    if (f.ships.length) relocateAir(sim, f.id);
   }
   const after = new Map<NationId, number>();
   for (const f of [...A, ...B]) after.set(f.nation, (after.get(f.nation) ?? 0) + f.ships.length);
@@ -778,7 +887,10 @@ function landArmies(sim: Sim): void {
     if (f.path.length || !(sim.world.provZones[f.landing] ?? []).includes(f.zone)) continue;
     // contested water: no landing while enemy warships hold the zone
     const z = zoneBalance(sim, f.zone, f.nation);
-    if (z.hostileSurface > z.friendSurface) continue;
+    if (z.hostileSurface > z.friendSurface) {
+      reportFleet(sim, f, `Waiting off ${provName(sim, f.landing)}: enemy warships outgun ours in ${zoneName(sim, f.zone)}, so the troops cannot land. Bring warships to win these waters.`);
+      continue;
+    }
     const p = st.provinces[f.landing];
     const open = p.controller === f.nation || isFriendly(sim, f.nation, p.controller) || (p.controller && atWar(sim, f.nation, p.controller)) || (!p.owner && !p.controller);
     if (!open) {
@@ -807,7 +919,9 @@ function repairAndWear(sim: Sim): void {
     }
     const contested = zoneBalance(sim, f.zone, f.nation).hostileSurface > 0;
     if (port > 0 && !contested) {
-      const gain = C.naval.repair * port * Math.max(0.2, 1 + nationMods(sim, f.nation).repair);
+      // a port under the bombs repairs at half rate
+      const bombed = coast.some((pid) => sim.state.provinces[pid].port > 0 && portBombed(sim, pid));
+      const gain = C.naval.repair * port * Math.max(0.2, 1 + nationMods(sim, f.nation).repair) * (bombed ? 0.5 : 1);
       for (const s of f.ships) s.hp = Math.min(100, s.hp + gain);
       continue;
     }
@@ -823,6 +937,7 @@ function blockadeStats(sim: Sim): void {
     const n = sim.state.nations[nid];
     if (!n.alive) continue;
     if (fleetsOf(sim, nid).some((f) => f.ships.some((s) => s.type !== 'transport') && f.home && portZone(sim, f.home) !== f.zone)) n.stats.seaWeeks++;
+    if (fleetsOf(sim, nid).some((f) => f.ships.some((s) => SHIPS[s.type].raid > 0) && raidingHere(sim, f).length)) n.stats.raidWeeks++;
     // count weeks this realm blockades someone else's coast
     for (const f of fleetsOf(sim, nid)) {
       const coast = sim.world.zones[f.zone]?.coasts ?? [];
@@ -838,10 +953,100 @@ function blockadeStats(sim: Sim): void {
 export function weeklyNaval(sim: Sim): void {
   if (!sim.world.zoneIds.length) return;
   moveFleets(sim);
+  // aircraft strike and cover at sea before the guns close
+  sinkStruck(sim, seaAir(sim));
   fightBattles(sim);
   landArmies(sim);
   repairAndWear(sim);
   blockadeStats(sim);
+}
+
+/** Enemy trade routes a fleet's raiders lie across this week: the realms whose trade passes its zone. */
+export function raidingHere(sim: Sim, f: Fleet): NationId[] {
+  return memoize(sim, 'raidingHere', `${f.id}|${f.zone}|${fleetEpoch(sim)}`, () => {
+    const st = sim.state;
+    const out = new Set<NationId>();
+    for (const c of st.contracts) {
+      if (!atWar(sim, f.nation, c.seller) && !atWar(sim, f.nation, c.buyer)) continue;
+      if (c.lag <= 0) continue;
+      if (tradeRoute(sim, c.seller, c.buyer)?.includes(f.zone)) {
+        if (atWar(sim, f.nation, c.seller)) out.add(c.seller);
+        if (atWar(sim, f.nation, c.buyer)) out.add(c.buyer);
+      }
+    }
+    return [...out].sort();
+  });
+}
+
+// ───────────────────────────── Shore bombardment ────────────────────────────
+
+/** Gun power a fleet can bring to bear on a coast (battleships and cruisers, by condition). */
+export function bombardPower(sim: Sim, f: Fleet): number {
+  let p = 0;
+  const m = nationMods(sim, f.nation);
+  for (const s of f.ships) p += SHIPS[s.type].bombard * (s.hp / 100) * (fuelled(sim, f.nation, s.type) ? 1 : C.naval.unfuelled);
+  return p * Math.max(0.2, 1 + m.navalAttack);
+}
+
+/**
+ * This week's shore bombardment, by battle and side: every fleet with gun ships
+ * lying still in a zone on the coast of a land battle its realm (or a friend)
+ * fights shells that battle: one battle a fleet a week (the largest it can reach).
+ * Inland provinces are out of reach: the battle province must be on the fleet's zone.
+ */
+export function bombardPlan(sim: Sim): Map<string, { att: Array<{ fleet: Fleet; power: number }>; def: Array<{ fleet: Fleet; power: number }> }> {
+  return memoize(sim, 'bombardPlan', `${fleetEpoch(sim)}`, () => {
+    const st = sim.state;
+    const out = new Map<string, { att: Array<{ fleet: Fleet; power: number }>; def: Array<{ fleet: Fleet; power: number }> }>();
+    const battles = Object.keys(st.battles).sort().map((id) => st.battles[id]);
+    if (!battles.length) return out;
+    for (const id of Object.keys(st.fleets).sort()) {
+      const f = st.fleets[id];
+      if (f.path.length || f.cargo.length) continue;
+      const power = bombardPower(sim, f);
+      if (power <= 0) continue;
+      const coast = sim.world.zones[f.zone]?.coasts ?? [];
+      let best: { b: typeof battles[number]; side: 'att' | 'def'; men: number } | null = null;
+      for (const b of battles) {
+        if (!coast.includes(b.province)) continue;
+        const ours = (list: NationId[]) => list.some((n) => n === f.nation || (isFriendly(sim, f.nation, n) && !atWar(sim, f.nation, n)));
+        const theirs = (list: NationId[]) => list.some((n) => atWar(sim, f.nation, n));
+        const side = ours(b.attackerNations) && theirs(b.defenderNations) ? 'att' : ours(b.defenderNations) && theirs(b.attackerNations) ? 'def' : null;
+        if (!side) continue;
+        let men = 0;
+        for (const aid of [...b.attackers, ...b.defenders]) for (const r of st.armies[aid]?.regiments ?? []) men += r.men;
+        if (!best || men > best.men) best = { b, side, men };
+      }
+      if (!best) continue;
+      const slot = out.get(best.b.id) ?? out.set(best.b.id, { att: [], def: [] }).get(best.b.id)!;
+      slot[best.side].push({ fleet: f, power });
+    }
+    return out;
+  });
+}
+
+/** Coastal forts fire back at the ships that shelled their province this week. */
+export function bombardFireBack(sim: Sim): void {
+  const st = sim.state;
+  for (const [bid, sides] of bombardPlan(sim)) {
+    const b = st.battles[bid];
+    const pid = b?.province ?? null;
+    for (const side of ['att', 'def'] as const) {
+      for (const { fleet: f } of sides[side]) {
+        if (!st.fleets[f.id]) continue;
+        st.nations[f.nation].stats.bombardWeeks++;
+        const where = pid ? provName(sim, pid) : 'the coast';
+        const p = pid ? st.provinces[pid] : null;
+        const fort = p && p.controller && atWar(sim, f.nation, p.controller) ? p.fort : 0;
+        if (fort > 0) {
+          const guns = f.ships.filter((s) => SHIPS[s.type].bombard > 0);
+          const dmg = (C.naval.coastalGuns * fort) / Math.max(1, guns.length);
+          for (const s of guns) s.hp = Math.max(1, s.hp - dmg);
+          reportFleet(sim, f, `Shelled the enemy at ${where}; the coastal forts (level ${fort}) hit back for ${Math.round(C.naval.coastalGuns * fort)} hull damage.`);
+        } else reportFleet(sim, f, `Shelled the enemy at ${where} in support of our troops.`);
+      }
+    }
+  }
 }
 
 // ───────────────────────────── Upkeep and fuel ──────────────────────────────
@@ -925,6 +1130,7 @@ export function mergeFleets(sim: Sim, ids: FleetId[]): Fleet {
       if (a) a.embarked = into.id;
     }
     if (!into.landing && f.landing) into.landing = f.landing;
+    mergeAir(sim, into, f.id);
     delete sim.state.fleets[f.id];
   }
   touchFleets(sim);
@@ -951,12 +1157,16 @@ export function splitFleet(sim: Sim, fleetId: FleetId, shipIds: string[]): Fleet
   const f = sim.state.fleets[fleetId];
   const moving = f.ships.filter((s) => shipIds.includes(s.id));
   f.ships = f.ships.filter((s) => !shipIds.includes(s.id));
-  return createFleet(sim, f.nation, f.zone, moving, f.home);
+  const g = createFleet(sim, f.nation, f.zone, moving, f.home);
+  // the air group goes where the carriers go
+  splitAir(sim, f, g);
+  return g;
 }
 
 export function disbandFleetProblem(sim: Sim, nid: NationId, fleetId: FleetId): string | null {
   const p = fleetOrderProblem(sim, nid, fleetId);
   if (p) return p;
   if (sim.state.fleets[fleetId].cargo.length) return 'Land the troops aboard first.';
+  if (wingsAboard(sim, fleetId).length) return 'Fly the air wings aboard to an airfield first.';
   return null;
 }

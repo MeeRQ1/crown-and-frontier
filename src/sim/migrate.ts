@@ -11,6 +11,8 @@
 //      influence, loans and trade blocs
 //   5  trade contracts and goods under way replace the automatic exchange of
 //      surplus between trade partners
+//   6  air wings gain readiness, carrier basing, sea targets and a weekly
+//      report; fleets and battles keep last week's support and report
 
 import { checkMapObject } from '../maps/validate';
 import { mapChecksum, type MapPackage } from '../maps/format';
@@ -168,6 +170,27 @@ const STEPS: Record<number, Step> = {
     st.pendingContracts = true;
     st.schema = 5;
     save.schema = 5;
+  },
+  // 5 → 6: aircraft gain readiness, carrier basing, sea targets and a weekly report
+  5: (save, notices) => {
+    const st = save.state as Record<string, any>;
+    let wings = 0;
+    for (const w of Object.values<any>(st.wings ?? {})) {
+      w.carrier = null;
+      w.readiness = 100;
+      w.zone = null;
+      w.report = null;
+      wings++;
+    }
+    for (const n of Object.values<any>(st.nations ?? {})) n.stats = { ...emptyForceStats(), ...n.stats };
+    st.schema = 6;
+    save.schema = 6;
+    const carriers = Object.values<any>(st.fleets ?? {}).reduce((k, f) => k + (f.ships ?? []).filter((x: any) => x.type === 'carrier').length, 0);
+    notices.push(
+      `This save was made before the naval and air update (save format 5) and was converted to format 6. ` +
+        `Its ${wings} air wing${wings === 1 ? '' : 's'} keep their missions and start fully ready${carriers ? `; its ${carriers} carrier${carriers === 1 ? '' : 's'} start with empty decks (fly fighter, ground-attack or reconnaissance wings aboard from an airfield within reach)` : ''}. ` +
+        `Ground support now joins one battle a week per wing, and wars may be declared on realms we do not border.`,
+    );
   },
 };
 
