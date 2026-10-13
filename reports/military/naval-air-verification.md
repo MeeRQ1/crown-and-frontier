@@ -156,7 +156,11 @@ The naval and air checks:
 - **Albania.** It may declare war on the Ottoman Empire; Diplomacy shows the reach by sea,
   the confirmation repeats it, and the war begins.
 
-The full run's results are in [`reports/web-verification.md`](../web-verification.md).
+The full run passed 96 of 97 checks ([`reports/web-verification.md`](../web-verification.md)).
+The one failure is the general performance probe: map draw averaged 18.2 ms at the fastest
+speed against a 16 ms limit. It is marginal on this machine for `main` as well. The same
+probe, alternating builds three times, measured 16.5, 27.6 and 30.5 ms on `main`, and 22.4,
+20.7 and 16.9 ms on this branch.
 
 ## Not verified
 

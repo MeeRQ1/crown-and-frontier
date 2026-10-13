@@ -43,7 +43,7 @@ overruling treaties and truces:
 | Kind | Result |
 |---|---|
 | Unit and scenario tests | 279 passing (23 files), 29 of them the naval and air scenarios |
-| Browser check | `npm run verify:web`, headless Chromium 141: see [reports/web-verification.md](reports/web-verification.md) |
+| Browser check | `npm run verify:web`, headless Chromium 141: 96 of 97 at the site root, the project subpath, the unpacked release ZIP and in an iframe ([reports/web-verification.md](reports/web-verification.md)). The one failure is the performance probe (map draw 18.2 ms on average against a 16 ms limit), which `main` also fails on this machine |
 | AI campaigns | World 1936 and Europe 1936, six years each from seed 2 ([reports/military/](reports/military/)) |
 | Screenshots | 15 in [docs/screenshots/naval-air/](docs/screenshots/naval-air/) |
 | External players | **None.** No one but me has played this update. |
