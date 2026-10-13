@@ -1,11 +1,13 @@
 // Combat matrices: equal-cost compositions against each other, through the
 // real combat code. Land: six army compositions attack and defend on every
 // terrain (forecast with even rolls). Sea: five fleet compositions meet in a
-// zone (one week of battle). A composition that wins every pairing everywhere
+// zone for a week; the carrier group also strikes each of the others from two
+// zones away (stand-off), where only aircraft reach. A composition that wins every pairing everywhere
 // would be a dominant strategy; the stage check is that none does.
 //   npx tsx tools/matrix.ts [--out reports/stage-c/combat-matrix.md]
 
-import { SHIPS, UNITS } from '../src/sim/config';
+import { SHIPS, UNITS, WINGS } from '../src/sim/config';
+import { createWing, touchWings, wingsAboard } from '../src/sim/air';
 import { startingTechs, TECH_LIST } from '../src/sim/data/techs';
 import { forecastBattle } from '../src/sim/combat';
 import { createGame } from '../src/sim/game';
@@ -13,7 +15,7 @@ import { createArmy, newRegiment } from '../src/sim/military';
 import { createFleet, newShip, touchFleets, weeklyNaval } from '../src/sim/naval';
 import { nextMemoEpoch } from '../src/sim/index';
 import { bump, type Sim } from '../src/sim/state';
-import type { ShipType, Terrain, UnitType } from '../src/sim/types';
+import type { Fleet, ShipType, Terrain, UnitType, WingType } from '../src/sim/types';
 import { declareWar } from '../src/sim/war';
 import { registerScenario } from '../src/sim/world';
 import type { ScenarioDef } from '../src/sim/types';
@@ -56,7 +58,12 @@ function matrixScenario(): ScenarioDef {
     straits: [],
     rivers: [],
     provinces,
-    seaZones: [{ id: 'sea', name: 'Sea', neighbors: [], coasts: ['home-a', 'home-b'] }],
+    // the fleets meet in the middle; for a stand-off strike they lie at either end
+    seaZones: [
+      { id: 'sea-w', name: 'West Sea', neighbors: ['sea'], coasts: ['home-a'] },
+      { id: 'sea', name: 'Sea', neighbors: ['sea-w', 'sea-e'], coasts: [] },
+      { id: 'sea-e', name: 'East Sea', neighbors: ['sea'], coasts: ['home-b'] },
+    ],
   };
 }
 
@@ -83,8 +90,12 @@ function regimentsFor(mix: Partial<Record<UnitType, number>>): UnitType[] {
   return out;
 }
 
+/** A carrier's air group, bought with it: every deck filled (three with Fleet Carriers), two strike wings and a fighter wing. */
+export const CARRIER_AIR: WingType[] = ['attack', 'attack', 'fighter'];
+const airGroupCost = CARRIER_AIR.reduce((s, t) => s + WINGS[t].cost + WINGS[t].materiel, 0);
+
 function shipsFor(mix: Partial<Record<ShipType, number>>): ShipType[] {
-  const per = Object.entries(mix).reduce((s, [t, w]) => s + (w ?? 0) * (SHIPS[t as ShipType].cost + SHIPS[t as ShipType].materiel), 0);
+  const per = Object.entries(mix).reduce((s, [t, w]) => s + (w ?? 0) * (SHIPS[t as ShipType].cost + SHIPS[t as ShipType].materiel + (t === 'carrier' ? airGroupCost : 0)), 0);
   const scale = (BUDGET * 1.5) / per;
   const out: ShipType[] = [];
   for (const [t, w] of Object.entries(mix)) for (let i = 0; i < Math.max(1, Math.round((w ?? 0) * scale)); i++) out.push(t as ShipType);
@@ -102,20 +113,50 @@ export function landBout(att: string, def: string, terrain: Terrain, level: Tech
   return { win: f.outcomes[1] === 'attacker', ratio: f.defLoss / Math.max(1, f.attLoss) };
 }
 
-/** Which fleet comes out ahead after a week of battle (share of fighting value kept)? */
-export function seaBout(x: string, y: string): { win: boolean; kept: [number, number] } {
+/** The air group bought with every carrier of a fleet: strikes on the enemy, fighters over our own ships. */
+function embarkAir(sim: Sim, f: Fleet): void {
+  for (const s of f.ships.filter((sh) => sh.type === 'carrier')) {
+    void s;
+    for (const t of CARRIER_AIR) {
+      const w = createWing(sim, f.nation, f.home!, t);
+      w.carrier = f.id;
+      w.mission = t === 'fighter' ? 'superiority' : 'naval';
+    }
+  }
+}
+
+function fleetWorth(sim: Sim, id: string): number {
+  return sim.state.fleets[id]?.ships.reduce((s, sh) => s + (SHIPS[sh.type].gun + SHIPS[sh.type].torpedo + SHIPS[sh.type].antiSub) * SHIPS[sh.type].hull * sh.hp, 0) ?? 0;
+}
+
+/** Can this composition strike from the air (carriers with their air group)? */
+export function hasStrike(name: string): boolean {
+  return !!FLEETS[name].carrier;
+}
+
+/**
+ * Which fleet comes out ahead after a week (share of fighting value kept)?
+ * - 'meet': both fleets in one zone, a meeting engagement: carriers' aircraft
+ *   strike first, then the guns (a fleet struck with no air cover is out-ranged);
+ * - 'standoff': `x` lies two zones from `y` and strikes it from the air; `y`
+ *   holds its station (escorting, blockading) and cannot reach back.
+ */
+export function seaBout(x: string, y: string, mode: 'meet' | 'standoff' = 'meet'): { win: boolean; kept: [number, number] } {
   const sim = fresh();
-  const fa = createFleet(sim, 'a', 'sea', shipsFor(FLEETS[x]).map((t) => newShip(sim, t)), 'home-a');
-  const fb = createFleet(sim, 'b', 'sea', shipsFor(FLEETS[y]).map((t) => newShip(sim, t)), 'home-b');
-  const value = (id: string) => sim.state.fleets[id]?.ships.reduce((s, sh) => s + (SHIPS[sh.type].gun + SHIPS[sh.type].torpedo + SHIPS[sh.type].air + SHIPS[sh.type].antiSub) * SHIPS[sh.type].hull * sh.hp, 0) ?? 0;
-  const va = value(fa.id);
-  const vb = value(fb.id);
+  const fa = createFleet(sim, 'a', mode === 'meet' ? 'sea' : 'sea-w', shipsFor(FLEETS[x]).map((t) => newShip(sim, t)), 'home-a');
+  const fb = createFleet(sim, 'b', mode === 'meet' ? 'sea' : 'sea-e', shipsFor(FLEETS[y]).map((t) => newShip(sim, t)), 'home-b');
+  embarkAir(sim, fa);
+  embarkAir(sim, fb);
+  if (mode === 'standoff') for (const w of wingsAboard(sim, fa.id)) if (w.mission === 'naval') w.zone = 'sea-e';
+  const va = fleetWorth(sim, fa.id);
+  const vb = fleetWorth(sim, fb.id);
   bump(sim);
   touchFleets(sim);
+  touchWings(sim);
   nextMemoEpoch();
   weeklyNaval(sim);
-  const ka = value(fa.id) / va;
-  const kb = value(fb.id) / vb;
+  const ka = fleetWorth(sim, fa.id) / va;
+  const kb = fleetWorth(sim, fb.id) / vb;
   return { win: ka > kb, kept: [ka, kb] };
 }
 
@@ -132,7 +173,7 @@ export interface LandMatrix {
 export interface MatrixResult {
   land: LandMatrix[];
   sea: Record<string, { wins: number; bouts: number }>;
-  seaRows: Array<{ x: string; y: string; win: boolean; kept: [number, number] }>;
+  seaRows: Array<{ x: string; y: string; win: boolean; kept: [number, number]; mode: 'meet' | 'standoff' }>;
   dominantLand: string[];
   dominantSea: string[];
 }
@@ -167,15 +208,27 @@ export function combatMatrix(): MatrixResult {
   const fl = Object.keys(FLEETS);
   const sea: MatrixResult['sea'] = Object.fromEntries(fl.map((n) => [n, { wins: 0, bouts: 0 }]));
   const seaRows: MatrixResult['seaRows'] = [];
+  const tally = (x: string, y: string, win: boolean) => {
+    sea[x].bouts++;
+    sea[y].bouts++;
+    if (win) sea[x].wins++;
+    else sea[y].wins++;
+  };
   for (let i = 0; i < fl.length; i++) {
     for (let j = i + 1; j < fl.length; j++) {
       const [x, y] = [fl[i], fl[j]];
       const r = seaBout(x, y);
-      seaRows.push({ x, y, ...r });
-      sea[x].bouts++;
-      sea[y].bouts++;
-      if (r.win) sea[x].wins++;
-      else sea[y].wins++;
+      seaRows.push({ x, y, ...r, mode: 'meet' });
+      tally(x, y, r.win);
+    }
+  }
+  // stand-off strikes: a carrier group against every other composition two zones away
+  for (const x of fl.filter(hasStrike)) {
+    for (const y of fl) {
+      if (y === x) continue;
+      const r = seaBout(x, y, 'standoff');
+      seaRows.push({ x, y, ...r, mode: 'standoff' });
+      tally(x, y, r.win);
     }
   }
   return {
@@ -201,7 +254,7 @@ if (isMain) {
     '',
     `Equal-cost compositions (${BUDGET} crowns + materiel per army; ${BUDGET * 1.5} per fleet), through the real combat code. Generated by \`npx tsx tools/matrix.ts\`.`,
     '',
-    'Land: each composition attacks each other one from a neighbouring province, against a defender dug in for two weeks, with the even-roll forecast. A pairing on a terrain goes to the composition that trades better attacking the other (enemy losses per own loss) than the other does attacking it, so the defender\'s edge cancels out. Sea: one week of battle in a zone, both sides with the whole tree; the side keeping the larger share of its fighting value wins.',
+    'Land: each composition attacks each other one from a neighbouring province, against a defender dug in for two weeks, with the even-roll forecast. A pairing on a terrain goes to the composition that trades better attacking the other (enemy losses per own loss) than the other does attacking it, so the defender\'s edge cancels out. Sea: one week of battle in a zone (a meeting engagement), both sides with the whole tree; the side keeping the larger share of its fighting value wins. Carriers carry their air group, bought with them: every deck filled with two strike wings and a fighter wing. The carrier group also strikes each other composition from two zones away for a week (a stand-off: only aircraft reach).',
     '',
   ];
   for (const m of r.land) {
@@ -221,8 +274,8 @@ if (isMain) {
   }
   lines.push('## Sea, the whole technology tree', '', '| Composition | Ships | Wins | Bouts |', '|---|---|---|---|');
   for (const [n, v] of Object.entries(r.sea)) lines.push(`| ${n} | ${shipsFor(FLEETS[n]).length} | ${v.wins} | ${v.bouts} |`);
-  lines.push('', '| Fleets | Winner | Value kept |', '|---|---|---|');
-  for (const x of r.seaRows) lines.push(`| ${x.x} vs ${x.y} | ${x.win ? x.x : x.y} | ${(x.kept[0] * 100).toFixed(0)}% / ${(x.kept[1] * 100).toFixed(0)}% |`);
+  lines.push('', '| Fleets | Situation | Winner | Value kept |', '|---|---|---|---|');
+  for (const x of r.seaRows) lines.push(`| ${x.x} vs ${x.y} | ${x.mode === 'meet' ? 'meeting engagement' : 'stand-off strike'} | ${x.win ? x.x : x.y} | ${(x.kept[0] * 100).toFixed(0)}% / ${(x.kept[1] * 100).toFixed(0)}% |`);
   lines.push('', `Dominant land composition: ${r.dominantLand.length ? r.dominantLand.join(', ') : 'none'}. Dominant fleet: ${r.dominantSea.length ? r.dominantSea.join(', ') : 'none'}.`);
   const text = lines.join('\n');
   console.log(text);

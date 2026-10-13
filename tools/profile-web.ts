@@ -402,6 +402,8 @@ async function settle(): Promise<void> {
     // the clock must keep running: no pauses for events, proposals, battles or choices
     app.updateSettings({ autoPauseWar: false, autoPauseEvent: false, autoPauseProposal: false, autoPauseChoice: false, autoPauseBattle: false });
     app.closeModal?.();
+    // a notice (a save converted from an older format) waits for its Close button
+    for (const b of document.querySelectorAll<HTMLButtonElement>('.modal-layer:not(.hidden) footer button')) if (b.textContent?.trim() === 'Close') b.click();
     app.tutorial?.end?.();
     for (const b of document.querySelectorAll('button')) if (/^End tutorial$/.test(b.textContent?.trim() ?? '')) (b as HTMLButtonElement).click();
   });
@@ -676,6 +678,11 @@ async function map1936(prefix: string, what: string, save: () => string): Promis
 }
 await map1936('e36', 'Europe, 1936 at week 280 (as Germany)', () => campaign('europe-1936-w280', 'europe-1936', 1, 280, 'ger'));
 await map1936('w36', 'the World, 1936 at week 280 (as Britain)', () => campaign('earth-1936-w280', 'earth-1936', 1, 280, 'gbr'));
+// 3c. naval and air warfare at scale (on request: --only na-…): the World 1936 save above
+// with every realm at war given front airfields, four wings on missions over each and a
+// battle squadron off an enemy coast (333 wings, 85 fleets). Made once with the baseline
+// commit by tools/naval-air-stress.ts, so both builds run the same campaign.
+await map1936('na', 'the World 1936 at week 280, every realm at war flying front-line air missions (333 wings, 85 fleets; as Britain)', () => readFileSync(`${SAVES}/earth-1936-w280-navalair.json`, 'utf8'));
 
 // 4. the map editor on the largest map: open a copy, drag, select and paint
 if (!only || ['editor-open', 'editor-pan', 'editor-click'].some((x) => only.has(x))) {

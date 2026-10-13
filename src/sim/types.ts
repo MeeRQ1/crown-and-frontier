@@ -25,8 +25,8 @@ export type UnitType = 'infantry' | 'cavalry' | 'artillery' | 'engineers' | 'arm
 export type ProjectKind = 'dev' | 'infra' | 'fort' | 'charter' | 'settle' | 'factory' | 'port' | 'airfield';
 export type ShipType = 'transport' | 'screen' | 'cruiser' | 'capital' | 'submarine' | 'carrier';
 export type WingType = 'recon' | 'fighter' | 'attack' | 'bomber';
-/** What an air wing does over its target area. */
-export type AirMission = 'idle' | 'superiority' | 'support' | 'interdiction' | 'bombing' | 'recon';
+/** What an air wing does over its target area (land) or zone (sea). */
+export type AirMission = 'idle' | 'superiority' | 'support' | 'interdiction' | 'bombing' | 'naval' | 'recon';
 export type Personality = 'expansionist' | 'defensive' | 'commercial' | 'opportunist' | 'diplomat';
 export type Difficulty = 'easy' | 'normal' | 'hard';
 export type VictoryPath = 'territorial' | 'economic' | 'diplomatic';
@@ -258,6 +258,13 @@ export interface Fleet {
   landing: ProvinceId | null;
   /** AI assignment tag */
   task: string | null;
+  /** what the fleet did last week beyond sailing (bombardment, air attacks, raiding), for the interface */
+  report?: FleetReport | null;
+}
+
+export interface FleetReport {
+  tick: number;
+  notes: string[];
 }
 
 export interface AirWing {
@@ -265,13 +272,34 @@ export interface AirWing {
   nation: NationId;
   name: string;
   type: WingType;
-  /** airfield province it flies from */
+  /** airfield province it flies from (aboard a carrier: the airfield it last flew from) */
   base: ProvinceId;
+  /** aboard the carriers of this fleet (format 6); null at its airfield */
+  carrier: FleetId | null;
   /** 0–100: losses lower it, the base replenishes it with materiel */
   strength: number;
+  /** 0–100 (format 6): flying wears it down, rest at the base restores it; effectiveness falls with it */
+  readiness: number;
   mission: AirMission;
-  /** centre of the mission area (the province and its neighbours; bombing: the province) */
+  /** land missions: centre of the mission area (the province and its neighbours; bombing: the province) */
   target: ProvinceId | null;
+  /** sea missions (format 6): the zone; null aboard a carrier means over its own fleet */
+  zone: ZoneId | null;
+  /** last week's operations, for the interface (format 6) */
+  report: WingReport | null;
+}
+
+/** One week of a wing's operations, as the player is told it. */
+export interface WingReport {
+  tick: number;
+  /** it flew this week (sorties that wear its readiness and expose it) */
+  flew: boolean;
+  /** what it did, or why it could not: one line */
+  note: string;
+  /** enemy aircraft strength it shot down, damage it dealt (hull or fire share), strength it lost */
+  kills: number;
+  hits: number;
+  lost: number;
 }
 
 export interface RecruitOrder {
@@ -348,6 +376,19 @@ export interface Battle {
   factors: string[];
   /** every attacker opened the battle by crossing a river into the province */
   river?: boolean;
+  /** fire support in the latest round, by side (format 6): air wings and ships offshore */
+  support?: { att: SupportLine[]; def: SupportLine[] };
+}
+
+/** One air wing or fleet supporting a side of a land battle, and what it added. */
+export interface SupportLine {
+  kind: 'air' | 'recon' | 'naval';
+  /** the wing or fleet */
+  id: string;
+  nation: NationId;
+  name: string;
+  /** added fire, as a share (0.12 = +12%) after caps */
+  value: number;
 }
 
 export interface BattleReport {
@@ -661,6 +702,12 @@ export interface NationStats {
   wingsBuilt: number;
   airMissionWeeks: number;
   bombingWeeks: number;
+  /** format 6: wing-weeks supporting a battle, enemy wings shot down, ship hits from the air, weeks of shore bombardment, weeks raiding enemy sea trade */
+  supportWeeks: number;
+  airKills: number;
+  navalStrikeHits: number;
+  bombardWeeks: number;
+  raidWeeks: number;
   /** diplomacy and focus (system-usage counts) */
   focusesDone: number;
   /** settlements dictated as the winning war leader */
@@ -878,8 +925,10 @@ export type Command =
   | { type: 'shipArmies'; nation: NationId; armies: ArmyId[]; fleet: FleetId; dest: ProvinceId }
   | { type: 'buildWing'; nation: NationId; province: ProvinceId; wing: WingType }
   | { type: 'cancelWing'; nation: NationId; province: ProvinceId }
-  | { type: 'airMission'; nation: NationId; wing: WingId; mission: AirMission; target: ProvinceId | null }
-  | { type: 'rebaseWing'; nation: NationId; wing: WingId; base: ProvinceId }
+  /** a land mission names a province; a sea mission (superiority, naval strike, recon) names a zone instead (aboard a carrier, no zone: over its own fleet) */
+  | { type: 'airMission'; nation: NationId; wing: WingId; mission: AirMission; target: ProvinceId | null; zone?: ZoneId | null }
+  /** to an airfield (`base`) or aboard the carriers of a fleet (`carrier`) */
+  | { type: 'rebaseWing'; nation: NationId; wing: WingId; base?: ProvinceId; carrier?: FleetId }
   | { type: 'disbandWing'; nation: NationId; wing: WingId }
   | { type: 'cancelBuild'; nation: NationId; province: ProvinceId }
   | { type: 'research'; nation: NationId; tech: TechId }

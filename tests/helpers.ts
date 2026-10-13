@@ -108,3 +108,23 @@ export function seaGame(opts: NewGameOptions = {}): Sim {
   sim.state.fleets = {};
   return sim;
 }
+
+// A long sea for range tests: realm a's port p0 on z0, realm b's port q5 on z5,
+// six zones in a row (z0 … z5) and no land between them.
+export function longSeaScenario(): ScenarioDef {
+  const zones = [0, 1, 2, 3, 4, 5].map((i) => ({ id: `z${i}`, name: `Zone ${i}`, neighbors: [i > 0 ? `z${i - 1}` : null, i < 5 ? `z${i + 1}` : null].filter((x): x is string => !!x), coasts: i === 0 ? ['p0'] : i === 5 ? ['q5'] : [] }));
+  return {
+    id: 'test-longsea',
+    name: 'Test long sea',
+    description: 'synthetic',
+    startYear: 1930,
+    nations: [nation('a', 'p0'), nation('b', 'q5')],
+    regions: [{ id: 'a', name: 'A' }, { id: 'b', name: 'B' }],
+    straits: [],
+    rivers: [],
+    provinces: [prov('p0', 'plains', 'a', [], { port: 2, dev: 6 }), prov('q5', 'plains', 'b', [], { port: 2, dev: 6 })],
+    seaZones: zones,
+  };
+}
+
+registerScenario('test-longsea', longSeaScenario);

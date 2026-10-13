@@ -27,6 +27,9 @@ export function seaAirSave(): { text: string; ids: Record<string, string> } {
   const regs = (t: UnitType, n: number) => Array.from({ length: n }, () => newRegiment(sim, t));
   const zone = sim.world.provZones.calvi.find((z) => sim.world.provZones.westmere.includes(z))!;
   const fleet = createFleet(sim, 'ser', zone, ships(['transport', 'transport', 'capital', 'capital', 'cruiser', 'cruiser']), 'calvi', 'Calvi Squadron');
+  // a carrier group with empty decks, for the air group checks
+  if (!st.nations.ser.research.done.includes('naval_aviation')) st.nations.ser.research.done.push('naval_aviation');
+  const carrier = createFleet(sim, 'ser', zone, ships(['carrier', 'screen']), 'calvi', 'Carrier Group');
   const landing = createArmy(sim, 'ser', 'calvi', regs('infantry', 4));
   const ours = createArmy(sim, 'ser', 'ostra', regs('infantry', 6));
   const theirs = createArmy(sim, 'aur', 'duncairn', regs('infantry', 5));
@@ -39,6 +42,6 @@ export function seaAirSave(): { text: string; ids: Record<string, string> } {
     w.mission = 'superiority';
     w.target = 'duncairn';
   }
-  return { text: serialize(sim), ids: { zone, fleet: fleet.id, landing: landing.id, ours: ours.id, theirs: theirs.id, attack: attack.id, f1: fighters[0].id, f2: fighters[1].id, f3: fighters[2].id } };
+  return { text: serialize(sim), ids: { zone, fleet: fleet.id, carrier: carrier.id, landing: landing.id, ours: ours.id, theirs: theirs.id, attack: attack.id, f1: fighters[0].id, f2: fighters[1].id, f3: fighters[2].id } };
 }
 

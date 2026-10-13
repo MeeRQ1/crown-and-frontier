@@ -2,6 +2,7 @@
 // bridge between interface actions and simulation commands. All game actions
 // go through applyCommand() — the same validation the AI uses.
 
+import { MISSION_LABELS, missionProblem, SEA_MISSIONS, stepsTo, wingHome, wingRange } from '../sim/air';
 import { applyCommand } from '../sim/commands';
 import { buildProblem, projectCost } from '../sim/construction';
 import { createGame, type NewGameOptions } from '../sim/game';
@@ -556,7 +557,8 @@ export class App {
         outlineRealm: this.ui.ledgerTab === 'diplomacy' ? this.ui.diploTarget : null,
         selectedFleet: this.selectedFleet,
         selectedZone: this.selectedZone,
-        selectedWing: this.selectedWing,
+        selectedWing: this.targeting?.kind === 'air' ? this.targeting.wing : this.selectedWing,
+        airTargeting: this.targeting?.kind === 'air',
         fleetPreview,
         fleetPreviewLabel,
         tradeRoutes: this.ui.ledgerTab === 'industry' && this.player ? this.tradeRoutes(sim, this.player) : null,
@@ -890,7 +892,8 @@ export class App {
   startAirTarget(wing: string, mission: AirMission): void {
     this.targeting = { kind: 'air', wing, mission };
     this.canvas.classList.add('move-mode');
-    this.toast('Click the province to fly the mission over. Esc cancels.');
+    this.mapDirty = true;
+    this.toast(mission === 'naval' ? 'Click the sea zone to strike (the shaded area is within range). Esc cancels.' : SEA_MISSIONS.includes(mission) ? 'Click a province, or a sea zone, to fly the mission over (the shaded area is within range). Esc cancels.' : 'Click the province to fly the mission over (the shaded area is within range). Esc cancels.');
     this.refresh();
   }
 
@@ -1483,6 +1486,26 @@ export class App {
     }
     const sim = this.sim;
     const tipEl = this.tipEl;
+    const tg = this.targeting;
+    if (tg?.kind === 'air' && sim.state.wings[tg.wing]) {
+      // choosing a mission's target: say whether it can be flown there, and why not
+      const w = sim.state.wings[tg.wing];
+      const t = this.airTargetAt(tg.mission, x, y);
+      const where = t ? (t.zone ? sim.world.zones[t.zone].name : provName(sim, t.target!)) : null;
+      const prob = t ? missionProblem(sim, w.nation, w.id, tg.mission, t.target, t.zone) : tg.mission === 'naval' ? 'Choose a sea zone.' : 'Choose a province.';
+      setChildren(
+        tipEl,
+        h('div', { class: 'tt-title' }, icon('plane'), `${MISSION_LABELS[tg.mission]}${where ? `: ${where}` : ''}`),
+        t ? h('div', { class: 'tt-row' }, `${stepsTo(sim, w, t.zone ? { zone: t.zone } : { prov: t.target! })} steps from ${wingHome(sim, w)} (range ${wingRange(sim, w)})`) : null,
+        h('div', { class: prob ? 'tt-hint bad' : 'tt-hint' }, prob ?? 'Click to fly the mission here. Esc cancels.'),
+      );
+      tipEl.classList.remove('hidden');
+      const W = this.stageEl.clientWidth;
+      const H = this.stageEl.clientHeight;
+      tipEl.style.left = `${Math.min(x + 16, W - (tipEl.offsetWidth || 260) - 8)}px`;
+      tipEl.style.top = `${Math.min(y + 18, H - (tipEl.offsetHeight || 70) - 8)}px`;
+      return;
+    }
     const fleetId = this.renderer.fleetAt(x, y);
     if (fleetId && sim.state.fleets[fleetId]) {
       const f = sim.state.fleets[fleetId];
@@ -1554,8 +1577,11 @@ export class App {
       this.canvas.classList.remove('move-mode');
       if (tg.kind === 'fleet') this.orderFleet(tg.fleet, x, y);
       else if (tg.kind === 'ship' && pid) this.do({ type: 'shipArmies', armies: tg.armies, fleet: tg.fleet, dest: pid });
-      else if (tg.kind === 'air' && pid) this.do({ type: 'airMission', wing: tg.wing, mission: tg.mission, target: pid });
-      else this.refresh();
+      else if (tg.kind === 'air') {
+        const t = this.airTargetAt(tg.mission, x, y);
+        if (t) this.do({ type: 'airMission', wing: tg.wing, mission: tg.mission, target: t.target, zone: t.zone });
+        else this.refresh();
+      } else this.refresh();
       return;
     }
     const fleet = this.renderer.fleetAt(x, y);
@@ -1583,6 +1609,23 @@ export class App {
       return;
     }
     this.selectProvince(pid);
+  }
+
+  /**
+   * What an air mission ordered at a screen point would cover: a province, or a
+   * sea zone (naval strikes always; superiority and reconnaissance over open water).
+   * A naval strike ordered on a coast takes the sea zone off it.
+   */
+  airTargetAt(mission: AirMission, x: number, y: number): { target: ProvinceId | null; zone: string | null } | null {
+    if (!this.renderer || !this.sim) return null;
+    const pid = this.renderer.provinceAt(x, y);
+    const zone = pid ? null : this.renderer.zoneAt(x, y);
+    if (mission === 'naval') {
+      const z = zone ?? (pid ? this.sim.world.provZones[pid]?.[0] ?? null : null);
+      return z ? { target: null, zone: z } : null;
+    }
+    if (zone && SEA_MISSIONS.includes(mission)) return { target: null, zone };
+    return pid ? { target: pid, zone: null } : null;
   }
 
   /** Sends a fleet to the sea zone at a screen point, or to the nearest zone on a coast there. */

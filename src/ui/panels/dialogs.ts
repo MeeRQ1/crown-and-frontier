@@ -60,14 +60,14 @@ export function dialog(app: App, title: string, body: (Node | string | null)[], 
   return close;
 }
 
-export function confirmDialog(app: App, title: string, text: string, onYes: () => void, yesLabel = 'Confirm', danger = true): void {
+export function confirmDialog(app: App, title: string, text: string | Node[], onYes: () => void, yesLabel = 'Confirm', danger = true): void {
   let close = () => {};
   const yes = button(yesLabel, () => {
     close();
     onYes();
   }, { cls: danger ? 'danger' : 'primary' });
   const no = button('Cancel', () => close());
-  close = dialog(app, title, [h('p', null, text)], [no, yes]);
+  close = dialog(app, title, typeof text === 'string' ? [h('p', null, text)] : text, [no, yes]);
 }
 
 // ───────────────────────────── Decision dock ────────────────────────────────

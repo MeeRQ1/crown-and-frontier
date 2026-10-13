@@ -38,6 +38,8 @@ import {
   type Sim,
 } from '../state';
 import { supplyDistances } from '../supply';
+import { fleetsOf } from '../naval';
+import { warReach } from '../reach';
 import type { NationId, PeaceTerms, ProjectKind, ProvinceId, TreatyType, VictoryPath, War, WarGoal } from '../types';
 import { VICTORY_MONTHS, victoryProgress } from '../victory';
 import { canJoin, evaluatePeace, goalOptions, provinceCost, scoreFor, termsCost } from '../war';
@@ -662,8 +664,63 @@ export function warCandidates(sim: Sim, nid: NationId): { cands: WarCandidate[];
     const score = value * (ratio / need - 1) * p.aggression;
     cands.push({ t, goal, score, ratio, need, value, notes });
   }
+  cands.push(...overseasCandidates(sim, nid, mine));
   cands.sort((a, b) => b.score - a.score || (a.t < b.t ? -1 : 1));
   return { cands, napBlocked };
+}
+
+/**
+ * Wars on realms we do not border, reached by sea: only with transports afloat
+ * for a real landing force, a navy that outweighs theirs (with their allies'),
+ * and a short sea route; the value is discounted for the trouble of holding a
+ * beach overseas. The same assessment the player sees (reach.ts).
+ */
+function overseasCandidates(sim: Sim, nid: NationId, mine: number): WarCandidate[] {
+  const st = sim.state;
+  const p = pers(sim, nid);
+  if (p.aggression < 1) return [];
+  let lift = 0;
+  let guns = 0;
+  for (const f of fleetsOf(sim, nid)) for (const s of f.ships) s.type === 'transport' ? (lift += 2) : (guns += 1);
+  if (lift < C.ai.overseasLift || guns < 3) return [];
+  // the waters within a short voyage of our ports: only realms with a coast on them are candidates
+  const near = new Set<string>();
+  let frontier: string[] = [];
+  for (const pid of sim.world.provIds) {
+    const p = st.provinces[pid];
+    if (p.port > 0 && p.owner === nid && p.controller === nid) for (const z of sim.world.provZones[pid] ?? []) if (!near.has(z)) (near.add(z), frontier.push(z));
+  }
+  for (let d = 0; d < C.ai.overseasZones && frontier.length; d++) {
+    const next: string[] = [];
+    for (const z of frontier) for (const nb of sim.world.zones[z].neighbors) if (!near.has(nb)) (near.add(nb), next.push(nb));
+    frontier = next;
+  }
+  const reachable = new Set<NationId>();
+  for (const z of near) for (const pid of sim.world.zones[z].coasts) {
+    const o = st.provinces[pid].owner;
+    if (o && o !== nid) reachable.add(o);
+  }
+  const out: WarCandidate[] = [];
+  for (const t of aliveNations(sim)) {
+    if (t === nid || !reachable.has(t) || borders(sim, nid, t) || atWar(sim, nid, t)) continue;
+    const goals = goalOptions(sim, nid, t).filter((g) => g.type !== 'coalition');
+    const goal = goals.find((g) => g.type === 'claim') ?? goals.find((g) => g.type === 'conquest');
+    if (!goal || issueCheck(sim, nid, t, goal)) continue;
+    // their coasts first: a goal inland of an overseas realm cannot be taken from a beach
+    if (!goal.provinces.every((pid) => sim.world.provZones[pid]?.length)) continue;
+    const r = warReach(sim, nid, t);
+    if (r.overland || r.seaZones === null || r.seaZones > C.ai.overseasZones) continue;
+    if (r.ourNavy < r.theirNavy * 1.2 || r.liftRegiments < C.ai.overseasLift) continue;
+    const theirs = sideStrength(sim, t, nid);
+    const ratio = mine / Math.max(0.5, theirs);
+    const need = p.warRatio * 1.3;
+    let value = 0;
+    for (const pid of goal.provinces) value += st.provinces[pid].dev + 3;
+    value *= 0.6;
+    const score = value * (ratio / need - 1) * p.aggression;
+    out.push({ t, goal, score, ratio, need, value, notes: [`overseas: ${r.seaZones} sea zone${r.seaZones === 1 ? '' : 's'}, transports for ${r.liftRegiments} regiments`] });
+  }
+  return out;
 }
 
 function considerWar(sim: Sim, nid: NationId): void {

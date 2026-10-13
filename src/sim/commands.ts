@@ -2,7 +2,7 @@
 // checkCommand() never mutates state; applyCommand() validates first and
 // leaves state untouched when it fails (returning a player-readable reason).
 
-import { buildWingProblem, cancelWing, inRange, missionProblem, MISSION_LABELS, rebaseProblem, startWing, touchWings } from './air';
+import { buildWingProblem, cancelWing, missionPlace, missionProblem, MISSION_LABELS, placeName, rebaseProblem, rebaseWing, startWing, touchWings, wingHome } from './air';
 import { C, SHIPS, WINGS } from './config';
 import { nextMemoEpoch } from './index';
 import { buildProblem, cancelProblem, cancelProject, startProject } from './construction';
@@ -157,9 +157,9 @@ export function checkCommand(sim: Sim, cmd: Command): string | null {
       return st.provinces[cmd.province]?.hangar.some((o) => o.nation === cmd.nation) ? null : 'No air wings of ours in training here.';
     case 'airMission':
       if (!(cmd.mission in MISSION_LABELS)) return 'Unknown mission.';
-      return missionProblem(sim, cmd.nation, cmd.wing, cmd.mission, cmd.target);
+      return missionProblem(sim, cmd.nation, cmd.wing, cmd.mission, cmd.target ?? null, cmd.zone ?? null);
     case 'rebaseWing':
-      return rebaseProblem(sim, cmd.nation, cmd.wing, cmd.base);
+      return rebaseProblem(sim, cmd.nation, cmd.wing, cmd.base ?? null, cmd.carrier ?? null);
     case 'disbandWing': {
       const w = st.wings[cmd.wing];
       return w && w.nation === cmd.nation ? null : 'Not our air wing.';
@@ -362,19 +362,16 @@ function execute(sim: Sim, cmd: Command): CommandResult {
     case 'airMission': {
       const w = st.wings[cmd.wing];
       w.mission = cmd.mission;
-      w.target = cmd.mission === 'idle' ? null : cmd.target;
+      w.target = cmd.mission === 'idle' ? null : (cmd.target ?? null);
+      w.zone = cmd.mission === 'idle' ? null : (cmd.zone ?? null);
       touchWings(sim);
-      return { ok: true };
+      if (cmd.mission === 'idle') return { ok: true, message: `${w.name} stands down to rest.` };
+      return { ok: true, message: `${w.name}: ${MISSION_LABELS[cmd.mission].toLowerCase()} over ${placeName(sim, missionPlace(sim, w))}.` };
     }
     case 'rebaseWing': {
       const w = st.wings[cmd.wing];
-      w.base = cmd.base;
-      if (w.target && !inRange(sim, w, w.target)) {
-        w.mission = 'idle';
-        w.target = null;
-      }
-      touchWings(sim);
-      return { ok: true };
+      rebaseWing(sim, w, cmd.base ?? null, cmd.carrier ?? null);
+      return { ok: true, message: `${w.name} now flies from ${wingHome(sim, w)}.` };
     }
     case 'disbandWing':
       delete st.wings[cmd.wing];

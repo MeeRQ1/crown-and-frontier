@@ -82,7 +82,7 @@ export const MODES: ModeDef[] = [
     label: 'Military',
     icon: 'military',
     key: 'U',
-    explain: 'Active fronts and threats. Your provinces are shaded by the hostile strength that could reach them within two marches; enemy land at war is hatched. Front-line borders are outlined.',
+    explain: 'Active fronts and threats. Your provinces are shaded by the hostile strength that could reach them within two marches; enemy land at war is hatched. Front-line borders are outlined. Where aircraft fly, a light tint shows who holds the sky: blue ours, amber contested, red the enemy\'s.',
     ramp: { stops: ['#efe6cf', '#e6c88d', '#cf8f68', '#a1564a'], from: 'safe', to: 'heavily threatened' },
   },
   {
@@ -406,6 +406,9 @@ export function legendFor(mode: MapMode): LegendEntry[] {
         { color: '#9c3b33', label: 'Your orders (dashed when not selected)', line: true },
         { color: '#253332', label: 'Enemy marches', line: true },
         { color: '#9c3b33', label: 'Front line against an enemy', line: true },
+        { color: 'rgba(61, 92, 140, 0.45)', label: 'Tint: we hold the sky (aircraft flying this week)' },
+        { color: 'rgba(181, 132, 47, 0.5)', label: 'Tint: the sky is contested' },
+        { color: 'rgba(156, 59, 51, 0.5)', label: 'Tint: the enemy holds the sky' },
       ];
     case 'resources':
       return [

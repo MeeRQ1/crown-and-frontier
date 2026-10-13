@@ -1,0 +1,23 @@
+# Gameplay profile — baseline 41108f3
+
+Intel(R) Xeon(R) Processor @ 2.80GHz ×4, 16 GB, headless Chromium 141.0.7390.37 (software rendering), 1366×800 at device pixel ratio 1, base /; 2026-10-13.
+
+Frame intervals are the time between animation frames as the player sees them (16.7 ms at 60 Hz). JS columns are milliseconds per second of wall time spent in the app's frame loop and in its parts; "main" is the main thread's task, script, style and layout time per second from the DevTools protocol.
+
+| Workload | Map | Weeks | Weeks/s | Frames | p50 | p95 | p99 | max | >33 ms | long tasks (max) | frame JS/s | draw/s | UI/s | minimap/s | main task/s | script/s | style/s | layout/s | worst input (ms) | drag move p50/p95 (ms) | heap MB |
+|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
+| w36-idle: the World, 1936 at week 280 (as Britain), paused, no input, 3 s | earth-1936 | 0 | — | 27 | 116.6 | 150 | 183.3 | 216.6 | 27 | 26 (210) | 1007.6 | 1007.2 | 0 | 0.2 | 1093.4 | 1057.3 | 0.2 | 0.1 | 0 | — | 30.5 → 44.2 |
+| w36-pan: the World, 1936 at week 280 (as Britain), paused, dragging at regional zoom, 6 s | earth-1936 | 0 | — | 834 | 16.7 | 16.8 | 50 | 83.3 | 12 | 12 (85) | 163 | 161.7 | 0 | 0.3 | 342.8 | 175.2 | 3.7 | 6.6 | 88 | 17.6 / 35.8 | 31.3 → 45.2 |
+| w36-max: the World, 1936 at week 280 (as Britain), fastest speed, no input, 8 s | earth-1936 | 24 | 3 | 375 | 16.7 | 50 | 66.7 | 116.7 | 23 | 16 (116) | 850.3 | 91.3 | 66.4 | 5.7 | 941.3 | 835.5 | 7 | 12.5 | 40 | — | 31.8 → 78.5 |
+| w36-max-pan: the World, 1936 at week 280 (as Britain), fastest speed while dragging and clicking, 6 s | earth-1936 | 56 | 2.8 | 1045 | 16.7 | 33.3 | 50.1 | 116.7 | 25 | 17 (119) | 718.9 | 155.7 | 11.6 | 2.2 | 915.4 | 720.2 | 6.7 | 9.9 | 144 | 43.2 / 99 | 38.3 → 103.5 |
+| na-idle: the World 1936 at week 280, every realm at war flying front-line air missions (333 wings, 85 fleets; as Britain), paused, no input, 3 s | earth-1936 | 0 | — | 39 | 66.7 | 166.6 | 166.8 | 233.2 | 26 | 24 (234) | 949.4 | 948.9 | 0 | 0.2 | 1048.6 | 999.5 | 0.3 | 0.3 | 0 | — | 30.4 → 44.1 |
+| na-pan: the World 1936 at week 280, every realm at war flying front-line air missions (333 wings, 85 fleets; as Britain), paused, dragging at regional zoom, 6 s | earth-1936 | 0 | — | 821 | 16.7 | 16.8 | 49.9 | 100 | 11 | 10 (112) | 168.1 | 166.7 | 0 | 0.3 | 353.1 | 174.9 | 3.8 | 7 | 32 | 17.3 / 35.9 | 31.2 → 43.3 |
+| na-pan-mid: the World 1936 at week 280, every realm at war flying front-line air missions (333 wings, 85 fleets; as Britain), paused, dragging at the medium tier, 6 s | earth-1936 | 0 | — | 1043 | 16.7 | 16.8 | 66.7 | 166.7 | 21 | 18 (163) | 255.6 | 254 | 0 | 0.3 | 457.9 | 264.9 | 2.6 | 4.7 | 160 | 30.5 / 47.1 | 31.6 → 43.6 |
+| na-zoom: the World 1936 at week 280, every realm at war flying front-line air missions (333 wings, 85 fleets; as Britain), paused, 12 wheel steps | earth-1936 | 0 | — | 105 | 16.7 | 50 | 100 | 166.7 | 10 | 8 (164) | 557.5 | 551.5 | 0 | 0.4 | 851.5 | 558.2 | 1.5 | 1.9 | 0 | — | 31.8 → 47.1 |
+| na-select: the World 1936 at week 280, every realm at war flying front-line air missions (333 wings, 85 fleets; as Britain), paused, 12 clicks | earth-1936 | 0 | — | 174 | 16.7 | 16.8 | 33.4 | 33.4 | 0 | 0 (0) | 73.1 | 20.1 | 50.1 | 0.4 | 239.8 | 99.8 | 9.1 | 16.1 | 72 | — | 32.1 → 45.2 |
+| na-panels: the World 1936 at week 280, every realm at war flying front-line air missions (333 wings, 85 fleets; as Britain), paused, each ledger by its key | earth-1936 | 0 | — | 246 | 16.7 | 16.8 | 116.7 | 216.6 | 7 | 6 (164) | 99.8 | 76.2 | 21.8 | 0.2 | 244.1 | 139.5 | 24.5 | 21.9 | 248 | — | 32.1 → 50.6 |
+| na-normal: the World 1936 at week 280, every realm at war flying front-line air missions (333 wings, 85 fleets; as Britain), normal speed, no input, 8 s | earth-1936 | 7 | 0.9 | 435 | 16.7 | 33.3 | 50 | 116.6 | 12 | 6 (115) | 361.5 | 76 | 27.8 | 1.3 | 454.1 | 358.5 | 2.8 | 5.4 | 40 | — | 35 → 63.5 |
+| na-max: the World 1936 at week 280, every realm at war flying front-line air missions (333 wings, 85 fleets; as Britain), fastest speed, no input, 8 s | earth-1936 | 25 | 3.1 | 365 | 16.7 | 50 | 83.3 | 133.3 | 28 | 23 (122) | 859.4 | 106.5 | 79.6 | 4.7 | 965 | 843 | 9 | 14 | 24 | — | 37.9 → 96.4 |
+| na-max-pan: the World 1936 at week 280, every realm at war flying front-line air missions (333 wings, 85 fleets; as Britain), fastest speed while dragging and clicking, 6 s | earth-1936 | 58 | 2.8 | 1079 | 16.7 | 33.4 | 50 | 100.1 | 31 | 22 (116) | 720.1 | 160.5 | 11.3 | 2 | 925 | 723.1 | 6.3 | 8.7 | 152 | 45.9 / 106.7 | 39.7 → 72.1 |
+
+No page errors.

@@ -26,7 +26,7 @@ import {
 import { supplyAt, supplyDistances } from '../supply';
 import type { Army, NationId, ProvinceId, UnitType } from '../types';
 import { diffOf, hostileArmiesAt, issue, pathVia, reachFrom, sumStrength, threatAround, type Reach } from './common';
-import { navalOps } from './navy';
+import { airOps, navalOps } from './navy';
 import { memoize } from '../index';
 
 function regimentsByType(sim: Sim, nid: NationId): Record<UnitType, number> {
@@ -492,8 +492,11 @@ export function operational(sim: Sim, nid: NationId): void {
   const armies = armiesOf(sim, nid)
     .filter((a) => !a.battle && !a.retreating && !a.embarked && a.task !== 'invasion')
     .sort((a, b) => (a.id < b.id ? -1 : 1));
-  if (!armies.length) return;
-  if (enemiesOf(sim, nid).length) warOps(sim, nid, armies);
-  else peaceOps(sim, nid, armies);
+  if (armies.length) {
+    if (enemiesOf(sim, nid).length) warOps(sim, nid, armies);
+    else peaceOps(sim, nid, armies);
+  }
+  // after the armies' orders: wings go on call where those orders bring a battle
+  airOps(sim, nid);
   void UNITS;
 }

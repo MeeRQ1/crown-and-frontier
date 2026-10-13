@@ -292,16 +292,16 @@ async function seaAirFlow(browser: Browser, base: string): Promise<void> {
   await page.waitForTimeout(250);
   await clickArmy(ids.theirs);
   const under = await inspector();
-  const theirSky = under.match(/Air support \+(\d+)% \(enemy holds the sky\)/);
+  const theirSky = under.match(/Air support on call \+(\d+)% \([^)]*the enemy holds the sky\)/);
   const fm: string[] = [];
   for (const f of [ids.f1, ids.f2, ids.f3]) fm.push(await flyMission(f, /Fly air superiority/, 'duncairn'));
   await view('duncairn');
   await page.waitForTimeout(250);
   await clickArmy(ids.theirs);
   const over = await inspector();
-  const ourSky = over.match(/Air support \+(\d+)% \(air superiority\)/);
+  const ourSky = over.match(/Air support on call \+(\d+)% \([^)]*(air superiority|contested sky)\)/);
   record(
-    'Air: a wing flies ground support chosen on the map; the attack forecast shows the enemy holding the sky, then our fighters winning it',
+    'Air: a wing flies ground support chosen on the map; the attack forecast shows the support on call, cut while the enemy holds the sky, restored as our fighters contest it',
     m1 === 'support@duncairn' && fm.every((x) => x === 'superiority@duncairn') && !!theirSky && !!ourSky && Number(ourSky[1]) > Number(theirSky[1]),
     `attack wing ${m1}; fighters ${fm.join(', ')}; forecast ${theirSky ? theirSky[0] : 'no enemy-sky note'} → ${ourSky ? ourSky[0] : 'no superiority note'}`,
   );
@@ -343,7 +343,120 @@ async function seaAirFlow(browser: Browser, base: string): Promise<void> {
     aboard === ids.fleet && landed && after.loc === 'westmere',
     `embarked on ${aboard}; landings ${after.landings}; army now in ${after.loc} (week ${after.tick})`,
   );
+  // ── carriers: the empty deck is explained; a fighter flies aboard from the card
+  await page.evaluate((f) => (window as any).cnf.selectFleet(f, true), ids.carrier);
+  await page.waitForTimeout(200);
+  const emptyCard = await inspector();
+  const flyAboard = page.locator('aside.inspector .action button', { hasText: /^Fly .*Fighter wing.* aboard/ }).first();
+  const canFly = (await flyAboard.count()) > 0;
+  if (canFly) await flyAboard.click();
+  await page.waitForTimeout(200);
+  const aboardNow = await page.evaluate((c) => Object.values((window as any).cnf.sim.state.wings).filter((w: any) => w.carrier === c).map((w: any) => w.type), ids.carrier);
+  const groupCard = await inspector();
+  record(
+    'Carrier: an empty deck says why it cannot strike; a fighter wing flies aboard from the fleet card and is listed in its air group',
+    /No aircraft aboard/.test(emptyCard) && canFly && aboardNow.includes('fighter') && /Air group[\s\S]*Decks\s*1 of 2 wings/i.test(groupCard),
+    `empty-deck note ${/No aircraft aboard/.test(emptyCard)}; button ${canFly}; aboard ${aboardNow.join(', ') || 'none'}; ${(groupCard.match(/Decks[^\n]*\n?[^\n]*/i) ?? ['no Decks row'])[0].replace(/\s+/g, ' ')}`,
+  );
+
+  // ── naval strike chosen on a sea zone: the hover says whether it can be flown there
+  await page.evaluate((w) => (window as any).cnf.selectWing(w), ids.attack);
+  await page.waitForTimeout(150);
+  await page.getByRole('button', { name: /Fly naval strike/ }).first().click();
+  const zp2 = await page.evaluate((z) => {
+    const app = (window as any).cnf;
+    const c = app.renderer.zoneCenter(z);
+    app.renderer.camera.centerOn(c.x, c.y, app.renderer.camera.zoom, false);
+    app.mapDirty = true;
+    const r = app.canvas.getBoundingClientRect();
+    const s = app.renderer.camera.toScreen(c.x, c.y);
+    for (let d = 0; d < 160; d += 4) for (const [dx, dy] of [[0, d], [d, 0], [0, -d], [-d, 0]]) if (app.renderer.zoneAt(s.x + dx, s.y + dy) === z && !app.renderer.fleetAt(s.x + dx, s.y + dy)) return { x: s.x + dx + r.left, y: s.y + dy + r.top };
+    return null;
+  }, ids.zone);
+  let hoverTip = '';
+  if (zp2) {
+    await page.mouse.move(zp2.x, zp2.y);
+    await page.waitForTimeout(200);
+    hoverTip = await page.locator('.hover-tip').first().innerText().catch(() => '');
+    await page.mouse.click(zp2.x, zp2.y);
+    await page.waitForTimeout(200);
+  }
+  const strike = await page.evaluate((w) => {
+    const x = (window as any).cnf.sim.state.wings[w];
+    return `${x.mission}@${x.zone}`;
+  }, ids.attack);
+  record(
+    'Naval strike: chosen by clicking a sea zone; the hover names the zone and the steps from the base',
+    strike === `naval@${ids.zone}` && /Naval strike/i.test(hoverTip) && /steps from/.test(hoverTip),
+    `order ${strike}; hover "${hoverTip.replace(/\n/g, ' / ').slice(0, 120)}"`,
+  );
+
+  // ── a grounded wing says why; Esc cancels choosing a target
+  await page.evaluate((w) => {
+    const app = (window as any).cnf;
+    app.sim.state.wings[w].readiness = 10;
+    app.selectWing(w);
+  }, ids.attack);
+  await page.waitForTimeout(200);
+  const grounded = await inspector();
+  await page.getByRole('button', { name: /Fly interdiction/ }).first().click();
+  const targeting = await page.evaluate(() => !!(window as any).cnf.targeting);
+  await page.keyboard.press('Escape');
+  const cancelled = await page.evaluate(() => !(window as any).cnf.targeting);
+  record(
+    'A grounded wing gives its reason on its card; Esc cancels choosing a target',
+    /Grounded/.test(grounded) && /Not ready: readiness 10%/.test(grounded) && targeting && cancelled,
+    `${(grounded.match(/Not ready[^\n]*/) ?? ['no reason shown'])[0]}; targeting ${targeting} → cancelled ${cancelled}`,
+  );
+
+  // ── the Military ledger lists every wing: where it flies from, its mission and readiness
+  await page.keyboard.press('Escape');
+  await page.keyboard.press('m');
+  await page.waitForTimeout(250);
+  const ops = await page.locator('[data-sk="air-operations"]').innerText().catch(() => '');
+  await page.keyboard.press('Escape');
+  record(
+    'Military ledger: an Air operations table lists each wing with its base or carrier, mission, state and readiness',
+    /Air operations/i.test(ops) && /aboard Carrier Group/.test(ops) && /naval strike over/.test(ops) && /10%/.test(ops),
+    ops.split('\n').slice(0, 6).join(' / ').slice(0, 200),
+  );
   record('No errors during the navy and air session', problems.length === 0, problems.slice(0, 3).join('; '));
+  await page.close();
+}
+
+/** Albania on the World, 1914: war on the Ottomans it does not border, with the reach assessment shown first. */
+async function overseasWarFlow(browser: Browser, base: string): Promise<void> {
+  const page = await browser.newPage({ viewport: { width: 1366, height: 768 } });
+  const problems = await watch(page);
+  await page.goto(base);
+  await page.waitForSelector('.screen .menu-list button', { timeout: 15000 });
+  await page.evaluate(() => (window as any).cnf.newGame({ scenario: 'earth', seed: 1, playerNation: 'alb', difficulty: 'normal' }, false));
+  await page.waitForSelector('canvas.map', { timeout: 120000 });
+  await page.waitForFunction(() => !!(window as any).cnf.renderer, null, { timeout: 120000 });
+  await page.evaluate(() => {
+    const app = (window as any).cnf;
+    app.dialogLayer.classList.add('hidden');
+    app.openDiplomacy('ott');
+  });
+  await page.waitForTimeout(400);
+  const detail = await page.locator('.diplo-detail').innerText();
+  const war = page.locator('.diplo-detail .action button', { hasText: /War of conquest/ }).first();
+  const offered = (await war.count()) > 0 && !(await war.isDisabled());
+  let dialogText = '';
+  if (offered) {
+    await war.click();
+    await page.waitForTimeout(200);
+    dialogText = await page.locator('.modal-layer:not(.hidden)').last().innerText().catch(() => '');
+    await page.locator('.modal-layer:not(.hidden) footer button', { hasText: 'Confirm' }).last().click();
+    await page.waitForTimeout(200);
+  }
+  const atWar = await page.evaluate(() => Object.values((window as any).cnf.sim.state.wars).some((w: any) => w.attackers.includes('alb') && w.defenders.includes('ott')));
+  record(
+    'Albania may declare war on the Ottoman Empire it does not border: Diplomacy assesses the reach by sea first, the dialog repeats it, and the war begins',
+    offered && /By sea: Aydın is 1 sea zone from our port of Durazzo/.test(detail) && /Overland: no route/.test(detail) && /Can we reach them\?/i.test(dialogText) && atWar,
+    `offered ${offered}; ${(detail.match(/By sea:[^\n]*/) ?? ['no sea line'])[0].slice(0, 110)}; dialog ${/Can we reach them/i.test(dialogText)}; at war ${atWar}`,
+  );
+  record('No errors during the overseas war session', problems.length === 0, problems.slice(0, 3).join('; '));
   await page.close();
 }
 
@@ -1257,6 +1370,7 @@ async function main(): Promise<void> {
     // ONLY=sea-air runs just the navy and air flow (while working on it; no report is written)
     if (process.env.ONLY === 'sea-air') {
       await seaAirFlow(browser, `${origin}/`);
+      await overseasWarFlow(browser, `${origin}/`);
       return;
     }
     if (process.env.ONLY === 'maps') {
@@ -1279,6 +1393,7 @@ async function main(): Promise<void> {
     await flow(browser, `${origin}${SUB}`, 'Project subpath');
     await mapChoice(browser, `${origin}/`);
     await seaAirFlow(browser, `${origin}/`);
+    await overseasWarFlow(browser, `${origin}/`);
     await mapEditorFlow(browser, `${origin}/`);
     await diplomacyFlow(browser, `${origin}/`);
     await tutorialFlow(browser, `${origin}/`);

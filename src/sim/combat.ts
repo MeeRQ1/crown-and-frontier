@@ -30,17 +30,18 @@
 // province without enemies (friendly ground and short supply lines preferred);
 // with no legal retreat they surrender.
 
-import { airCombatBonus } from './air';
+import { airSupportFor, airSupportForecast } from './air';
 import { C, TERRAIN, UNITS } from './config';
 import { isShort, removePopulation, reserveCap } from './economy';
 import { maxMorale, removeArmy } from './military';
-import { armiesIn } from './index';
+import { armiesIn, touchBattles } from './index';
 import { nationMods, type Mods } from './modifiers';
 import { canEnter, isRiver } from './movement';
 import { range } from './rng';
 import { addContribution, atWar, bump, isFriendly, nationName, notify, provName, type Sim } from './state';
 import { supplyCombatMul, supplyDistances, supplyStatus } from './supply';
-import type { Army, Battle, BattleReport, NationId, ProvinceId, UnitType } from './types';
+import { bombardPlan, bombardPower } from './naval';
+import type { Army, Battle, BattleReport, NationId, ProvinceId, SupportLine, UnitType } from './types';
 
 // ───────────────────────────── Snapshots (shared by live and forecast) ──────
 
@@ -138,7 +139,13 @@ export function armourShare(s: SideSnap): number {
   return line > 0 ? armour / line : 0;
 }
 
-function sideCalc(sim: Sim, pid: ProvinceId, s: SideSnap, enemyAntiCav = 0): SideCalc {
+/** Fire support for one side of a battle: the share added to its fire, and what the report says. */
+export interface SideSupport {
+  share: number;
+  notes: string[];
+}
+
+function sideCalc(sim: Sim, pid: ProvinceId, s: SideSnap, enemyAntiCav = 0, fireSupport?: SideSupport): SideCalc {
   const terr = TERRAIN[sim.world.prov[pid].terrain];
   const front: Array<{ army: ArmySnap; reg: RegSnap }> = [];
   const support: Array<{ army: ArmySnap; reg: RegSnap }> = [];
@@ -213,11 +220,10 @@ function sideCalc(sim: Sim, pid: ProvinceId, s: SideSnap, enemyAntiCav = 0): Sid
     const pen = (1 - C.naval.landing) * Math.max(0, 1 - nationMods(sim, s.armies[0].nation).landing);
     notes.push(`Landing from the sea −${Math.round(pen * 100)}%`);
   }
-  // the air over the battlefield
-  const air = airCombatBonus(sim, pid, [...new Set(s.armies.map((a) => a.nation))]);
-  if (air.mul !== 1) {
-    fire *= air.mul;
-    notes.push(...air.notes);
+  // fire support from the air and from the sea (committed to this battle; see battleSupport)
+  if (fireSupport && fireSupport.share > 0) {
+    fire *= 1 + fireSupport.share;
+    notes.push(...fireSupport.notes);
   }
   if (reserveRegs > 0) notes.push(`Frontage ${terr.frontage}: ${reserveRegs} regiment${reserveRegs === 1 ? '' : 's'} held in reserve`);
   const supplyWorst = Math.min(...s.armies.map((a) => a.supply));
@@ -299,9 +305,9 @@ export interface RoundResult {
 }
 
 /** Resolves one round on the snapshots in place. */
-export function resolveRound(sim: Sim, pid: ProvinceId, att: SideSnap, def: SideSnap, rollA: number, rollD: number, river = false): RoundResult {
-  const A = sideCalc(sim, pid, att, sideAntiCavalry(sim, def));
-  const D = sideCalc(sim, pid, def, sideAntiCavalry(sim, att));
+export function resolveRound(sim: Sim, pid: ProvinceId, att: SideSnap, def: SideSnap, rollA: number, rollD: number, river = false, support?: { att: SideSupport; def: SideSupport }): RoundResult {
+  const A = sideCalc(sim, pid, att, sideAntiCavalry(sim, def), support?.att);
+  const D = sideCalc(sim, pid, def, sideAntiCavalry(sim, att), support?.def);
   const dfb = defenceBonus(sim, pid, def, river, att);
   const defCas = A.fire * C.combat.casualtyPerFire * rollA * (1 - dfb.value);
   const attCas = D.fire * C.combat.casualtyPerFire * rollD;
@@ -382,7 +388,7 @@ function cloneSide(s: SideSnap): SideSnap {
   return { armies: s.armies.map((a) => ({ ...a, regs: a.regs.map((r) => ({ ...r })) })) };
 }
 
-export function simulateSnap(sim: Sim, pid: ProvinceId, att: SideSnap, def: SideSnap, rollA: number, rollD: number, river = false) {
+export function simulateSnap(sim: Sim, pid: ProvinceId, att: SideSnap, def: SideSnap, rollA: number, rollD: number, river = false, support?: { att: SideSupport; def: SideSupport }) {
   const a = cloneSide(att);
   const d = cloneSide(def);
   const as = sideMen(a);
@@ -394,7 +400,7 @@ export function simulateSnap(sim: Sim, pid: ProvinceId, att: SideSnap, def: Side
   let defLoss = 0;
   while (!out && round < C.combat.maxRounds + 1) {
     round++;
-    const r = resolveRound(sim, pid, a, d, rollA, rollD, river);
+    const r = resolveRound(sim, pid, a, d, rollA, rollD, river, support);
     if (round === 1) factors = r.factors;
     attLoss += r.attCas;
     defLoss += r.defCas;
@@ -414,9 +420,11 @@ export function forecastBattle(sim: Sim, pid: ProvinceId, attackers: Army[], def
   // an attacker arriving has not dug in
   for (const a of att.armies) a.stationary = 0;
   const river = attackers.length > 0 && attackers.every((a) => isRiver(sim, from ?? a.location, pid));
-  const lo = simulateSnap(sim, pid, att, def, C.combat.rollMin, C.combat.rollMax, river);
-  const mid = simulateSnap(sim, pid, att, def, 1, 1, river);
-  const hi = simulateSnap(sim, pid, att, def, C.combat.rollMax, C.combat.rollMin, river);
+  // the support each side could call on this week (a forecast: commitments can change)
+  const support = { att: supportForecast(sim, pid, [...new Set(attackers.map((a) => a.nation))]), def: supportForecast(sim, pid, [...new Set(defenders.map((a) => a.nation))]) };
+  const lo = simulateSnap(sim, pid, att, def, C.combat.rollMin, C.combat.rollMax, river, support);
+  const mid = simulateSnap(sim, pid, att, def, 1, 1, river, support);
+  const hi = simulateSnap(sim, pid, att, def, C.combat.rollMax, C.combat.rollMin, river, support);
   const outcomes = [lo.outcome, mid.outcome, hi.outcome];
   const wins = outcomes.filter((o) => o === 'attacker').length;
   return {
@@ -429,6 +437,62 @@ export function forecastBattle(sim: Sim, pid: ProvinceId, attackers: Army[], def
     factors: mid.factors,
     outcomes,
   };
+}
+
+// ───────────────────────────── Fire support ─────────────────────────────────
+
+/** Air and naval fire support together, capped: guns and bombs cannot replace the infantry. */
+function combine(air: { share: number; notes: string[] }, naval: { share: number; notes: string[] }): SideSupport {
+  const raw = air.share + naval.share;
+  const share = Math.min(C.naval.supportCap, raw);
+  const notes = [...air.notes, ...naval.notes];
+  if (raw > share + 1e-9) notes.push(`Fire support capped at +${Math.round(C.naval.supportCap * 100)}% (${Math.round(raw * 100)}% committed)`);
+  return { share, notes };
+}
+
+/** Shore bombardment committed to one side of a live battle this week. */
+function navalSupportFor(sim: Sim, b: Battle, side: 'att' | 'def'): { share: number; notes: string[]; lines: SupportLine[] } {
+  const ships = bombardPlan(sim).get(b.id)?.[side] ?? [];
+  if (!ships.length) return { share: 0, notes: [], lines: [] };
+  let power = 0;
+  for (const x of ships) power += x.power;
+  const share = Math.min(C.naval.bombardMax, C.naval.bombardPer * power);
+  const lines: SupportLine[] = ships.map((x) => ({ kind: 'naval', id: x.fleet.id, nation: x.fleet.nation, name: x.fleet.name, value: (share * x.power) / power }));
+  return { share, notes: [`Naval gunfire +${Math.round(share * 100)}% from ${ships.length === 1 ? ships[0].fleet.name : `${ships.length} fleets`} offshore`], lines };
+}
+
+/** The fire support each side of a live battle has this week, with the wings and fleets that give it. */
+export function battleSupport(sim: Sim, b: Battle): { att: SideSupport; def: SideSupport; lines: { att: SupportLine[]; def: SupportLine[] } } {
+  const out = { att: { share: 0, notes: [] } as SideSupport, def: { share: 0, notes: [] } as SideSupport, lines: { att: [] as SupportLine[], def: [] as SupportLine[] } };
+  for (const side of ['att', 'def'] as const) {
+    const air = airSupportFor(sim, b, side);
+    const naval = navalSupportFor(sim, b, side);
+    out[side] = combine(air, naval);
+    const raw = air.share + naval.share;
+    const k = raw > 0 ? out[side].share / raw : 1;
+    out.lines[side] = [...air.lines, ...naval.lines].map((l) => ({ ...l, value: l.value * k }));
+  }
+  return out;
+}
+
+/** Support a side could call on in a battle at `pid` (forecasts): aircraft on call over it, gun ships lying off its coast. */
+export function supportForecast(sim: Sim, pid: ProvinceId, nations: NationId[]): SideSupport {
+  const air = airSupportForecast(sim, pid, nations);
+  let power = 0;
+  let fleets = 0;
+  const st = sim.state;
+  for (const z of sim.world.provZones[pid] ?? []) {
+    for (const id of Object.keys(st.fleets).sort()) {
+      const f = st.fleets[id];
+      if (f.zone !== z || f.path.length || f.cargo.length || !nations.includes(f.nation)) continue;
+      const p = bombardPower(sim, f);
+      if (p <= 0) continue;
+      power += p;
+      fleets++;
+    }
+  }
+  const share = Math.min(C.naval.bombardMax, C.naval.bombardPer * power);
+  return combine(air, { share, notes: share > 0 ? [`Naval gunfire +${Math.round(share * 100)}% (${fleets} fleet${fleets === 1 ? '' : 's'} offshore)`] : [] });
 }
 
 // ───────────────────────────── Live battles ─────────────────────────────────
@@ -505,6 +569,7 @@ export function detectBattles(sim: Sim): void {
       factors: [],
     };
     st.battles[b.id] = b;
+    touchBattles(sim);
     for (const a of here) {
       if (isFriendly(sim, a.nation, anchor.nation) && atWar(sim, a.nation, foe.nation)) join(b, a, 'def');
       else if (isFriendly(sim, a.nation, foe.nation) && atWar(sim, a.nation, anchor.nation)) join(b, a, 'att');
@@ -561,6 +626,7 @@ export function pruneBattles(sim: Sim): void {
     if (!att.length || !def.length) {
       for (const x of [...att, ...def]) st.armies[x].battle = null;
       delete st.battles[id];
+      touchBattles(sim);
     }
   }
   for (const aid in st.armies) {
@@ -588,8 +654,11 @@ export function weeklyCombat(sim: Sim): void {
     for (const a of att.armies) a.stationary = 0; // attackers never count as entrenched
     const rollA = range(st.rng, C.combat.rollMin, C.combat.rollMax);
     const rollD = range(st.rng, C.combat.rollMin, C.combat.rollMax);
-    const r = resolveRound(sim, b.province, att, def, rollA, rollD, !!b.river);
-    if (b.rounds.length === 0) b.factors = r.factors;
+    const sup = battleSupport(sim, b);
+    const r = resolveRound(sim, b.province, att, def, rollA, rollD, !!b.river, sup);
+    // the factors of the latest round: support comes and goes week by week
+    b.factors = r.factors;
+    b.support = { att: sup.lines.att, def: sup.lines.def };
     // write back to armies
     for (const snap of [...att.armies, ...def.armies]) writeBack(sim, snap);
     for (const a of [...attArmies, ...defArmies]) {
@@ -789,6 +858,7 @@ function endBattle(sim: Sim, b: Battle, winner: 'attacker' | 'defender'): void {
   st.reports.push(report);
   if (st.reports.length > 120) st.reports.splice(0, st.reports.length - 120);
   delete st.battles[b.id];
+  touchBattles(sim);
 
   for (const n of winNations)
     notify(sim, n, 'normal', 'battle', `Victory at ${provName(sim, b.province)}: enemy lost ${report[winner === 'attacker' ? 'defLosses' : 'attLosses'].toLocaleString()} men, we lost ${Math.round(winLoss).toLocaleString()}.`, { province: b.province });

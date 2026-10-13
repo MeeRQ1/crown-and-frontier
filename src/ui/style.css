@@ -893,6 +893,14 @@ canvas.map.dragging { cursor: grabbing; }
 .group-card { border: 1px solid var(--line); padding: var(--s3); margin-bottom: var(--s4); background: var(--bg-raised); }
 .gc-head { display: flex; align-items: center; gap: var(--s4); padding: var(--s2) var(--s3) var(--s3); }
 .front-row { display: flex; align-items: center; gap: var(--s4); padding: var(--s3) 0; border-bottom: 1px solid var(--line-soft); }
+/* fire support in a battle (resolved), and the war-reach assessment */
+.support-grid { display: grid; grid-template-columns: 1fr 1fr; gap: var(--s4); }
+.support-side { min-width: 0; }
+.support-line { display: flex; align-items: center; gap: var(--s3); padding: var(--s2) 0; border-bottom: 1px solid var(--line-soft); font-size: var(--fs-sm); }
+.support-line:last-child { border-bottom: 0; }
+.support-line .grow { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+.reach .callout { margin-top: var(--s3); }
+@media (max-width: 760px) { .support-grid { grid-template-columns: 1fr; } }
 .front-row:last-child { border-bottom: 0; }
 details.section > summary { cursor: pointer; list-style: none; }
 details.section > summary::-webkit-details-marker { display: none; }

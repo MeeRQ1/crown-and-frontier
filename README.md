@@ -50,8 +50,11 @@ economic prosperity or diplomatic leadership.
   sieges; **navies** (transports, torpedo boats, cruisers, battleships, submarines,
   carriers) that fight for sea zones, close straits, blockade coasts and carry armies to
   hostile shores, where a coast held with a fleet offshore becomes a beachhead that supplies
-  them; **air wings** (reconnaissance, fighters, ground attack, bombers) flying
-  from airfields for air superiority, ground support, interdiction and bombing; a five-era
+  them, raid the trade on sea routes and shell battles on the coast; **air wings**
+  (reconnaissance, fighters, ground attack, bombers) flying from airfields or carriers, within a
+  range counted over land and sea and with readiness to manage, for air superiority, ground
+  support committed to one battle, interdiction, bombing and naval strikes; wars on realms we
+  do not border, with an assessment of whether we can reach them first; a five-era
   research tree of 73 technologies in five branches with horizon years; **national focus
   trees** (a generic tree and a national branch for every realm); diplomacy with coalitions,
   **guarantees, influence and spheres, loans and trade blocs**; **peace settlements** with
@@ -86,7 +89,7 @@ this if you try.
 | Move the selected army | Right-click a province, or **G** / Move then click | Long-press a province, or "March here" in the province card |
 | Sail the selected fleet | Right-click a sea zone or coast, or **G** / Sail then click | "Sail" in the fleet card, then tap |
 | Carry an army by sea | "Ship by sea" in the army card (a fleet with transports off its coast), then click the beach | the same, with taps |
-| Air missions | Select a wing (in its airfield's province card), choose a mission, click the target | the same, with taps |
+| Air missions | Select a wing (in its airfield's province card, its carrier's fleet card or the Military ledger), choose a mission, click the target province or sea zone (the shading is its range; the hover says whether it can fly there); **Esc** cancels | the same, with taps |
 | Add a waypoint | **Shift**+right-click | — |
 | Pan / zoom | Drag / mouse wheel, arrow keys, **+ / −** | Drag / pinch |
 | Pause, speed | **Space**, **1–4** | ▶ and speed pips |
@@ -241,10 +244,13 @@ that the final state matches.
   empires start far larger than the kingdoms. In 16 AI campaigns Russia won 6 on score and
   Sweden and Denmark 10 by diplomacy; Norway and Denmark rarely fight.
 - **Navy and air are abstracted:** fleets fight in sea zones and wings fly missions over a
-  province and its neighbours; there are no individual ships' positions, convoys or air
-  routes. Troops at sea cannot be redirected until they land.
-- **Save format:** 5.
-  - Format-1 to format-4 saves are converted on load, each with a notice.
+  province and its neighbours, or over one sea zone; there are no individual ships' positions
+  or air routes, and convoys are the trade on a route between two ports, raided zone by zone.
+  Troops at sea cannot be redirected until they land.
+- **Save format:** 6.
+  - Format-1 to format-5 saves are converted on load, each with a notice.
+  - A format-5 campaign keeps its wings' missions (fully ready, at their airfields); its
+    carriers start with empty decks.
   - A format-4 campaign keeps its running trade exchanges as 12-month contracts at list price.
   - A format-3 campaign keeps each realm's national policy as the matching completed focus.
   - Format-3 saves written before Stage C load with empty navies and air arms.

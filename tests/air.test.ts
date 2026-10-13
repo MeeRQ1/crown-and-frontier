@@ -2,7 +2,7 @@
 // supply, movement and industry.
 
 import { describe, expect, it } from 'vitest';
-import { airCombatBonus, airControl, bombingLoss, createWing, interdiction, weeklyAir } from '../src/sim/air';
+import { airControl, airSupportForecast, bombingLoss, createWing, interdiction, weeklyAir } from '../src/sim/air';
 import { applyCommand, checkCommand } from '../src/sim/commands';
 import { C, WINGS } from '../src/sim/config';
 import { forecastBattle } from '../src/sim/combat';
@@ -60,11 +60,18 @@ describe('airfields and wings', () => {
     const f = wing(sim, 'a', 'a1', 'fighter');
     const b = wing(sim, 'a', 'a1', 'bomber');
     expect(checkCommand(sim, { type: 'airMission', nation: 'a', wing: f.id, mission: 'bombing', target: 'b1' })).toMatch(/cannot fly/);
-    expect(checkCommand(sim, { type: 'airMission', nation: 'a', wing: b.id, mission: 'bombing', target: 'b1' })).toMatch(/enemy-held/);
+    expect(checkCommand(sim, { type: 'airMission', nation: 'a', wing: b.id, mission: 'bombing', target: 'b1' })).toMatch(/held by an enemy/);
     declareWar(sim, 'a', 'b', { type: 'conquest', provinces: ['b1'] });
     expect(checkCommand(sim, { type: 'airMission', nation: 'a', wing: b.id, mission: 'bombing', target: 'b1' })).toBeNull();
-    // c's island is not connected by land: no hop distance, out of range
-    expect(checkCommand(sim, { type: 'airMission', nation: 'a', wing: f.id, mission: 'superiority', target: 'c1' })).toMatch(/out of range/);
+    // c's island lies across three sea zones: four steps from a1 (a1 → West → Middle → East → c1),
+    // beyond a fighter's 3 and within a bomber's 5
+    expect(checkCommand(sim, { type: 'airMission', nation: 'a', wing: f.id, mission: 'superiority', target: 'c1' })).toMatch(/out of range: 4 steps from A1; the range is 3/);
+    expect(checkCommand(sim, { type: 'airMission', nation: 'a', wing: b.id, mission: 'interdiction', target: 'c1' })).toBeNull();
+    // a naval strike names a sea zone, and fighters do not fly it
+    expect(checkCommand(sim, { type: 'airMission', nation: 'a', wing: b.id, mission: 'naval', target: 'b1' })).toMatch(/sea zone/);
+    expect(checkCommand(sim, { type: 'airMission', nation: 'a', wing: b.id, mission: 'naval', target: null, zone: 'zm' })).toBeNull();
+    expect(checkCommand(sim, { type: 'airMission', nation: 'a', wing: f.id, mission: 'naval', target: null, zone: 'zm' })).toMatch(/cannot fly naval strike/);
+    expect(checkCommand(sim, { type: 'airMission', nation: 'a', wing: b.id, mission: 'interdiction', target: null, zone: 'zm' })).toMatch(/flown over land/);
   });
 });
 
@@ -87,7 +94,7 @@ describe('air power at war', () => {
     fresh(sim);
     const supported = forecastBattle(sim, 'b1', [att], [def]);
     expect(supported.defLoss).toBeGreaterThan(base.defLoss);
-    expect(supported.factors.some((x) => /Air support \+/.test(x))).toBe(true);
+    expect(supported.factors.some((x) => /Air support on call \+40% \(2 wings\)/.test(x))).toBe(true);
     // the enemy wins the sky over the battlefield
     for (let i = 0; i < 3; i++) wing(sim, 'b', 'b2', 'fighter', 'superiority', 'b1');
     fresh(sim);
@@ -96,7 +103,7 @@ describe('air power at war', () => {
     expect(contested.factors.some((x) => /enemy holds the sky/.test(x))).toBe(true);
     // the support bonus itself falls to 40%
     const full = 2 * WINGS.attack.ground * C.air.supportPer;
-    expect(airCombatBonus(sim, 'b1', ['a']).mul).toBeCloseTo(1 + Math.min(C.air.supportMax, full) * C.air.contested, 9);
+    expect(airSupportForecast(sim, 'b1', ['a']).share).toBeCloseTo(Math.min(C.air.supportMax, full) * C.air.contested, 9);
   });
 
   it('interdiction cuts an enemy army’s supply and speed', () => {

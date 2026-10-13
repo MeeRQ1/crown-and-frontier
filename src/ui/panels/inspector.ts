@@ -2,6 +2,7 @@
 // what is selected, a fact grid gives the essentials, primary actions come
 // next, and details follow. Unavailable actions always say why.
 
+import { airBalance, airControl } from '../../sim/air';
 import { C, RESOURCE_INFO, TERRAIN, UNITS, UNIT_TYPES } from '../../sim/config';
 import { checkCommand } from '../../sim/commands';
 import { forecastBattle } from '../../sim/combat';
@@ -14,7 +15,7 @@ import { etaWeeks, isRiver } from '../../sim/movement';
 import { siegeInfo } from '../../sim/siege';
 import { armiesAt, atWar, menOf, nationName, provName } from '../../sim/state';
 import { armySupplyInfo, provinceSupplyCapacity } from '../../sim/supply';
-import type { Army, ProjectKind, ProvinceId, StrategicResource, UnitType } from '../../sim/types';
+import type { Army, Battle, SupportLine, ProjectKind, ProvinceId, StrategicResource, UnitType } from '../../sim/types';
 import type { App } from '../app';
 import { orderStatus, readiness } from '../../sim/readiness';
 import { action, bar, button, h, rebuild, row, setChildren } from '../dom';
@@ -153,6 +154,7 @@ function provinceCard(app: App, pid: ProvinceId): HTMLElement[] {
       p.owner ? row('Factories', h('span', { title: `Factories make materiel for regiments and sell the surplus as manufactured goods. Each burns ${C.industry.coalPerFactory} coal a month.` }, `${p.factories}/${factoryMax(sim, pid)}`)) : null,
       row('Population', `${fmt(p.pop, 1)}k`),
       me ? row('Supply capacity', plural(Math.floor(provinceSupplyCapacity(sim, me, pid)), 'regiment')) : null,
+      me ? skyRow(app, pid) : null,
       (() => {
         const nb = sim.world.prov[pid].neighbors;
         const rivers = nb.filter((n) => isRiver(sim, pid, n));
@@ -469,6 +471,18 @@ export function forecastView(f: ReturnType<typeof forecastBattle>, side: 'attack
   );
 }
 
+/** Who holds the sky over a province this week, when aircraft fly over it. */
+function skyRow(app: App, pid: ProvinceId): HTMLElement | null {
+  const sim = app.sim!;
+  const me = app.player!;
+  const ctl = airControl(sim, pid, me);
+  if (ctl === 'none') return null;
+  const b = airBalance(sim, { prov: pid }, me);
+  const label = ctl === 'ours' ? 'Ours' : ctl === 'theirs' ? 'The enemy\'s' : 'Contested';
+  const help = `Air power over the province this week (fighters on patrol in full, other aircraft at half). A side holds the sky at ${C.air.superiority}× the other's; ground support, interdiction and bombing fly at full effect under our sky, ${Math.round(C.air.disputed * 100)}% contested and ${Math.round(C.air.contested * 100)}% under the enemy's.`;
+  return row('Sky', h('span', { class: ctl === 'ours' ? 'good' : ctl === 'theirs' ? 'bad' : 'warn', title: help }, `${label} · ${fmt(b.ours, 1)} against ${fmt(b.theirs, 1)}`));
+}
+
 function battleSection(app: App, bid: string): HTMLElement {
   const sim = app.sim!;
   const b = sim.state.battles[bid];
@@ -484,8 +498,41 @@ function battleSection(app: App, bid: string): HTMLElement {
     row('Defenders', `${b.defenderNations.map((n) => sim.world.nationDefs[n].short).join(', ')} · ${men(m(def))} (lost ${men(b.defLosses)})`),
     last ? bar(last.defMorale, 1, 'info', 'Defender morale') : null,
     row('Round', `${b.rounds.length} of at most ${C.combat.maxRounds}`),
+    supportBlock(app, b),
     b.factors.length ? h('ul', { class: 'reasons' }, b.factors.map((x) => h('li', null, x))) : null,
     h('p', { class: 'small faint' }, 'A side breaks at 25% morale or after losing 90% of its men. Reinforcements arriving in the province join the battle.'),
+  );
+}
+
+/**
+ * Fire support in this battle's latest round, side by side: the wings and fleets
+ * that gave it and what each added (resolved, not a forecast), and for our side
+ * what more could be called in.
+ */
+function supportBlock(app: App, b: Battle): HTMLElement {
+  const sim = app.sim!;
+  const me = app.player;
+  const ourSide: 'att' | 'def' | null = me ? (b.attackerNations.includes(me) ? 'att' : b.defenderNations.includes(me) ? 'def' : null) : null;
+  const line = (l: SupportLine) => {
+    const name = h('button', { class: 'linkish', type: 'button' }, l.name);
+    name.addEventListener('click', () => (l.kind === 'naval' ? app.selectFleet(l.id, true) : app.selectWing(l.id)));
+    return h('div', { class: 'support-line' }, shield(app, l.nation), h('span', { class: 'grow' }, name, h('span', { class: 'faint' }, l.kind === 'naval' ? ' · naval gunfire' : l.kind === 'recon' ? ' · reconnaissance' : ' · ground support')), h('b', null, `+${Math.round(l.value * 100)}%`));
+  };
+  const sideView = (label: string, lines: SupportLine[]) =>
+    h('div', { class: 'support-side' }, h('div', { class: 'eyebrow' }, label), lines.length ? lines.map(line) : h('p', { class: 'small faint' }, 'None this round.'));
+  const sup = b.support ?? { att: [], def: [] };
+  const hint: HTMLElement[] = [];
+  if (ourSide) {
+    const mine = sup[ourSide];
+    if (!mine.some((l) => l.kind !== 'naval')) hint.push(h('p', { class: 'small muted' }, 'No air support for us: give a ground-attack or fighter wing a support mission over this province or a neighbour, within its range. Each wing joins one battle a week.'));
+    if (!mine.some((l) => l.kind === 'naval') && sim.world.provZones[b.province]?.length) hint.push(h('p', { class: 'small muted' }, 'No naval gunfire: battleships or cruisers lying still in a sea zone on this coast would shell the enemy (coastal forts fire back).'));
+  }
+  return h(
+    'div',
+    { class: 'support', 'data-sk': 'battle-support' },
+    h('div', { class: 'eyebrow', style: 'margin-top:8px' }, 'Fire support this round (resolved)'),
+    h('div', { class: 'support-grid' }, sideView('Attackers', sup.att), sideView('Defenders', sup.def)),
+    hint,
   );
 }
 

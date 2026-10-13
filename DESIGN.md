@@ -88,11 +88,14 @@ Weekly order:
 
 1. Proposal expiry (unanswered calls to arms are honoured).
 2. AI decisions, through the same `applyCommand()` as the player.
-3. Standing orders, then the **naval phase**: fleets sail, hostile fleets fight, troops
-   land, ships repair or wear, blockades are counted.
-4. Movement and arrivals, in army-id order.
-5. The **air phase**: air combat, flak, replenishment, rebasing.
-6. Battle detection, then one combat round per battle.
+3. Standing orders, then the **naval phase**: fleets sail; aircraft fly their sea missions
+   (air cover, patrols, naval strikes); hostile fleets fight; troops land; ships repair or
+   wear; blockades and raiding are counted.
+4. Movement and arrivals, in army-id order; then battle detection (contact on arrival).
+5. The **air phase** over land: rebasing, ground support planned for this week's battles,
+   interception, flak, bombing, readiness and replacements.
+6. One combat round per battle, with its air and naval fire support; coastal forts fire
+   back at the ships that shelled them.
 7. Sieges and changes of control. Any control change marks the supply network stale.
 8. Army care on the updated map: supply level, attrition, morale recovery and reinforcement.
 9. Recruitment, shipyards and hangars, then construction progress.
@@ -465,19 +468,20 @@ Middle Sea from 36.5 to 25.4 ms (`reports/perf/web-stageD.md`).
 ## The navy (`naval.ts`)
 
 **Ships** are laid down in a port (one slipway per port level) and join a squadron off it.
+Every type has a job, things it cannot do and a counter:
 
-| Ship | Needs | Cost | Weeks | Upkeep | Guns | Torpedo | Anti-sub | AA | Air | Hull | Speed | Notes |
-|---|---|---|---|---|---|---|---|---|---|---|---|---|
-| Transport | — | 20, 15 materiel, 2 iron | 10 | 0.6 | 0 | 0 | 0 | 0 | 0 | 2 | 1 | carries 2 regiments |
-| Torpedo boat (screen) | Torpedo Boats | 25, 20, 3 iron | 12 | 0.8 | 1 | 1 | 3 | 0.5 | 0 | 2 | 2 | hunts submarines, shields transports and carriers |
-| Cruiser | — | 45, 40, 6 iron | 20 | 1.5 | 3.5 | 0.5 | 1 | 1 | 0 | 4 | 2 | patrols, blockades, escorts |
-| Battleship (capital) | — | 90, 90, 14 iron | 36 | 3 | 8 | 0 | 0 | 2 | 0 | 12 | 1.5 | the heaviest guns afloat |
-| Submarine | Submarines | 35, 30, 4 iron | 16 | 1 | 0.3 | 4 | 0 | 0 | 0 | 2 | 1.5 | only anti-sub fire hurts it; always burns oil |
-| Carrier | Naval Aviation | 100, 100, 12 iron, 2 rubber | 40 | 3.5 | 0.5 | 0 | 1 | 3 | 7 | 9 | 1.5 | strikes from the air; always burns oil |
+| Ship | Needs | Cost | Upkeep | Guns | Torpedo | Anti-sub | AA | Bombard | Raid | Escort | Hull | Speed | Job |
+|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
+| Transport | — | 20, 15 materiel, 2 iron, 10 wk | 0.6 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 2 | 1 | carries 2 regiments |
+| Torpedo boat (screen) | Torpedo Boats | 25, 20, 3 iron, 12 wk | 0.8 | 1 | 1 | 3 | 1 | 0 | 0 | 2 | 2 | 2 | escort: hunts submarines, shields convoys and carriers |
+| Cruiser | — | 45, 40, 6 iron, 20 wk | 1.5 | 3.5 | 0.5 | 1 | 1.5 | 3.5 | 1.5 | 1.5 | 4 | 2 | patrol, raiding, escort, light bombardment |
+| Battleship (capital) | — | 90, 90, 14 iron, 36 wk | 3 | 8 | 0 | 0 | 2 | 8 | 0 | 0.5 | 12 | 1.5 | the decisive surface fight; heavy bombardment |
+| Submarine | Submarines | 35, 30, 4 iron, 16 wk | 1 | 0.3 | 4 | 0 | 0 | 0 | 4 | 0 | 2 | 1.5 | raids sea trade; ambushes big ships |
+| Carrier | Naval Aviation | 100, 100, 12 iron, 2 rubber, 40 wk | 3.5 | 0.5 | 0 | 1 | 3 | 0 | 0 | 0 | 9 | 1.5 | a mobile air base: 2 wings (3 with Fleet Carriers) |
 
 Ships burn coal each month (oil after Oil-Fired Boilers); a realm short of its fleet's fuel
 fights at 60% and sails at half speed. Fleets at a friendly port on an uncontested zone repair 6 hp a
-week per port level; fleets more than four zones from every friendly port lose 2 hp a week.
+week per port level (half under the bombs); fleets more than four zones from every friendly port lose 2 hp a week.
 
 **Movement.** A fleet sails one zone per movement point per week (its slowest ship). A fleet
 entering a zone that holds enemy warships stops there and fights.
@@ -487,14 +491,15 @@ entering a zone that holds enemy warships stops there and fights.
 - guns hit surface ships, spread by size; transports and carriers behind at least as many
   screens and cruisers are hit at 30%;
 - submarine torpedoes go for capital ships, carriers and transports (three times the weight);
-- anti-submarine fire is the only thing that hurts submarines;
-- carriers' aircraft strike at 1.5× in the first round, blunted by the enemy's anti-aircraft
-  fire (× 20 / (20 + AA));
-- a side **without carrier aircraft** against one with them is out-ranged: its guns fire at
-  30% in the first round and 60% in the second.
+- anti-submarine fire is the only thing that hurts submarines, half as much again when a
+  reconnaissance patrol of the hunters' side flies over the zone;
+- aircraft take no part in the gun battle: they strike in the air phase before it (below). A
+  side **struck from the air that week with no air cover of its own** (the enemy holds the sky
+  over it) is out-ranged: its guns fire at 30% in the first round and 60% in the second.
 
 Damage per ship is fire × 32 × roll ÷ its hull. A side falling below half its starting
-fighting value withdraws. Regiments aboard sunk transports go down with them: whatever no longer fits in the transports still afloat is lost.
+fighting value withdraws. Regiments aboard sunk transports go down with them, and a sunk
+carrier's air group flies to an airfield within reach or is lost.
 
 **Sea control.**
 
@@ -502,38 +507,121 @@ fighting value withdraws. Regiments aboard sunk transports go down with them: wh
   own there: no marching or supply across it.
 - A coastal province is **blockaded** when every zone on its coast holds enemy warships
   (submarines count half) at more than twice our surface power there. It loses 25% of its
-  crowns, and the realm's sea trade shrinks with the blockaded share of its coast
-  (Convoys resist). Realms with a land border trade overland.
+  crowns, its shipyard stops, and the realm's sea trade shrinks with the blockaded share of its
+  coast (Convoys resist). Realms with a land border trade overland.
+- **Raiding.** Trade between realms without a land border goes by sea, on the shortest zone
+  route between their trade ports (the capital if it is a port, else the biggest port).
+  Raiders at war with either partner (submarines 4, cruisers 1.5 a ship) take a share of what
+  passes each zone: 6% per point of raid power that gets through, at most 40% a zone and 75%
+  a route. Escorts of either partner's side in the zone (screens 2, cruisers 1.5, battleships
+  0.5) turn raiders away: what gets through is raid × raid ÷ (raid + 2.5 × escort). Convoys
+  cut the loss by 30%. A fleet sitting elsewhere protects nothing: raiding is zone by zone,
+  on the route.
+
+**Shore bombardment.** Battleships and cruisers lying still (not sailing, carrying no troops)
+in a zone on the coast of a land battle that their realm or a friend fights shell the enemy:
++2% fire per point of gun power (a battleship 16%, a cruiser 7%), at most +25% from all the
+fleets offshore. Each fleet shells one battle a week (the largest it can reach). Inland
+provinces, and coasts on other zones, are out of reach. Coastal forts of the province fire
+back: 3 hull a week per fort level, spread over the gun ships. Air and naval fire support of a
+side together never exceed +50%.
 
 **Armies by sea.** Armies standing on a coast board a fleet with room (two regiments per
 transport) lying in a zone on that coast, and name a beach: our own or a friendly coast,
-unclaimed land, or an enemy's coast. The fleet sails there and the troops land when it
-reaches a zone on that coast. They fight at 75% that week. Troops at sea cannot be ordered
-and take no part in land battles; they go down with their transports.
+unclaimed land, or an enemy's coast. Aboard, they are out of every land phase: the fleet sails
+there (a week a zone for transports) and the troops land when it reaches a zone on that coast
+and enemy warships do not outgun ours there; until then they wait offshore, exposed to enemy
+ships, submarines and aircraft, and the fleet says why. They fight at 75% the week they land
+(87% with Amphibious Warfare). Ashore they are supplied by sea only while a fleet of ours lies
+off a coast they hold, uncontested (a beachhead), or once they take a port or fortified town;
+until they take the beach they are unsupplied. A war fleet in the same zone sails with the
+transports as their escort; strike aircraft over the route and enemy fleets on it are the
+threat.
 
 ## Air power (`air.ts`)
 
-**Airfields** (Aviation) hold two wings per level. A wing flies a mission over a target
-province within its range, counted in province hops from its base. Missions cover the target
-and its neighbours (bombing: the target only).
+**Airfields** (Aviation) hold two wings per level. **Carriers** hold two wings each (three with
+Fleet Carriers): fighters, ground attack and reconnaissance, never bombers. A wing flies its
+mission over a place within its **range, counted in steps over land and sea** from where it is
+based (reach.ts): a province to a neighbour, a coastal province to a zone on its coast and a
+zone to the next are one step each. From a carrier, range counts from the zone the fleet lies in
+that week. A wing changes base (airfield or carrier) within twice its range; doing so costs
+30 readiness.
 
-| Wing | Needs | Cost | Weeks | Upkeep | Air | Ground | Bomb | Range | Missions |
-|---|---|---|---|---|---|---|---|---|---|
-| Reconnaissance | Aviation | 20, 15 materiel, 1 rubber | 6 | 0.6 | 0.5 | 0 | 0 | 3 | recon |
-| Fighter | Fighters | 30, 25, 1 rubber, 1 iron | 8 | 1 | 3 | 0.5 | 0 | 3 | superiority, support |
-| Ground attack | Ground Attack | 35, 30, 1 rubber, 2 iron | 10 | 1.2 | 1 | 3 | 0.5 | 3 | support, interdiction |
-| Bomber | Strategic Bombing | 50, 45, 2 rubber, 3 iron | 14 | 1.8 | 0.8 | 1 | 3 | 5 | bombing, interdiction |
+| Wing | Needs | Cost | Upkeep | Air | Ground | Bomb | Naval | Range | Missions | Carrier |
+|---|---|---|---|---|---|---|---|---|---|---|
+| Reconnaissance | Aviation | 20, 15 materiel, 1 rubber, 6 wk | 0.6 | 0.5 | 0 | 0 | 0 | 3 | recon | yes |
+| Fighter | Fighters | 30, 25, 1 rubber, 1 iron, 8 wk | 1 | 3 | 0.5 | 0 | 0 | 3 | superiority, support | yes |
+| Ground attack | Ground Attack | 35, 30, 1 rubber, 2 iron, 10 wk | 1.2 | 1 | 3 | 0.5 | 3 | 3 | support, interdiction, naval strike | yes |
+| Bomber | Strategic Bombing | 50, 45, 2 rubber, 3 iron, 14 wk | 1.8 | 0.8 | 1 | 3 | 2 | 5 | bombing, interdiction, naval strike | no |
 
-- **Air superiority:** a side with 1.5× the enemy's air power over a province holds the sky
-  there. The enemy's support and interdiction then fall to 40%.
-- **Ground support:** +12% firepower per point of ground value over our battles (at most +40%).
-- **Reconnaissance:** +5% firepower.
-- **Interdiction:** enemy armies in the area lose up to 40% supply and 30% speed.
-- **Bombing:** factories in an enemy-held province lose up to 60% of their output.
-- **Losses:** wings lose strength each week against enemy air power, and bombers over forts
-  to flak. A wing at a quiet base regains 8 strength a week, paid in materiel. A wing whose
-  airfield falls rebases to the nearest free one, or is lost.
-- **Costs:** aircraft burn oil (30% while idle).
+**Missions.** Over land a mission covers its target province and the neighbours (bombing: the
+target only); over the sea it covers one zone (aboard a carrier, no zone means the zone the
+fleet is in, wherever it sails).
+
+- **Air superiority** (fighters): patrols the area. Every enemy wing flying there is
+  intercepted: it loses 10 × E ÷ (E + F + 0.5) strength a week (× its vulnerability: fighters
+  0.7, reconnaissance 1, ground attack 1.1, bombers 1.2), where E is the enemy fighters on
+  patrol there and F ours; the patrolling fighters are credited with what they shoot down.
+  Over a sea zone it is the fleet's air cover.
+- **Ground support** (ground attack; fighters weakly): on call over the area. Each week it joins
+  **one** of our battles there, the one at its target first, else the largest, and adds
+  +12% fire per point of ground value to that battle only (at most +40% from all air support).
+  With no battle it stands by: it does not fly, wear or risk anything. Ground fire costs it
+  1.5 strength a week.
+- **Interdiction** (ground attack, bombers): enemy armies in the area lose up to 40% supply and
+  30% speed.
+- **Strategic bombing** (bombers): an enemy-held province's factories lose up to 60% of their
+  output, its shipyard stops building and its port repairs at half rate, and wings on its
+  airfield lose 12 readiness per point of bombing, for as long as the bombing goes on. Forts
+  shoot back (2 strength a week per level).
+- **Naval strike** (ground attack, bombers): strikes the enemy ships in the zone if it finds
+  them (always under a reconnaissance patrol of our side, else 60%). Strike power is
+  naval value × 4 (carrier wings × Fleet Carriers' +25%), blunted by the targets'
+  anti-aircraft fire (× 20 ÷ (20 + AA)); damage is spread by size, battleships and carriers
+  twice as likely to be hit, transports half as likely again, valuables behind escorts half as
+  likely. The strike wings lose 0.5 strength per point of AA (at most 20).
+- **Reconnaissance**: over land, our battles in the area fire 5% harder and our support and
+  interdiction there strike 20% harder; over a sea zone, our strikes always find their targets
+  and enemy submarines lose their cover (aircraft can hit them; escorts' anti-submarine fire
+  +50%).
+
+**The sky.** A side with 1.5× the other's air power over a place holds the sky there. What a
+mission achieves is scaled by who holds the sky over it: 100% in ours, 75% contested, 40% in
+the enemy's. Wings on other missions defend themselves at half their air value.
+
+**Readiness and costs.** Each week a wing flies it loses 10 readiness; rest restores
+25 × (1 − readiness) a week, so sustained operations settle near 60% and a rested wing surges.
+Its values count at 50% + 50% of readiness. Below 25% a wing is grounded until it recovers, and
+a realm short of oil recovers nothing. Strength lost is replaced at 8 a week at a quiet base,
+paid in materiel (aboard a carrier only off a friendly port). Wings burn oil (30% while idle)
+and cost their upkeep (+25% with All-Metal Monoplanes). A wing whose airfield falls flies to
+the nearest airfield of ours within twice its range, or is lost.
+
+**Every wing says what it did.** Each week it records whether it flew, what it achieved
+(battles supported, enemy aircraft downed, hull damage, armies interdicted, industry and
+shipyards hit) or exactly why not: out of range (with the steps), not ready, no oil, flight
+deck out of action, no battle in the area, target no longer held by an enemy.
+
+## Combined warfare
+
+Land, sea and air meet in the battle round and in supply, never as a national bonus:
+
+- **Fire support is committed, not ambient.** A wing supports one battle a week, a fleet shells
+  one battle a week, and only from where they actually are; both are named in the battle with
+  what they added. Together they are capped at +50%: guns and bombs cannot replace infantry.
+- **Counters.** Fighters over a battle cut the enemy's support to 40% and shoot down the
+  supporting wings; forts shoot back at bombers and at ships; anti-aircraft escorts and air
+  cover blunt naval strikes; escorts turn raiders away; a reconnaissance patrol strips
+  submarines of their cover.
+- **Effects end with their conditions.** Out of range, grounded, a base or carrier lost, the
+  target no longer an enemy's, peace: the next week the effect is gone (bombing orders fall idle
+  with a note; other orders are kept but do nothing, and say why).
+
+The worked scenarios in `tests/naval-air-scenarios.test.ts` exercise each of these through the
+weekly tick, and `tools/matrix.ts` checks that no fleet composition dominates (a carrier group
+caught by gun ships in its own zone loses; standing off two zones away, its aircraft strike
+everything but submarines).
 
 ### Worked examples (`npm run examples`, `tests/worked-sea-air.test.ts`)
 
@@ -545,24 +633,37 @@ East Water; c is an island realm.
 | 5 infantry from a2 attack 4 dug-in infantry in b1, overland | **Likely victory** (795 vs 952 losses) | numbers beat a 10% entrenchment |
 | The same 5 land on b1 from the Middle Water | **Uncertain** (990 vs 840; unlucky → defender holds) | Landing from the sea −25% |
 | The same landing with Amphibious Warfare | **Uncertain** (815 vs 832) | the penalty halves to −13% |
-| Two of a's cruisers in the East Water, no b warships | b2 **blockaded**: crowns 2.88 → 2.16 a month; b's trade with the island 100% → 81%; with a (land neighbour) 100% | every zone on b2's coast holds enemy warships at more than twice b's power |
-| One b cruiser joins them | not blockaded | 2 × 1 cruiser ≥ 2 cruisers |
+| Two of a's cruisers in the East Water, no b warships | b2 **blockaded**: crowns 2.88 → 2.16 a month; b's trade with the island cut further by the same cruisers raiding the route | every zone on b2's coast holds enemy warships at more than twice b's power |
+| One b cruiser joins them | not blockaded; the cruisers still raid, less | 2 × 1 cruiser ≥ 2 cruisers; one escort turns some raiders away |
 | Two of a's submarines instead of the cruisers | blockaded | submarines count half, enough against no defenders |
-| 6 infantry from a2 attack 6 infantry in b1, no aircraft | **Uncertain**, defender holds with even rolls (1,248 vs 1,104) | entrenchment +10% |
-| Two of a's ground-attack wings support the attack | attacker wins with even rolls (1,158 vs 1,548) | Air support +40% |
-| Three of b's fighter wings hold the sky over b1 | support +16% (1,212 vs 1,272) | the enemy holds the sky: support falls to 40% |
-| a answers with three fighter wings | support +40% again | the sky is contested: neither side holds it |
+| 6 infantry from a2 attack 6 infantry in b1, no aircraft | **Uncertain**, defender holds with even rolls | entrenchment +10% |
+| Two of a's ground-attack wings on call over b1 | attacker wins with even rolls | Air support on call +40% (2 wings) |
+| Three of b's fighter wings hold the sky over b1 | support +16% | the enemy holds the sky: support falls to 40% |
+| a answers with three fighter wings | support +30% | the sky is contested: 75% |
 
 ## Wars and peace (`war.ts`)
 
 - **War goals:**
   - **Claim** — provinces we hold claims on. No trust cost.
-  - **Conquest** — up to two bordering provinces. Costs 8 trust and alarms the target's neighbours. Forbidden while the Concord of Nations focus is held.
+  - **Conquest** — up to two provinces of the target. **No shared border is needed**: the
+    goals offered are provinces bordering our land first, then coasts by the length of the sea
+    route from our ports, then the rest by distance. Costs 8 trust and alarms the target's
+    neighbours. Forbidden while the Concord of Nations focus is held.
   - **Coalition** — declared by a coalition member; all members join.
   Claims come from history, events, peace (the previous owner keeps one) or 12-month fabrication
   on a province bordering ours or, from Stage F, on a coast whose sea zone holds or borders a
   zone with one of our ports (so island realms can make war across the water).
-- **Blocked by:** truces (5 years after peace), non-aggression pacts, and alliances.
+- **Blocked by:** truces (5 years after peace), non-aggression pacts, and alliances. Nothing
+  else: whether our forces can reach the enemy is a separate question.
+- **Eligibility, reach and sustainment are separate.** Before the declaration Diplomacy shows a
+  war-reach assessment (`reach.ts`) of the forces we have now: whether our armies can march onto
+  their land (through our own, friendly or unclaimed land only: declaring war grants no passage
+  through neutral realms, and military access exists only between allies and co-belligerents),
+  how far their nearest coast is by sea from our ports and how many regiments our transports
+  afloat carry, their navy (with their allies') against ours, and how many of our wings reach
+  their land. It warns when no usable route exists or the landing force or escort is too small,
+  but never blocks the declaration. Holding a beach overseas needs a fleet offshore or a captured
+  port (sustainment, below).
 - **Calls to arms:** the target's defensive allies, the realms that guarantee its independence and
   the realm whose sphere it is in are called. AI realms join unless exhausted or already in two
   wars. A human player gets a 4-week decision that defaults to honouring the call. Declining
@@ -836,13 +937,27 @@ of fighters, ground attack and bombers, with one or two reconnaissance wings. We
   strait beside its shores; otherwise at home.
 - At war the main fleet seeks the zone within reach where it does the most good and can hold
   (enemy coasts to blockade, straits, enemy fleets it outguns by 20%, its own troopships to
-  escort), falls back when outgunned, and returns to port below 55% condition.
+  escort, our blockaded coasts and raided trade to set free, coastal battles of ours to shell),
+  avoids waters where enemy aircraft hold the sky unless it has fighters aboard, falls back when
+  outgunned, and returns to port below 55% condition. Submarines are detached as raider
+  squadrons and lie on the routes of enemy sea trade where enemy escorts are weaker.
 - A monthly invasion plan picks an enemy coast that is weakly held or out of reach by land and
-  a port to gather at. Transports gather there, a detachment boards and sails, and the plan is
-  dropped after eight months.
-- Fighters fly superiority over our battles and objectives (at peace over the capital or the
-  most threatened border); attack wings support our battles or interdict enemy armies;
-  bombers bomb enemy industry in range; reconnaissance watches the front or the border.
+  a port to gather at. Transports gather there and a detachment boards; it sails under the
+  escort of a war fleet in the port's zone, or waits (calling the nearest war fleet) while
+  enemy ships or aircraft watch the route; the plan is dropped after eight months.
+- Each wing flies the most useful mission it can reach: support for our battles, and support on
+  call where a battle is about to begin (an army marching onto enemy troops, standing beside
+  them, or about to land: most land battles are fought out in a week, and on call costs
+  nothing until they start), naval strikes on enemy fleets (troopships first), fighters against enemy aircraft over our land, battles and
+  fleets, interdiction of enemy armies at our borders, bombing of enemy airfields, shipyards and
+  factories, reconnaissance with our strikes. At peace every wing rests: a patrol meets nothing
+  and would only wear down the readiness a war's first weeks need. A working order is kept
+  unless another scores a third better, so orders do not flip week to week.
+- Empty carrier decks are filled with fighter and ground-attack wings from airfields within
+  reach (a fighter for each carrier first); carriers are only built with such aircraft to fly.
+- Wars on realms it does not border are considered only with transports afloat for six
+  regiments, a navy 1.2× theirs (with their allies'), and a coast within four sea zones of its
+  ports; their value is discounted for the trouble of holding a beach overseas.
 
 **Stability.** Commitment bonuses keep plans from flip-flopping; emergencies reassign armies at once.
 
@@ -874,9 +989,10 @@ default and disclosed in the setup screen and the game menu.
   noise) lives only in the UI. A test forbids `Math.random` and wall-clock time in `src/sim`.
 - **Reproducibility:** the same seed, settings and command sequence reproduce identical states.
   Tests assert this, and that a game saved mid-war continues exactly like the original.
-- **Save format 4** (`src/sim/save.ts`): versioned and checksummed JSON of the complete state,
+- **Save format 6** (`src/sim/save.ts`): versioned and checksummed JSON of the complete state,
   including movement progress, battles, queues, treaties, events, stockpiles, factories,
-  fleets (with troops aboard), ports, slipways, air wings, airfields, national focus,
+  fleets (with troops aboard and last week's report), ports, slipways, air wings (base or
+  carrier, mission, sea target, readiness, last week's report), airfields, national focus,
   influence, guarantees, loans, trade blocs, reparations, army limits, war contributions and
   AI commitments. (Stage C extended format 3 rather than starting a new one: a format-3 save
   written before fleets existed loads with empty navies and air arms, starting ports from the
@@ -899,7 +1015,10 @@ default and disclosed in the setup screen and the game menu.
   Charter, Martial Levy, Frontier Settlement, Royal Academy, Fortress Doctrine, Concord of
   Nations), every realm then chooses a focus, wars under way start recording contribution, the
   new diplomacy starts empty, and policy changes are dropped from the command log (they can no
-  longer be replayed). The notice says all of this. A save that cannot
+  longer be replayed). Format 4 becomes format 5 (trade contracts): running exchanges become
+  12-month contracts at list price. Format 5 becomes format 6 (the naval and air update): every
+  wing starts fully ready at its airfield with its mission kept, carriers start with empty
+  decks, and the new force statistics start at zero. The notice says all of this. A save that cannot
   be converted (for example an embedded map that no longer validates) is refused with the
   reason, stays listed, and can still be exported from the load screen. The tests convert a
   save from the first release (`tests/fixtures/reach-save-main-c29aea6.json`) and two format-2
@@ -980,7 +1099,8 @@ Observations that drove the tuning:
     researched Aviation and its first wings were reconnaissance that idled at peace. Aviation
     is now weighted up, fighters lead the mix once known, and at peace fighters and
     reconnaissance watch the capital and the most threatened border. Every such realm now
-    flies missions.
+    flies missions. (Since the naval and air update a flight wears readiness, so at peace the
+    wings rest instead.)
   - Fleets at peace keep station off the realm they plan to fight, off claimed coasts, on
     a strait beside their shores, or off a rival navy's home waters.
   - Bankruptcies tripled on Aldmere in the first batch (a collapsing realm kept a large

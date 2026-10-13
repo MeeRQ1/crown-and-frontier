@@ -1,7 +1,8 @@
 // State invariants checked by tests, AI campaigns and after loading a save.
 // Returns a list of violations (empty = consistent).
 
-import { C, SHIPS, UNITS } from './config';
+import { C, SHIPS, UNITS, WINGS } from './config';
+import { deckSlots } from './air';
 import { devMax } from './construction';
 import { maxMorale } from './military';
 import { checkIndexes } from './index';
@@ -93,11 +94,25 @@ export function checkInvariants(sim: Sim): string[] {
     for (const s of f.ships) cap += SHIPS[s.type].capacity;
     if (regs > cap) out.push(`${fid}: carries ${regs} regiments with room for ${cap}`);
   }
+  const aboard = new Map<string, number>();
   for (const wid in st.wings) {
     const w = st.wings[wid];
     if (!st.nations[w.nation]?.alive) out.push(`${wid}: wing of dead realm`);
     if (!sim.world.prov[w.base]) out.push(`${wid}: bad base`);
     if (!(w.strength > 0 && w.strength <= 100)) out.push(`${wid}: strength ${w.strength}`);
+    if (!(w.readiness >= 0 && w.readiness <= 100)) out.push(`${wid}: readiness ${w.readiness}`);
+    if (w.zone && !sim.world.zones[w.zone]) out.push(`${wid}: bad zone ${w.zone}`);
+    if (w.carrier) {
+      const f = st.fleets[w.carrier];
+      if (!f) out.push(`${wid}: aboard missing fleet ${w.carrier}`);
+      else if (f.nation !== w.nation) out.push(`${wid}: aboard a fleet of ${f.nation}`);
+      else if (!WINGS[w.type].carrier) out.push(`${wid}: ${w.type} aboard a carrier`);
+      aboard.set(w.carrier, (aboard.get(w.carrier) ?? 0) + 1);
+    }
+  }
+  for (const [fid, n] of aboard) {
+    const f = st.fleets[fid];
+    if (f && n > deckSlots(sim, f).hold) out.push(`${fid}: ${n} wings aboard with deck room for ${deckSlots(sim, f).hold}`);
   }
   for (const bid in st.battles) {
     const b = st.battles[bid];

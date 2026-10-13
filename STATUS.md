@@ -1,10 +1,66 @@
 # Status
 
-Last updated at the **Atlas & Strategy Refinement update** (save format 5, map format 3),
-which follows Stages A–F of the strategic depth expansion in the same draft pull request.
-The branch has not been merged or published. The atlas section below is current; the
-sections after it describe the expansion (Stages A–F) and the redesign release (0.2.0) and
-are kept for their evidence. Where a later change altered a fact, it is corrected in place.
+Last updated at the **Naval, Air and Combined Warfare update** (save format 6, map format 3).
+It follows the performance update and the 1936 maps, and before them the Atlas & Strategy
+Refinement update and Stages A–F of the strategic depth expansion. This update is a draft pull
+request that has not been merged or published. The sections after this one are kept for
+their evidence; where a later change altered a fact, it is corrected in place.
+
+## Naval, Air and Combined Warfare update
+
+The brief asked for the following, without capturing provinces by air, teleporting, or
+overruling treaties and truces:
+
+- naval and air warfare that changes campaign decisions and battle outcomes;
+- a distinct purpose, limits and counters for every ship and aircraft type;
+- air missions committed to battles and places, from bases or carriers, with range,
+  readiness and costs;
+- blockade, raiding, bombardment and sea transport with escorts and interception;
+- carriers as real air bases;
+- wars on realms we do not border, with a reach assessment first;
+- AI that uses all of this by the player's rules;
+- an interface that shows it;
+- verification by scenarios, AI campaigns, the browser and profiles of production builds.
+
+**Status key:** ✅ done and exercised · 🟡 done, with a known gap stated · ⏸ not done.
+
+| Requirement | Status | What was built | Evidence |
+|---|---|---|---|
+| Audit first | ✅ | Code, browser and AI-campaign audit of the baseline: the inventory, 13 findings, and an assessment of each type (role, problem, refinement, scenario) | [reports/military/naval-air-audit.md](reports/military/naval-air-audit.md) |
+| Roster: purpose, limits, counters | ✅ | Ships gain bombardment, raiding, escort and deck values, and a stated job. Wings gain a naval value, carrier eligibility, vulnerability and a role. Fleet Carriers adds a deck; All-Metal Monoplanes costs upkeep | DESIGN "The navy", "Air power"; the uses-and-counters table in [the verification report](reports/military/naval-air-verification.md); the fleet matrix |
+| Air missions | ✅ | Range in steps over land and sea from the base or carrier. Readiness (wear 10, recovery, grounding below 25%). Support committed to one battle a week; interception with losses; interdiction; bombing of factories, shipyards and airfields; naval strike with detection and AA; the sky (100/75/40%) scaling every mission; a reason whenever a mission does nothing | `tests/naval-air-scenarios.test.ts`: land with and without air, contested air, logistics strikes |
+| Naval operations | ✅ | Raiding of sea trade zone by zone, with escorts and recon as counters. Shore bombardment by ships lying offshore (+25% at most), never inland, answered by coastal forts. Convoys exposed to strikes and raiders. Air and naval fire support together capped at +50% | scenarios: coastal combat, raiding, protected and exposed transport |
+| Carriers | ✅ | 2 decks (3 with Fleet Carriers) for fighters, ground attack and recon. Missions flown from the carrier's zone by the same rules. Ferry range; decks out below 40% hull. Air groups kept consistent through splits, merges, sinking and paying off. An empty carrier says why | scenarios: carriers (7) |
+| Wars without a shared border | ✅ | Any realm may be the target, subject to treaties and truces. Conquest goals rank by border, then sea route. Diplomacy and the declaration dialog show the reach (overland, by sea, lift, navies, air) and warn without blocking | Albania scenario and browser check |
+| Combined warfare | ✅ | Fire support is committed and named, capped, and countered by fighters, forts, AA, escorts and recon; effects end with their conditions | DESIGN "Combined warfare"; scenarios |
+| Interface | ✅ | Wing card (state, readiness, reason, last week's resolved report, missions by land and sea, base change to airfields and carriers). Range shading with an edge while targeting, and a hover saying whether a mission can be flown there. Sky tint in the Military mode and a Sky row on province cards. Fleet card (air group, decks, operations here, roles). Battle card (resolved fire support by wing and fleet). Air operations table in the Military ledger. Reach in Diplomacy and the declaration dialog. Keyboard (Esc) and touch | 15 screenshots ([docs/screenshots/naval-air/](docs/screenshots/naval-air/)); browser checks |
+| AI | ✅ | Purposeful missions, with support on call where battles are about to begin and rest at peace. Fights for the sky; covers fleets and convoys; fills carrier decks; raids and answers raids and blockades; overseas wars only with lift and a short sea route; replaces losses within its means | AI-only campaigns: air support in 13 of 19 and 22 of 26 battles with a wing in reach; idle at war about 10%; 0 months in debt; no invariant failures |
+| Saves | ✅ | Format 6, with a format-5 migration and a notice; save/load mid-war plays on identically | scenarios: saves and determinism |
+| Performance | 🟡 | Profiles of production builds, `main` and this branch on one machine; a Node A/B per phase | [reports/perf/naval-air-sim.md](reports/perf/naval-air-sim.md), `naval-air-before.md`, `naval-air-after.md`. The browser's performance probe is marginal on this machine for `main` and the branch alike (see Known gaps) |
+
+### Evidence
+
+| Kind | Result |
+|---|---|
+| Unit and scenario tests | 279 passing (23 files), 29 of them the naval and air scenarios |
+| Browser check | `npm run verify:web`, headless Chromium 141: 96 of 97 at the site root, the project subpath, the unpacked release ZIP and in an iframe ([reports/web-verification.md](reports/web-verification.md)). The one failure is the performance probe (map draw 18.2 ms on average against a 16 ms limit), which `main` also fails on this machine |
+| AI campaigns | World 1936 and Europe 1936, six years each from seed 2 ([reports/military/](reports/military/)) |
+| Screenshots | 15 in [docs/screenshots/naval-air/](docs/screenshots/naval-air/) |
+| External players | **None.** No one but me has played this update. |
+
+### Known gaps
+
+- **Untested browsers and hardware.** Only headless Chromium on Linux with software
+  rendering was used; Firefox, Safari, GPUs and real phones were not tried.
+- **The performance probe.** The browser check's probe (average map draw under 16 ms at
+  the fastest speed) is marginal on this machine for both builds. Three alternating runs
+  measured 16.5–30.5 ms on `main` and 16.9–22.4 ms on this branch.
+- **Few land battles in AI campaigns on the 1936 maps** (21 and 33 in six years). The AI's
+  use of air in battle rests on small numbers.
+- **The carrier group loses meeting engagements by design.** Caught in its own zone by gun
+  ships of the same cost, it loses; it wins by standing off.
+- **Abstractions.** Convoys are the trade on a route rather than ships; aircraft have no
+  routes, only ranges; troops at sea cannot be redirected.
 
 ## Atlas & Strategy Refinement update
 
