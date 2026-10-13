@@ -519,7 +519,7 @@ export function raidBalance(sim: Sim, zone: ZoneId, nid: NationId): { raid: numb
 export function zoneRaid(sim: Sim, zone: ZoneId, nid: NationId): number {
   const b = raidBalance(sim, zone, nid);
   if (b.raid <= 0) return 0;
-  const through = b.raid * (b.raid / (b.raid + 1.5 * b.escort));
+  const through = b.raid * (b.raid / (b.raid + 2.5 * b.escort));
   return Math.min(C.naval.raidZoneMax, C.naval.raidRate * through);
 }
 
