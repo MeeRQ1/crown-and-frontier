@@ -116,8 +116,9 @@ the AI playing every realm by the same rules and commands as the player. The res
 ### Before and after the AI changes
 
 At peace, every wing now rests. Before, AI fighters patrolled the capital and the border at
-peace: 29,552 of the World's wing-weeks were flown, almost all of them at peace, wearing
-down readiness and burning full oil for a sky with no enemy in it.
+peace. On the World, 29,552 wing-weeks were flown, at least 20,600 of them at peace, wearing
+down readiness and burning full oil for a sky with no enemy in it. Now 7,113 are flown, all at
+war.
 
 Ground support is now put on call before a battle begins. Most land battles are fought out
 in one week, so an order given after a battle starts arrived too late. Support now waits:
