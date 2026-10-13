@@ -685,6 +685,9 @@ export const C = {
 
   ai: {
     diagnosticsKept: 400,
+    /** an overseas war needs transports afloat for this many regiments, and a sea route of at most this many zones */
+    overseasLift: 6,
+    overseasZones: 4,
     openingMonths: 18, // AI realms start no offensive wars during the opening
     exposureWeight: 0.15, // share of each open neighbour's strength counted against a war plan (beyond two open borders)
     secondFrontExhaustion: 25, // an AI at war and this exhausted refuses a call to a second front

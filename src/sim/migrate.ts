@@ -188,7 +188,7 @@ const STEPS: Record<number, Step> = {
     const carriers = Object.values<any>(st.fleets ?? {}).reduce((k, f) => k + (f.ships ?? []).filter((x: any) => x.type === 'carrier').length, 0);
     notices.push(
       `This save was made before the naval and air update (save format 5) and was converted to format 6. ` +
-        `Its ${wings} air wing${wings === 1 ? '' : 's'} keep their missions and start fully ready${carriers ? `; its ${carriers} carrier${carriers === 1 ? '' : 's'} start with empty decks (fly fighter, ground-attack or reconnaissance wings aboard from an airfield within reach)` : ''}. ` +
+        `Its ${wings} air wing${wings === 1 ? ' keeps its mission and starts' : 's keep their missions and start'} fully ready${carriers ? `; its ${carriers} carrier${carriers === 1 ? ' starts' : 's start'} with empty decks (fly fighter, ground-attack or reconnaissance wings aboard from an airfield within reach)` : ''}. ` +
         `Ground support now joins one battle a week per wing, and wars may be declared on realms we do not border.`,
     );
   },

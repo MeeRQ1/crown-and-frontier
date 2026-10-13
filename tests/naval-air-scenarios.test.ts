@@ -6,7 +6,8 @@
 //   a1 ─ a2 ─ b1 ─ b2        land; i1 is b's island across a strait from a2;
 //    W     M         E       c1 is realm c's island, reached only by sea (zone E)
 
-import { describe, expect, it } from 'vitest';
+import { writeFileSync } from 'node:fs';
+import { afterAll, describe, expect, it } from 'vitest';
 import { airControl, createWing, deckSlots, missionProblem, relocateAir, wingStatus, wingsAboard } from '../src/sim/air';
 import { applyCommand, checkCommand } from '../src/sim/commands';
 import { C } from '../src/sim/config';
@@ -25,6 +26,15 @@ import { readSave, serialize } from '../src/sim/save';
 import { borders } from '../src/sim/state';
 import { isBeachhead, supplyConnected } from '../src/sim/supply';
 import { applyPeace, declareWarProblem, goalOptions } from '../src/sim/war';
+
+// What each scenario measured, for reports/military/naval-air-verification.md:
+// NAVAL_AIR_EVIDENCE=<file> writes it there after the run.
+const evidence: Record<string, Record<string, unknown>> = {};
+const note = (scenario: string, values: Record<string, unknown>) => void (evidence[scenario] = { ...evidence[scenario], ...values });
+const r1 = (x: number) => Math.round(x * 10) / 10;
+afterAll(() => {
+  if (process.env.NAVAL_AIR_EVIDENCE) writeFileSync(process.env.NAVAL_AIR_EVIDENCE, `${JSON.stringify(evidence, null, 1)}\n`);
+});
 
 function fresh(sim: Sim) {
   bump(sim);
@@ -92,6 +102,7 @@ describe('land combat with and without air support', () => {
     const w2 = wing(air.sim, 'a', 'a1', 'attack', 'support', 'b1');
     fresh(air.sim);
     const b1 = firstRound(air.sim);
+    note('land', { defLossesNoAir: Math.round(b0.defLosses), defLossesAir: Math.round(b1.defLosses), attLossesNoAir: Math.round(b0.attLosses), attLossesAir: Math.round(b1.attLosses), factor: b1.factors.find((f) => /Air support/.test(f)) });
     expect(b1.defLosses).toBeGreaterThan(b0.defLosses);
     expect(b1.factors.some((f) => /^Attacker: Air support \+\d+% from 2 wings/.test(f))).toBe(true);
     expect(b1.support!.att.map((l) => l.id).sort()).toEqual([w1.id, w2.id].sort());
@@ -115,6 +126,7 @@ describe('land combat with and without air support', () => {
     expect(battles.length).toBe(2);
     const supported = battles.filter((b) => b.support!.att.some((l) => l.id === w.id));
     expect(supported).toHaveLength(1);
+    note('land', { battlesInArea: battles.length, battlesSupportedByOneWing: supported.length });
     // the battle at its target comes first
     expect(supported[0].province).toBe('b1');
   });
@@ -135,6 +147,7 @@ describe('land combat with and without air support', () => {
     far.carrier = null;
     fresh(sim);
     const p = missionProblem(sim, 'a', far.id, 'support', 'c1');
+    note('land', { cancelledSupportLines: (sim.state.battles[b.id]?.support?.att ?? []).length, outOfRange: p });
     expect(p).toMatch(/out of range/);
   });
 });
@@ -161,6 +174,7 @@ describe('contested airspace and interception', () => {
     week(covered.sim, 3);
     const loneLeft = lone.sim.state.wings[lone.bomber.id]?.strength ?? 0;
     const coveredLeft = covered.sim.state.wings[covered.bomber.id]?.strength ?? 0;
+    note('contested', { bomberStrengthAlone: r1(loneLeft), bomberStrengthEscorted: r1(coveredLeft), skyAlone: airControl(lone.sim, 'b1', 'a'), skyEscorted: airControl(covered.sim, 'b1', 'a'), interceptorKills: r1(lone.sim.state.nations.b.stats.airKills), interceptorReport: lone.sim.state.wings[lone.interceptors[0].id].report!.note });
     expect(loneLeft).toBeLessThan(coveredLeft);
     // the interceptors are credited with what they shot down
     expect(lone.sim.state.nations.b.stats.airKills).toBeGreaterThan(0);
@@ -172,6 +186,7 @@ describe('contested airspace and interception', () => {
     const covered = raid(true);
     const l = computeLedger(lone.sim, 'b').industry;
     const c = computeLedger(covered.sim, 'b').industry;
+    note('contested', { targetIndustryUnderEnemySky: r1(l), targetIndustryUnderContestedSky: r1(c) });
     // more industry is lost under contested skies than under enemy-held ones
     expect(c).toBeLessThan(l);
   });
@@ -193,6 +208,7 @@ describe('logistics strikes and their consequences', () => {
     const w = wing(sim, 'a', 'a1', 'attack', 'interdiction', 'b1');
     fresh(sim);
     week(sim);
+    note('logistics', { supplyBefore: r1(before), supplyInterdicted: r1(sim.state.armies[def.id].supply), interdictionReport: sim.state.wings[w.id].report!.note });
     expect(sim.state.armies[def.id].supply).toBeLessThan(before);
     expect(sim.state.wings[w.id].report!.note).toMatch(/Interdicted 1 enemy army around B1/);
   });
@@ -205,11 +221,13 @@ describe('logistics strikes and their consequences', () => {
     const bombers = [wing(sim, 'a', 'a1', 'bomber', 'bombing', 'b1'), wing(sim, 'a', 'a1', 'bomber', 'bombing', 'b1')];
     fresh(sim);
     week(sim, 2);
+    note('logistics', { shipyardWeeksLeftAfter2WeeksBombed: sim.state.provinces.b1.dock[0].weeksLeft, groundedFighterReadiness: Math.round(sim.state.wings[victim.id].readiness), bombingReport: sim.state.wings[bombers[0].id].report!.note });
     expect(sim.state.provinces.b1.dock[0].weeksLeft).toBe(10);
     expect(sim.state.wings[victim.id].readiness).toBeLessThan(80);
     expect(sim.state.wings[bombers[0].id].report!.note).toMatch(/shipyard halted.*grounded on the airfield/);
     for (const b of bombers) applyCommand(sim, { type: 'airMission', nation: 'a', wing: b.id, mission: 'idle', target: null });
     week(sim);
+    note('logistics', { shipyardWeeksLeftWeekAfterBombingStops: sim.state.provinces.b1.dock[0].weeksLeft });
     expect(sim.state.provinces.b1.dock[0].weeksLeft).toBe(9);
   });
 });
@@ -236,6 +254,7 @@ describe('coastal combat with and without shore bombardment', () => {
     const b1 = firstRound(off.sim);
     expect(b1.factors.some((f) => /^Attacker: Naval gunfire \+\d+% from A First Squadron offshore/.test(f))).toBe(true);
     expect(b1.support!.att.some((l) => l.kind === 'naval' && l.id === off.f!.id)).toBe(true);
+    note('coastal', { defLossesNoShips: Math.round(b0.defLosses), defLossesBombarded: Math.round(b1.defLosses), factor: b1.factors.find((f) => /Naval gunfire/.test(f)) });
     expect(b1.defLosses).toBeGreaterThan(b0.defLosses);
     expect(off.sim.state.nations.a.stats.bombardWeeks).toBeGreaterThan(0);
   });
@@ -244,6 +263,7 @@ describe('coastal combat with and without shore bombardment', () => {
     for (const where of ['elsewhere', 'sailing'] as const) {
       const c = coast(where);
       const b = firstRound(c.sim);
+      note('coastal', { [`gunfireLines_${where}`]: b.support!.att.filter((l) => l.kind === 'naval').length });
       expect(b.support!.att.filter((l) => l.kind === 'naval'), where).toEqual([]);
     }
   });
@@ -253,6 +273,7 @@ describe('coastal combat with and without shore bombardment', () => {
     const hp0 = c.f!.ships.reduce((s, x) => s + x.hp, 0);
     firstRound(c.sim);
     const f = c.sim.state.fleets[c.f!.id];
+    note('coastal', { fleetHullBefore: r1(hp0), fleetHullAfterFortsFireBack: r1(f.ships.reduce((s, x) => s + x.hp, 0)), fortReport: f.report!.notes.find((n) => /coastal forts/.test(n)) });
     expect(f.ships.reduce((s, x) => s + x.hp, 0)).toBeLessThan(hp0);
     expect(f.report!.notes.join(' ')).toMatch(/coastal forts \(level 2\) hit back/);
   });
@@ -264,6 +285,7 @@ describe('coastal combat with and without shore bombardment', () => {
     const b = firstRound(c.sim);
     expect(b.factors.some((f) => /Fire support capped at \+50%/.test(f))).toBe(true);
     const total = b.support!.att.reduce((s, l) => s + l.value, 0);
+    note('coastal', { capWith4WingsAndSquadron: r1(total * 100), capFactor: b.factors.find((f) => /capped/.test(f)) });
     expect(total).toBeCloseTo(C.naval.supportCap, 6);
   });
 });
@@ -291,6 +313,7 @@ describe('raiding, blockade and counterplay', () => {
     fleet(sim, 'b', 'ze', ['screen', 'screen', 'screen']);
     fresh(sim);
     const escorted = raidLoss(sim, 'b', 'c');
+    note('raiding', { tradeShareLostTo2Subs: r1(raided.share * 100), tradeShareLostWith3Screens: r1(escorted.share * 100), tradeOpenRaided: r1(tradeOpen(sim, 'b', 'c') * 100) });
     expect(escorted.share).toBeLessThan(raided.share / 2);
   });
 
@@ -304,7 +327,10 @@ describe('raiding, blockade and counterplay', () => {
       week(sim);
       return Object.values(sim.state.fleets).filter((f) => f.nation === 'a').reduce((s, f) => s + f.ships.reduce((x, sh) => x + sh.hp, 0), 0);
     };
-    expect(run(true)).toBeLessThan(run(false));
+    const withPatrol = run(true);
+    const without = run(false);
+    note('raiding', { subHullAfterAWeekWithRecon: r1(withPatrol), subHullAfterAWeekWithoutRecon: r1(without) });
+    expect(withPatrol).toBeLessThan(without);
   });
 });
 
@@ -342,6 +368,7 @@ describe('protected and exposed sea transport', () => {
   it('escorts and fighter cover bring the troops through', () => {
     const exposed = crossing(false);
     const covered = crossing(true);
+    note('transport', { regimentsLandedExposed: exposed.landed ? exposed.regiments : 0, regimentsAfloatOrAshoreExposed: exposed.regiments, regimentsLandedProtected: covered.landed ? covered.regiments : 0, of: 4 });
     expect(covered.regiments).toBeGreaterThan(exposed.regiments);
     expect(covered.landed).toBe(true);
     expect(checkInvariants(covered.sim)).toEqual([]);
@@ -361,6 +388,7 @@ describe('protected and exposed sea transport', () => {
     const a = sim.state.armies[army.id];
     if (a) {
       expect(a.embarked).toBeTruthy();
+      note('transport', { waitOffshoreReason: sim.state.fleets[a.embarked!].report!.notes.find((n) => /outgun/.test(n)) });
       expect(sim.state.fleets[a.embarked!].report!.notes.join(' ')).toMatch(/enemy warships outgun ours/);
     }
     expect(checkInvariants(sim)).toEqual([]);
@@ -388,9 +416,11 @@ describe('carriers: mobile air bases', () => {
     const a2 = wing(sim, 'a', 'a1', 'attack');
     const bo = wing(sim, 'a', 'a1', 'bomber');
     fresh(sim);
+    note('carrier', { bomberAboard: checkCommand(sim, { type: 'rebaseWing', nation: 'a', wing: bo.id, carrier: cv.id }) });
     expect(checkCommand(sim, { type: 'rebaseWing', nation: 'a', wing: bo.id, carrier: cv.id })).toMatch(/too heavy/);
     expect(applyCommand(sim, { type: 'rebaseWing', nation: 'a', wing: f1.id, carrier: cv.id }).ok).toBe(true);
     expect(applyCommand(sim, { type: 'rebaseWing', nation: 'a', wing: a1.id, carrier: cv.id }).ok).toBe(true);
+    note('carrier', { thirdWingAboard: checkCommand(sim, { type: 'rebaseWing', nation: 'a', wing: a2.id, carrier: cv.id }) });
     expect(checkCommand(sim, { type: 'rebaseWing', nation: 'a', wing: a2.id, carrier: cv.id })).toMatch(/decks are full \(2 wings\)/);
     expect(wingsAboard(sim, cv.id).map((w) => w.id)).toEqual([f1.id, a1.id]);
     // flying aboard costs readiness
@@ -407,6 +437,7 @@ describe('carriers: mobile air bases', () => {
     expect(wingStatus(sim, land).reason).toMatch(/Out of range: C1 is 4 steps from A1; the range is 3/);
     week(sim);
     const b = Object.values(sim.state.battles)[0];
+    note('carrier', { landWingBeyondReach: wingStatus(sim, land).reason, battleSupport: b.factors.find((f) => /Air support/.test(f)) });
     expect(b.province).toBe('c1');
     expect(b.support!.att.map((l) => l.id)).toEqual([sea.id]);
   });
@@ -420,6 +451,7 @@ describe('carriers: mobile air bases', () => {
     cv.ships.find((s) => s.type === 'carrier')!.hp = 30;
     fresh(sim);
     expect(wingStatus(sim, w).state).toBe('grounded');
+    note('carrier', { damagedCarrier: wingStatus(sim, w).reason });
     expect(wingStatus(sim, w).reason).toMatch(/Flight decks out of action/);
   });
 
@@ -437,6 +469,7 @@ describe('carriers: mobile air bases', () => {
     const hp0 = target.ships.reduce((s, x) => s + x.hp, 0);
     week(sim);
     const after = sim.state.fleets[target.id]?.ships.reduce((s, x) => s + x.hp, 0) ?? 0;
+    note('carrier', { strikeTargetHullBefore: r1(hp0), strikeTargetHullAfter: r1(after) });
     expect(after).toBeLessThan(hp0);
     // no surface battle: the fleets never shared a zone
     expect(sim.state.reports.filter((r) => r.sea)).toEqual([]);
@@ -498,6 +531,7 @@ describe('carriers: mobile air bases', () => {
     week(sim, 4);
     expect(sim.state.fleets[cv.id].zone).toBe('z0');
     fresh(sim);
+    note('carrier', { carrierSailedAway: wingStatus(sim, sim.state.wings[w.id]).reason });
     expect(wingStatus(sim, sim.state.wings[w.id]).reason).toMatch(/Out of range: Q5 is 6 steps from the carriers of/);
     // the order is kept, not dropped: it resumes when the carrier comes back
     expect(sim.state.wings[w.id].mission).toBe('interdiction');
@@ -518,6 +552,7 @@ describe('a prepared war across the sea: Albania on the World, 1914', () => {
     expect(goal.provinces).toEqual(['aydn', 'karesi']);
     expect(declareWarProblem(sim, 'alb', 'ott', goal)).toBeNull();
     const r = warReach(sim, 'alb', 'ott');
+    note('albania', { goal: goal.provinces, notes: r.notes, warnings: r.warnings });
     expect(r.overland).toBe(false);
     expect(r.seaZones).toBe(1);
     expect(r.liftRegiments).toBe(2);
@@ -546,12 +581,15 @@ describe('a prepared war across the sea: Albania on the World, 1914', () => {
     expect(applyCommand(sim, { type: 'shipArmies', nation: 'alb', armies: [army.id], fleet: home.id, dest: 'aydn' }).ok).toBe(true);
     // at sea: in no province, out of every land phase
     expect(st.armies[army.id].embarked).toBe(home.id);
+    const declaredAt = st.tick;
     for (let i = 0; i < 4 && st.armies[army.id]?.embarked; i++) week(sim);
     const landed = st.armies[army.id];
+    note('albania', { liftAfterTwoTransports: warReach(sim, 'alb', 'ott').liftRegiments, regimentsShipped: landed.regiments.length, weeksToLand: st.tick - declaredAt });
     expect(landed.embarked).toBeFalsy();
     expect(landed.location).toBe('aydn');
     // the fleet stays offshore; once the beach is taken it is a supply source by sea
     for (let i = 0; i < 8 && st.provinces.aydn.controller !== 'alb'; i++) week(sim);
+    note('albania', { weeksToTakeAydin: st.tick - declaredAt, suppliedBySea: supplyConnected(sim, 'alb', 'aydn') });
     expect(st.provinces.aydn.controller).toBe('alb');
     expect(isBeachhead(sim, 'aydn')).toBe(true);
     expect(supplyConnected(sim, 'alb', 'aydn')).toBe(true);
@@ -568,7 +606,7 @@ describe('peace, cancellation, saves and determinism', () => {
     const bomber = wing(sim, 'a', 'a1', 'bomber', 'bombing', 'b1');
     fresh(sim);
     const bombed = computeLedger(sim, 'b').industry;
-    applyPeace(sim, w.id, 'a', 'b', { provinces: [], crowns: 0 });
+    applyPeace(sim, w.id, 'a', 'b', { provinces: [], gold: 0, mode: 'white' });
     week(sim);
     expect(sim.state.wings[bomber.id].mission).toBe('idle');
     expect(sim.state.wings[bomber.id].report!.note).toMatch(/no longer held by an enemy/);
@@ -616,7 +654,8 @@ describe('peace, cancellation, saves and determinism', () => {
     obj.state.schema = 5;
     delete obj.checksum;
     const { sim: loaded, notices } = readSave(JSON.stringify(obj));
-    expect(notices.join(' ')).toMatch(/naval and air update \(save format 5\).*1 air wing keep their missions/);
+    note('saves', { migrationNotice: notices.find((n) => /format 5/.test(n)) });
+    expect(notices.join(' ')).toMatch(/naval and air update \(save format 5\).*1 air wing keeps its mission/);
     const lw = Object.values(loaded.state.wings)[0];
     expect(lw).toMatchObject({ readiness: 100, carrier: null, zone: null, mission: 'superiority', target: 'b1' });
     week(loaded, 2);

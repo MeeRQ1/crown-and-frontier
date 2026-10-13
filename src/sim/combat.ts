@@ -34,7 +34,7 @@ import { airSupportFor, airSupportForecast } from './air';
 import { C, TERRAIN, UNITS } from './config';
 import { isShort, removePopulation, reserveCap } from './economy';
 import { maxMorale, removeArmy } from './military';
-import { armiesIn } from './index';
+import { armiesIn, touchBattles } from './index';
 import { nationMods, type Mods } from './modifiers';
 import { canEnter, isRiver } from './movement';
 import { range } from './rng';
@@ -569,6 +569,7 @@ export function detectBattles(sim: Sim): void {
       factors: [],
     };
     st.battles[b.id] = b;
+    touchBattles(sim);
     for (const a of here) {
       if (isFriendly(sim, a.nation, anchor.nation) && atWar(sim, a.nation, foe.nation)) join(b, a, 'def');
       else if (isFriendly(sim, a.nation, foe.nation) && atWar(sim, a.nation, anchor.nation)) join(b, a, 'att');
@@ -625,6 +626,7 @@ export function pruneBattles(sim: Sim): void {
     if (!att.length || !def.length) {
       for (const x of [...att, ...def]) st.armies[x].battle = null;
       delete st.battles[id];
+      touchBattles(sim);
     }
   }
   for (const aid in st.armies) {
@@ -856,6 +858,7 @@ function endBattle(sim: Sim, b: Battle, winner: 'attacker' | 'defender'): void {
   st.reports.push(report);
   if (st.reports.length > 120) st.reports.splice(0, st.reports.length - 120);
   delete st.battles[b.id];
+  touchBattles(sim);
 
   for (const n of winNations)
     notify(sim, n, 'normal', 'battle', `Victory at ${provName(sim, b.province)}: enemy lost ${report[winner === 'attacker' ? 'defLosses' : 'attLosses'].toLocaleString()} men, we lost ${Math.round(winLoss).toLocaleString()}.`, { province: b.province });

@@ -33,7 +33,7 @@
 
 import { mergeAir, outrangedThisWeek, portBombed, relocateAir, reportFleet, seaAir, splitAir, subsExposed, wingsAboard } from './air';
 import { C, SHIPS, SHIP_TYPES } from './config';
-import { memoGeo, memoize, touchArmies } from './index';
+import { memoGeo, memoize, ownedBy, touchArmies } from './index';
 import { armyCap } from './influence';
 import { nationMods } from './modifiers';
 import { range } from './rng';
@@ -466,11 +466,22 @@ export function tradeOpen(sim: Sim, a: NationId, b: NationId): number {
 
 /** The port a realm's sea trade leaves from: its capital if it is a port, else its biggest port (null: none). */
 export function tradePort(sim: Sim, nid: NationId): ProvinceId | null {
-  const st = sim.state;
-  const cap = st.nations[nid]?.capital;
-  if (cap && st.provinces[cap].port > 0 && st.provinces[cap].owner === nid && st.provinces[cap].controller === nid) return cap;
-  const ports = portsOf(sim, nid);
-  return ports.length ? [...ports].sort((x, y) => st.provinces[y].port - st.provinces[x].port || st.provinces[y].dev - st.provinces[x].dev || (x < y ? -1 : 1))[0] : null;
+  return memoGeo(sim, 'tradePort', nid, () => {
+    const st = sim.state;
+    const cap = st.nations[nid]?.capital;
+    if (cap && st.provinces[cap].port > 0 && st.provinces[cap].owner === nid && st.provinces[cap].controller === nid) return cap;
+    let best: ProvinceId | null = null;
+    for (const pid of ownedBy(sim, nid)) {
+      const p = st.provinces[pid];
+      if (p.port <= 0 || p.controller !== nid) continue;
+      if (!best) best = pid;
+      else {
+        const b = st.provinces[best];
+        if (p.port > b.port || (p.port === b.port && (p.dev > b.dev || (p.dev === b.dev && pid < best)))) best = pid;
+      }
+    }
+    return best;
+  });
 }
 
 const routeCache = new WeakMap<object, Map<string, ZoneId[] | null>>();
@@ -523,11 +534,27 @@ export function zoneRaid(sim: Sim, zone: ZoneId, nid: NationId): number {
   return Math.min(C.naval.raidZoneMax, C.naval.raidRate * through);
 }
 
+/** Zones where raiders (ships that raid trade) lie this week. */
+function raiderZones(sim: Sim): Set<ZoneId> {
+  return memoGeo(sim, 'raiderZones', `${fleetEpoch(sim)}`, () => {
+    const out = new Set<ZoneId>();
+    for (const id of Object.keys(sim.state.fleets)) {
+      const f = sim.state.fleets[id];
+      if (f.ships.some((s) => SHIPS[s.type].raid > 0)) out.add(f.zone);
+    }
+    return out;
+  });
+}
+
+const NO_RAID: { share: number; zones: ZoneId[] } = Object.freeze({ share: 0, zones: [] }) as { share: number; zones: ZoneId[] };
+
 /** What raiders on the route take of the trade between two realms (0–0.75), and where. */
 export function raidLoss(sim: Sim, a: NationId, b: NationId): { share: number; zones: ZoneId[] } {
   return memoGeo(sim, 'raidLoss', `${a < b ? a : b}|${a < b ? b : a}|${fleetEpoch(sim)}`, () => {
     const route = tradeRoute(sim, a, b);
-    if (!route) return { share: 0, zones: [] };
+    if (!route) return NO_RAID;
+    const raiders = raiderZones(sim);
+    if (!route.some((z) => raiders.has(z))) return NO_RAID;
     let keep = 1;
     const zones: ZoneId[] = [];
     for (const z of route) {
@@ -961,21 +988,32 @@ export function weeklyNaval(sim: Sim): void {
   blockadeStats(sim);
 }
 
+/** Sea trade by zone: the realm pairs whose contracts pass through each zone this week (one pass over the contracts). */
+function tradeByZone(sim: Sim): Map<ZoneId, Array<[NationId, NationId]>> {
+  return memoGeo(sim, 'tradeByZone', '', () => {
+    const out = new Map<ZoneId, Array<[NationId, NationId]>>();
+    const seen = new Set<string>();
+    for (const c of sim.state.contracts) {
+      if (c.lag <= 0) continue;
+      const k = `${c.seller}|${c.buyer}`;
+      if (seen.has(k)) continue;
+      seen.add(k);
+      for (const z of tradeRoute(sim, c.seller, c.buyer) ?? []) (out.get(z) ?? out.set(z, []).get(z)!).push([c.seller, c.buyer]);
+    }
+    return out;
+  });
+}
+
 /** Enemy trade routes a fleet's raiders lie across this week: the realms whose trade passes its zone. */
 export function raidingHere(sim: Sim, f: Fleet): NationId[] {
-  return memoize(sim, 'raidingHere', `${f.id}|${f.zone}|${fleetEpoch(sim)}`, () => {
-    const st = sim.state;
-    const out = new Set<NationId>();
-    for (const c of st.contracts) {
-      if (!atWar(sim, f.nation, c.seller) && !atWar(sim, f.nation, c.buyer)) continue;
-      if (c.lag <= 0) continue;
-      if (tradeRoute(sim, c.seller, c.buyer)?.includes(f.zone)) {
-        if (atWar(sim, f.nation, c.seller)) out.add(c.seller);
-        if (atWar(sim, f.nation, c.buyer)) out.add(c.buyer);
-      }
-    }
-    return [...out].sort();
-  });
+  const pairs = tradeByZone(sim).get(f.zone);
+  if (!pairs) return [];
+  const out = new Set<NationId>();
+  for (const [a, b] of pairs) {
+    if (atWar(sim, f.nation, a)) out.add(a);
+    if (atWar(sim, f.nation, b)) out.add(b);
+  }
+  return [...out].sort();
 }
 
 // ───────────────────────────── Shore bombardment ────────────────────────────

@@ -8,7 +8,7 @@
 // province, capitals, geographic features, realms, then province names. What
 // cannot be placed is hidden; full names stay in the inspector.
 
-import { activeMission } from '../../sim/air';
+import { activeMission, airCells, airControl, missionArea, missionPlace, wingCoverage, wingPlace, wingRange, type AirControl } from '../../sim/air';
 import { SHIPS, TERRAIN } from '../../sim/config';
 import { entrenchBonus } from '../../sim/combat';
 import { maxMorale } from '../../sim/military';
@@ -16,7 +16,7 @@ import { fleetsIn, subPower, surfacePower } from '../../sim/naval';
 import { moveCost } from '../../sim/movement';
 import { memoEpochNow } from '../../sim/index';
 import { atWar, isFriendly, menOf, type Sim } from '../../sim/state';
-import type { Army, Fleet, NationId, ProvinceId, UnitType } from '../../sim/types';
+import type { AirWing, Army, Fleet, NationId, ProvinceId, UnitType } from '../../sim/types';
 import { HEADING, SANS } from '../fonts';
 import { drawShield } from '../heraldry';
 import { BaseMap, PALETTE, type TerrainDetail } from './basemap';
@@ -54,6 +54,8 @@ export interface RenderState {
   selectedFleet?: string | null;
   selectedZone?: string | null;
   selectedWing?: string | null;
+  /** an air mission's target is being chosen for the selected wing (its range is shaded more strongly) */
+  airTargeting?: boolean;
   /** route preview for the selected fleet (sea zones) */
   fleetPreview?: string[] | null;
   fleetPreviewLabel?: string | null;
@@ -724,6 +726,7 @@ export class MapRenderer {
     mctx: ReturnType<typeof buildContext>,
   ): void {
     this.paintRealmLayers(g, sim, rs, tier, px, view, visible, { wash: true, lines: true, washComposite: 'multiply' }, mctx);
+    if (rs.mode === 'military' && rs.player) this.drawSkies(g, sim, rs.player, view, true);
     this.drawSeaZones(g, sim, rs, tier, px, view);
     this.drawStraits(g, px);
     if (tier === 'close' || rs.mode === 'supply') {
@@ -907,11 +910,12 @@ export class MapRenderer {
     const roads = tier === 'close' || rs.mode === 'supply';
     const provs = this.geo.provList;
     const sig: string[] = new Array(provs.length);
+    const sky = rs.mode === 'military' && rs.player ? this.skies(sim, rs.player) : null;
     for (let i = 0; i < provs.length; i++) {
       const id = provs[i].id;
       const f = fillFor(rs.mode, mctx, id, rs.focusNation);
       const ps = st.provinces[id];
-      sig[i] = `${f.alpha > 0 ? `${f.color}|${f.alpha}` : ''}|${f.hatch ?? ''}|${ps?.owner ?? ''}${roads ? `|${ps?.infra ?? 0}` : ''}`;
+      sig[i] = `${f.alpha > 0 ? `${f.color}|${f.alpha}` : ''}|${f.hatch ?? ''}|${ps?.owner ?? ''}${roads ? `|${ps?.infra ?? 0}` : ''}${sky ? `|${sky.get(`p:${id}`) ?? ''}` : ''}`;
     }
     let zones: string[] = [];
     if (rs.mode === 'sea' || (rs.mode === 'military' && rs.player)) zones = this.zoneSignature(sim, rs);
@@ -946,10 +950,12 @@ export class MapRenderer {
   /** Who colours each sea zone in the sea and military modes, zone by zone (in zoneIds order). */
   private zoneSignature(sim: Sim, rs: RenderState): string[] {
     const me = rs.player;
-    return this.geo.zoneIds.map((z) =>
-      fleetsIn(sim, z)
-        .map((f) => `${f.nation}${me && (f.nation === me || isFriendly(sim, me, f.nation)) ? '+' : me && atWar(sim, me, f.nation) ? '-' : ''}${surfacePower(f) + subPower(f) * 0.5}`)
-        .join(','),
+    const sky = rs.mode === 'military' && me ? this.skies(sim, me) : null;
+    return this.geo.zoneIds.map(
+      (z) =>
+        fleetsIn(sim, z)
+          .map((f) => `${f.nation}${me && (f.nation === me || isFriendly(sim, me, f.nation)) ? '+' : me && atWar(sim, me, f.nation) ? '-' : ''}${surfacePower(f) + subPower(f) * 0.5}`)
+          .join(',') + (sky ? `|${sky.get(`z:${z}`) ?? ''}` : ''),
     );
   }
 
@@ -1257,6 +1263,52 @@ export class MapRenderer {
 
   // ───────────────────────────── sea and air ──────────────────────────────
 
+  /**
+   * Military mode: who holds the sky wherever aircraft fly this week, from our
+   * side's view (a light tint: blue ours, amber contested, red the enemy's).
+   * Drawn under the sea clip for zones, and for provinces over the land.
+   */
+  private skyOf: { cells: unknown; me: NationId; rev: number; map: Map<string, AirControl> } | null = null;
+  /** Who holds the sky over each province and zone where aircraft fly this week, from `me`'s view ('p:' and 'z:' keys). */
+  private skies(sim: Sim, me: NationId): Map<string, AirControl> {
+    const cells = airCells(sim);
+    const o = this.skyOf;
+    if (o && o.cells === cells && o.me === me && o.rev === sim.state.rev) return o.map;
+    const map = new Map<string, AirControl>();
+    for (const key of cells.keys()) {
+      const ctl = airControl(sim, key[0] === 'p' ? { prov: key.slice(2) } : { zone: key.slice(2) }, me);
+      if (ctl !== 'none') map.set(key, ctl);
+    }
+    this.skyOf = { cells, me, rev: sim.state.rev, map };
+    return map;
+  }
+
+  /** The military mode's sky tint over provinces (`land`) or sea zones: blue ours, amber contested, red theirs. */
+  private drawSkies(ctx: CanvasRenderingContext2D, sim: Sim, me: NationId, view: [number, number, number, number], land: boolean): void {
+    const sky = this.skies(sim, me);
+    if (!sky.size) return;
+    const fill = { ours: 'rgba(61, 92, 140, 0.2)', contested: 'rgba(181, 132, 47, 0.26)', theirs: 'rgba(156, 59, 51, 0.28)', none: '' } as const;
+    ctx.save();
+    for (const [key, ctl] of sky) {
+      if ((key[0] === 'p') !== land) continue;
+      const id = key.slice(2);
+      let path: Path2D | null | undefined;
+      if (land) {
+        const g = this.geo.provs.get(id);
+        if (!g || !boxMeets(g.bbox, view)) continue;
+        path = g.path;
+      } else {
+        const bb = this.geo.zoneBBox(id);
+        if (bb && !boxMeets(bb, view)) continue;
+        path = this.geo.zonePath(id);
+      }
+      if (!path) continue;
+      ctx.fillStyle = fill[ctl];
+      ctx.fill(path);
+    }
+    ctx.restore();
+  }
+
   /** Zone borders (world space); in the military and sea modes, who holds each zone. */
   private drawSeaZones(ctx: CanvasRenderingContext2D, sim: Sim, rs: RenderState, tier: Tier, px: number, view: [number, number, number, number]): void {
     const geo = this.geo;
@@ -1289,6 +1341,7 @@ export class MapRenderer {
         ctx.restore();
       }
     }
+    if (rs.mode === 'military' && me) this.drawSkies(ctx, sim, me, view, false);
     if (rs.mode === 'military' && me) {
       for (const z of geo.zoneIds) {
         if (!inView(z)) continue;
@@ -1381,18 +1434,50 @@ export class MapRenderer {
   }
 
   private drawAirMissions(sim: Sim, rs: RenderState, tier: Tier, px: number): void {
-    if (tier === 'far') return;
     const ctx = this.ctx;
     const me = rs.player;
+    // the selected wing's reach: every province and zone within range of its base or carrier
+    const sel = rs.selectedWing ? sim.state.wings[rs.selectedWing] : undefined;
+    if (sel && (sel.nation === me || rs.airTargeting)) {
+      const cov = this.coverageFor(sim, sel);
+      ctx.save();
+      ctx.fillStyle = rs.airTargeting ? 'rgba(194, 171, 114, 0.2)' : 'rgba(194, 171, 114, 0.08)';
+      for (const id of cov.provs) {
+        const p = this.geo.provs.get(id);
+        if (p) ctx.fill(p.path);
+      }
+      if (cov.zones.length) {
+        // a zone's shape runs under the coast: only its water
+        ctx.save();
+        ctx.clip(this.geo.seaClip(), 'evenodd');
+        for (const z of cov.zones) {
+          const path = this.geo.zonePath(z);
+          if (path) ctx.fill(path);
+        }
+        ctx.restore();
+      }
+      // where the range ends over land
+      ctx.strokeStyle = BRASS_INK;
+      ctx.globalAlpha = rs.airTargeting ? 0.9 : 0.5;
+      ctx.lineWidth = (rs.airTargeting ? 2.2 : 1.6) * px;
+      ctx.setLineDash([6 * px, 4 * px]);
+      ctx.stroke(cov.edge);
+      ctx.restore();
+    }
+    if (tier === 'far' && !sel) return;
     for (const w of Object.values(sim.state.wings)) {
-      if (!w.target || w.mission === 'idle') continue;
+      if (w.mission === 'idle') continue;
       const mine = w.nation === me;
       const hostile = me ? atWar(sim, me, w.nation) : false;
       const selected = w.id === rs.selectedWing;
       if (!selected && !mine && !hostile) continue;
+      if (!selected && tier === 'far') continue;
       if (!activeMission(sim, w)) continue;
-      const a = this.provinceCenter(w.base);
-      const b = this.provinceCenter(w.target);
+      const place = missionPlace(sim, w);
+      if (!place) continue;
+      const from = wingPlace(sim, w);
+      const a = from.prov !== undefined ? this.provinceCenter(from.prov) : this.zoneCenter(from.zone);
+      const b = place.prov !== undefined ? this.provinceCenter(place.prov) : this.zoneCenter(place.zone);
       const mx = (a.x + b.x) / 2;
       const my = (a.y + b.y) / 2 - Math.hypot(b.x - a.x, b.y - a.y) * 0.18;
       ctx.save();
@@ -1404,17 +1489,39 @@ export class MapRenderer {
       ctx.quadraticCurveTo(mx, my, b.x, b.y);
       ctx.stroke();
       if (selected) {
-        // the mission area: the target and its neighbours (bombing: the target)
-        const area = w.mission === 'bombing' ? [w.target] : [w.target, ...sim.world.prov[w.target].neighbors];
+        // the mission area: the target and its neighbours (bombing: the target), or the zone
         ctx.setLineDash([]);
-        ctx.fillStyle = 'rgba(194, 171, 114, 0.16)';
-        for (const id of area) {
-          const p = this.geo.provs.get(id);
-          if (p) ctx.fill(p.path);
+        ctx.fillStyle = 'rgba(194, 171, 114, 0.18)';
+        if (place.zone !== undefined) {
+          const path = this.geo.zonePath(place.zone);
+          if (path) ctx.fill(path);
+        } else {
+          for (const id of missionArea(sim, w)) {
+            const p = this.geo.provs.get(id);
+            if (p) ctx.fill(p.path);
+          }
         }
       }
       ctx.restore();
     }
+  }
+
+  private coverageMemo: { key: string; provs: string[]; zones: string[]; edge: Path2D } | null = null;
+
+  /**
+   * Provinces and zones within a wing's range, and the land border where its range
+   * ends (cached until the wing moves).
+   */
+  private coverageFor(sim: Sim, w: AirWing): { provs: string[]; zones: string[]; edge: Path2D } {
+    const from = wingPlace(sim, w);
+    const key = `${w.id}|${from.prov ?? ''}|${from.zone ?? ''}|${wingRange(sim, w)}`;
+    if (this.coverageMemo?.key === key) return this.coverageMemo;
+    const c = wingCoverage(sim, w);
+    const inside = new Set(c.provs);
+    const edge = new Path2D();
+    for (const id of c.provs) for (const e of this.geo.edgesOf.get(id) ?? []) if (!e.coast && !inside.has(e.a === id ? e.b : e.a)) edge.addPath(e.path);
+    this.coverageMemo = { key, provs: c.provs, zones: c.zones, edge };
+    return this.coverageMemo;
   }
 
   private drawFleets(sim: Sim, rs: RenderState, tier: Tier): void {

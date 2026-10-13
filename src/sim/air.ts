@@ -43,7 +43,7 @@
 // readiness and replacements; the battle round then reads the support plan.
 
 import { C, SHIPS, WINGS, WING_TYPES } from './config';
-import { armiesIn, memoize } from './index';
+import { armiesIn, battleGen, geoRev, memoEpochNow } from './index';
 import { nationMods } from './modifiers';
 import { fleetEpoch, fleetsIn, zoneName } from './naval';
 import { opDistance, placesWithin, type Place } from './reach';
@@ -87,8 +87,80 @@ function wingGen(sim: Sim): number {
   return airGen.get(sim.state) ?? 0;
 }
 
+/**
+ * The air situation of the week (statuses, presence, support and bombing plans)
+ * depends only on the wings, the fleets, the geography (control, wars), the
+ * battles and the week: kept across the phases of a week while none of them
+ * changes, instead of being rebuilt in every phase.
+ */
+interface AirTable {
+  tick: number;
+  gen: number;
+  geo: number;
+  battles: number;
+  sig: string;
+  values: Map<string, unknown>;
+}
+const airWeek = new WeakMap<object, Map<string, AirTable>>();
+
+/**
+ * Fleets matter to the air only where wings fly from them: the zone and the
+ * working decks of every fleet with wings aboard (not every fleet move).
+ */
+interface CarrierInfo {
+  tick: number;
+  gen: number;
+  fleets: number;
+  sig: string;
+  /** per wing aboard: its carrier's zone, working decks, and its place in the air group */
+  wing: Map<WingId, string>;
+}
+const carrierInfoCache = new WeakMap<object, CarrierInfo>();
+
+function carrierInfo(sim: Sim): CarrierInfo {
+  const st = sim.state;
+  const gen = wingGen(sim);
+  const fleets = fleetEpoch(sim);
+  const hit = carrierInfoCache.get(st);
+  if (hit && hit.tick === st.tick && hit.gen === gen && hit.fleets === fleets) return hit;
+  let sig = '';
+  const wing = new Map<WingId, string>();
+  for (const [fid, list] of wingIndex(sim).byCarrier) {
+    const f = st.fleets[fid];
+    const d = f ? `${f.zone}:${deckSlots(sim, f).operate}` : '-';
+    sig += `${fid}@${d};`;
+    list.forEach((w, i) => wing.set(w.id, `${d}:${i}`));
+  }
+  const info = { tick: st.tick, gen, fleets, sig, wing };
+  carrierInfoCache.set(st, info);
+  return info;
+}
+
+function carrierSig(sim: Sim): string {
+  return carrierInfo(sim).sig;
+}
+
+/** `wide`: also keyed on the wings and the carriers (presence, plans); else only the week, geography and battles (per-wing statuses keyed on the wing itself). */
+function airCached<T>(sim: Sim, table: string, sub: string, compute: () => T, wide = true): T {
+  const st = sim.state;
+  const gen = wide ? wingGen(sim) : 0;
+  const geo = geoRev(sim);
+  const battles = battleGen(sim);
+  const sig = wide ? carrierSig(sim) : '';
+  let per = airWeek.get(st);
+  if (!per) airWeek.set(st, (per = new Map()));
+  let t = per.get(table);
+  if (!t || t.tick !== st.tick || t.gen !== gen || t.geo !== geo || t.battles !== battles || t.sig !== sig) per.set(table, (t = { tick: st.tick, gen, geo, battles, sig, values: new Map() }));
+  if (t.values.has(sub)) return t.values.get(sub) as T;
+  const v = compute();
+  t.values.set(sub, v);
+  return v;
+}
+
 interface WingIndex {
   gen: number;
+  /** memo epoch it was last checked against the state (the count is verified once an epoch) */
+  epoch: number;
   count: number;
   byNation: Map<NationId, AirWing[]>;
   /** wings at airfields (not aboard carriers), by airfield */
@@ -102,11 +174,16 @@ const wingIdx = new WeakMap<object, WingIndex>();
 function wingIndex(sim: Sim): WingIndex {
   const st = sim.state;
   const gen = wingGen(sim);
-  const ids = Object.keys(st.wings);
   const hit = wingIdx.get(st);
+  const epoch = memoEpochNow();
+  if (hit && hit.gen === gen && hit.epoch === epoch) return hit;
+  const ids = Object.keys(st.wings);
   // the count also catches wings added or removed without touchWings (tests editing state directly)
-  if (hit && hit.gen === gen && hit.count === ids.length) return hit;
-  const x: WingIndex = { gen, count: ids.length, byNation: new Map(), byBase: new Map(), byCarrier: new Map() };
+  if (hit && hit.gen === gen && hit.count === ids.length) {
+    hit.epoch = epoch;
+    return hit;
+  }
+  const x: WingIndex = { gen, epoch, count: ids.length, byNation: new Map(), byBase: new Map(), byCarrier: new Map() };
   for (const id of ids.sort()) {
     const w = st.wings[id];
     (x.byNation.get(w.nation) ?? x.byNation.set(w.nation, []).get(w.nation)!).push(w);
@@ -506,7 +583,9 @@ function computeStatus(sim: Sim, w: AirWing): WingStatus {
 
 /** A wing's status this week (memoized per phase). */
 export function wingStatus(sim: Sim, w: AirWing): WingStatus {
-  return memoize(sim, 'wingStatus', `${w.id}|${wingGen(sim)}|${fleetEpoch(sim)}|${w.strength}|${w.readiness}`, () => computeStatus(sim, w));
+  // everything a status depends on that is not the week, geography or battles: the wing itself, and its carrier
+  const deck = w.carrier ? (carrierInfo(sim).wing.get(w.id) ?? '-') : '';
+  return airCached(sim, 'wingStatus', `${w.id}|${w.strength}|${w.readiness}|${w.mission}|${w.target}|${w.zone}|${w.carrier}|${w.base}|${deck}`, () => computeStatus(sim, w), false);
 }
 
 /** A wing has an order it can carry out this week (flying, or on call). */
@@ -563,7 +642,7 @@ export interface SidePlan {
 
 /** This week's ground support, by battle and side (memoized per phase). */
 export function supportPlan(sim: Sim): Map<string, { att: SidePlan; def: SidePlan }> {
-  return memoize(sim, 'supportPlan', `${wingGen(sim)}|${fleetEpoch(sim)}`, () => {
+  return airCached(sim, 'supportPlan', '', () => {
     const out = new Map<string, { att: SidePlan; def: SidePlan }>();
     const st = sim.state;
     if (!Object.keys(st.wings).length || !Object.keys(st.battles).length) return out;
@@ -702,7 +781,7 @@ export function wingCells(sim: Sim, w: AirWing): string[] {
 
 /** Air presence by place ("p:" province or "z:" zone) and realm, for the current week (derived, never saved). */
 function cellMap(sim: Sim): Map<string, Map<NationId, AirPresence>> {
-  return memoize(sim, 'airCells', `${wingGen(sim)}|${fleetEpoch(sim)}`, () => {
+  return airCached(sim, 'airCells', '', () => {
     const out = new Map<string, Map<NationId, AirPresence>>();
     const add = (cell: string, nid: NationId, k: keyof AirPresence, v: number) => {
       const m = out.get(cell) ?? out.set(cell, new Map()).get(cell)!;
@@ -729,7 +808,7 @@ function cellMap(sim: Sim): Map<string, Map<NationId, AirPresence>> {
 
 /** Presence over land provinces only (interdiction, recon). */
 function airMap(sim: Sim): Map<ProvinceId, Map<NationId, AirPresence>> {
-  return memoize(sim, 'airMapProv', `${wingGen(sim)}|${fleetEpoch(sim)}`, () => {
+  return airCached(sim, 'airMapProv', '', () => {
     const out = new Map<ProvinceId, Map<NationId, AirPresence>>();
     for (const [cell, m] of cellMap(sim)) if (cell[0] === 'p') out.set(cell.slice(2), m);
     return out;
@@ -737,6 +816,20 @@ function airMap(sim: Sim): Map<ProvinceId, Map<NationId, AirPresence>> {
 }
 
 const cellKey = (p: Place): string => (p.prov !== undefined ? `p:${p.prov}` : `z:${p.zone}`);
+
+/** Every place with aircraft over it this week ("p:" province or "z:" zone), and who flies there (map overlays). */
+export function airCells(sim: Sim): ReadonlyMap<string, Map<NationId, AirPresence>> {
+  return cellMap(sim);
+}
+
+/** Every sea zone with aircraft over it this week, and who flies there (for AI heuristics). */
+export function skiesAtSea(sim: Sim): Array<[ZoneId, Map<NationId, AirPresence>]> {
+  return airCached(sim, 'skiesAtSea', '', () => {
+    const out: Array<[ZoneId, Map<NationId, AirPresence>]> = [];
+    for (const [cell, m] of cellMap(sim)) if (cell[0] === 'z') out.push([cell.slice(2), m]);
+    return out;
+  });
+}
 
 export function airAt(sim: Sim, place: Place, nid: NationId): AirPresence {
   return cellMap(sim).get(cellKey(place))?.get(nid) ?? ZERO;
@@ -795,27 +888,48 @@ export function interdiction(sim: Sim, pid: ProvinceId, nid: NationId): { supply
   return { supply: Math.min(C.air.interdictSupplyMax, C.air.interdictSupply * power), move: Math.min(C.air.interdictMoveMax, C.air.interdictMove * power) };
 }
 
-/** Bombing power over an enemy-held province this week, after air defence and the sky. */
-export function bombingPower(sim: Sim, pid: ProvinceId): number {
-  const st = sim.state;
-  const ctl = st.provinces[pid].controller;
-  if (!ctl || !Object.keys(st.wings).length) return 0;
-  return memoize(sim, 'bombingPower', `${pid}|${wingGen(sim)}|${fleetEpoch(sim)}`, () => {
-    let bomb = 0;
-    let by: NationId | null = null;
-    for (const id of Object.keys(st.wings)) {
+/** Bombing power over every bombed province this week, after air defence and the sky (one pass over the wings). */
+function bombingMap(sim: Sim): Map<ProvinceId, number> {
+  return airCached(sim, 'bombingMap', '', () => {
+    const st = sim.state;
+    const raw = new Map<ProvinceId, { bomb: number; by: NationId }>();
+    for (const id of Object.keys(st.wings).sort()) {
       const w = st.wings[id];
-      if (w.mission !== 'bombing' || w.target !== pid || !atWar(sim, w.nation, ctl)) continue;
+      if (w.mission !== 'bombing' || !w.target) continue;
+      const ctl = st.provinces[w.target].controller;
+      if (!ctl || !atWar(sim, w.nation, ctl)) continue;
       const s = wingStatus(sim, w);
       if (s.state !== 'flying') continue;
-      bomb += WINGS[w.type].bomb * s.eff * Math.max(0.2, 1 + nationMods(sim, w.nation).airAttack);
-      by ??= w.nation;
+      const v = WINGS[w.type].bomb * s.eff * Math.max(0.2, 1 + nationMods(sim, w.nation).airAttack);
+      const cur = raw.get(w.target);
+      if (cur) cur.bomb += v;
+      else raw.set(w.target, { bomb: v, by: w.nation });
     }
-    if (bomb <= 0) return 0;
-    bomb *= Math.max(0.1, 1 - nationMods(sim, ctl).airDefence);
-    if (by) bomb *= controlFactor(airControl(sim, { prov: pid }, by));
-    return bomb;
+    const out = new Map<ProvinceId, number>();
+    for (const [pid, { bomb, by }] of raw) {
+      const ctl = st.provinces[pid].controller!;
+      out.set(pid, bomb * Math.max(0.1, 1 - nationMods(sim, ctl).airDefence) * controlFactor(airControl(sim, { prov: pid }, by)));
+    }
+    return out;
   });
+}
+
+/** Bombing power over an enemy-held province this week, after air defence and the sky. */
+const lastBombing = new WeakMap<object, { tick: number; gen: number; geo: number; battles: number; fleets: number; map: Map<ProvinceId, number> }>();
+
+export function bombingPower(sim: Sim, pid: ProvinceId): number {
+  const st = sim.state;
+  if (!st.provinces[pid].controller || !st.counters.wing) return 0;
+  // the economy asks for every province with factories: a cheap check of the last map first
+  const gen = wingGen(sim);
+  const geo = geoRev(sim);
+  const battles = battleGen(sim);
+  const fleets = fleetEpoch(sim);
+  const l = lastBombing.get(st);
+  if (l && l.tick === st.tick && l.gen === gen && l.geo === geo && l.battles === battles && l.fleets === fleets) return l.map.get(pid) ?? 0;
+  const map = bombingMap(sim);
+  lastBombing.set(st, { tick: st.tick, gen, geo, battles, fleets, map });
+  return map.get(pid) ?? 0;
 }
 
 /** Industry lost in a province to enemy bombing this month (0–0.6). */
@@ -858,12 +972,31 @@ function seaSortiesOf(sim: Sim): Map<WingId, Sortie> {
   return s.by;
 }
 
+/** Fighters on patrol by place, each with its air value (for interception and credit). */
+function patrols(sim: Sim): Map<string, Array<[AirWing, number]>> {
+  return airCached(sim, 'patrols', '', () => {
+    const out = new Map<string, Array<[AirWing, number]>>();
+    for (const id of Object.keys(sim.state.wings).sort()) {
+      const w = sim.state.wings[id];
+      if (w.mission !== 'superiority') continue;
+      const s = wingStatus(sim, w);
+      if (s.state !== 'flying') continue;
+      const v = WINGS[w.type].air * s.eff;
+      for (const c of wingCells(sim, w)) (out.get(c) ?? out.set(c, []).get(c)!).push([w, v]);
+    }
+    return out;
+  });
+}
+
 /** Intercepting fighters over the place a wing flies in, and our cover there: the strength it loses. */
 function interception(sim: Sim, w: AirWing, cells: string[], eff: number): { loss: number; cell: string | null; theirs: number } {
   let worst = 0;
   let at: string | null = null;
   let enemy = 0;
+  const pat = patrols(sim);
   for (const c of cells) {
+    // nobody patrols here: nothing to intercept us
+    if (!pat.has(c)) continue;
     const place: Place = c[0] === 'p' ? { prov: c.slice(2) } : { zone: c.slice(2) };
     const b = airBalance(sim, place, w.nation);
     if (b.theirFighters <= 0) continue;
@@ -879,15 +1012,10 @@ function interception(sim: Sim, w: AirWing, cells: string[], eff: number): { los
 
 /** Credits shot-down strength to the enemy fighters patrolling a place. */
 function creditKills(sim: Sim, cell: string, victim: NationId, lost: number, kills: Map<WingId, number>): void {
-  const st = sim.state;
   let total = 0;
   const shooters: Array<[AirWing, number]> = [];
-  for (const id of Object.keys(st.wings).sort()) {
-    const w = st.wings[id];
-    if (w.mission !== 'superiority' || !atWar(sim, w.nation, victim)) continue;
-    const s = wingStatus(sim, w);
-    if (s.state !== 'flying' || !wingCells(sim, w).includes(cell)) continue;
-    const v = WINGS[w.type].air * s.eff;
+  for (const [w, v] of patrols(sim).get(cell) ?? []) {
+    if (!atWar(sim, w.nation, victim)) continue;
     shooters.push([w, v]);
     total += v;
   }

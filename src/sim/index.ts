@@ -14,6 +14,17 @@ import type { Sim } from './state';
 // keyed by the armies object itself, so replacing it (loading, tests) starts afresh
 const armyGen = new WeakMap<object, number>();
 
+const battleGenMap = new WeakMap<object, number>();
+
+/** Call after a battle starts or ends: keeps caches that depend on the battles (air support plans) exact. */
+export function touchBattles(sim: Sim): void {
+  battleGenMap.set(sim.state, (battleGenMap.get(sim.state) ?? 0) + 1);
+}
+
+export function battleGen(sim: Sim): number {
+  return battleGenMap.get(sim.state) ?? 0;
+}
+
 /** Call after creating, removing or relocating an army. */
 export function touchArmies(sim: Sim): void {
   armyGen.set(sim.state.armies, (armyGen.get(sim.state.armies) ?? 0) + 1);

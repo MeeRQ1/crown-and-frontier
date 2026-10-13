@@ -75,6 +75,7 @@ export function conquestTargets(sim: Sim, attacker: NationId, target: NationId):
   const ourZones = new Set<string>();
   for (const pid of ours) if (st.provinces[pid].port > 0 && st.provinces[pid].controller === attacker) for (const z of w.provZones[pid] ?? []) ourZones.add(z);
   const rank = new Map<ProvinceId, number>();
+  const rest: ProvinceId[] = [];
   for (const pid of theirs) {
     if (w.prov[pid].neighbors.some((nb) => st.provinces[nb].owner === attacker)) {
       rank.set(pid, 0);
@@ -82,12 +83,14 @@ export function conquestTargets(sim: Sim, attacker: NationId, target: NationId):
     }
     let sea = Infinity;
     for (const z of w.provZones[pid] ?? []) for (const oz of ourZones) sea = Math.min(sea, w.zoneHop(oz, z) ?? Infinity);
-    if (sea < Infinity) {
-      rank.set(pid, 100 + sea);
-      continue;
-    }
+    if (sea < Infinity) rank.set(pid, 100 + sea);
+    else rest.push(pid);
+  }
+  // inland provinces, or no sea route at all: by distance from our land (only when nothing nearer exists)
+  const nearer = rank.size > 0;
+  for (const pid of rest) {
     let land = Infinity;
-    for (const q of ours) land = Math.min(land, w.hop(q, pid) ?? Infinity);
+    if (!nearer) for (const q of ours) land = Math.min(land, w.hop(q, pid) ?? Infinity);
     rank.set(pid, 1000 + (land < Infinity ? land : 9000));
   }
   return theirs.sort((a, b) => rank.get(a)! - rank.get(b)! || st.provinces[b].dev - st.provinces[a].dev || (a < b ? -1 : 1));

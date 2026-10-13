@@ -11,13 +11,19 @@
 // superiority and support over our battles and objectives, interdict enemy
 // armies, bomb enemy industry in range, and scout the front.
 
-import { airfieldRoom, buildWingProblem, inRange, missionProblem, wingsOf, wingUnlocked } from '../air';
+import { airfieldRoom, skiesAtSea, buildWingProblem, deckSlots, inRangeOf, MISSION_LABELS, missionProblem, rebaseProblem, wingsAboard, wingsAt, wingsOf, wingStatus, wingUnlocked } from '../air';
+import type { Place } from '../reach';
 import { SHIPS, WINGS } from '../config';
-import { armiesIn } from '../index';
+import { armiesIn, armiesOfNation, memoWeek } from '../index';
 import { grossIncome } from '../economy';
 import {
+  bombardPower,
   buildShipProblem,
   fleetCapacity,
+  fleetsIn,
+  provinceBlockaded,
+  raidBalance,
+  tradeRoute,
   fleetsOf,
   pathToCoast,
   portsOf,
@@ -29,7 +35,7 @@ import {
   zoneBalance,
 } from '../naval';
 import { armiesOf, atWar, diag, enemiesOf, isFriendly, months, ownedProvinces, type Sim } from '../state';
-import type { AirMission, Army, Fleet, NationId, Personality, ProvinceId, ShipType, UnitType, WingType, ZoneId } from '../types';
+import type { AirMission, AirWing, Army, Fleet, NationId, Personality, ProvinceId, ShipType, UnitType, WingType, ZoneId } from '../types';
 import { aiRand, issue, reachFrom } from './common';
 
 /** Share of income a temperament spends on ships (peace, war). */
@@ -117,8 +123,11 @@ function nextShip(sim: Sim, nid: NationId): ShipType | null {
   ];
   let best: ShipType | null = null;
   let gap = -Infinity;
+  // a carrier is worth building only with aircraft to fly from it
+  const deckWings = wingUnlocked(sim, nid, 'attack') || wingUnlocked(sim, nid, 'fighter');
   for (const [t, share] of target) {
     if (!shipUnlocked(sim, nid, t)) continue;
+    if (t === 'carrier' && !deckWings) continue;
     const g = share - c[t] / Math.max(1, war);
     if (g > gap) (gap = g), (best = t);
   }
@@ -169,10 +178,13 @@ export function navalStrategy(sim: Sim, nid: NationId, reserve: number): void {
   for (const w of wingsOf(sim, nid)) have[w.type]++;
   for (const pid of sim.world.provIds) for (const o of st.provinces[pid].hangar) if (o.nation === nid) have[o.wing]++;
   const total = Object.values(have).reduce((a, b) => a + b, 0);
+  // empty carrier decks call for fighters and strike aircraft
+  let decks = 0;
+  for (const f of fleetsOf(sim, nid)) decks += Math.max(0, deckSlots(sim, f).hold - wingsAboard(sim, f.id).length);
   const mix: Array<[WingType, number]> = [
     ['fighter', 0.45],
-    ['attack', 0.3],
-    ['bomber', 0.15],
+    ['attack', 0.3 + (decks > 0 ? 0.2 : 0)],
+    ['bomber', decks > 0 ? 0.08 : 0.15],
     // spotters lead only until fighters are known
     ['recon', total < 2 && !wingUnlocked(sim, nid, 'fighter') ? 0.5 : 0.1],
   ];
@@ -196,24 +208,53 @@ function warships(f: Fleet): boolean {
 }
 
 /** What holding a zone is worth to us at war: enemy coasts to blockade, straits, enemy fleets we can beat. */
-function zoneValue(sim: Sim, nid: NationId, zone: ZoneId, power: number): number {
+/**
+ * What holding a zone is worth to us at war: enemy coasts to blockade, straits,
+ * enemy fleets we can beat, our own blockaded coasts and raided trade to set free,
+ * our troopships to escort and our coastal battles to shell; waters where enemy
+ * aircraft hold the sky are worth half to a fleet without its own fighters.
+ */
+function zoneValue(sim: Sim, nid: NationId, zone: ZoneId, power: number, f?: Fleet, battles?: Set<ProvinceId>): number {
   const st = sim.state;
   const z = sim.world.zones[zone];
   let v = 0;
   for (const pid of z.coasts) {
     const p = st.provinces[pid];
     if (p.owner && atWar(sim, nid, p.owner)) v += 1 + p.dev * 0.5 + p.port * 2;
-    if (p.owner === nid) v += 0.5;
+    if (p.owner === nid) v += provinceBlockaded(sim, pid) ? 4 : 0.5;
+    // our armies fighting on this coast: the guns can shell the battle
+    if (battles?.has(pid) && f && bombardPower(sim, f) > 0) v += 5;
   }
   v += (z.straits?.length ?? 0) * 3;
   // escort our troopships to their beach
-  for (const f of fleetsOf(sim, nid)) if (f.cargo.length && f.landing && (sim.world.provZones[f.landing] ?? []).includes(zone)) v += 10;
+  for (const g of fleetsOf(sim, nid)) if (g.cargo.length && g.landing && (sim.world.provZones[g.landing] ?? []).includes(zone)) v += 10;
+  // enemy raiders preying on our trade here
+  const raid = raidBalance(sim, zone, nid).raid;
+  if (raid > 0) v += 2 + raid;
   const b = zoneBalance(sim, zone, nid);
   if (b.hostileSurface + b.hostileSubs > 0) {
     if (power >= (b.hostileSurface + b.hostileSubs) * 1.2) v += 6 + b.hostileSurface;
     else v = -1; // not a fight we want
   }
+  // enemy aircraft over these waters: only with fighters of our own is it worth going in
+  if (v > 0 && f && enemySkies(sim, nid).has(zone) && !wingsAboard(sim, f.id).some((w) => w.type === 'fighter')) v *= 0.5;
   return v;
+}
+
+/** Sea zones where enemy aircraft fly this week (and hold the sky), as the AI sees them at the start of its turn. */
+function enemySkies(sim: Sim, nid: NationId): Set<ZoneId> {
+  return memoWeek(sim, 'enemySkies', nid, () => {
+    const out = new Set<ZoneId>();
+    for (const [z, m] of skiesAtSea(sim)) {
+      for (const [n, a] of m) {
+        if (a.air > 0 && atWar(sim, nid, n)) {
+          out.add(z);
+          break;
+        }
+      }
+    }
+    return out;
+  });
 }
 
 /**
@@ -256,14 +297,21 @@ function fleetOps(sim: Sim, nid: NationId): void {
   const fleets = [...fleetsOf(sim, nid)].filter((f) => !f.cargo.length);
   if (!fleets.length) return;
   const war = enemiesOf(sim, nid).length > 0;
-  // gather squadrons that share a zone and have nothing aboard
+  // gather squadrons that share a zone and have nothing aboard (raiding submarines keep apart)
   const byZone = new Map<ZoneId, Fleet[]>();
-  for (const f of fleets) if (!f.path.length && f.task !== 'transport') (byZone.get(f.zone) ?? byZone.set(f.zone, []).get(f.zone)!).push(f);
+  for (const f of fleets) if (!f.path.length && f.task !== 'transport' && f.task !== 'raid') (byZone.get(f.zone) ?? byZone.set(f.zone, []).get(f.zone)!).push(f);
   for (const group of byZone.values()) {
     const warFleets = group.filter(warships);
     if (warFleets.length >= 2) issue(sim, { type: 'mergeFleets', nation: nid, fleets: warFleets.map((f) => f.id) });
   }
+  // the provinces where our armies fight this week (gun ships offshore shell them)
+  const battles = new Set<ProvinceId>();
+  for (const id of Object.keys(sim.state.battles)) {
+    const b = sim.state.battles[id];
+    if (b.attackerNations.includes(nid) || b.defenderNations.includes(nid)) battles.add(b.province);
+  }
   for (const f of [...fleetsOf(sim, nid)].filter((x) => !x.cargo.length)) {
+    if (f.task === 'raid') continue;
     const home = f.home ? portZone(sim, f.home) : null;
     if (!warships(f)) {
       // transports wait at home, or gather where an invasion is planned (invasions())
@@ -301,13 +349,72 @@ function fleetOps(sim: Sim, nid: NationId): void {
     for (const z of sim.world.zoneIds) {
       const hops = sim.world.zoneHop(f.zone, z);
       if (hops === undefined || hops > 6) continue;
-      const v = zoneValue(sim, nid, z, power) / (1 + 0.35 * hops);
+      const v = zoneValue(sim, nid, z, power, f, battles) / (1 + 0.35 * hops);
       if (v > bv + 0.01 || (Math.abs(v - bv) <= 0.01 && best !== null && z < best)) (bv = v), (best = z);
     }
     if (best && best !== f.zone && bv > 1) {
       f.task = 'sortie';
       issue(sim, { type: 'moveFleet', nation: nid, fleet: f.id, zone: best }, `${f.name} sails for ${sim.world.zones[best].name}`);
     } else if (!best && home && f.zone !== home) issue(sim, { type: 'moveFleet', nation: nid, fleet: f.id, zone: home });
+  }
+}
+
+/**
+ * Weekly at war: submarines go raiding. A mixed fleet with two or more submarines
+ * detaches them; raider squadrons lie on the sea routes of enemy trade (weighted by
+ * what passes) where enemy escorts are weaker than they are, and come home to
+ * repair when badly hurt.
+ */
+function raiderOps(sim: Sim, nid: NationId): void {
+  const st = sim.state;
+  if (!enemiesOf(sim, nid).length) {
+    // at peace raiders rejoin the fleet at home
+    for (const f of fleetsOf(sim, nid)) if (f.task === 'raid') f.task = null;
+    return;
+  }
+  for (const f of [...fleetsOf(sim, nid)]) {
+    if (f.cargo.length || f.task === 'raid' || f.path.length) continue;
+    const subs = f.ships.filter((x) => x.type === 'submarine');
+    if (subs.length < 2 || subs.length === f.ships.length) {
+      if (subs.length >= 2 && subs.length === f.ships.length) f.task = 'raid';
+      continue;
+    }
+    const r = issue(sim, { type: 'splitFleet', nation: nid, fleet: f.id, ships: subs.map((x) => x.id) }, `${f.name} detaches its submarines to raid enemy trade`);
+    if (r.ok) {
+      const made = [...fleetsOf(sim, nid)].find((g) => g.zone === f.zone && g.id !== f.id && g.ships.every((x) => x.type === 'submarine') && g.task !== 'raid');
+      if (made) made.task = 'raid';
+    }
+  }
+  const raiders = fleetsOf(sim, nid).filter((f) => f.task === 'raid');
+  if (!raiders.length) return;
+  // enemy sea trade by zone: what passes along the routes of contracts an enemy signed
+  const passing = new Map<ZoneId, number>();
+  for (const c of st.contracts) {
+    if (c.lag <= 0 || (!atWar(sim, nid, c.seller) && !atWar(sim, nid, c.buyer))) continue;
+    for (const z of tradeRoute(sim, c.seller, c.buyer) ?? []) passing.set(z, (passing.get(z) ?? 0) + c.qty);
+  }
+  for (const f of raiders) {
+    const home = f.home ? portZone(sim, f.home) : null;
+    const hp = f.ships.reduce((s, x) => s + x.hp, 0) / f.ships.length;
+    if (hp < 50 && home) {
+      if (f.zone !== home && f.path[f.path.length - 1] !== home) issue(sim, { type: 'moveFleet', nation: nid, fleet: f.id, zone: home }, `${f.name} returns from raiding to repair`);
+      continue;
+    }
+    if (f.path.length) continue;
+    const power = subPower(f);
+    let best: ZoneId | null = null;
+    let bv = 0;
+    for (const [z, qty] of passing) {
+      const hops = sim.world.zoneHop(f.zone, z);
+      if (hops === undefined || hops > 8) continue;
+      // enemy escorts here: their screens and cruisers hunt us
+      let escorts = 0;
+      for (const g of fleetsIn(sim, z)) if (atWar(sim, nid, g.nation)) for (const x of g.ships) escorts += SHIPS[x.type].antiSub * (x.hp / 100);
+      if (escorts > power) continue;
+      const v = qty / (1 + escorts) / (1 + 0.3 * hops);
+      if (v > bv + 1e-9 || (Math.abs(v - bv) <= 1e-9 && best !== null && z < best)) (bv = v), (best = z);
+    }
+    if (best && best !== f.zone) issue(sim, { type: 'moveFleet', nation: nid, fleet: f.id, zone: best }, `${f.name} goes raiding in ${sim.world.zones[best].name}`);
   }
 }
 
@@ -427,37 +534,126 @@ function invasions(sim: Sim, nid: NationId): void {
     force = made;
     force.task = 'invasion';
   }
+  // escorts first: troopships sail with warships, or wait for them while enemy ships or aircraft watch the route
+  const escort = [...fleetsOf(sim, nid)].find((f) => f.zone === zone && !f.path.length && !f.cargo.length && warships(f) && f.task !== 'raid');
+  if (escort) {
+    const m = issue(sim, { type: 'mergeFleets', nation: nid, fleets: [escort.id, fleet.id] }, `${escort.name} takes the troopships under escort`);
+    if (m.ok) {
+      const merged = sim.state.fleets[escort.id];
+      const r = issue(sim, { type: 'shipArmies', nation: nid, armies: [force.id], fleet: merged.id, dest: plan.target }, `${force.name} sails under escort to invade ${sim.world.prov[plan.target].name}`);
+      if (r.ok) n.ai.invasion = null;
+    }
+    return;
+  }
+  const route = [zone, ...(pathToCoast(sim, zone, plan.target) ?? [])];
+  const skies = enemySkies(sim, nid);
+  const danger = route.some((z) => {
+    const b = zoneBalance(sim, z, nid);
+    return b.hostileSurface + b.hostileSubs > 0 || skies.has(z);
+  });
+  if (danger && st.tick - plan.since < months(4)) {
+    // call the nearest healthy war fleet to the port to escort the convoy
+    const main = [...fleetsOf(sim, nid)]
+      .filter((f) => warships(f) && !f.cargo.length && f.task !== 'raid')
+      .sort((a, b) => (sim.world.zoneHop(a.zone, zone) ?? 99) - (sim.world.zoneHop(b.zone, zone) ?? 99) || (a.id < b.id ? -1 : 1))[0];
+    if (main && main.zone !== zone && main.path[main.path.length - 1] !== zone) issue(sim, { type: 'moveFleet', nation: nid, fleet: main.id, zone }, `${main.name} comes to escort the invasion convoy`);
+    return;
+  }
   const r = issue(sim, { type: 'shipArmies', nation: nid, armies: [force.id], fleet: fleet.id, dest: plan.target }, `${force.name} sails to invade ${sim.world.prov[plan.target].name}`);
   if (r.ok) n.ai.invasion = null;
 }
 
 // ───────────────────────────── Weekly: air ──────────────────────────────────
 
-function airOps(sim: Sim, nid: NationId): void {
+interface AirOrder {
+  mission: AirMission;
+  target: ProvinceId | null;
+  zone: ZoneId | null;
+  score: number;
+  why: string;
+}
+
+/** What the air arm can see this week: battles, enemy fleets, armies, industry, airfields and aircraft (public, like the player's map). */
+interface AirContext {
+  war: boolean;
+  battles: Array<{ pid: ProvinceId; men: number }>;
+  objectives: ProvinceId[];
+  enemyFleets: Array<{ zone: ZoneId; value: number; cargo: number }>;
+  enemyArmies: Array<{ pid: ProvinceId; regs: number }>;
+  targets: Array<{ pid: ProvinceId; score: number; what: string }>;
+  /** places enemy aircraft fly over our land, battles or fleets this week */
+  enemyAir: Map<string, number>;
+  /** zones our strike aircraft are working (recon goes with them) */
+  strikeZones: ZoneId[];
+  capital: ProvinceId | null;
+  frontier: () => ProvinceId[];
+}
+
+/** What every realm offers enemy aircraft this week, by realm (shared by every AI realm's planning). */
+interface AirTargets {
+  /** provinces it holds worth bombing: airfields with wings, working shipyards, factories */
+  targets: Map<NationId, AirContext['targets']>;
+  /** where its aircraft fly (place key → air, ground and bomb values) */
+  air: Map<NationId, Map<string, number>>;
+}
+
+function airTargets(sim: Sim): AirTargets {
+  return memoWeek(sim, 'airTargets', '', () => {
+    const st = sim.state;
+    const targets = new Map<NationId, AirContext['targets']>();
+    for (const pid of sim.world.provIds) {
+      const p = st.provinces[pid];
+      if (!p.controller) continue;
+      const fieldWings = p.airfield > 0 ? wingsAt(sim, pid).length : 0;
+      let score = 0;
+      const what: string[] = [];
+      if (fieldWings >= 2) (score += 2 + fieldWings * 0.5), what.push(`${fieldWings} wings on the airfield`);
+      if (p.port > 0 && p.dock.length) (score += 1.5 + p.dock.length * 0.5), what.push('a shipyard at work');
+      if (p.factories > 0) (score += 1 + p.factories * 0.4), what.push(`${p.factories} factories`);
+      if (score > 0) (targets.get(p.controller) ?? targets.set(p.controller, []).get(p.controller)!).push({ pid, score, what: what.join(', ') });
+    }
+    const air = new Map<NationId, Map<string, number>>();
+    for (const id of Object.keys(st.wings).sort()) {
+      const w = st.wings[id];
+      if (w.mission === 'idle') continue;
+      const ws = wingStatus(sim, w);
+      if (ws.state !== 'flying' || !ws.place) continue;
+      const k = ws.place.prov !== undefined ? `p:${ws.place.prov}` : `z:${ws.place.zone}`;
+      const m = air.get(w.nation) ?? air.set(w.nation, new Map()).get(w.nation)!;
+      m.set(k, (m.get(k) ?? 0) + WINGS[w.type].air + WINGS[w.type].ground + WINGS[w.type].bomb);
+    }
+    return { targets, air };
+  });
+}
+
+function airContext(sim: Sim, nid: NationId): AirContext {
   const st = sim.state;
-  const wings = wingsOf(sim, nid);
-  if (!wings.length) return;
-  const war = enemiesOf(sim, nid).length > 0;
-  // places that matter: our battles, then our armies' objectives, then the capital
-  const battles = Object.values(st.battles)
+  const foes = enemiesOf(sim, nid);
+  const war = foes.length > 0;
+  const battles = Object.keys(st.battles)
+    .sort()
+    .map((id) => st.battles[id])
     .filter((b) => b.attackerNations.includes(nid) || b.defenderNations.includes(nid))
-    .map((b) => b.province)
-    .sort();
+    .map((b) => ({ pid: b.province, men: [...b.attackers, ...b.defenders].reduce((s, a) => s + (st.armies[a]?.regiments.length ?? 0), 0) }));
   const objectives = [...new Set(Object.values(st.nations[nid].ai.objectives).map((o) => o.target))].sort();
-  const front = [...battles, ...objectives];
-  const enemyArmies = war
-    ? Object.values(st.armies)
-        .filter((a: Army) => !a.embarked && atWar(sim, nid, a.nation))
-        .sort((a, b) => b.regiments.length - a.regiments.length || (a.id < b.id ? -1 : 1))
-        .map((a) => a.location)
-    : [];
-  const factories = war
-    ? sim.world.provIds
-        .filter((pid) => st.provinces[pid].controller && atWar(sim, nid, st.provinces[pid].controller!) && st.provinces[pid].factories > 0)
-        .sort((a, b) => st.provinces[b].factories - st.provinces[a].factories || (a < b ? -1 : 1))
-    : [];
+  const enemyFleets: AirContext['enemyFleets'] = [];
+  const enemyArmies: AirContext['enemyArmies'] = [];
+  const targets: AirContext['targets'] = [];
+  const enemyAir = new Map<string, number>();
+  if (war) {
+    const shared = airTargets(sim);
+    for (const e of [...foes].sort()) {
+      for (const f of fleetsOf(sim, e)) if (f.ships.length) enemyFleets.push({ zone: f.zone, value: surfacePower(f) + f.ships.length, cargo: f.cargo.length });
+      for (const a of armiesOfNation(sim, e)) {
+        // armies on or next to our land
+        if (st.provinces[a.location].controller === nid || sim.world.prov[a.location].neighbors.some((q) => st.provinces[q].controller === nid)) enemyArmies.push({ pid: a.location, regs: a.regiments.length });
+      }
+      targets.push(...(shared.targets.get(e) ?? []));
+      for (const [k, v] of shared.air.get(e) ?? []) enemyAir.set(k, (enemyAir.get(k) ?? 0) + v);
+    }
+  }
+  const strikeZones = [...new Set(wingsOf(sim, nid).filter((w) => w.mission === 'naval' && w.zone).map((w) => w.zone!))].sort();
   const cap = st.nations[nid].capital;
-  // our border provinces, most foreign troops next door first (the frontier watch)
   let watch: ProvinceId[] | null = null;
   const frontier = () => {
     if (watch) return watch;
@@ -477,37 +673,127 @@ function airOps(sim: Sim, nid: NationId): void {
     rows.sort((a, b) => b[1] - a[1] || (a[0] < b[0] ? -1 : 1));
     return (watch = rows.map((r) => r[0]));
   };
+  return { war, battles, objectives, enemyFleets, enemyArmies, targets, enemyAir, strikeZones, capital: cap && st.provinces[cap].controller === nid ? cap : null, frontier };
+}
+
+/** Every mission worth flying for a wing this week, by its type, from where it is based, with a score. */
+function orderOptions(sim: Sim, w: AirWing, ctx: AirContext): AirOrder[] {
+  const r = WINGS[w.type];
+  const can = (m: AirMission) => (r.missions as AirMission[]).includes(m);
+  const opts: AirOrder[] = [];
+  const reach = (p: Place) => inRangeOf(sim, w, p);
+  const prov = (pid: ProvinceId) => reach({ prov: pid });
+  const zone = (z: ZoneId) => reach({ zone: z });
+  if (ctx.war) {
+    if (can('support')) {
+      for (const b of ctx.battles) if (prov(b.pid)) opts.push({ mission: 'support', target: b.pid, zone: null, score: (w.type === 'attack' ? 4 : 1.5) + b.men / 10, why: 'support our battle' });
+      if (w.type === 'attack') for (const o of ctx.objectives.slice(0, 6)) if (prov(o)) opts.push({ mission: 'support', target: o, zone: null, score: 1.5, why: 'on call over our objective' });
+    }
+    if (can('naval')) {
+      for (const f of ctx.enemyFleets) if (zone(f.zone)) opts.push({ mission: 'naval', target: null, zone: f.zone, score: 2.5 + f.cargo * 4 + f.value / 10, why: f.cargo ? 'strike enemy troopships' : 'strike an enemy fleet' });
+      // aboard a carrier with nothing in reach: guard the fleet's own waters
+      if (w.carrier) opts.push({ mission: 'naval', target: null, zone: null, score: 1, why: 'guard the fleet' });
+    }
+    if (can('superiority')) {
+      for (const [k, v] of ctx.enemyAir) {
+        const p: Place = k[0] === 'p' ? { prov: k.slice(2) } : { zone: k.slice(2) };
+        if (reach(p)) opts.push({ mission: 'superiority', target: p.prov ?? null, zone: p.zone ?? null, score: 3 + v / 2, why: 'meet enemy aircraft' });
+      }
+      for (const b of ctx.battles) if (prov(b.pid)) opts.push({ mission: 'superiority', target: b.pid, zone: null, score: 2 + b.men / 20, why: 'cover our battle' });
+      if (w.carrier) opts.push({ mission: 'superiority', target: null, zone: null, score: 2.2, why: 'air cover over the fleet' });
+      if (ctx.capital && prov(ctx.capital)) opts.push({ mission: 'superiority', target: ctx.capital, zone: null, score: 1, why: 'guard the capital' });
+    }
+    if (can('interdiction')) for (const a of ctx.enemyArmies) if (prov(a.pid)) opts.push({ mission: 'interdiction', target: a.pid, zone: null, score: 1.5 + a.regs / 5, why: 'interdict an enemy army' });
+    if (can('bombing')) for (const t of ctx.targets) if (prov(t.pid)) opts.push({ mission: 'bombing', target: t.pid, zone: null, score: t.score, why: `bomb ${t.what}` });
+    if (can('recon')) {
+      for (const z of ctx.strikeZones) if (zone(z)) opts.push({ mission: 'recon', target: null, zone: z, score: 3, why: 'find ships for our strikes' });
+      for (const b of ctx.battles) if (prov(b.pid)) opts.push({ mission: 'recon', target: b.pid, zone: null, score: 2 + b.men / 20, why: 'spot for our battle' });
+      const f = ctx.frontier().find(prov);
+      if (f) opts.push({ mission: 'recon', target: f, zone: null, score: 1, why: 'watch the frontier' });
+    }
+  } else {
+    if (can('superiority')) {
+      if (w.carrier) opts.push({ mission: 'superiority', target: null, zone: null, score: 1, why: 'air cover over the fleet' });
+      else if (ctx.capital && prov(ctx.capital)) opts.push({ mission: 'superiority', target: ctx.capital, zone: null, score: 1, why: 'guard the capital' });
+      else {
+        const f = ctx.frontier().find(prov);
+        if (f) opts.push({ mission: 'superiority', target: f, zone: null, score: 0.8, why: 'watch the frontier' });
+      }
+    }
+    if (can('recon')) {
+      const f = ctx.frontier().find(prov);
+      if (f) opts.push({ mission: 'recon', target: f, zone: null, score: 1, why: 'watch the frontier' });
+    }
+  }
+  return opts;
+}
+
+function sameOrder(w: AirWing, o: AirOrder): boolean {
+  return w.mission === o.mission && w.target === o.target && w.zone === o.zone;
+}
+
+/**
+ * Weekly: each wing flies the most useful mission it can reach; a working order is
+ * kept unless another is clearly better (no flip-flopping week to week); with
+ * nothing worth flying a wing rests (and recovers its readiness).
+ */
+function airOps(sim: Sim, nid: NationId): void {
+  const wings = wingsOf(sim, nid);
+  if (!wings.length) return;
+  const ctx = airContext(sim, nid);
   for (const w of wings) {
-    let mission: AirMission = 'idle';
-    let target: ProvinceId | null = null;
-    const pick = (list: ProvinceId[]) => list.find((p) => inRange(sim, w, p)) ?? null;
-    if (war) {
-      if (w.type === 'fighter') (target = pick(front) ?? (cap && inRange(sim, w, cap) ? cap : null)), (mission = 'superiority');
-      else if (w.type === 'attack') {
-        target = pick(battles) ?? pick(objectives);
-        mission = 'support';
-        if (!target) (target = pick(enemyArmies)), (mission = 'interdiction');
-      } else if (w.type === 'bomber') {
-        target = pick(factories);
-        mission = 'bombing';
-        if (!target) (target = pick(enemyArmies)), (mission = 'interdiction');
-      } else (target = pick(front) ?? pick(frontier())), (mission = 'recon');
-    } else if (w.type === 'fighter') {
-      mission = 'superiority';
-      target = cap && inRange(sim, w, cap) ? cap : pick(frontier());
-    } else if (w.type === 'recon') (target = pick(frontier())), (mission = 'recon');
-    if (!target) mission = 'idle';
-    if (mission === w.mission && target === w.target) continue;
-    if (mission !== 'idle' && missionProblem(sim, nid, w.id, mission, target)) continue;
-    issue(sim, { type: 'airMission', nation: nid, wing: w.id, mission, target: mission === 'idle' ? null : target });
+    const opts = orderOptions(sim, w, ctx);
+    let best: AirOrder | null = null;
+    for (const o of opts) if (!best || o.score > best.score + 1e-9) best = o;
+    const status = wingStatus(sim, w);
+    if (!best) {
+      if (w.mission !== 'idle' && (status.state === 'grounded' || !ctx.war)) issue(sim, { type: 'airMission', nation: nid, wing: w.id, mission: 'idle', target: null });
+      continue;
+    }
+    if (sameOrder(w, best)) continue;
+    if (w.mission !== 'idle' && status.state !== 'grounded') {
+      const cur = opts.find((o) => sameOrder(w, o))?.score ?? 0;
+      if (cur >= best.score * 0.75) continue;
+    }
+    if (missionProblem(sim, nid, w.id, best.mission, best.target, best.zone)) continue;
+    issue(sim, { type: 'airMission', nation: nid, wing: w.id, mission: best.mission, target: best.target, zone: best.zone }, `${w.name}: ${MISSION_LABELS[best.mission].toLowerCase()} (${best.why})`);
   }
 }
 
-/** Weekly: fleets, invasions and air missions. */
+// ───────────────────────────── Weekly: carriers ─────────────────────────────
+
+/** Fills empty decks with wings from airfields within ferry range: a fighter for each carrier first, then strike aircraft. */
+function carrierOps(sim: Sim, nid: NationId): void {
+  for (const f of [...fleetsOf(sim, nid)]) {
+    const deck = deckSlots(sim, f);
+    if (!deck.hold || !deck.operate) continue;
+    const aboard = wingsAboard(sim, f.id);
+    let room = deck.hold - aboard.length;
+    if (room <= 0) continue;
+    const carriers = f.ships.filter((s) => SHIPS[s.type].deck > 0).length;
+    let fighters = aboard.filter((w) => w.type === 'fighter').length;
+    const pool = wingsOf(sim, nid)
+      .filter((w) => !w.carrier && WINGS[w.type].carrier && w.type !== 'recon' && !rebaseProblem(sim, nid, w.id, null, f.id))
+      .sort((a, b) => Number(a.mission !== 'idle') - Number(b.mission !== 'idle') || (a.id < b.id ? -1 : 1));
+    while (room > 0 && pool.length) {
+      const wantFighter = fighters < carriers;
+      const i = Math.max(0, pool.findIndex((w) => (wantFighter ? w.type === 'fighter' : w.type === 'attack')));
+      const w = pool.splice(i, 1)[0];
+      const r = issue(sim, { type: 'rebaseWing', nation: nid, wing: w.id, carrier: f.id }, `${w.name} flies aboard ${f.name}`);
+      if (!r.ok) continue;
+      if (w.type === 'fighter') fighters++;
+      room--;
+    }
+  }
+}
+
+/** Weekly: fleets, raiders, invasions, carriers' air groups and air missions. */
 export function navalOps(sim: Sim, nid: NationId): void {
   if (sim.world.zoneIds.length) {
     fleetOps(sim, nid);
+    raiderOps(sim, nid);
     invasions(sim, nid);
+    carrierOps(sim, nid);
   }
   airOps(sim, nid);
 }

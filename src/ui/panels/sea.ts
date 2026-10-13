@@ -2,9 +2,11 @@
 // wing, and the port and airfield sections of a province card. Unavailable
 // actions always say why.
 
-import { activeMission, airControl, airfieldRoom, buildWingProblem, MISSION_LABELS, missionProblem, rebaseProblem, wingCost, wingRange, wingUnlocked } from '../../sim/air';
+import { airBalance, airControl, airfieldRoom, buildWingProblem, deckSlots, ferryRange, LAND_MISSIONS, MISSION_HELP, MISSION_LABELS, missionPlace, missionProblem, placeName, readyFactor, rebaseProblem, SEA_MISSIONS, wingCost, wingRange, wingsAboard, wingStatus, wingUnlocked, type WingState } from '../../sim/air';
 import { C, RESOURCE_INFO, SHIP_TYPES, SHIPS, WING_TYPES, WINGS } from '../../sim/config';
 import {
+  bombardPlan,
+  bombardPower,
   buildShipProblem,
   cargoRegiments,
   disbandFleetProblem,
@@ -17,14 +19,18 @@ import {
   mergeFleetsProblem,
   portZone,
   provinceBlockaded,
+  raidBalance,
+  raidingHere,
   shipCost,
   shipUnlocked,
   zoneBalance,
   zoneBlockaded,
   zoneName,
+  zoneRaid,
 } from '../../sim/naval';
-import { atWar, provName } from '../../sim/state';
-import type { AirMission, AirWing, Fleet, ProvinceId, ShipType, StrategicResource, WingType } from '../../sim/types';
+import { isBeachhead } from '../../sim/supply';
+import { atWar, dateOf, provName } from '../../sim/state';
+import type { AirWing, Fleet, ProvinceId, ShipType, StrategicResource, WingType } from '../../sim/types';
 import type { App } from '../app';
 import { action, button, h, row } from '../dom';
 import { fmt, plural, weeks } from '../format';
@@ -58,8 +64,9 @@ export function wingRow(app: App, w: AirWing): HTMLElement {
     { class: 'btn quiet', type: 'button', style: 'width:100%;justify-content:flex-start;margin:2px 0', 'data-fk': `wing-${w.id}` },
     shield(app, w.nation),
     h('span', { class: 'grow', style: 'text-align:left' }, w.name),
-    h('span', { class: 'faint' }, `${Math.round(w.strength)}% · ${w.mission === 'idle' ? 'idle' : `${MISSION_LABELS[w.mission].toLowerCase()}${w.target ? ` over ${provName(sim, w.target)}` : ''}`}`),
+    h('span', { class: 'faint' }, `${Math.round(w.strength)}% · ${wingLine(app, w)}`),
   );
+  void sim;
   b.addEventListener('click', () => app.selectWing(w.id));
   return b;
 }
@@ -114,13 +121,21 @@ export function fleetCard(app: App, f: Fleet): HTMLElement[] {
       tile('Speed', `${fmt(fleetSpeed(sim, f), 1)}`, `zones / week${cap ? ` · carries ${cargoRegiments(sim, f)}/${cap}` : ''}`),
     ),
   );
+  // what it did last week beyond sailing (resolved)
+  if (f.report && f.report.tick >= st.tick - 1 && f.report.notes.length) body.appendChild(section('Last week (resolved)', h('ul', { class: 'notes small', 'data-sk': 'fleet-report' }, f.report.notes.map((n) => h('li', null, n)))));
+  // the air group of its carriers
+  const deck = deckSlots(sim, f);
+  if (deck.hold) body.appendChild(airGroupSection(app, f));
+  // what its ships can do from where it lies
+  const ops = fleetOperations(app, f);
+  if (ops.length) body.appendChild(section('Operations here', h('ul', { class: 'notes small', 'data-sk': 'fleet-ops' }, ops.map((n) => h('li', null, n)))));
   // ships by type
   const rows: HTMLElement[] = [];
   for (const t of SHIP_TYPES) {
     const ships = f.ships.filter((s) => s.type === t);
     if (!ships.length) continue;
     const avg = ships.reduce((s, x) => s + x.hp, 0) / ships.length;
-    const r = row(h('span', null, `${ships.length} × ${ships.length === 1 ? SHIPS[t].label : SHIPS[t].plural}`), `${Math.round(avg)}%`);
+    const r = row(h('span', null, `${ships.length} × ${ships.length === 1 ? SHIPS[t].label : SHIPS[t].plural}`, h('span', { class: 'faint' }, ` · ${SHIPS[t].role.toLowerCase()}`)), `${Math.round(avg)}%`);
     rows.push(r);
     if (mine && ships.length < f.ships.length) {
       rows.push(
@@ -155,7 +170,7 @@ export function fleetCard(app: App, f: Fleet): HTMLElement[] {
           const a = st.armies[id];
           return a ? row(a.name, `${a.regiments.length} regiments`) : null;
         }),
-        h('p', { class: 'small muted' }, f.landing ? `They land at ${provName(sim, f.landing)} when the fleet reaches a zone on its coast and no enemy warships outgun ours there.` : 'No landing chosen.'),
+        h('p', { class: 'small muted' }, f.landing ? `They land at ${provName(sim, f.landing)} when the fleet reaches a zone on its coast and no enemy warships outgun ours there${f.path.length ? ` (${weeks(fleetEta(sim, f, f.path))} away)` : ''}. Ashore, they are supplied by sea only while a fleet of ours lies off the beach, or once they take a port.` : 'No landing chosen.'),
       ),
     );
   }
@@ -169,6 +184,55 @@ export function fleetCard(app: App, f: Fleet): HTMLElement[] {
     );
   }
   out.push(body);
+  return out;
+}
+
+/** The wings aboard a fleet's carriers, its decks, and how to fill them. */
+function airGroupSection(app: App, f: Fleet): HTMLElement {
+  const sim = app.sim!;
+  const st = sim.state;
+  const deck = deckSlots(sim, f);
+  const aboard = wingsAboard(sim, f.id);
+  const items: Array<HTMLElement | null> = [row('Decks', `${aboard.length} of ${deck.hold} wings${deck.operate < deck.hold ? ` · ${deck.operate} working (a carrier below ${C.air.deckHull}% hull cannot operate aircraft)` : ''}`)];
+  if (!aboard.length) items.push(h('div', { class: 'callout warn', 'data-sk': 'empty-deck' }, icon('alert'), h('span', null, `No aircraft aboard: the carriers can neither strike nor cover the fleet. Fly fighter, ground-attack or reconnaissance wings aboard from an airfield within reach (twice a wing's range).`)));
+  for (const w of aboard) items.push(wingRow(app, w));
+  if (f.nation === app.player && aboard.length < deck.hold) {
+    const near = Object.keys(st.wings)
+      .sort()
+      .map((id) => st.wings[id])
+      .filter((w) => w.nation === f.nation && w.carrier !== f.id && WINGS[w.type].carrier);
+    const acts = near.slice(0, 6).map((w) => action(`Fly ${w.name} aboard`, `${WINGS[w.type].label} at ${w.carrier ? st.fleets[w.carrier]?.name : provName(sim, w.base)} · readiness ${Math.round(w.readiness)}%.`, () => app.do({ type: 'rebaseWing', wing: w.id, carrier: f.id }), rebaseProblem(sim, f.nation, w.id, null, f.id)));
+    if (acts.length) items.push(h('div', { class: 'actions' }, acts));
+  }
+  return section('Air group', ...items);
+}
+
+/** What a fleet's ships do where it lies this week: shell a battle, raid trade, blockade, cover the beach. */
+function fleetOperations(app: App, f: Fleet): string[] {
+  const sim = app.sim!;
+  const st = sim.state;
+  const out: string[] = [];
+  const guns = bombardPower(sim, f);
+  if (guns > 0) {
+    const plan = bombardPlan(sim);
+    let shelling: string | null = null;
+    for (const [bid, sides] of plan) for (const side of ['att', 'def'] as const) if (sides[side].some((x) => x.fleet.id === f.id)) shelling = provName(sim, st.battles[bid].province);
+    if (shelling) out.push(`Shelling the battle of ${shelling} (naval gunfire, at most +${Math.round(C.naval.bombardMax * 100)}% with every fleet there).`);
+    else out.push(f.path.length ? 'Gun ships under way do not bombard.' : `Gun power ${guns.toFixed(1)}: lying still off a coast where our armies fight, it shells the battle (coastal forts fire back).`);
+  }
+  const raided = raidingHere(sim, f);
+  if (f.ships.some((s) => SHIPS[s.type].raid > 0)) out.push(raided.length ? `Raiding the sea trade of ${raided.map((n) => sim.world.nationDefs[n].short).join(', ')} that passes through ${zoneName(sim, f.zone)}.` : `No enemy sea trade passes through ${zoneName(sim, f.zone)}: raiders do nothing here.`);
+  const coast = sim.world.zones[f.zone]?.coasts ?? [];
+  const blockading = coast.filter((pid) => st.provinces[pid].owner && atWar(sim, f.nation, st.provinces[pid].owner!) && provinceBlockaded(sim, pid));
+  if (blockading.length) out.push(`Blockading ${blockading.map((p) => provName(sim, p)).join(', ')}: their crowns, shipyards and sea trade suffer.`);
+  const escort = f.ships.reduce((s, x) => s + SHIPS[x.type].escort, 0);
+  if (escort > 0 && !f.cargo.length) {
+    const ours = raidBalance(sim, f.zone, f.nation);
+    if (ours.raid > 0) out.push(`Escorting our trade through ${zoneName(sim, f.zone)} against ${ours.raiders.map((n) => sim.world.nationDefs[n].short).join(', ')} raiders.`);
+  }
+  const beach = coast.filter((pid) => isBeachhead(sim, pid) && st.provinces[pid].controller === f.nation && st.provinces[pid].owner !== f.nation);
+  if (beach.length && !f.path.length) out.push(`Holding the waters off ${beach.map((p) => provName(sim, p)).join(', ')}: our troops there are supplied by sea.`);
+  if (airControl(sim, { zone: f.zone }, f.nation) === 'theirs') out.push('Enemy aircraft hold the sky over these waters: struck from the air, our guns would be out-ranged. Bring fighters (a carrier, or land-based fighters over the zone).');
   return out;
 }
 
@@ -210,6 +274,17 @@ export function zoneCard(app: App, zone: string): HTMLElement[] {
         h('p', { class: 'small muted' }, `Enemy warships that outgun ours here close the straits this zone commands to us. Where every zone on a coast holds enemy warships (submarines count half) at ${C.naval.blockadeRatio}× our surface power, that coast is blockaded: it loses ${Math.round(C.naval.blockadeIncome * 100)}% of its crowns and its sea trade.`),
       ),
     );
+    const ctl = airControl(sim, { zone }, me);
+    const ab = airBalance(sim, { zone }, me);
+    const raid = raidBalance(sim, zone, me);
+    body.appendChild(
+      section(
+        'Air and trade',
+        row('The sky', ctl === 'none' ? 'no aircraft' : ctl === 'ours' ? `ours (${fmt(ab.ours, 1)} to ${fmt(ab.theirs, 1)})` : ctl === 'theirs' ? `the enemy's (${fmt(ab.theirs, 1)} to ${fmt(ab.ours, 1)})` : `contested (${fmt(ab.ours, 1)} to ${fmt(ab.theirs, 1)})`),
+        row('Enemy raiders here', raid.raid > 0 ? `${fmt(raid.raid, 1)} raid power against ${fmt(raid.escort, 1)} of our escorts: ${Math.round(zoneRaid(sim, zone, me) * 100)}% of our trade passing is lost` : 'none'),
+        h('p', { class: 'small muted' }, 'Submarines and cruisers at war with a realm take a share of its sea trade passing through their zone; screens and cruisers of its side there turn most of them away. A reconnaissance patrol overhead lets aircraft and escorts find submarines.'),
+      ),
+    );
   }
   if (z.straits?.length) body.appendChild(section('Straits it commands', ...z.straits.map(([a, c]) => row(`${provName(sim, a)} – ${provName(sim, c)}`, ''))));
   body.appendChild(
@@ -230,48 +305,99 @@ export function zoneCard(app: App, zone: string): HTMLElement[] {
 
 // ───────────────────────────── Air wing ─────────────────────────────────────
 
+const STATE_LABEL: Record<WingState, { text: string; cls: string }> = {
+  flying: { text: 'Flying', cls: 'good' },
+  standby: { text: 'On call', cls: '' },
+  grounded: { text: 'Grounded', cls: 'warn' },
+  idle: { text: 'Resting', cls: '' },
+};
+
+/** One line: what a wing is doing or why not. */
+export function wingLine(app: App, w: AirWing): string {
+  const sim = app.sim!;
+  const s = wingStatus(sim, w);
+  if (w.mission === 'idle') return `resting · readiness ${Math.round(w.readiness)}%`;
+  const where = placeName(sim, missionPlace(sim, w));
+  const what = `${MISSION_LABELS[w.mission].toLowerCase()} over ${where}`;
+  return s.state === 'flying' ? what : `${what} · ${STATE_LABEL[s.state].text.toLowerCase()}`;
+}
+
 export function wingCard(app: App, w: AirWing): HTMLElement[] {
   const sim = app.sim!;
   const st = sim.state;
   const mine = w.nation === app.player;
   const r = WINGS[w.type];
+  const status = wingStatus(sim, w);
   const tags: HTMLElement[] = [];
   if (app.player && !mine && atWar(sim, app.player, w.nation)) tags.push(h('span', { class: 'tag bad' }, 'Enemy'));
-  if (w.mission !== 'idle' && w.target) {
-    const ctl = airControl(sim, w.target, w.nation);
-    tags.push(h('span', { class: `tag ${ctl === 'ours' ? 'good' : ctl === 'theirs' ? 'bad' : ''}` }, ctl === 'ours' ? 'Air superiority' : ctl === 'theirs' ? 'Enemy holds the sky' : ctl === 'contested' ? 'Contested sky' : 'Quiet sky'));
+  tags.push(h('span', { class: `tag ${STATE_LABEL[status.state].cls}`, 'data-sk': 'wing-state' }, STATE_LABEL[status.state].text));
+  const place = missionPlace(sim, w);
+  if (status.state === 'flying' && place) {
+    const ctl = airControl(sim, place, w.nation);
+    if (ctl !== 'none' && airBalance(sim, place, w.nation).theirs > 0) tags.push(h('span', { class: `tag ${ctl === 'ours' ? 'good' : ctl === 'theirs' ? 'bad' : 'warn'}` }, ctl === 'ours' ? 'We hold the sky' : ctl === 'theirs' ? 'Enemy holds the sky' : 'Contested sky'));
   }
-  const out: HTMLElement[] = [head(app, w.nation, w.name, [`${r.label} · based at ${provName(sim, w.base)}`], tags)];
+  const out: HTMLElement[] = [head(app, w.nation, w.name, [`${r.label} · ${w.carrier ? `aboard ${st.fleets[w.carrier]?.name ?? 'a carrier'}` : `based at ${provName(sim, w.base)}`}`], tags)];
+  if (mine && w.mission !== 'idle') {
+    out.push(h('div', { class: 'ins-primary' }, quick('stop', 'Stand down', () => app.do({ type: 'airMission', wing: w.id, mission: 'idle', target: null }), null, 'Rest at the base: readiness and strength recover.')));
+  }
   const body = h('div', { class: 'ins-body scroll', 'data-sk': 'ins' });
+  const rng = wingRange(sim, w);
   body.appendChild(
     h(
       'div',
       { class: 'stat-grid', style: 'margin-top:10px' },
-      tile('Strength', `${Math.round(w.strength)}%`, 'replenished at a quiet base with materiel'),
-      tile('Range', `${wingRange(sim, w)}`, 'provinces from the base'),
-      tile('Mission', MISSION_LABELS[w.mission], w.target ? `over ${provName(sim, w.target)}${activeMission(sim, w) ? '' : ' (out of range)'}` : null),
-      tile('Values', `air ${r.air} · ground ${r.ground}`, `bombing ${r.bomb} · upkeep ${r.upkeep}/mo`),
+      tile('Strength', `${Math.round(w.strength)}%`, w.carrier ? 'replaced off a friendly port' : 'replaced at the base with materiel', 'Aircraft and crews. Losses come from interception, flak and anti-aircraft fire; replacements are paid in materiel.'),
+      tile('Readiness', `${Math.round(w.readiness)}%`, `flies at ${Math.round(readyFactor(w) * 100)}% of its values`, `Each week flown wears it (−${C.air.wear}); rest restores it. Sustained operations settle near 60%. Below ${C.air.minReady}% the wing is grounded; without oil it does not recover.`),
+      tile('Range', `${rng}`, `steps over land and sea from ${w.carrier ? 'its carrier' : 'the base'}`, 'A province to its neighbour, a coast to its sea zone and a zone to the next are one step each.'),
+      tile('Mission', MISSION_LABELS[w.mission], place ? `over ${placeName(sim, place)}` : w.mission === 'idle' ? 'none' : null),
     ),
   );
-  body.appendChild(h('p', { class: 'small muted', style: 'margin-top:8px' }, r.description));
+  // what it is doing, or why it cannot
+  const why = status.state === 'flying' ? null : status.reason;
+  if (why) body.appendChild(h('div', { class: `callout ${status.state === 'grounded' ? 'warn' : 'info'}`, style: 'margin-top:8px', 'data-sk': 'wing-reason' }, icon(status.state === 'grounded' ? 'alert' : 'info'), h('span', null, why)));
+  // last week, as resolved
+  const rep = w.report;
+  if (rep) {
+    const when = rep.tick === st.tick - 1 ? 'Last week' : `Week of ${dateOf(sim, rep.tick).short}`;
+    body.appendChild(
+      section(
+        `${when} (resolved)`,
+        h('p', { class: 'small', 'data-sk': 'wing-report' }, rep.note || (rep.flew ? 'Flew its mission.' : 'Did not fly.')),
+        rep.flew || rep.lost > 0
+          ? h(
+              'div',
+              { class: 'strip' },
+              h('div', null, h('span', { class: 'k' }, 'Enemy aircraft downed'), h('b', null, `${Math.round(rep.kills)}%`)),
+              h('div', null, h('span', { class: 'k' }, 'Hull damage dealt'), h('b', null, `${Math.round(rep.hits)}`)),
+              h('div', null, h('span', { class: 'k' }, 'Strength lost'), h('b', null, `${Math.round(rep.lost)}`)),
+            )
+          : null,
+      ),
+    );
+  }
+  body.appendChild(h('p', { class: 'small muted', style: 'margin-top:8px' }, `${r.role}. ${r.description}`));
   if (mine) {
-    const missions: AirMission[] = r.missions;
-    const acts = missions.map((m) => {
-      const detail: Record<string, string> = {
-        superiority: `Fight for the sky over the target and its neighbours. With ${C.air.superiority}× the enemy's air power we hold superiority: their support and interdiction fall to ${Math.round(C.air.contested * 100)}%.`,
-        support: `Our battles in the area fire up to +${Math.round(C.air.supportMax * 100)}% harder.`,
-        interdiction: `Enemy armies in the area lose up to ${Math.round(C.air.interdictSupplyMax * 100)}% supply and ${Math.round(C.air.interdictMoveMax * 100)}% speed.`,
-        bombing: `Factories in an enemy-held province lose up to ${Math.round(C.air.bombIndustryMax * 100)}% of their output; forts shoot back.`,
-        recon: `Our battles in the area fire +${Math.round(C.air.recon * 100)}% harder.`,
-      };
-      return action(`Fly ${MISSION_LABELS[m].toLowerCase()}…`, `${detail[m]} Choose the target on the map.`, () => app.startAirTarget(w.id, m), null);
-    });
-    if (w.mission !== 'idle') acts.push(action('Stand down', 'Return to base and replenish.', () => app.do({ type: 'airMission', wing: w.id, mission: 'idle', target: null }), missionProblem(sim, w.nation, w.id, 'idle', null)));
-    body.appendChild(section('Missions', h('div', { class: 'actions' }, acts)));
-    const fields = sim.world.provIds.filter((pid) => st.provinces[pid].airfield > 0 && st.provinces[pid].controller === w.nation && pid !== w.base);
-    if (fields.length) {
-      body.appendChild(section('Rebase', h('div', { class: 'actions' }, fields.slice(0, 6).map((pid) => action(`To ${provName(sim, pid)}`, `${plural(airfieldRoom(sim, pid), 'free place')}.`, () => app.do({ type: 'rebaseWing', wing: w.id, base: pid }), rebaseProblem(sim, w.nation, w.id, pid))))));
+    const acts: HTMLElement[] = [];
+    for (const m of r.missions) {
+      const sea = SEA_MISSIONS.includes(m);
+      const land = LAND_MISSIONS.includes(m);
+      const where = sea && land ? 'Click a province or a sea zone on the map.' : sea ? 'Click a sea zone on the map.' : 'Click a province on the map.';
+      acts.push(action(`Fly ${MISSION_LABELS[m].toLowerCase()}…`, `${MISSION_HELP[m]} ${where}`, () => app.startAirTarget(w.id, m), null));
+      // from a carrier, the sea missions can simply cover the fleet wherever it sails
+      if (w.carrier && sea) acts.push(action(`${MISSION_LABELS[m]} over the fleet`, `Over the zone the carrier lies in, wherever it sails.`, () => app.do({ type: 'airMission', wing: w.id, mission: m, target: null, zone: null }), missionProblem(sim, w.nation, w.id, m, null, null)));
     }
+    body.appendChild(section('Missions', h('div', { class: 'actions', 'data-sk': 'wing-missions' }, acts)));
+    // where it can fly from: airfields and carriers within ferry range
+    const ferry = ferryRange(sim, w);
+    const fields = sim.world.provIds.filter((pid) => st.provinces[pid].airfield > 0 && st.provinces[pid].owner === w.nation && st.provinces[pid].controller === w.nation && (pid !== w.base || w.carrier));
+    const carriers = Object.keys(st.fleets)
+      .sort()
+      .map((id) => st.fleets[id])
+      .filter((f) => f.nation === w.nation && f.id !== w.carrier && deckSlots(sim, f).hold > 0);
+    const rebase: HTMLElement[] = [];
+    for (const f of carriers) rebase.push(action(`Aboard ${f.name}`, `${zoneName(sim, f.zone)} · decks ${wingsAboard(sim, f.id).length}/${deckSlots(sim, f).hold}. Costs ${C.air.rebase} readiness.`, () => app.do({ type: 'rebaseWing', wing: w.id, carrier: f.id }), rebaseProblem(sim, w.nation, w.id, null, f.id)));
+    for (const pid of fields.slice(0, 8)) rebase.push(action(`To ${provName(sim, pid)}`, `${plural(airfieldRoom(sim, pid), 'free place')}. Costs ${C.air.rebase} readiness.`, () => app.do({ type: 'rebaseWing', wing: w.id, base: pid }), rebaseProblem(sim, w.nation, w.id, pid)));
+    if (rebase.length) body.appendChild(section('Change base', h('p', { class: 'small muted' }, `A wing flies up to ${ferry} steps to a new airfield or carrier${r.carrier ? '' : ' (bombers cannot use carriers)'}.`), h('div', { class: 'actions' }, rebase)));
     body.appendChild(section('Orders', action('Disband the wing', 'No more upkeep or fuel. This cannot be undone.', () => confirmDialog(app, `Disband ${w.name}?`, 'The aircraft and crews are stood down for good.', () => app.do({ type: 'disbandWing', wing: w.id }), 'Disband'), null)));
   }
   out.push(body);
@@ -374,13 +500,13 @@ export function navyAirSection(app: App): HTMLElement | null {
       { class: 'strip' },
       cell('Fleets', `${fleets.length} · ${ships} ships`),
       cell('Fleet upkeep', `${fmt(l.expenses['Fleet upkeep'] ?? 0)} cr/mo`),
-      cell('Air wings', `${wings.length} · ${wings.filter((w) => w.mission !== 'idle').length} flying`),
+      cell('Air wings', `${wings.length} · ${wings.filter((w) => wingStatus(sim, w).state === 'flying').length} flying · ${wings.filter((w) => wingStatus(sim, w).state === 'grounded').length} grounded`, 'flying this week · with a mission they cannot fly (see why on each)'),
       cell('Blockades', `${theirBlockaded.length} held · ${ourBlockaded.length} on us`, 'enemy coasts we blockade · our coasts blockaded'),
     ),
     fleets.length ? h('div', null, ...fleets.map((f) => fleetRow(app, f))) : h('p', { class: 'small muted' }, 'No fleets. Ships are built in ports (a province card on the coast).'),
     ourBlockaded.length ? h('div', { class: 'callout bad', style: 'margin-top:6px' }, icon('alert'), h('span', null, `Blockaded: ${ourBlockaded.map((p) => provName(sim, p)).join(', ')}. Win back the sea around them or our trade and their crowns suffer.`)) : null,
     theirBlockaded.length ? h('p', { class: 'small good' }, `We blockade: ${theirBlockaded.map((p) => provName(sim, p)).join(', ')}.`) : null,
-    wings.length ? h('div', { style: 'margin-top:6px' }, h('div', { class: 'eyebrow' }, 'Air wings'), ...wings.map((w) => wingRow(app, w))) : st.nations[me].research.done.includes('aviation') ? h('p', { class: 'small muted' }, 'No air wings. Build an airfield in a province, then raise wings there.') : h('p', { class: 'small muted' }, 'Aircraft arrive with the Aviation technology (horizon 1908).'),
+    wings.length ? airOperations(app, wings) : st.nations[me].research.done.includes('aviation') ? h('p', { class: 'small muted' }, 'No air wings. Build an airfield in a province, then raise wings there.') : h('p', { class: 'small muted' }, 'Aircraft arrive with the Aviation technology (horizon 1908).'),
     reports.length
       ? h(
           'div',
@@ -389,5 +515,30 @@ export function navyAirSection(app: App): HTMLElement | null {
           ...reports.map((r) => row(`${zoneName(sim, r.province)}`, r.outcome)),
         )
       : null,
+  );
+}
+
+/** Every wing of ours in one table: where it flies from, its mission and state, readiness, and last week's result. */
+function airOperations(app: App, wings: AirWing[]): HTMLElement {
+  const sim = app.sim!;
+  const rows = wings.map((w) => {
+    const s = wingStatus(sim, w);
+    const name = h('button', { class: 'linkish', type: 'button', 'data-fk': `air-op-${w.id}` }, w.name);
+    name.addEventListener('click', () => app.selectWing(w.id));
+    return h(
+      'tr',
+      null,
+      h('td', null, name),
+      h('td', { class: 'small' }, w.carrier ? `aboard ${sim.state.fleets[w.carrier]?.name ?? '?'}` : provName(sim, w.base)),
+      h('td', { class: `small ${s.state === 'grounded' ? 'warn' : ''}` }, wingLine(app, w), s.state === 'grounded' ? h('div', { class: 'faint' }, s.reason) : null),
+      h('td', { class: 'r' }, `${Math.round(w.readiness)}%`),
+      h('td', { class: 'small faint' }, w.report?.note ?? ''),
+    );
+  });
+  return h(
+    'div',
+    { style: 'margin-top:6px', 'data-sk': 'air-operations' },
+    h('div', { class: 'eyebrow' }, 'Air operations'),
+    h('table', { class: 'register compact' }, h('thead', null, h('tr', null, h('th', null, 'Wing'), h('th', null, 'Flies from'), h('th', null, 'Mission'), h('th', { class: 'r' }, 'Ready'), h('th', null, 'Last week'))), h('tbody', null, rows)),
   );
 }
