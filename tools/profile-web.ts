@@ -402,6 +402,8 @@ async function settle(): Promise<void> {
     // the clock must keep running: no pauses for events, proposals, battles or choices
     app.updateSettings({ autoPauseWar: false, autoPauseEvent: false, autoPauseProposal: false, autoPauseChoice: false, autoPauseBattle: false });
     app.closeModal?.();
+    // a notice (a save converted from an older format) waits for its Close button
+    for (const b of document.querySelectorAll<HTMLButtonElement>('.modal-layer:not(.hidden) footer button')) if (b.textContent?.trim() === 'Close') b.click();
     app.tutorial?.end?.();
     for (const b of document.querySelectorAll('button')) if (/^End tutorial$/.test(b.textContent?.trim() ?? '')) (b as HTMLButtonElement).click();
   });

@@ -945,12 +945,14 @@ of fighters, ground attack and bombers, with one or two reconnaissance wings. We
   a port to gather at. Transports gather there and a detachment boards; it sails under the
   escort of a war fleet in the port's zone, or waits (calling the nearest war fleet) while
   enemy ships or aircraft watch the route; the plan is dropped after eight months.
-- Each wing flies the most useful mission it can reach: support for our battles, naval strikes
-  on enemy fleets (troopships first), fighters against enemy aircraft over our land, battles and
+- Each wing flies the most useful mission it can reach: support for our battles, and support on
+  call where a battle is about to begin (an army marching onto enemy troops, standing beside
+  them, or about to land: most land battles are fought out in a week, and on call costs
+  nothing until they start), naval strikes on enemy fleets (troopships first), fighters against enemy aircraft over our land, battles and
   fleets, interdiction of enemy armies at our borders, bombing of enemy airfields, shipyards and
-  factories, reconnaissance with our strikes; at peace fighters guard the capital and
-  reconnaissance the border, the rest rest. A working order is kept unless another scores a third
-  better, so orders do not flip week to week.
+  factories, reconnaissance with our strikes. At peace every wing rests: a patrol meets nothing
+  and would only wear down the readiness a war's first weeks need. A working order is kept
+  unless another scores a third better, so orders do not flip week to week.
 - Empty carrier decks are filled with fighter and ground-attack wings from airfields within
   reach (a fighter for each carrier first); carriers are only built with such aircraft to fly.
 - Wars on realms it does not border are considered only with transports afloat for six
@@ -1097,7 +1099,8 @@ Observations that drove the tuning:
     researched Aviation and its first wings were reconnaissance that idled at peace. Aviation
     is now weighted up, fighters lead the mix once known, and at peace fighters and
     reconnaissance watch the capital and the most threatened border. Every such realm now
-    flies missions.
+    flies missions. (Since the naval and air update a flight wears readiness, so at peace the
+    wings rest instead.)
   - Fleets at peace keep station off the realm they plan to fight, off claimed coasts, on
     a strait beside their shores, or off a rival navy's home waters.
   - Bankruptcies tripled on Aldmere in the first batch (a collapsing realm kept a large

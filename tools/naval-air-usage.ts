@@ -6,7 +6,8 @@
 //   npx tsx tools/naval-air-usage.ts [scenario] [years] [seed]
 
 import '../src/maps/builtin';
-import { wingStatus } from '../src/sim/air';
+import { inRangeOf, wingStatus } from '../src/sim/air';
+import { WINGS } from '../src/sim/config';
 import { createGame } from '../src/sim/game';
 import { checkInvariants } from '../src/sim/invariants';
 import { borders } from '../src/sim/state';
@@ -27,6 +28,8 @@ export interface NavalAirUsage {
   carrierWingWeeks: number;
   battles: number;
   battlesWithAir: number;
+  /** battles with a ground-support wing of either side within range when they began */
+  battlesInAirReach: number;
   battlesWithGunfire: number;
   /** mission orders changed per hundred wing-weeks (churn) */
   orderChanges: number;
@@ -49,9 +52,11 @@ export interface NavalAirUsage {
 export function navalAirUsage(scenario: string, years: number, seed: number): NavalAirUsage {
   const sim = createGame({ scenario, seed, playerNation: null });
   const st = sim.state;
-  const u: NavalAirUsage = { scenario, years, seed, weeks: 0, warWeeks: 0, wingWeeks: 0, byState: {}, atWarWingWeeks: 0, idleAtWar: 0, flyingByMission: {}, carrierWingWeeks: 0, battles: 0, battlesWithAir: 0, battlesWithGunfire: 0, orderChanges: 0, supportWeeks: 0, airKills: 0, navalStrikeHits: 0, bombardWeeks: 0, raidWeeks: 0, landings: 0, navalBattles: 0, overseasWars: 0, debtMonths: 0, realmMonths: 0, invariantFailures: [], secs: 0 };
+  const u: NavalAirUsage = { scenario, years, seed, weeks: 0, warWeeks: 0, wingWeeks: 0, byState: {}, atWarWingWeeks: 0, idleAtWar: 0, flyingByMission: {}, carrierWingWeeks: 0, battles: 0, battlesWithAir: 0, battlesInAirReach: 0, battlesWithGunfire: 0, orderChanges: 0, supportWeeks: 0, airKills: 0, navalStrikeHits: 0, bombardWeeks: 0, raidWeeks: 0, landings: 0, navalBattles: 0, overseasWars: 0, debtMonths: 0, realmMonths: 0, invariantFailures: [], secs: 0 };
   const t0 = Date.now();
   const seen = new Set<string>();
+  const withAir = new Set<string>();
+  const withGuns = new Set<string>();
   const seenWars = new Set<string>();
   const lastOrder = new Map<string, string>();
   let changes = 0;
@@ -77,14 +82,24 @@ export function navalAirUsage(scenario: string, years: number, seed: number): Na
       if (prev !== undefined && prev !== order) changes++;
       lastOrder.set(id, order);
     }
+    // a battle counts once, with air or gunfire if any of its rounds had it
     for (const b of Object.values(st.battles)) {
-      if (seen.has(b.id)) continue;
       if (!b.support) continue;
-      seen.add(b.id);
-      u.battles++;
+      if (!seen.has(b.id)) {
+        seen.add(b.id);
+        u.battles++;
+        const sides = new Set([...b.attackerNations, ...b.defenderNations]);
+        if (Object.values(st.wings).some((w) => sides.has(w.nation) && (WINGS[w.type].missions as string[]).includes('support') && inRangeOf(sim, w, { prov: b.province }))) u.battlesInAirReach++;
+      }
       const lines = [...b.support.att, ...b.support.def];
-      if (lines.some((l) => l.kind !== 'naval')) u.battlesWithAir++;
-      if (lines.some((l) => l.kind === 'naval')) u.battlesWithGunfire++;
+      if (lines.some((l) => l.kind !== 'naval') && !withAir.has(b.id)) {
+        withAir.add(b.id);
+        u.battlesWithAir++;
+      }
+      if (lines.some((l) => l.kind === 'naval') && !withGuns.has(b.id)) {
+        withGuns.add(b.id);
+        u.battlesWithGunfire++;
+      }
     }
     for (const war of Object.values(st.wars)) {
       if (seenWars.has(war.id)) continue;

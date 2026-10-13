@@ -1,0 +1,90 @@
+{
+ "land": {
+  "defLossesNoAir": 276,
+  "defLossesAir": 384,
+  "attLossesNoAir": 366,
+  "attLossesAir": 366,
+  "factor": "Attacker: Air support +40% from 2 wings (air superiority)",
+  "battlesInArea": 2,
+  "battlesSupportedByOneWing": 1,
+  "cancelledSupportLines": 0,
+  "outOfRange": "C1 is out of range: 4 steps from A1; the range is 3."
+ },
+ "contested": {
+  "bomberStrengthAlone": 66.9,
+  "bomberStrengthEscorted": 82.8,
+  "skyAlone": "theirs",
+  "skyEscorted": "contested",
+  "interceptorKills": 0.3,
+  "interceptorReport": "Fought for the sky over B1: shot down 5% of an enemy wing; we hold it.",
+  "targetIndustryUnderEnemySky": 2.1,
+  "targetIndustryUnderContestedSky": 1.3
+ },
+ "logistics": {
+  "supplyBefore": 1,
+  "supplyInterdicted": 0.6,
+  "interdictionReport": "Interdicted 1 enemy army around B1.",
+  "shipyardWeeksLeftAfter2WeeksBombed": 10,
+  "groundedFighterReadiness": 25,
+  "bombingReport": "Bombed B1: factories −60%; shipyard halted, repairs halved; 1 enemy wing grounded on the airfield.",
+  "shipyardWeeksLeftWeekAfterBombingStops": 9
+ },
+ "coastal": {
+  "defLossesNoShips": 276,
+  "defLossesBombarded": 342,
+  "factor": "Attacker: Naval gunfire +23% from A First Squadron offshore",
+  "gunfireLines_elsewhere": 0,
+  "gunfireLines_sailing": 0,
+  "fleetHullBefore": 200,
+  "fleetHullAfterFortsFireBack": 194,
+  "fortReport": "Shelled the enemy at B1; the coastal forts (level 2) hit back for 6 hull damage.",
+  "capWith4WingsAndSquadron": 50,
+  "capFactor": "Attacker: Fire support capped at +50% (63% committed)"
+ },
+ "raiding": {
+  "tradeShareLostTo2Subs": 40,
+  "tradeShareLostWith3Screens": 16.2,
+  "tradeOpenRaided": 83.8,
+  "subHullAfterAWeekWithRecon": 148.2,
+  "subHullAfterAWeekWithoutRecon": 198.8
+ },
+ "transport": {
+  "regimentsLandedExposed": 0,
+  "regimentsAfloatOrAshoreExposed": 0,
+  "regimentsLandedProtected": 4,
+  "of": 4
+ },
+ "carrier": {
+  "bomberAboard": "Bomber wings are too heavy for a carrier deck.",
+  "thirdWingAboard": "A First Squadron's decks are full (2 wings).",
+  "landWingBeyondReach": "Out of range: C1 is 4 steps from A1; the range is 3.",
+  "battleSupport": "Attacker: Air support +34% from A Ground-attack wing 2 (air superiority)",
+  "damagedCarrier": "Flight decks out of action: A First Squadron's carriers are below 40% hull. Repair them in port.",
+  "strikeTargetHullBefore": 200,
+  "strikeTargetHullAfter": 136.2,
+  "carrierSailedAway": "Out of range: Q5 is 6 steps from the carriers of A First Squadron (Zone 0); the range is 3."
+ },
+ "albania": {
+  "goal": [
+   "aydn",
+   "karesi"
+  ],
+  "notes": [
+   "Overland: no route. Realms that are neither our allies nor at war with us lie between us, and declaring war gives no right of passage.",
+   "By sea: Aydın is 1 sea zone from our port of Durazzo. Our transports afloat carry 2 regiments (we have 5).",
+   "Their navy and their allies': 3 warships to our 3. Troops land only where enemy warships do not outgun ours, and stay supplied only while a fleet holds the waters off the beach or once they take a port.",
+   "Air: 0 of our wings reach their land from where they are based."
+  ],
+  "warnings": [
+   "Our transports carry only 2 regiments: a landing that small is easily thrown back."
+  ],
+  "liftAfterTwoTransports": 6,
+  "regimentsShipped": 5,
+  "weeksToLand": 1,
+  "weeksToTakeAydin": 2,
+  "suppliedBySea": true
+ },
+ "saves": {
+  "migrationNotice": "This save was made before the naval and air update (save format 5) and was converted to format 6. Its 1 air wing keeps its mission and starts fully ready. Ground support now joins one battle a week per wing, and wars may be declared on realms we do not border."
+ }
+}

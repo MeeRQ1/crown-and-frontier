@@ -577,6 +577,8 @@ interface AirOrder {
 interface AirContext {
   war: boolean;
   battles: Array<{ pid: ProvinceId; men: number }>;
+  /** where our armies will fight next: marching onto enemy troops, standing beside them, or landing (regiments of both sides) */
+  imminent: Map<ProvinceId, number>;
   objectives: ProvinceId[];
   enemyFleets: Array<{ zone: ZoneId; value: number; cargo: number }>;
   enemyArmies: Array<{ pid: ProvinceId; regs: number }>;
@@ -652,6 +654,28 @@ function airContext(sim: Sim, nid: NationId): AirContext {
       for (const [k, v] of shared.air.get(e) ?? []) enemyAir.set(k, (enemyAir.get(k) ?? 0) + v);
     }
   }
+  // most land battles are fought out in a week: support has to be on call before they begin
+  const imminent = new Map<ProvinceId, number>();
+  if (war) {
+    const foesAt = (pid: ProvinceId) => armiesIn(sim, pid).reduce((s, e) => s + (atWar(sim, nid, e.nation) ? e.regiments.length : 0), 0);
+    for (const a of armiesOfNation(sim, nid)) {
+      if (a.battle || a.retreating) continue;
+      if (a.embarked) {
+        // troops at sea fight on the beach: support waits over it before they come ashore
+        const beach = st.fleets[a.embarked]?.landing;
+        if (beach) imminent.set(beach, (imminent.get(beach) ?? 0) + a.regiments.length + foesAt(beach));
+        continue;
+      }
+      const next = a.path[0];
+      let at = a.location;
+      let foes = 0;
+      if (next) {
+        at = next;
+        foes = foesAt(next);
+      } else for (const q of sim.world.prov[a.location].neighbors) foes += foesAt(q);
+      if (foes > 0) imminent.set(at, (imminent.get(at) ?? 0) + a.regiments.length + foes);
+    }
+  }
   const strikeZones = [...new Set(wingsOf(sim, nid).filter((w) => w.mission === 'naval' && w.zone).map((w) => w.zone!))].sort();
   const cap = st.nations[nid].capital;
   let watch: ProvinceId[] | null = null;
@@ -673,7 +697,7 @@ function airContext(sim: Sim, nid: NationId): AirContext {
     rows.sort((a, b) => b[1] - a[1] || (a[0] < b[0] ? -1 : 1));
     return (watch = rows.map((r) => r[0]));
   };
-  return { war, battles, objectives, enemyFleets, enemyArmies, targets, enemyAir, strikeZones, capital: cap && st.provinces[cap].controller === nid ? cap : null, frontier };
+  return { war, battles, imminent, objectives, enemyFleets, enemyArmies, targets, enemyAir, strikeZones, capital: cap && st.provinces[cap].controller === nid ? cap : null, frontier };
 }
 
 /** Every mission worth flying for a wing this week, by its type, from where it is based, with a score. */
@@ -687,7 +711,10 @@ function orderOptions(sim: Sim, w: AirWing, ctx: AirContext): AirOrder[] {
   if (ctx.war) {
     if (can('support')) {
       for (const b of ctx.battles) if (prov(b.pid)) opts.push({ mission: 'support', target: b.pid, zone: null, score: (w.type === 'attack' ? 4 : 1.5) + b.men / 10, why: 'support our battle' });
-      if (w.type === 'attack') for (const o of ctx.objectives.slice(0, 6)) if (prov(o)) opts.push({ mission: 'support', target: o, zone: null, score: 1.5, why: 'on call over our objective' });
+      // on call costs nothing until the battle begins; fighters add little, but more than an empty sky
+      const attack = w.type === 'attack';
+      for (const [pid, regs] of ctx.imminent) if (prov(pid)) opts.push({ mission: 'support', target: pid, zone: null, score: attack ? 3 + regs / 5 : 1.2 + regs / 10, why: 'on call where our army is about to fight' });
+      if (attack) for (const o of ctx.objectives.slice(0, 6)) if (prov(o)) opts.push({ mission: 'support', target: o, zone: null, score: 1.5, why: 'on call over our objective' });
     }
     if (can('naval')) {
       for (const f of ctx.enemyFleets) if (zone(f.zone)) opts.push({ mission: 'naval', target: null, zone: f.zone, score: 2.5 + f.cargo * 4 + f.value / 10, why: f.cargo ? 'strike enemy troopships' : 'strike an enemy fleet' });
@@ -711,20 +738,9 @@ function orderOptions(sim: Sim, w: AirWing, ctx: AirContext): AirOrder[] {
       const f = ctx.frontier().find(prov);
       if (f) opts.push({ mission: 'recon', target: f, zone: null, score: 1, why: 'watch the frontier' });
     }
-  } else {
-    if (can('superiority')) {
-      if (w.carrier) opts.push({ mission: 'superiority', target: null, zone: null, score: 1, why: 'air cover over the fleet' });
-      else if (ctx.capital && prov(ctx.capital)) opts.push({ mission: 'superiority', target: ctx.capital, zone: null, score: 1, why: 'guard the capital' });
-      else {
-        const f = ctx.frontier().find(prov);
-        if (f) opts.push({ mission: 'superiority', target: f, zone: null, score: 0.8, why: 'watch the frontier' });
-      }
-    }
-    if (can('recon')) {
-      const f = ctx.frontier().find(prov);
-      if (f) opts.push({ mission: 'recon', target: f, zone: null, score: 1, why: 'watch the frontier' });
-    }
   }
+  // at peace no mission meets anything: every wing rests, keeping its readiness for the
+  // first weeks of a war and burning a third of the oil
   return opts;
 }
 
@@ -737,7 +753,7 @@ function sameOrder(w: AirWing, o: AirOrder): boolean {
  * kept unless another is clearly better (no flip-flopping week to week); with
  * nothing worth flying a wing rests (and recovers its readiness).
  */
-function airOps(sim: Sim, nid: NationId): void {
+export function airOps(sim: Sim, nid: NationId): void {
   const wings = wingsOf(sim, nid);
   if (!wings.length) return;
   const ctx = airContext(sim, nid);
@@ -787,13 +803,11 @@ function carrierOps(sim: Sim, nid: NationId): void {
   }
 }
 
-/** Weekly: fleets, raiders, invasions, carriers' air groups and air missions. */
+/** Weekly: fleets, raiders, invasions and carriers' air groups (air missions follow the armies' orders: `airOps`). */
 export function navalOps(sim: Sim, nid: NationId): void {
-  if (sim.world.zoneIds.length) {
-    fleetOps(sim, nid);
-    raiderOps(sim, nid);
-    invasions(sim, nid);
-    carrierOps(sim, nid);
-  }
-  airOps(sim, nid);
+  if (!sim.world.zoneIds.length) return;
+  fleetOps(sim, nid);
+  raiderOps(sim, nid);
+  invasions(sim, nid);
+  carrierOps(sim, nid);
 }
