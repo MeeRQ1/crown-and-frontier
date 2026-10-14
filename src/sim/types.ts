@@ -313,6 +313,8 @@ export interface AirWing {
   zone: ZoneId | null;
   /** last week's operations, for the interface (format 6) */
   report: WingReport | null;
+  /** its service so far (format 7): weeks flown, enemy aircraft downed and hull hit (summed), strength lost */
+  record?: { weeks: number; kills: number; hits: number; lost: number };
 }
 
 /** One week of a wing's operations, as the player is told it. */

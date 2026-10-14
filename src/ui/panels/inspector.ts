@@ -24,7 +24,7 @@ import { icon, type IconName } from '../icons';
 import { section, shield, tip } from './common';
 import { confirmDialog } from './dialogs';
 import { airfieldSection, fleetCard, portSection, wingCard, zoneCard } from './sea';
-import { fleetCapacity, fleetsIn, transportFor } from '../../sim/naval';
+import { fleetCapacity, fleetEta, fleetsIn, routeThreats, transportFor, zoneName } from '../../sim/naval';
 
 export function renderInspector(app: App): void {
   const sim = app.sim!;
@@ -300,10 +300,20 @@ export function armyStatus(app: App, a: Army): string {
 /** Why the army cannot ship by sea from this coast, said plainly (a tooltip alone is lost on touch screens). */
 function shipNote(app: App, a: Army): HTMLElement | null {
   const sim = app.sim!;
+  if (a.embarked) {
+    // at sea: the fleet, the beach, the time, and what lies in wait on the way
+    const f = sim.state.fleets[a.embarked];
+    if (!f) return null;
+    const threats = routeThreats(sim, f);
+    const when = f.landing ? `lands at ${provName(sim, f.landing)}${f.path.length ? ` in ${weeks(fleetEta(sim, f, f.path))}` : ' once no enemy warships outgun ours off the beach'}` : 'no landing chosen';
+    const risk = threats.length ? ` Danger on the way: ${threats.map((t) => `${zoneName(sim, t.zone)}${t.air ? ' (enemy air)' : ''}`).join(', ')}; transports sunk drown their troops.` : ' No enemy warships known on the route.';
+    return h('div', { class: `small ${threats.length ? 'warn' : 'muted'}`, style: 'flex-basis:100%', 'data-sk': 'army-at-sea' }, `Aboard ${f.name}: ${when}.${risk}`);
+  }
   const zones = sim.world.provZones[a.location];
-  if (!zones?.length || a.embarked || a.battle || a.retreating) return null;
+  if (!zones?.length || a.battle || a.retreating) return null;
   const regs = a.regiments.length;
-  if (transportFor(sim, a.nation, a.location, regs)) return null;
+  const ready = transportFor(sim, a.nation, a.location, regs);
+  if (ready) return h('div', { class: 'small muted', style: 'flex-basis:100%' }, `${ready.name} lies off this coast with room for ${fleetCapacity(ready)} regiments: Ship by sea, then click the beach (or select the fleet and embark from it).`);
   let room = 0;
   for (const z of zones) for (const f of fleetsIn(sim, z)) if (f.nation === a.nation && !f.cargo.length) room = Math.max(room, fleetCapacity(f));
   const need = `${regs} regiments need ${plural(Math.ceil(regs / 2), 'transport')}`;

@@ -1296,6 +1296,14 @@ export function weeklyAir(sim: Sim): void {
     if (s) w.report = { tick: st.tick, flew: true, note: s.note, kills: k, hits: s.hits, lost: s.lost };
     else if (didFly) w.report = { tick: st.tick, flew: true, note: notes.get(id) ?? '', kills: k, hits: 0, lost: lostNow };
     else if (!w.report || w.report.tick !== st.tick) w.report = { tick: st.tick, flew: false, note: wingStatus(sim, w).reason, kills: 0, hits: 0, lost: 0 };
+    // its service so far (format 7): weeks flown, what it shot down and hit, what it lost
+    if (w.report.tick === st.tick && w.report.flew) {
+      const r = (w.record ??= { weeks: 0, kills: 0, hits: 0, lost: 0 });
+      r.weeks++;
+      r.kills += w.report.kills;
+      r.hits += w.report.hits;
+      r.lost += w.report.lost;
+    }
   }
   touchWings(sim);
 }

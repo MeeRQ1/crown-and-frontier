@@ -77,7 +77,8 @@ async function main(): Promise<void> {
     page.evaluate(() => {
       const app = (window as any).cnf;
       const r = app.canvas.getBoundingClientRect();
-      const m = (app.renderer.wingMarkers ?? app.renderer.markers ?? []).find((x: any) => x.wing);
+      // the wing counters (format 7: hit-tested, `wings`); before, nothing recorded them
+      const m = (app.renderer.wingMarkers ?? []).find((x: any) => x.wings?.length);
       return m ? { x: m.x + m.w / 2 + r.left, y: m.y + m.h / 2 + r.top } : null;
     });
   try {
@@ -147,6 +148,63 @@ async function main(): Promise<void> {
     await page.keyboard.press('m');
     await page.waitForTimeout(300);
     await record('roster', 'the Military ledger: armies by region, fleets, air operations', 1);
+    await page.keyboard.press('m');
+    await page.waitForTimeout(200);
+
+    // ── the orders on the map (format 7 control): the same tasks by the shortest route ──
+    const menuText = async () => ((await page.locator('.order-menu').innerText().catch(() => '')) || '').replace(/\s+/g, ' ').slice(0, 260);
+    const choose = async (re: RegExp) => {
+      const item = page.locator('.order-menu .order-item', { hasText: re }).first();
+      if (await item.count()) await item.click();
+      else if (await page.locator('.order-menu').count()) await page.keyboard.press('Escape');
+      await page.waitForTimeout(200);
+    };
+    // 6. a wing: click its counter, right-click the front, pick the mission
+    await centre('serenna', 46);
+    await page.waitForTimeout(300);
+    const wm2 = await wingMarker();
+    if (wm2) await page.mouse.click(wm2.x, wm2.y);
+    await page.waitForTimeout(200);
+    await record('order-wing-select', `click the wing counter at Serenna: ${(await page.evaluate(() => (window as any).cnf.selectedWing)) ? 'selects a wing (again: the next one)' : 'nothing selects a wing'}`, 1);
+    await centre('duncairn', 46);
+    await page.waitForTimeout(200);
+    const dp2 = await point('duncairn');
+    if (dp2) await page.mouse.click(dp2.x, dp2.y, { button: 'right' });
+    await page.waitForTimeout(250);
+    await record('order-wing-menu', `right-click Duncairn: ${(await menuText()) || 'no order menu'}`, 1);
+    await choose(/Ground support|Air superiority/);
+    await record('order-wing-set', 'choose the mission in the menu: the order is set, the wing stays selected', 1);
+    // 7. a fleet: select it, right-click the water, pick an order
+    await page.evaluate((f) => (window as any).cnf.selectFleet(f, true), ids.fleet);
+    await page.waitForTimeout(300);
+    const zp = await page.evaluate((z) => {
+      const app = (window as any).cnf;
+      const r = app.canvas.getBoundingClientRect();
+      const c = app.renderer.zoneCenter(z);
+      const s = app.renderer.camera.toScreen(c.x, c.y);
+      for (let d = 0; d < 120; d += 6)
+        for (const [dx, dy] of [[0, d], [d, 0], [0, -d], [-d, 0]]) {
+          const x = s.x + dx;
+          const y = s.y + dy;
+          if (!app.renderer.provinceAt(x, y) && app.renderer.zoneAt(x, y) === z && !app.renderer.fleetAt(x, y)) return { x: x + r.left, y: y + r.top };
+        }
+      return null;
+    }, ids.zone);
+    if (zp) await page.mouse.click(zp.x, zp.y, { button: 'right' });
+    await page.waitForTimeout(250);
+    await record('order-fleet-menu', `right-click its waters: ${(await menuText()) || 'no order menu'}`, 1);
+    await choose(/^\s*\d?\s*Blockade/);
+    await record('order-fleet-set', 'choose Blockade: the fleet card shows the order, its effect and how to end it', 1);
+    // 8. an army overseas from the fleet: embark from the fleet card, click the beach
+    const embark = page.locator('aside.inspector .action button', { hasText: /^Embark / }).first();
+    const canEmbark = await embark.count();
+    if (canEmbark) await embark.click();
+    await centre('westmere', 46);
+    await page.waitForTimeout(200);
+    const wp = await point('westmere');
+    if (canEmbark && wp) await page.mouse.click(wp.x, wp.y);
+    await page.waitForTimeout(250);
+    await record('order-embark', canEmbark ? 'from the fleet card: Embark the army on its coast, then click the beach' : 'the fleet card offers no embarking', 2);
   } finally {
     await browser.close();
     server.close();

@@ -31,7 +31,7 @@
 // our armies fight shell the enemy (combat.ts reads bombardPlan); coastal forts
 // fire back.
 
-import { mergeAir, outrangedThisWeek, portBombed, relocateAir, reportFleet, seaAir, splitAir, subsExposed, wingsAboard } from './air';
+import { airControl, mergeAir, outrangedThisWeek, portBombed, relocateAir, reportFleet, seaAir, splitAir, subsExposed, wingsAboard } from './air';
 import { C, SHIPS, SHIP_TYPES } from './config';
 import { warDead } from './economy';
 import { memoGeo, memoize, ownedBy, touchArmies } from './index';
@@ -639,8 +639,25 @@ export function shipArmies(sim: Sim, nid: NationId, armyIds: string[], fleetId: 
   f.landing = dest;
   f.path = pathToCoast(sim, f.zone, dest) ?? [];
   f.progress = 0;
+  // carrying troops is its order now: a standing order would steer it elsewhere
+  f.duty = null;
   touchArmies(sim);
   touchFleets(sim);
+}
+
+/**
+ * The danger on a fleet's route (the zones ahead, and where it lies): enemy
+ * warships and submarines in each zone, and whether the enemy holds the sky
+ * there. Carried troops drown with sunk transports.
+ */
+export function routeThreats(sim: Sim, f: Fleet, path: ZoneId[] = f.path): Array<{ zone: ZoneId; surface: number; subs: number; air: boolean }> {
+  const out: Array<{ zone: ZoneId; surface: number; subs: number; air: boolean }> = [];
+  for (const z of [f.zone, ...path]) {
+    const b = zoneBalance(sim, z, f.nation);
+    const air = airControl(sim, { zone: z }, f.nation) === 'theirs';
+    if (b.hostileSurface > 0 || b.hostileSubs > 0 || air) out.push({ zone: z, surface: b.hostileSurface, subs: b.hostileSubs, air });
+  }
+  return out;
 }
 
 /** A fleet with room for these regiments lying off the coast of `pid` (most room first). */

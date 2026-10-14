@@ -10,8 +10,9 @@ import { canEnter, etaWeeks, findPath } from '../sim/movement';
 import { readSave, SaveError, serialize } from '../sim/save';
 import { atWar, dateOf, months, ownedProvinces, provName, type Sim } from '../sim/state';
 import { isOver, step, weekSlices } from '../sim/tick';
-import { fleetEta, fleetsIn, fleetSummary, pathToCoast, transportFor, zonePath } from '../sim/naval';
-import type { AirMission, Army, Command, CommandResult, ContractTerms, Demand, DemandKind, NationId, ProvinceId, Tradeable } from '../sim/types';
+import { DUTY_HELP, DUTY_LABELS, dutyDestination, fleetDutyProblem, fleetEta, fleetsIn, fleetSummary, pathToCoast, transportFor, zoneName, zonePath } from '../sim/naval';
+import { closeOrderMenu, openOrderMenu, orderMenuOpen, rebaseTargets } from './orders';
+import type { AirMission, Army, Command, CommandResult, ContractTerms, Demand, DemandKind, FleetDuty, FleetDutyKind, NationId, ProvinceId, Tradeable } from '../sim/types';
 import { Sound } from './audio';
 import { h, setChildren } from './dom';
 import { fontsReady } from './fonts';
@@ -119,7 +120,12 @@ export class App {
   selectedWing: string | null = null;
   hoverZone: string | null = null;
   /** what the next map click chooses: a fleet's destination, a beach for armies, an air target */
-  targeting: { kind: 'fleet'; fleet: string } | { kind: 'ship'; armies: string[]; fleet: string } | { kind: 'air'; wing: string; mission: AirMission } | null = null;
+  targeting:
+    | { kind: 'fleet'; fleet: string }
+    | { kind: 'ship'; armies: string[]; fleet: string }
+    | { kind: 'air'; wing: string; mission: AirMission; group?: string[] }
+    | { kind: 'duty'; fleet: string; duty: FleetDutyKind }
+    | null = null;
   hoverProvince: ProvinceId | null = null;
   moveMode = false;
   mode: MapMode = 'political';
@@ -559,6 +565,7 @@ export class App {
         selectedZone: this.selectedZone,
         selectedWing: this.targeting?.kind === 'air' ? this.targeting.wing : this.selectedWing,
         airTargeting: this.targeting?.kind === 'air',
+        rebaseTargets: this.wingRebaseTargets(sim),
         fleetPreview,
         fleetPreviewLabel,
         tradeRoutes: this.ui.ledgerTab === 'industry' && this.player ? this.tradeRoutes(sim, this.player) : null,
@@ -577,6 +584,16 @@ export class App {
   }
 
   private legendKey = '';
+  private rebaseMemo: { key: string; value: { provinces: ProvinceId[]; fleets: string[] } } | null = null;
+
+  /** The airfields and carriers the selected wing of ours could move to (worked out once a week). */
+  private wingRebaseTargets(sim: Sim): { provinces: ProvinceId[]; fleets: string[] } | null {
+    const w = this.selectedWing ? sim.state.wings[this.selectedWing] : undefined;
+    if (!w || w.nation !== this.player || this.targeting) return null;
+    const key = `${w.id}|${w.base}|${w.carrier}|${sim.state.tick}|${sim.state.rev}`;
+    if (this.rebaseMemo?.key !== key) this.rebaseMemo = { key, value: rebaseTargets(sim, w) };
+    return this.rebaseMemo.value;
+  }
 
   /** Our contracts as routes between the two capitals (the chosen good only, when one is chosen). */
   private tradeRoutes(sim: Sim, pid: NationId): Array<{ from: ProvinceId; to: ProvinceId; sea: boolean }> {
@@ -722,7 +739,7 @@ export class App {
     if (this.orderArmy && !st.armies[this.orderArmy]) this.orderArmy = null;
     if (this.selectedFleet && !st.fleets[this.selectedFleet]) this.selectedFleet = null;
     if (this.selectedWing && !st.wings[this.selectedWing]) this.selectedWing = null;
-    if (this.targeting && ((this.targeting.kind === 'fleet' && !st.fleets[this.targeting.fleet]) || (this.targeting.kind === 'air' && !st.wings[this.targeting.wing]))) this.targeting = null;
+    if (this.targeting && (((this.targeting.kind === 'fleet' || this.targeting.kind === 'duty') && !st.fleets[this.targeting.fleet]) || (this.targeting.kind === 'air' && !st.wings[this.targeting.wing]))) this.targeting = null;
   }
 
   /**
@@ -888,9 +905,44 @@ export class App {
     this.refresh();
   }
 
-  /** The next map click picks an air wing's target province. */
-  startAirTarget(wing: string, mission: AirMission): void {
-    this.targeting = { kind: 'air', wing, mission };
+  /** The next map click picks the place for a fleet's standing order (a zone, a coast, a port or a fleet). */
+  startDutyTarget(fleet: string, duty: FleetDutyKind): void {
+    this.targeting = { kind: 'duty', fleet, duty };
+    this.canvas.classList.add('move-mode');
+    const what: Record<FleetDutyKind, string> = {
+      hold: 'Click anywhere.',
+      patrol: 'Click the sea zone to patrol.',
+      blockade: 'Click the sea zone to blockade (a coast takes the waters off it).',
+      raid: 'Click the sea zone to raid in.',
+      escort: 'Click the fleet of ours to escort.',
+      bombard: 'Click the coast province to shell.',
+      port: 'Click the port to return to.',
+    };
+    this.toast(`${DUTY_LABELS[duty]}: ${what[duty]} Esc cancels.`);
+    this.refresh();
+  }
+
+  /** The order a duty would be at a screen point (null: nothing fitting there). */
+  dutyAt(fleetId: string, duty: FleetDutyKind, x: number, y: number): Omit<FleetDuty, 'since'> | null {
+    const sim = this.sim;
+    const f = sim?.state.fleets[fleetId];
+    if (!sim || !f || !this.renderer) return null;
+    const pid = this.renderer.provinceAt(x, y);
+    const zone = pid ? null : this.renderer.zoneAt(x, y);
+    if (duty === 'hold') return { kind: 'hold' };
+    if (duty === 'escort') {
+      const g = this.renderer.fleetAt(x, y);
+      return g ? { kind: 'escort', fleet: g } : null;
+    }
+    if (duty === 'bombard') return pid ? { kind: 'bombard', province: pid } : null;
+    if (duty === 'port') return pid ? { kind: 'port', province: pid } : null;
+    const z = zone ?? (pid ? (sim.world.provZones[pid]?.includes(f.zone) ? f.zone : pathToCoast(sim, f.zone, pid)?.at(-1) ?? null) : null);
+    return z ? { kind: duty, zone: z } : null;
+  }
+
+  /** The next map click picks an air wing's target province (for several wings at once: `group`). */
+  startAirTarget(wing: string, mission: AirMission, group?: string[]): void {
+    this.targeting = group && group.length > 1 ? { kind: 'air', wing, mission, group } : { kind: 'air', wing, mission };
     this.canvas.classList.add('move-mode');
     this.mapDirty = true;
     this.toast(mission === 'naval' ? 'Click the sea zone to strike (the shaded area is within range). Esc cancels.' : SEA_MISSIONS.includes(mission) ? 'Click a province, or a sea zone, to fly the mission over (the shaded area is within range). Esc cancels.' : 'Click the province to fly the mission over (the shaded area is within range). Esc cancels.');
@@ -1053,14 +1105,36 @@ export class App {
   }
 
   centreSelection(): void {
-    const a = this.selectedArmy ? this.sim?.state.armies[this.selectedArmy] : undefined;
+    const sim = this.sim;
+    const a = this.selectedArmy ? sim?.state.armies[this.selectedArmy] : undefined;
+    const w = this.selectedWing ? sim?.state.wings[this.selectedWing] : undefined;
+    const f = this.selectedFleet ? sim?.state.fleets[this.selectedFleet] : w?.carrier ? sim?.state.fleets[w.carrier] : undefined;
     if (a) this.centerOn(a.location, 110);
+    else if (f && this.renderer) {
+      const c = this.renderer.zoneCenter(f.zone);
+      this.renderer.camera.centerOn(c.x, c.y, Math.max(this.renderer.camera.zoom, this.renderer.camera.zoomForProvincePx(50)));
+      this.mapDirty = true;
+    } else if (w) this.centerOn(w.base, 90);
     else if (this.selectedProvince) this.centerOn(this.selectedProvince, 110);
   }
 
+  /** N: the next army of ours (with a wing or a fleet selected: the next wing or fleet). */
   cycleArmy(): void {
     const sim = this.sim;
     if (!sim || !this.player) return;
+    if (this.selectedWing || this.selectedFleet) {
+      const kind = this.selectedWing ? 'wings' : 'fleets';
+      const ids = Object.keys(kind === 'wings' ? sim.state.wings : sim.state.fleets)
+        .sort()
+        .filter((id) => (kind === 'wings' ? sim.state.wings[id].nation : sim.state.fleets[id].nation) === this.player);
+      if (!ids.length) return;
+      const i = ids.indexOf((kind === 'wings' ? this.selectedWing : this.selectedFleet) ?? '');
+      const next = ids[(i + 1) % ids.length];
+      if (kind === 'wings') this.selectWing(next);
+      else this.selectFleet(next);
+      this.centreSelection();
+      return;
+    }
     const mine = Object.values(sim.state.armies)
       .filter((a) => a.nation === this.player)
       .sort((a, b) => (a.id < b.id ? -1 : 1));
@@ -1506,8 +1580,39 @@ export class App {
       tipEl.style.top = `${Math.min(y + 18, H - (tipEl.offsetHeight || 70) - 8)}px`;
       return;
     }
+    if (tg?.kind === 'duty' && sim.state.fleets[tg.fleet]) {
+      // choosing where a fleet's order applies: say whether it can be given there, and why not
+      const f = sim.state.fleets[tg.fleet];
+      const d = this.dutyAt(f.id, tg.duty, x, y);
+      const prob = d ? fleetDutyProblem(sim, f.nation, f.id, d) : 'Choose a place on the map.';
+      const dest = d ? dutyDestination(sim, f, d) : null;
+      const path = dest && dest !== f.zone ? zonePath(sim, f.zone, dest) : null;
+      const where = d?.zone ? zoneName(sim, d.zone) : d?.province ? provName(sim, d.province) : d?.fleet ? sim.state.fleets[d.fleet]?.name ?? '' : '';
+      setChildren(
+        tipEl,
+        h('div', { class: 'tt-title' }, icon('anchor'), `${DUTY_LABELS[tg.duty]}${where ? `: ${where}` : ''}`),
+        h('div', { class: 'tt-row' }, path ? `${path.length} zone${path.length === 1 ? '' : 's'} away · ${weeks(fleetEta(sim, f, path))}` : dest ? 'Here' : DUTY_HELP[tg.duty]),
+        h('div', { class: prob ? 'tt-hint bad' : 'tt-hint' }, prob ?? 'Click to give the order. Esc cancels.'),
+      );
+      tipEl.classList.remove('hidden');
+      const W = this.stageEl.clientWidth;
+      const H = this.stageEl.clientHeight;
+      tipEl.style.left = `${Math.min(x + 16, W - (tipEl.offsetWidth || 260) - 8)}px`;
+      tipEl.style.top = `${Math.min(y + 18, H - (tipEl.offsetHeight || 70) - 8)}px`;
+      return;
+    }
+    const wm = !tg ? this.renderer.wingAt(x, y) : null;
     const fleetId = this.renderer.fleetAt(x, y);
-    if (fleetId && sim.state.fleets[fleetId]) {
+    if (wm && !fleetId) {
+      const ws = wm.wings.map((id) => sim.state.wings[id]).filter((w) => !!w);
+      const n = ws[0]?.nation;
+      setChildren(
+        tipEl,
+        h('div', { class: 'tt-title' }, n ? shield(this, n) : null, wm.fleet ? `Aboard ${sim.state.fleets[wm.fleet]?.name ?? ''}` : `Airfield at ${provName(sim, wm.base!)}`),
+        ...ws.slice(0, 5).map((w) => h('div', { class: 'tt-row' }, `${w.name} · ${MISSION_LABELS[w.mission].toLowerCase()} · ready ${Math.round(w.readiness)}%`)),
+        h('div', { class: 'tt-hint' }, n === this.player ? `Click to select${ws.length > 1 ? ' (again for the next wing)' : ''}; then right-click a place for its orders.` : 'Click for details.'),
+      );
+    } else if (fleetId && sim.state.fleets[fleetId]) {
       const f = sim.state.fleets[fleetId];
       const def = sim.world.nationDefs[f.nation];
       const hostile = this.player ? atWar(sim, this.player, f.nation) : false;
@@ -1515,7 +1620,8 @@ export class App {
         tipEl,
         h('div', { class: 'tt-title' }, shield(this, f.nation), f.name),
         h('div', { class: 'tt-row' }, `${def.short}${hostile ? ' · enemy' : ''} · ${fleetSummary(f)}${f.cargo.length ? ` · carrying ${f.cargo.length} ${f.cargo.length === 1 ? 'army' : 'armies'}` : ''}`),
-        h('div', { class: 'tt-hint' }, f.nation === this.player ? 'Click to select, then right-click a sea zone to sail.' : 'Click for details.'),
+        f.duty ? h('div', { class: 'tt-row' }, `Order: ${DUTY_LABELS[f.duty.kind].toLowerCase()}`) : null,
+        h('div', { class: 'tt-hint' }, f.nation === this.player ? 'Click to select, then right-click a place for its orders (Shift+right-click sails at once).' : 'Click for details.'),
       );
     } else if (!armyId && !pid && this.hoverZone) {
       const z = sim.world.zones[this.hoverZone];
@@ -1524,7 +1630,7 @@ export class App {
         tipEl,
         h('div', { class: 'tt-title' }, icon('anchor'), z.name),
         h('div', { class: 'tt-row' }, `${z.coasts.length} coastal provinces${z.straits?.length ? ` · commands ${z.straits.length} strait${z.straits.length === 1 ? '' : 's'}` : ''}${here.length ? ` · ${here.length} fleet${here.length === 1 ? '' : 's'}` : ''}`),
-        this.selectedFleet && sim.state.fleets[this.selectedFleet]?.nation === this.player ? h('div', { class: 'tt-hint' }, 'Right-click to sail here.') : null,
+        this.selectedFleet && sim.state.fleets[this.selectedFleet]?.nation === this.player ? h('div', { class: 'tt-hint' }, 'Right-click for orders here (Shift+right-click sails at once).') : null,
       );
     } else if (armyId && sim.state.armies[armyId]) {
       const a = sim.state.armies[armyId];
@@ -1577,9 +1683,27 @@ export class App {
       this.canvas.classList.remove('move-mode');
       if (tg.kind === 'fleet') this.orderFleet(tg.fleet, x, y);
       else if (tg.kind === 'ship' && pid) this.do({ type: 'shipArmies', armies: tg.armies, fleet: tg.fleet, dest: pid });
-      else if (tg.kind === 'air') {
+      else if (tg.kind === 'duty') {
+        const d = this.dutyAt(tg.fleet, tg.duty, x, y);
+        if (d) this.do({ type: 'fleetDuty', fleet: tg.fleet, duty: d });
+        else this.refresh();
+      } else if (tg.kind === 'air') {
         const t = this.airTargetAt(tg.mission, x, y);
-        if (t) this.do({ type: 'airMission', wing: tg.wing, mission: tg.mission, target: t.target, zone: t.zone });
+        if (t && tg.group) {
+          // several wings at once: each flies it if it can; the others say why not
+          const sim = this.sim;
+          let ok = 0;
+          const why: string[] = [];
+          for (const id of tg.group) {
+            const w = sim.state.wings[id];
+            if (!w) continue;
+            const prob = missionProblem(sim, w.nation, id, tg.mission, t.target, t.zone);
+            if (prob) why.push(`${w.name}: ${prob}`);
+            else if (this.do({ type: 'airMission', wing: id, mission: tg.mission, target: t.target, zone: t.zone }, true).ok) ok++;
+          }
+          this.toast(`${ok} of ${tg.group.length} wings fly ${MISSION_LABELS[tg.mission].toLowerCase()}${why.length ? `. ${why.slice(0, 2).join(' ')}` : '.'}`, why.length ? 'fail' : undefined);
+          this.refresh();
+        } else if (t) this.do({ type: 'airMission', wing: tg.wing, mission: tg.mission, target: t.target, zone: t.zone });
         else this.refresh();
       } else this.refresh();
       return;
@@ -1587,6 +1711,13 @@ export class App {
     const fleet = this.renderer.fleetAt(x, y);
     if (fleet) {
       this.selectFleet(fleet);
+      return;
+    }
+    // an air wing counter: the wings at that airfield or aboard that fleet; clicking again cycles through them
+    const wm = this.renderer.wingAt(x, y);
+    if (wm) {
+      const i = this.selectedWing ? wm.wings.indexOf(this.selectedWing) : -1;
+      this.selectWing(wm.wings[(i + 1) % wm.wings.length]);
       return;
     }
     const army = this.renderer.armyAt(x, y);
@@ -1646,10 +1777,13 @@ export class App {
     if (!this.renderer || !this.sim) return;
     const pid = this.renderer.provinceAt(x, y);
     const f = this.selectedFleet ? this.sim.state.fleets[this.selectedFleet] : undefined;
-    if (f && f.nation === this.player) {
+    // Shift+right-click sails at once; otherwise the orders that fit the place
+    if (f && f.nation === this.player && shift) {
       this.orderFleet(f.id, x, y);
       return;
     }
+    if (this.targeting) this.cancelTargeting();
+    if (openOrderMenu(this, x, y)) return;
     const a = this.selectedArmy ? this.sim.state.armies[this.selectedArmy] : undefined;
     if (a && a.nation === this.player && pid) this.orderMove(pid, undefined, shift);
     else if (pid) this.selectProvince(pid);
@@ -1711,6 +1845,13 @@ export class App {
     } else if (lk === 'o') {
       const i = MODES.findIndex((o) => o.id === this.mode);
       this.setMode(MODES[(i + (e.shiftKey ? MODES.length - 1 : 1)) % MODES.length].id);
+    } else if (lk === 'e' && (this.selectedWing || this.selectedFleet)) {
+      // orders at the pointer (or at the middle of the map)
+      if (orderMenuOpen()) closeOrderMenu();
+      else {
+        const p = this.hoverPos ?? { x: this.stageEl.clientWidth / 2, y: this.stageEl.clientHeight / 2 };
+        if (!openOrderMenu(this, p.x, p.y)) this.toast('Select an air wing or a fleet of ours first.');
+      }
     } else if (lk === 'g' && this.selectedArmy) this.startMoveMode();
     else if (lk === 'g' && this.selectedFleet && this.sim.state.fleets[this.selectedFleet]?.nation === this.player) this.startFleetMove(this.selectedFleet);
     else if (lk === 'f') this.fitWorld();
@@ -1734,11 +1875,27 @@ export class App {
 
   private renderBanner(): void {
     const a = this.selectedArmy && this.sim ? this.sim.state.armies[this.selectedArmy] : undefined;
+    const tg = this.targeting;
     if (this.moveMode && a) {
       this.bannerEl.classList.remove('hidden');
       const cancel = h('button', { class: 'btn small quiet', type: 'button' }, 'Cancel (Esc)');
       cancel.addEventListener('click', () => this.cancelMoveMode());
       setChildren(this.bannerEl, icon('move'), h('span', null, `Choose where ${a.name} marches. Shift adds a waypoint.`), cancel);
+    } else if (tg && this.sim) {
+      // choosing a place for a fleet, a landing, a mission or an order: the banner can cancel it (touch has no Esc)
+      const sim = this.sim;
+      const text =
+        tg.kind === 'fleet'
+          ? `Choose where ${sim.state.fleets[tg.fleet]?.name ?? 'the fleet'} sails.`
+          : tg.kind === 'ship'
+            ? 'Choose the coast to land on.'
+            : tg.kind === 'duty'
+              ? `${DUTY_LABELS[tg.duty]}: choose the place for ${sim.state.fleets[tg.fleet]?.name ?? 'the fleet'}.`
+              : `${MISSION_LABELS[tg.mission]}: choose where ${tg.group ? `${tg.group.length} wings fly` : `${sim.state.wings[tg.wing]?.name ?? 'the wing'} flies`}.`;
+      this.bannerEl.classList.remove('hidden');
+      const cancel = h('button', { class: 'btn small quiet', type: 'button', 'data-fk': 'banner-cancel' }, 'Cancel (Esc)');
+      cancel.addEventListener('click', () => this.cancelTargeting());
+      setChildren(this.bannerEl, icon('target'), h('span', null, text), cancel);
     } else {
       this.bannerEl.classList.add('hidden');
       this.canvas?.classList.remove('move-mode');
