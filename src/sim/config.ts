@@ -543,7 +543,7 @@ export const C = {
 
   diplomacy: {
     envoysBase: 2,
-    envoyCost: 1.5, // crowns / month
+    envoyCost: 1.5, // crowns / month for a realm of middling means; scaled by its taxes (economy.envoyCost)
     envoyMonths: 12,
     envoyGain: 2.5, // opinion / month
     envoyCap: 35,

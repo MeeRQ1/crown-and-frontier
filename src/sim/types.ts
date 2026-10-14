@@ -573,6 +573,8 @@ export interface Proposal {
   bloc?: string;
   /** a trade contract's terms */
   contract?: ContractTerms;
+  /** why the proposer offers a treaty, in its own words */
+  reason?: string;
 }
 
 /** The terms of a trade contract, as proposed (format 5). */
@@ -676,7 +678,7 @@ export interface AIState {
   /** per war: the last peace offer made, how it was answered, and the war's recent outlook (format 7) */
   peace: Record<WarId, PeaceMemory>;
   /** answers our treaty proposals got, by `${realm}:${type}` (format 7) */
-  treatyAnswers: Record<string, { tick: number; accepted: boolean }>;
+  treatyAnswers: Record<string, { tick: number; accepted: boolean; reason?: string }>;
   /** a planned landing: gather a force at `port`, carry it to `target` */
   invasion?: { target: ProvinceId; port: ProvinceId; since: number } | null;
 }
@@ -956,7 +958,7 @@ export type Command =
   | { type: 'focus'; nation: NationId; focus: FocusId }
   | { type: 'envoy'; nation: NationId; target: NationId }
   | { type: 'recallEnvoy'; nation: NationId; target: NationId }
-  | { type: 'propose'; nation: NationId; target: NationId; treaty: TreatyType }
+  | { type: 'propose'; nation: NationId; target: NationId; treaty: TreatyType; reason?: string }
   | { type: 'cancelTreaty'; nation: NationId; target: NationId; treaty: TreatyType }
   | { type: 'fabricate'; nation: NationId; province: ProvinceId }
   | { type: 'declareWar'; nation: NationId; target: NationId; goal: WarGoal }

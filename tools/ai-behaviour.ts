@@ -21,6 +21,10 @@ export interface AiBehaviour {
   proposed: Record<string, number>;
   signed: Record<string, number>;
   treatiesAtEnd: Record<string, number>;
+  /** decisions to fight on or hold out, and alliances left (format 7 AI) */
+  decisions: Record<string, number>;
+  /** treaties sounded out and found unwelcome before any formal offer (format 7 AI) */
+  soundedOut: Record<string, number>;
   /** the largest number of treaty proposals any realm made in one year */
   maxProposalsPerRealmYear: number;
   samples: string[];
@@ -29,7 +33,7 @@ export interface AiBehaviour {
 export function aiBehaviour(scenario: string, years: number, seed: number): AiBehaviour {
   const sim = createGame({ scenario, seed, playerNation: null });
   const st = sim.state;
-  const out: AiBehaviour = { scenario, years, seed, wars: 0, warsEnded: 0, peace: {}, proposed: {}, signed: {}, treatiesAtEnd: {}, maxProposalsPerRealmYear: 0, samples: [] };
+  const out: AiBehaviour = { scenario, years, seed, wars: 0, warsEnded: 0, peace: {}, proposed: {}, signed: {}, treatiesAtEnd: {}, decisions: {}, soundedOut: {}, maxProposalsPerRealmYear: 0, samples: [] };
   const seenWars = new Set<string>();
   let last: AIDiagnostic | undefined = st.diagnostics.at(-1);
   const perYear = new Map<string, number>();
@@ -45,11 +49,16 @@ export function aiBehaviour(scenario: string, years: number, seed: number): AiBe
     for (; i < d.length; i++) {
       const s = d[i].summary;
       let m: RegExpMatchArray | null;
-      if ((m = s.match(/^Offered peace to .* \((winning|losing\/tired|conceding)[^)]*\): (sent|invalid)/))) bump(out.peace, `offer to player: ${m[1]}`);
-      else if ((m = s.match(/^Peace with .* \((winning|losing\/tired|conceding)[^)]*\): (agreed|failed)/))) bump(out.peace, `AI-AI ${m[1]}: ${m[2]}`);
+      if ((m = s.match(/^Offered peace to .* \((winning|losing\/tired|conceding|a stalemate)[^)]*\): (sent|invalid)/))) bump(out.peace, `offer to player: ${m[1]}`);
+      else if ((m = s.match(/^Peace with .* \((winning|losing\/tired|conceding|a stalemate)[^)]*\): (agreed|failed)/))) bump(out.peace, `AI-AI ${m[1]}: ${m[2]}`);
+      else if ((m = s.match(/^Peace (white|concede|demand) to .* would be refused/))) bump(out.peace, `AI-AI ${m[1]} judged refused`);
       else if (/^Peace .* would be refused/.test(s)) bump(out.peace, 'AI-AI offer judged refused');
+      else if (/^Settlement with .* would be refused/.test(s)) bump(out.peace, 'AI-AI settlement judged refused');
       else if ((m = s.match(/^Settlement with .*: (agreed|failed)/))) bump(out.peace, `AI-AI settlement: ${m[1]}`);
       else if (/^Proposed a settlement to/.test(s)) bump(out.peace, 'settlement offered to player');
+      else if ((m = s.match(/^(Fighting on|Holding out|Pressing on) against/))) bump(out.decisions, m[1]);
+      else if ((m = s.match(/^Sounded out .* on an? (\w+)/))) bump(out.soundedOut, m[1]);
+      else if (/^Left the alliance/.test(s)) bump(out.decisions, 'Left an alliance');
       else if ((m = s.match(/^Proposed (\w+) to .*: (.*)$/))) {
         bump(out.proposed, m[1]);
         if (!/declined|refused|invalid/i.test(m[2])) bump(out.signed, m[1]);

@@ -396,7 +396,7 @@ function execute(sim: Sim, cmd: Command): CommandResult {
       recallEnvoy(sim, cmd.nation, cmd.target);
       return { ok: true };
     case 'propose':
-      return proposeTreaty(sim, cmd.nation, cmd.target, cmd.treaty);
+      return proposeTreaty(sim, cmd.nation, cmd.target, cmd.treaty, cmd.reason);
     case 'cancelTreaty':
       cancelTreaty(sim, cmd.nation, cmd.target, cmd.treaty);
       return { ok: true };
@@ -609,7 +609,7 @@ function rememberAnswer(sim: Sim, p: Proposal, accepted: boolean): void {
   const ai = sim.state.nations[p.from]?.ai;
   if (!ai) return;
   if ((p.kind === 'peace' || p.kind === 'settlement') && p.war && ai.peace[p.war]) ai.peace[p.war].answer = accepted ? 'accepted' : 'rejected';
-  if (p.kind === 'alliance' || p.kind === 'nap' || p.kind === 'trade') ai.treatyAnswers[`${p.to}:${p.kind}`] = { tick: sim.state.tick, accepted };
+  if (p.kind === 'alliance' || p.kind === 'nap' || p.kind === 'trade') ai.treatyAnswers[`${p.to}:${p.kind}`] = p.reason ? { tick: sim.state.tick, accepted, reason: p.reason } : { tick: sim.state.tick, accepted };
 }
 
 export { evaluateTreaty };

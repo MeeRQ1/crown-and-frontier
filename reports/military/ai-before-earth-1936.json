@@ -1,0 +1,42 @@
+{
+ "scenario": "earth-1936",
+ "years": 6,
+ "seed": 2,
+ "wars": 37,
+ "warsEnded": 33,
+ "peace": {
+  "AI-AI offer judged refused": 18,
+  "AI-AI settlement: agreed": 30,
+  "AI-AI losing/tired: agreed": 4
+ },
+ "proposed": {
+  "nap": 114,
+  "trade": 2253,
+  "alliance": 40
+ },
+ "signed": {
+  "nap": 114,
+  "trade": 2253,
+  "alliance": 40
+ },
+ "treatiesAtEnd": {
+  "alliance": 62,
+  "trade": 2224,
+  "nap": 66
+ },
+ "maxProposalsPerRealmYear": 12,
+ "samples": [
+  "wk73 hun: Focus → Frontier Settlement",
+  "wk81 est: Peace white to Poland would be refused (-4)",
+  "wk82 rom: Settlement with Bulgaria (score 59): agreed",
+  "wk83 ger: Settlement with Czechoslovakia (score 28): agreed",
+  "wk84 sau: Peace white to Iraq would be refused (-63)",
+  "wk85 irq: Settlement with Saudi Arabia (score 54): agreed",
+  "wk86 pol: Settlement with Latvia (score 59): agreed",
+  "wk86 alb: Peace white to Turkey would be refused (-16)",
+  "wk87 tur: Settlement with Bulgaria (score 35): agreed (their counter-offer)",
+  "wk88 ita: Settlement with Switzerland (score 70): agreed",
+  "wk88 bul: Peace white to Greece would be refused (-69)",
+  "wk89 gre: Settlement with Bulgaria (score 65): agreed"
+ ]
+}

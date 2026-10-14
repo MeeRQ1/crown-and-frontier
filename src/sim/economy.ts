@@ -92,6 +92,15 @@ function commerceRaw(sim: Sim, nid: NationId): number {
   return v;
 }
 
+/**
+ * An envoy's keep at a foreign court, crowns a month: 1.5 for a realm of middling
+ * means (25 crowns of provincial taxes a month), scaled by the realm's taxes
+ * between half and two and a half times, so a small realm can afford one.
+ */
+export function envoyCost(sim: Sim, nid: NationId): number {
+  return C.diplomacy.envoyCost * Math.max(0.5, Math.min(2.5, provincialTaxes(sim, nid) / 25));
+}
+
 /** Crowns a month from all of a realm's trade agreements: at most `commerceCap` of its own taxes. */
 export function commerceIncome(sim: Sim, nid: NationId): number {
   const cap = C.economy.commerceCap * provincialTaxes(sim, nid);
@@ -355,13 +364,34 @@ export function surplusMatches(sim: Sim): TradeLine[] {
  * (sales, the value of what it can buy, and commerce), for treaty evaluation.
  */
 export function tradeValue(sim: Sim, nid: NationId, partner: NationId): number {
-  // an estimate for treaty decisions: each realm's balance is worked out once a week
-  const A = memoWeek(sim, 'tradeBalance', nid, () => tradeBalance(sim, nid));
-  const B = memoWeek(sim, 'tradeBalance', partner, () => tradeBalance(sim, partner));
+  // an estimate for treaty decisions: each realm's balance is worked out once a week.
+  // Goods count only where our current partners do not already cover them: a need
+  // they can supply, or a surplus they can take, adds nothing to one more agreement.
+  const bal = (o: NationId) => memoWeek(sim, 'tradeBalance', o, () => tradeBalance(sim, o));
+  const A = bal(nid);
+  const B = bal(partner);
+  const cover = memoWeek(sim, 'tradeCover', nid, () => {
+    const supply: Record<string, number> = {};
+    const demand: Record<string, number> = {};
+    for (const o of treatyPartners(sim, 'trade', nid)) {
+      const O = bal(o);
+      for (const res of ['food', ...STRATEGIC]) {
+        supply[res] = (supply[res] ?? 0) + Math.max(0, O.surplus[res] - O.keep[res]);
+        demand[res] = (demand[res] ?? 0) + Math.max(0, O.keep[res] - O.surplus[res]);
+      }
+    }
+    return { supply, demand };
+  });
+  const isPartner = treatyPartners(sim, 'trade', nid).includes(partner);
   let v = commerceGain(sim, nid, partner);
   for (const res of ['food', ...STRATEGIC]) {
-    const sell = Math.max(0, Math.min(A.surplus[res] - A.keep[res], B.keep[res] - B.surplus[res]));
-    const buy = Math.max(0, Math.min(B.surplus[res] - B.keep[res], A.keep[res] - A.surplus[res]));
+    const theirSurplus = Math.max(0, B.surplus[res] - B.keep[res]);
+    const theirNeed = Math.max(0, B.keep[res] - B.surplus[res]);
+    const others = { supply: (cover.supply[res] ?? 0) - (isPartner ? theirSurplus : 0), demand: (cover.demand[res] ?? 0) - (isPartner ? theirNeed : 0) };
+    const ourSurplus = Math.max(0, A.surplus[res] - A.keep[res] - others.demand);
+    const ourNeed = Math.max(0, A.keep[res] - A.surplus[res] - others.supply);
+    const sell = Math.min(ourSurplus, theirNeed);
+    const buy = Math.min(theirSurplus, ourNeed);
     const price = RESOURCE_INFO[res as StrategicResource | 'food'].price;
     // a sale earns its price; a purchase we need is worth about half its price to us
     v += sell * price + buy * price * 0.5;
@@ -540,7 +570,7 @@ export function computeLedger(sim: Sim, nid: NationId, contracts: ContractPlan =
   if (forts) expenses['Fort upkeep'] = forts * C.construction.fortUpkeep * Math.max(0, 1 + mods.fortUpkeep);
 
   const envoys = sim.state.envoys.filter((e) => e.from === nid).length;
-  if (envoys) expenses['Envoys'] = envoys * C.diplomacy.envoyCost;
+  if (envoys) expenses['Envoys'] = envoys * envoyCost(sim, nid);
 
   const funding = researchFundingCost(gross, n.research.funding);
   if (funding) expenses['Research funding'] = funding;

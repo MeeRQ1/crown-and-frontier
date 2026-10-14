@@ -282,10 +282,13 @@ function proposalCard(app: App, id: string, n: number): HTMLElement | null {
       trade: `The framework for trade contracts between us (goods move only under a contract), and commerce for each of us: ${Math.round(C.economy.commerceShare * 100)}% of the smaller economy's provincial taxes a month (all our agreements together at most ${Math.round(C.economy.commerceCap * 100)}% of our own taxes). War ends it, and every contract under it.`,
       alliance: 'Each side is called to arms when the other is attacked (defensive only). Grants military access.',
     };
+    if (p.reason) body.push(h('p', null, h('strong', null, 'Their reason: '), `${p.reason}.`));
     body.push(h('p', null, what[p.kind]));
     if (app.player) {
-      const back = evaluateTreaty(sim, app.player, p.from, p.kind as 'nap' | 'trade' | 'alliance');
-      body.push(h('p', { class: 'small faint' }, `Their current opinion-based view of the treaty: ${back.score >= 0 ? 'favourable' : 'reluctant'} (${back.score >= 0 ? '+' : ''}${Math.round(back.score)}).`));
+      // how the same treaty weighs from our side, by the rules any realm applies
+      const ours = evaluateTreaty(sim, p.from, app.player, p.kind as 'nap' | 'trade' | 'alliance');
+      const top = [...ours.reasons].sort((a, b) => Math.abs(b.value) - Math.abs(a.value)).slice(0, 4);
+      body.push(h('p', { class: 'small faint' }, `Weighed as an AI realm would weigh it for us: ${ours.score >= 0 ? 'in our interest' : 'against our interest'} (${ours.score >= 0 ? '+' : ''}${Math.round(ours.score)})${top.length ? `: ${top.map((r) => `${r.label} ${r.value > 0 ? '+' : ''}${r.value}`).join('; ')}` : ''}.`));
     }
   }
   body.push(h('p', { class: 'small faint' }, `Expires ${dateOf(sim, p.expires).short}.`));
