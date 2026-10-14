@@ -10,6 +10,7 @@ import {
   buildShipProblem,
   cargoRegiments,
   disbandFleetProblem,
+  dutyWeights,
   DUTY_HELP,
   DUTY_LABELS,
   fleetCapacity,
@@ -346,7 +347,12 @@ function fleetOperations(app: App, f: Fleet): string[] {
   if (f.ships.some((s) => SHIPS[s.type].raid > 0)) out.push(raided.length ? `Raiding the sea trade of ${raided.map((n) => sim.world.nationDefs[n].short).join(', ')} that passes through ${zoneName(sim, f.zone)}.` : `No enemy sea trade passes through ${zoneName(sim, f.zone)}: raiders do nothing here.`);
   const coast = sim.world.zones[f.zone]?.coasts ?? [];
   const blockading = coast.filter((pid) => st.provinces[pid].owner && atWar(sim, f.nation, st.provinces[pid].owner!) && provinceBlockaded(sim, pid));
-  if (blockading.length) out.push(`Blockading ${blockading.map((p) => provName(sim, p)).join(', ')}: their crowns, shipyards and sea trade suffer.`);
+  if (blockading.length) {
+    out.push(`Blockading ${blockading.map((p) => provName(sim, p)).join(', ')}: their crowns, shipyards and sea trade suffer.`);
+    // close inshore, the forts on that coast fire on us (not again on a week we shell them)
+    const fort = Math.max(0, ...blockading.map((p) => st.provinces[p].fort));
+    if (fort > 0 && dutyWeights(sim, f).blockade >= 1 && !f.path.length) out.push(`The coastal forts there (level ${fort}) fire on the blockading ships: about ${Math.round(C.naval.coastalGuns * C.naval.blockadeFire * fort)} hull damage a week, shared by the fleet. A raid order keeps it off the coast.`);
+  }
   const escort = f.ships.reduce((s, x) => s + SHIPS[x.type].escort, 0);
   if (escort > 0 && !f.cargo.length) {
     const ours = raidBalance(sim, f.zone, f.nation);

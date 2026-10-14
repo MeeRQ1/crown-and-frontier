@@ -1114,9 +1114,31 @@ export function bombardPlan(sim: Sim): Map<string, { att: Array<{ fleet: Fleet; 
   });
 }
 
-/** Coastal forts fire back at the ships that shelled their province this week (battles and sieges). */
+/** A port changed hands: the fleets of its former holder (and friends) based there make another port their home. */
+export function rehomeFleets(sim: Sim, pid: ProvinceId, lostBy: NationId): void {
+  const st = sim.state;
+  const ctrl = st.provinces[pid].controller;
+  for (const id of Object.keys(st.fleets).sort()) {
+    const f = st.fleets[id];
+    if (f.home !== pid || (ctrl && isFriendly(sim, f.nation, ctrl))) continue;
+    if (f.nation !== lostBy && !isFriendly(sim, f.nation, lostBy)) continue;
+    const home = homePortFor(sim, f.nation, f.zone);
+    f.home = home && home !== pid ? home : null;
+    notify(sim, f.nation, 'normal', 'navy', `${f.name} lost its home port of ${provName(sim, pid)}${f.home ? `: it now repairs and refits at ${provName(sim, f.home)}` : ' and has no friendly port left'}.`, { province: pid });
+    reportFleet(sim, f, `Home port ${provName(sim, pid)} lost${f.home ? `; new home ${provName(sim, f.home)}` : ''}.`);
+  }
+}
+
+/**
+ * Coastal forts fire back at the ships that shelled their province this week
+ * (battles and sieges), and at the ships that blockade their coast close inshore
+ * (a fleet keeping a province blockaded, on station or under a hold, patrol or
+ * blockade order), at half the rate. A ship is fired on once a week at most: a
+ * fleet that shelled a coast is not fired on again for its blockade.
+ */
 export function bombardFireBack(sim: Sim): void {
   const st = sim.state;
+  const firedOn = new Set<string>();
   // ships shelling a siege: the besieged fort answers them
   const shelling = new Set<ProvinceId>();
   for (const id of Object.keys(st.fleets).sort()) {
@@ -1128,6 +1150,7 @@ export function bombardFireBack(sim: Sim): void {
     if (!p.siege || !p.controller) continue;
     for (const f of siegeGuns(sim, pid, p.siege.nation).fleets) {
       if (!atWar(sim, f.nation, p.controller)) continue;
+      firedOn.add(f.id);
       st.nations[f.nation].stats.bombardWeeks++;
       if (p.fort > 0) {
         const guns = f.ships.filter((s) => SHIPS[s.type].bombard > 0);
@@ -1142,7 +1165,8 @@ export function bombardFireBack(sim: Sim): void {
     const pid = b?.province ?? null;
     for (const side of ['att', 'def'] as const) {
       for (const { fleet: f } of sides[side]) {
-        if (!st.fleets[f.id]) continue;
+        if (!st.fleets[f.id] || firedOn.has(f.id)) continue;
+        firedOn.add(f.id);
         st.nations[f.nation].stats.bombardWeeks++;
         const where = pid ? provName(sim, pid) : 'the coast';
         const p = pid ? st.provinces[pid] : null;
@@ -1155,6 +1179,25 @@ export function bombardFireBack(sim: Sim): void {
         } else reportFleet(sim, f, `Shelled the enemy at ${where} in support of our troops.`);
       }
     }
+  }
+  // the blockading squadrons close inshore: the strongest enemy fort on the coast they cut off
+  for (const id of Object.keys(st.fleets).sort()) {
+    const f = st.fleets[id];
+    if (firedOn.has(f.id) || f.path.length || f.cargo.length || dutyWeights(sim, f).blockade < 1) continue;
+    let fort = 0;
+    let where: ProvinceId | null = null;
+    for (const pid of sim.world.zones[f.zone]?.coasts ?? []) {
+      const p = st.provinces[pid];
+      if (p.fort <= fort || !p.controller || !atWar(sim, f.nation, p.controller) || !provinceBlockaded(sim, pid)) continue;
+      fort = p.fort;
+      where = pid;
+    }
+    if (!where) continue;
+    const hulls = f.ships.filter((s) => s.type !== 'submarine');
+    if (!hulls.length) continue;
+    const dmg = (C.naval.coastalGuns * C.naval.blockadeFire * fort) / hulls.length;
+    for (const s of hulls) s.hp = Math.max(1, s.hp - dmg);
+    reportFleet(sim, f, `Blockading close inshore: the coastal forts of ${provName(sim, where)} (level ${fort}) hit us for ${Math.round(C.naval.coastalGuns * C.naval.blockadeFire * fort)} hull damage.`);
   }
 }
 

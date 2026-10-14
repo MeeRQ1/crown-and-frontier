@@ -496,6 +496,8 @@ export const C = {
     bombardPer: 0.02,
     bombardMax: 0.25,
     coastalGuns: 3,
+    /** coastal forts fire at ships blockading their coast at this share of their fire at bombarding ships */
+    blockadeFire: 0.5,
     /** air and naval fire support of a side together never exceeds this */
     supportCap: 0.5,
     /** raiding: share of sea trade lost per raid point in a zone on the route, after escorts (zone and route caps) */

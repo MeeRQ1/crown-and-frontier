@@ -15,7 +15,7 @@ import { poolCap } from './economy';
 import { cancelRecruits } from './military';
 import { armiesIn } from './index';
 import { nationMods } from './modifiers';
-import { siegeGuns } from './naval';
+import { rehomeFleets, siegeGuns } from './naval';
 import { atWar, bump, isFriendly, nationName, notify, provName, type Sim } from './state';
 import { supplyStatus } from './supply';
 import type { Army, NationId, ProvinceId } from './types';
@@ -90,9 +90,14 @@ export function setController(sim: Sim, pid: ProvinceId, ctrl: NationId | null):
   const p = sim.state.provinces[pid];
   if (p.controller === ctrl) return;
   const lostByOwner = p.owner !== null && p.controller === p.owner;
+  const prev = p.controller;
   p.controller = ctrl;
   p.siege = null;
   if (p.recruits.length) cancelRecruits(sim, pid);
+  // what changes hands with the province: its anti-aircraft batteries are wrecked when an
+  // enemy takes it; fleets based on its port find another home (airfields: the air phase)
+  if (ctrl && prev && atWar(sim, ctrl, prev)) p.aa = 0;
+  if (p.port > 0 && prev) rehomeFleets(sim, pid, prev);
   bump(sim);
   // an occupied province no longer adds to its owner's reserve
   if (lostByOwner) {
