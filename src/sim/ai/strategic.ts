@@ -986,9 +986,16 @@ export function considerPeace(sim: Sim, nid: NationId): void {
         value = termsCost(sim, w, nid, other, { mode: 'concede', provinces, gold });
       }
       if (!provinces.length && !gold) {
-        decide(`Holding out against ${nationName(sim, other)}: nothing occupied to concede and no crowns to pay`, ['Rejected: a white peace, which a winning enemy would refuse']);
-        mem.tick = st.tick;
-        mem.standing = standing;
+        // nothing of ours left to give (only the capital, or nothing occupied, and an empty
+        // treasury): ask for a white peace now and then; the enemy decides
+        if (mem.mode === 'white' && (refused || mem.answer === 'pending') && !shifted && !waited) {
+          if (st.tick - mem.tick >= months(6)) {
+            decide(`Holding out against ${nationName(sim, other)}: nothing left to concede, and our white peace was refused`, ['Rejected: repeating the same offer']);
+            mem.tick = st.tick;
+          }
+          continue;
+        }
+        offerPeace(sim, nid, w.id, other, { mode: 'white', provinces: [], gold: 0 }, 'nothing left to concede but the capital: asking for a white peace', standing, 0, trace, ['Rejected: ceding the capital (not yet exhausted enough to give up the realm)', 'Rejected: paying (the treasury is empty)']);
         continue;
       }
       if (refused && mem.mode === 'concede' && value <= mem.value * 1.05 && !waited) {
@@ -1056,7 +1063,14 @@ function trySettlement(sim: Sim, nid: NationId, warId: string, other: NationId, 
   const mem = n.ai.peace[warId];
   n.ai.lastPeaceTry[warId] = st.tick;
   const demands = buildSettlement(sim, warId, nid, scale);
-  if (!demands.length) return false;
+  if (!demands.length) {
+    // nothing we could ask of them (no land we may take, nothing to pay): say so, not silently
+    if (st.tick - mem.tick >= months(6)) {
+      diag(sim, nid, 'strategic', `No terms to ask of ${nationName(sim, other)} (${why}): no land we may take and nothing they can pay; fighting on`, trace);
+      mem.tick = st.tick;
+    }
+    return false;
+  }
   const w = st.wars[warId];
   mem.tick = st.tick;
   mem.mode = 'settlement';

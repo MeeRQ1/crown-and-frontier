@@ -257,7 +257,10 @@ export function buildSettlement(sim: Sim, warId: string, leader: NationId, scale
   const theirLead = mySide === w.attackers ? w.defenderLead : w.attackerLead;
   const a = assessWar(sim, warId, leader);
   const adv = a ? warStanding(a) : scoreFor(w, leader);
-  const budget = (adv * 0.9 * PERSONALITIES[st.nations[leader].ai.personality].risk + st.nations[theirLead].warExhaustion * 0.3) * scale - 3;
+  let budget = (adv * 0.9 * PERSONALITIES[st.nations[leader].ai.personality].risk + st.nations[theirLead].warExhaustion * 0.3) * scale - 3;
+  // a total victory (most of their land held, no army of theirs left in the field) dictates
+  // at least the declared war goal, whatever the winner's temperament
+  if (a && a.landHeld >= 0.8 && a.enemyForces < 1 && scale >= 1) budget = Math.max(budget, 100 + st.nations[theirLead].warExhaustion * 0.3);
   if (budget <= 3) return [];
   const shares = contributionShares(w, mySide);
   const order = [...mySide].filter((n) => st.nations[n]?.alive).sort((a, b) => shares[b] - shares[a] || (a < b ? -1 : 1));
@@ -288,7 +291,8 @@ export function buildSettlement(sim: Sim, warId: string, leader: NationId, scale
         const goal = win === leader && w.goal.provinces.includes(pid);
         const adj = sim.world.prov[pid].neighbors.some((nb) => mine.has(nb));
         if (!claim && !goal && !adj) continue;
-        if (st.nations[from].capital === pid && !claim) continue;
+        // a capital only when claimed or the declared war goal (a war over Riga can end with Riga)
+        if (st.nations[from].capital === pid && !claim && !goal) continue;
         land.push({ pid, from, v: (goal ? 20 : 0) + (claim ? 10 : 0) + (p.controller === win ? 5 : 0) + p.dev });
       }
     }

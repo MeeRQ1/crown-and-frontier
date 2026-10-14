@@ -101,6 +101,39 @@ describe('peace from the losing side', () => {
   });
 });
 
+describe('nothing left to give, nothing left to fight with', () => {
+  it('a realm whose only loss is its capital, with an empty treasury, asks for a white peace rather than nothing', () => {
+    const sim = lineGame({ playerNation: 'a' });
+    const st = sim.state;
+    st.tick = months(20);
+    declareWar(sim, 'a', 'b', { type: 'conquest', provinces: ['b1'] });
+    st.provinces.b1.controller = 'a';
+    addArmy(sim, 'a', 'b1', { infantry: 10 });
+    addArmy(sim, 'b', 'b2', { infantry: 1 });
+    st.nations.b.manpower = 0;
+    st.nations.b.treasury = 0;
+    st.nations.b.warExhaustion = 40;
+    considerPeace(sim, 'b');
+    const [p] = peaceTo(sim, 'a');
+    expect(p?.terms?.mode).toBe('white');
+    expect(said(sim, 'b', /nothing left to concede but the capital: asking for a white peace/).length).toBe(1);
+  });
+
+  it('a total victory dictates the declared goal, even a capital, whatever the winner’s temperament', () => {
+    const sim = lineGame();
+    const st = sim.state;
+    st.tick = months(20);
+    const w = declareWar(sim, 'a', 'b', { type: 'conquest', provinces: ['b1'] });
+    for (const pid of ['b1', 'b2', 'b3']) st.provinces[pid].controller = 'a';
+    addArmy(sim, 'a', 'b1', { infantry: 10 });
+    st.nations.b.treasury = 0;
+    st.nations.a.ai.personality = 'defensive';
+    w.score = 100;
+    const demands = buildSettlement(sim, w.id, 'a');
+    expect(demands.some((d) => d.kind === 'cede' && d.province === 'b1')).toBe(true);
+  });
+});
+
 describe('peace from the winning side', () => {
   it('a winning AI holding its goal offers the human a settlement', () => {
     const sim = lineGame({ playerNation: 'b' });
