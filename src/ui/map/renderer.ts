@@ -56,6 +56,8 @@ export interface RenderState {
   selectedWing?: string | null;
   /** an air mission's target is being chosen for the selected wing (its range is shaded more strongly) */
   airTargeting?: boolean;
+  /** airfields (and carrier fleets) the selected wing could move to (format 7 control) */
+  rebaseTargets?: { provinces: ProvinceId[]; fleets: string[] } | null;
   /** route preview for the selected fleet (sea zones) */
   fleetPreview?: string[] | null;
   fleetPreviewLabel?: string | null;
@@ -125,7 +127,7 @@ const SEA_INK = '#4d6d73';
 const RANGE_INK = '#5f5f50';
 
 /** The branch symbol for an army: its most numerous regiment type. */
-const BRANCH: Record<UnitType, string> = { infantry: 'infantry', cavalry: 'cavalry', artillery: 'artillery', engineers: 'support', armour: 'armor' };
+const BRANCH: Record<UnitType, string> = { infantry: 'infantry', cavalry: 'cavalry', artillery: 'artillery', engineers: 'support', armour: 'armor', airborne: 'infantry' };
 function branchOf(a: Army): string {
   const n = new Map<UnitType, number>();
   for (const r of a.regiments) n.set(r.type, (n.get(r.type) ?? 0) + 1);
@@ -234,6 +236,8 @@ export class MapRenderer {
   readonly base: BaseMap;
   markers: Marker[] = [];
   fleetMarkers: Array<{ fleet: string; x: number; y: number; w: number; h: number }> = [];
+  /** air wing counters: the wings at one airfield, or aboard one fleet */
+  wingMarkers: Array<{ wings: string[]; base: ProvinceId | null; fleet: string | null; x: number; y: number; w: number; h: number }> = [];
   battleMarkers: Array<{ battle: string; province: ProvinceId; x: number; y: number; r: number }> = [];
   /** what the last frame placed (names and markers) and left out: for browser checks */
   readonly placed = new Registry();
@@ -314,6 +318,15 @@ export class MapRenderer {
     for (let i = this.fleetMarkers.length - 1; i >= 0; i--) {
       const m = this.fleetMarkers[i];
       if (sx >= m.x - 4 && sx <= m.x + m.w + 4 && sy >= m.y - 4 && sy <= m.y + m.h + 4) return m.fleet;
+    }
+    return null;
+  }
+
+  /** The air wings under a screen point: those at one airfield, or aboard one fleet. */
+  wingAt(sx: number, sy: number): { wings: string[]; base: ProvinceId | null; fleet: string | null } | null {
+    for (let i = this.wingMarkers.length - 1; i >= 0; i--) {
+      const m = this.wingMarkers[i];
+      if (sx >= m.x - 4 && sx <= m.x + m.w + 4 && sy >= m.y - 4 && sy <= m.y + m.h + 4) return m;
     }
     return null;
   }
@@ -447,6 +460,7 @@ export class MapRenderer {
     this.placed.clear();
     this.markers = [];
     this.fleetMarkers = [];
+    this.wingMarkers = [];
     this.battleMarkers = [];
     const t = now / 1000;
     this.drawBattles(sim, rs, t);
@@ -1419,6 +1433,39 @@ export class MapRenderer {
     const sel = rs.selectedFleet ? sim.state.fleets[rs.selectedFleet] : undefined;
     if (sel?.path.length) this.seaRoute(this.fleetPos(sel), sel.path, ROUTE, px, false, 1.2);
     if (sel && rs.fleetPreview?.length) this.seaRoute(this.fleetPos(sel), rs.fleetPreview, BRASS_INK, px, true, 1.1);
+    // the selected fleet's standing order: its station, the coast it shells, the fleet it escorts
+    const d = sel?.duty;
+    if (sel && d) {
+      const ctx = this.ctx;
+      ctx.save();
+      ctx.setLineDash([6 * px, 4 * px]);
+      ctx.strokeStyle = BRASS_INK;
+      ctx.lineWidth = 2.4 * px;
+      if ((d.kind === 'patrol' || d.kind === 'blockade' || d.kind === 'raid' || d.kind === 'port') && d.zone) {
+        const path = this.geo.zonePath(d.zone);
+        if (path) {
+          // the zone's water, tinted (its shape is made of cells: filled, never stroked)
+          ctx.save();
+          ctx.clip(this.geo.seaClip(), 'evenodd');
+          ctx.fillStyle = d.kind === 'raid' ? 'rgba(156, 59, 51, 0.16)' : 'rgba(194, 171, 114, 0.24)';
+          ctx.fill(path);
+          ctx.restore();
+        }
+      }
+      if ((d.kind === 'bombard' || d.kind === 'port') && d.province) {
+        const p = this.geo.provs.get(d.province);
+        if (p) ctx.stroke(p.path);
+      }
+      if (d.kind === 'escort' && d.fleet && sim.state.fleets[d.fleet]) {
+        const a = this.fleetPos(sel);
+        const b = this.fleetPos(sim.state.fleets[d.fleet]);
+        ctx.beginPath();
+        ctx.moveTo(a.x, a.y);
+        ctx.lineTo(b.x, b.y);
+        ctx.stroke();
+      }
+      ctx.restore();
+    }
     // the beach a fleet with troops is heading for
     if (sel?.landing) {
       const p = this.geo.provs.get(sel.landing);
@@ -1574,28 +1621,75 @@ export class MapRenderer {
   }
 
   private drawWings(sim: Sim, rs: RenderState, tier: Tier): void {
-    if (tier === 'far') return;
     const me = rs.player;
-    const at = new Map<ProvinceId, { nation: NationId; n: number; sel: boolean }>();
-    for (const w of Object.values(sim.state.wings)) {
+    // one counter per airfield, and one per fleet for the wings aboard its carriers
+    const at = new Map<string, { nation: NationId; wings: string[]; sel: boolean; base: ProvinceId | null; fleet: string | null }>();
+    for (const id of Object.keys(sim.state.wings).sort()) {
+      const w = sim.state.wings[id];
       const mine = w.nation === me;
       const hostile = me ? atWar(sim, me, w.nation) : false;
       if (!mine && !hostile && w.id !== rs.selectedWing && rs.presentation.armies !== 'all') continue;
-      const cur = at.get(w.base) ?? { nation: w.nation, n: 0, sel: false };
-      cur.n++;
+      // far out, only our own wings (as with fleets): they stay easy to find and select
+      if (tier === 'far' && w.id !== rs.selectedWing && !mine) continue;
+      const fleet = w.carrier && sim.state.fleets[w.carrier] ? w.carrier : null;
+      const key = fleet ? `f${fleet}` : `p${w.base}`;
+      const cur = at.get(key) ?? { nation: w.nation, wings: [], sel: false, base: fleet ? null : w.base, fleet };
+      cur.wings.push(w.id);
       if (w.id === rs.selectedWing) cur.sel = true;
-      at.set(w.base, cur);
+      at.set(key, cur);
     }
-    for (const [pid, v] of at) {
-      const c = this.provinceCenter(pid);
-      const s = this.camera.toScreen(c.x, c.y);
-      const kind = 'pill';
-      const { w, h } = this.counterSize(kind, String(v.n));
-      const x = s.x + 16;
-      const y = s.y + 2;
-      if (x < -40 || y < -40 || x > this.width + 40 || y > this.height + 40) continue;
-      this.counter(sim, { kind, nation: v.nation, x, y, symbol: 'air', count: String(v.n), detail: '', bars: null, status: null, relation: this.relation(sim, v.nation, me), selected: v.sel });
-      this.placed.add({ x, y, w, h });
+    const kind = 'pill';
+    for (const v of at.values()) {
+      let s: { x: number; y: number };
+      if (v.fleet) {
+        // beside the fleet's counter
+        const m = this.fleetMarkers.find((x) => x.fleet === v.fleet);
+        if (m) s = { x: m.x + m.w + 2, y: m.y + m.h / 2 - 8 };
+        else {
+          const c = this.fleetPos(sim.state.fleets[v.fleet]);
+          const p = this.camera.toScreen(c.x, c.y);
+          s = { x: p.x + 16, y: p.y - 8 };
+        }
+      } else {
+        const c = this.provinceCenter(v.base!);
+        const p = this.camera.toScreen(c.x, c.y);
+        s = { x: p.x + 16, y: p.y + 2 };
+      }
+      const { w, h } = this.counterSize(kind, String(v.wings.length));
+      if (s.x < -40 || s.y < -40 || s.x > this.width + 40 || s.y > this.height + 40) continue;
+      this.counter(sim, { kind, nation: v.nation, x: s.x, y: s.y, symbol: 'air', count: String(v.wings.length), detail: '', bars: null, status: null, relation: this.relation(sim, v.nation, me), selected: v.sel });
+      this.placed.add({ x: s.x, y: s.y, w, h });
+      this.wingMarkers.push({ wings: v.wings, base: v.base, fleet: v.fleet, x: s.x, y: s.y, w, h });
+    }
+    // where the selected wing could move to: rings on the airfields and carriers in reach
+    const rt = rs.rebaseTargets;
+    if (rt && (rt.provinces.length || rt.fleets.length)) {
+      const ctx = this.ctx;
+      ctx.save();
+      ctx.strokeStyle = BRASS_INK;
+      ctx.fillStyle = 'rgba(194, 171, 114, 0.25)';
+      ctx.lineWidth = 1.6;
+      ctx.setLineDash([3, 3]);
+      const ring = (x: number, y: number) => {
+        if (x < -20 || y < -20 || x > this.width + 20 || y > this.height + 20) return;
+        ctx.beginPath();
+        ctx.arc(x, y, 11, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.stroke();
+      };
+      for (const pid of rt.provinces) {
+        const c = this.provinceCenter(pid);
+        const p = this.camera.toScreen(c.x, c.y);
+        ring(p.x, p.y);
+      }
+      for (const fid of rt.fleets) {
+        const f = sim.state.fleets[fid];
+        if (!f) continue;
+        const c = this.fleetPos(f);
+        const p = this.camera.toScreen(c.x, c.y);
+        ring(p.x, p.y);
+      }
+      ctx.restore();
     }
   }
 

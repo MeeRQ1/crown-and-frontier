@@ -1,7 +1,10 @@
 // Economy, resources, industry, trade, population and manpower. Settled
 // monthly (every 4 ticks).
 //
-// Crowns:    province tax = (dev*0.8 + pop*0.012 + capital 3) * efficiency
+// Crowns:    the national budget's money. The treasury is a stock of crowns; income,
+//            upkeep and payments are crowns a month, settled every 4 ticks.
+//            province tax = (dev*0.8 + pop*0.03 + capital 5) * efficiency (pop in
+//            units of 10,000 people)
 //            efficiency = integrationFactor * (1 - unrest/200), 0 if occupied or in revolt
 // Food:      province = (dev*0.5*terrainProd + food deposit 3) * efficiency; armies on
 //            supply lines eat it (the `supplies` stockpile, shown as Food).
@@ -15,8 +18,9 @@
 // Trade:     goods move only under trade contracts (trade.ts): quantity, price
 //            and term agreed, the seller's contracted quantity shipped before its
 //            own use, delivered overland the same month or by sea a month later,
-//            paid on delivery. Each trade agreement also brings 1 crown of
-//            commerce. Enemy blockades hold back the blockaded share of sea
+//            paid on delivery. Each trade agreement also brings commerce: 4% of
+//            the smaller partner's provincial taxes a month, all agreements
+//            together at most 25% of the realm's own. Enemy blockades hold back the blockaded share of sea
 //            shipments (realms with a land border trade overland); a blockaded
 //            province loses a quarter of its crowns. Inside a trade bloc, members
 //            offer each other contracts 20% below list price, earn 50% more
@@ -26,8 +30,10 @@
 //            income last month) are paid with the monthly settlement.
 // Navy/air:  ships and air wings cost upkeep; ships burn coal (oil after Oil-Fired
 //            Boilers; submarines and carriers always oil), aircraft burn oil.
-// Reserve:   military-age men = pop*40 per thousand * (0.2+0.8*integration); the manpower
-//            pool can never exceed reserve minus men already serving (no double counting).
+// Reserve:   men fit for service = 5% of the people * (0.2+0.8*integration), less war
+//            dead not yet replaced by new cohorts (1% of the losses a month). The pool
+//            of men ready to call up refills at 1/60 of the reserve a month and can
+//            never exceed the reserve minus the men already serving (no double counting).
 
 import { airFuel, airUpkeep, bombingLoss } from './air';
 import { C, RESOURCE_INFO, STRATEGIC, TERRAIN, UNITS } from './config';
@@ -63,6 +69,56 @@ export function provinceBaseCrowns(sim: Sim, pid: ProvinceId): number {
 
 export function provinceCrowns(sim: Sim, pid: ProvinceId): number {
   return provinceBaseCrowns(sim, pid) * provinceEfficiency(sim, pid) - provinceBlockadeLoss(sim, pid);
+}
+
+/** A realm's provincial taxes this month, before national modifiers: the base its commerce is measured on. */
+export function provincialTaxes(sim: Sim, nid: NationId): number {
+  return memoWeek(sim, 'provincialTaxes', nid, () => {
+    let v = 0;
+    for (const pid of ownedBy(sim, nid)) v += Math.max(0, provinceCrowns(sim, pid));
+    return v;
+  });
+}
+
+/** Commerce a trade agreement brings each partner: a share of the smaller economy, less what blockades stop. */
+function commerceWith(sim: Sim, nid: NationId, other: NationId): number {
+  const v = C.economy.commerceShare * Math.min(provincialTaxes(sim, nid), provincialTaxes(sim, other)) * tradeOpen(sim, nid, other);
+  return sameBloc(sim, nid, other) ? v * (1 + C.bloc.commerceBonus) : v;
+}
+
+function commerceRaw(sim: Sim, nid: NationId): number {
+  // a realm's commerce before its cap, worked out once a week: judging one more agreement
+  // (commerceGain, every pair of realms each month) then costs one partner, not all of them
+  return memoWeek(sim, 'commerceRaw', nid, () => {
+    let v = 0;
+    for (const o of treatyPartners(sim, 'trade', nid)) v += commerceWith(sim, nid, o);
+    return v;
+  });
+}
+
+/**
+ * An envoy's keep at a foreign court, crowns a month: 1.5 for a realm of middling
+ * means (25 crowns of provincial taxes a month), scaled by the realm's taxes
+ * between half and two and a half times, so a small realm can afford one.
+ */
+export function envoyCost(sim: Sim, nid: NationId): number {
+  return C.diplomacy.envoyCost * Math.max(0.5, Math.min(2.5, provincialTaxes(sim, nid) / 25));
+}
+
+/** Crowns a month from all of a realm's trade agreements: at most `commerceCap` of its own taxes. */
+export function commerceIncome(sim: Sim, nid: NationId): number {
+  const cap = C.economy.commerceCap * provincialTaxes(sim, nid);
+  return Math.min(cap, commerceRaw(sim, nid)) * Math.max(0, 1 + nationMods(sim, nid).trade);
+}
+
+/** What a trade agreement with `partner` adds to our commerce (nothing once our commerce is at its cap). */
+export function commerceGain(sim: Sim, nid: NationId, partner: NationId): number {
+  const cap = C.economy.commerceCap * provincialTaxes(sim, nid);
+  const now = commerceRaw(sim, nid);
+  const has = treatyPartners(sim, 'trade', nid).includes(partner);
+  const without = has ? now - commerceWith(sim, nid, partner) : now;
+  const withIt = has ? now : now + commerceWith(sim, nid, partner);
+  return Math.max(0, Math.min(cap, withIt) - Math.min(cap, without)) * Math.max(0, 1 + nationMods(sim, nid).trade);
 }
 
 /** Crowns an enemy blockade takes from a coastal province this month (before national modifiers). */
@@ -312,13 +368,34 @@ export function surplusMatches(sim: Sim): TradeLine[] {
  * (sales, the value of what it can buy, and commerce), for treaty evaluation.
  */
 export function tradeValue(sim: Sim, nid: NationId, partner: NationId): number {
-  // an estimate for treaty decisions: each realm's balance is worked out once a week
-  const A = memoWeek(sim, 'tradeBalance', nid, () => tradeBalance(sim, nid));
-  const B = memoWeek(sim, 'tradeBalance', partner, () => tradeBalance(sim, partner));
-  let v = C.economy.tradeCommerce * Math.max(0, 1 + nationMods(sim, nid).trade);
+  // an estimate for treaty decisions: each realm's balance is worked out once a week.
+  // Goods count only where our current partners do not already cover them: a need
+  // they can supply, or a surplus they can take, adds nothing to one more agreement.
+  const bal = (o: NationId) => memoWeek(sim, 'tradeBalance', o, () => tradeBalance(sim, o));
+  const A = bal(nid);
+  const B = bal(partner);
+  const cover = memoWeek(sim, 'tradeCover', nid, () => {
+    const supply: Record<string, number> = {};
+    const demand: Record<string, number> = {};
+    for (const o of treatyPartners(sim, 'trade', nid)) {
+      const O = bal(o);
+      for (const res of ['food', ...STRATEGIC]) {
+        supply[res] = (supply[res] ?? 0) + Math.max(0, O.surplus[res] - O.keep[res]);
+        demand[res] = (demand[res] ?? 0) + Math.max(0, O.keep[res] - O.surplus[res]);
+      }
+    }
+    return { supply, demand };
+  });
+  const isPartner = treatyPartners(sim, 'trade', nid).includes(partner);
+  let v = commerceGain(sim, nid, partner);
   for (const res of ['food', ...STRATEGIC]) {
-    const sell = Math.max(0, Math.min(A.surplus[res] - A.keep[res], B.keep[res] - B.surplus[res]));
-    const buy = Math.max(0, Math.min(B.surplus[res] - B.keep[res], A.keep[res] - A.surplus[res]));
+    const theirSurplus = Math.max(0, B.surplus[res] - B.keep[res]);
+    const theirNeed = Math.max(0, B.keep[res] - B.surplus[res]);
+    const others = { supply: (cover.supply[res] ?? 0) - (isPartner ? theirSurplus : 0), demand: (cover.demand[res] ?? 0) - (isPartner ? theirNeed : 0) };
+    const ourSurplus = Math.max(0, A.surplus[res] - A.keep[res] - others.demand);
+    const ourNeed = Math.max(0, A.keep[res] - A.surplus[res] - others.supply);
+    const sell = Math.min(ourSurplus, theirNeed);
+    const buy = Math.min(theirSurplus, ourNeed);
     const price = RESOURCE_INFO[res as StrategicResource | 'food'].price;
     // a sale earns its price; a purchase we need is worth about half its price to us
     v += sell * price + buy * price * 0.5;
@@ -336,7 +413,29 @@ export function reserveCap(sim: Sim, nid: NationId): number {
     if (p.controller !== nid) continue;
     r += p.pop * C.population.reservePerPop * (0.2 + 0.8 * (p.integration / 100));
   }
-  return Math.max(0, r * (1 + nationMods(sim, nid).manpower));
+  return Math.max(0, r * (1 + nationMods(sim, nid).manpower) - (sim.state.nations[nid].reserveLost ?? 0));
+}
+
+/**
+ * Men a realm loses for good (killed, taken or drowned): they count in its
+ * statistics, leave its population and its reserve of men fit for service; new
+ * cohorts make up `population.lossRecovery` of the losses a month.
+ */
+export function warDead(sim: Sim, nid: NationId, men: number): void {
+  if (!(men > 0)) return;
+  const n = sim.state.nations[nid];
+  n.stats.menLost += men;
+  removePopulation(sim, nid, men);
+  // the population loss already takes the reserve's share of them; the rest were soldiers
+  const share = C.population.reservePerPop / C.population.peoplePerPop;
+  n.reserveLost = (n.reserveLost ?? 0) + men * (1 - share);
+}
+
+/** People living in a realm's provinces (occupied ones included). */
+export function nationPopulation(sim: Sim, nid: NationId): number {
+  let u = 0;
+  for (const pid of ownedBy(sim, nid)) u += sim.state.provinces[pid].pop;
+  return u * C.population.peoplePerPop;
 }
 
 /** Men currently serving: regiments plus recruits in training. */
@@ -414,9 +513,8 @@ export function computeLedger(sim: Sim, nid: NationId, contracts: ContractPlan =
   const foodIn = planAmount(contracts.in, nid, 'food');
   const sales = contracts.sales.get(nid) ?? 0;
   const purchases = contracts.purchases.get(nid) ?? 0;
-  let pacts = 0;
-  for (const o of treatyPartners(sim, 'trade', nid)) pacts += tradeOpen(sim, nid, o) * (sameBloc(sim, nid, o) ? 1 + C.bloc.commerceBonus : 1);
-  if (pacts) income['Commerce'] = pacts * C.economy.tradeCommerce * Math.max(0, 1 + mods.trade);
+  const commerce = commerceIncome(sim, nid);
+  if (commerce > 0) income['Commerce'] = commerce;
   if (sales) income['Contract sales'] = sales;
   // credit: loans repaid to us, reparations paid to us
   let repaid = 0;
@@ -472,11 +570,16 @@ export function computeLedger(sim: Sim, nid: NationId, contracts: ContractPlan =
   if (airUp) expenses['Air wing upkeep'] = airUp;
 
   let forts = 0;
-  for (const pid of ownedProvinces(sim, nid)) forts += sim.state.provinces[pid].fort;
+  let aa = 0;
+  for (const pid of ownedProvinces(sim, nid)) {
+    forts += sim.state.provinces[pid].fort;
+    aa += sim.state.provinces[pid].aa ?? 0;
+  }
   if (forts) expenses['Fort upkeep'] = forts * C.construction.fortUpkeep * Math.max(0, 1 + mods.fortUpkeep);
+  if (aa) expenses['Anti-aircraft batteries'] = aa * C.construction.flakUpkeep;
 
   const envoys = sim.state.envoys.filter((e) => e.from === nid).length;
-  if (envoys) expenses['Envoys'] = envoys * C.diplomacy.envoyCost;
+  if (envoys) expenses['Envoys'] = envoys * envoyCost(sim, nid);
 
   const funding = researchFundingCost(gross, n.research.funding);
   if (funding) expenses['Research funding'] = funding;
@@ -596,6 +699,8 @@ export function* monthlyEconomySteps(sim: Sim): Generator<void, void, void> {
       notify(sim, nid, 'urgent', 'shortage', `Shortage of ${what}. ${newShort.map(shortageEffect).join(' ')} Trade for it, take a deposit or research a substitute.`);
     }
     n.materiel = Math.min(materielCap(sim, nid), n.materiel + ledger.materielIn);
+    // war dead are made up by new cohorts coming of age, a share of the losses a month
+    if (n.reserveLost) n.reserveLost = n.reserveLost < 1 ? 0 : n.reserveLost * (1 - C.population.lossRecovery);
     // the pool never exceeds the reserve minus the men serving: a shrinking reserve
     // (occupation, lost integration, casualties) shrinks it too
     n.manpower = clamp(n.manpower + ledger.manpowerIn, 0, poolCap(sim, nid));
@@ -693,10 +798,10 @@ export function removePopulation(sim: Sim, nid: NationId, men: number): void {
   let total = 0;
   for (const pid of owned) total += sim.state.provinces[pid].pop;
   if (total <= 0) return;
-  const thousands = men / 1000;
+  const units = men / C.population.peoplePerPop;
   for (const pid of owned) {
     const p = sim.state.provinces[pid];
-    p.pop = Math.max(1, p.pop - (thousands * p.pop) / total);
+    p.pop = Math.max(1, p.pop - (units * p.pop) / total);
   }
 }
 

@@ -30,7 +30,7 @@ import { airOps, navalOps } from './navy';
 import { memoize } from '../index';
 
 function regimentsByType(sim: Sim, nid: NationId): Record<UnitType, number> {
-  const out: Record<UnitType, number> = { infantry: 0, cavalry: 0, artillery: 0, engineers: 0, armour: 0 };
+  const out: Record<UnitType, number> = { infantry: 0, cavalry: 0, artillery: 0, engineers: 0, armour: 0, airborne: 0 };
   for (const a of armiesOf(sim, nid)) for (const r of a.regiments) out[r.type]++;
   for (const pid of sim.world.provIds) for (const o of sim.state.provinces[pid].recruits) if (o.nation === nid) out[o.unit]++;
   return out;

@@ -192,6 +192,31 @@ const STEPS: Record<number, Step> = {
         `Ground support now joins one battle a week per wing, and wars may be declared on realms we do not border.`,
     );
   },
+  // 6 → 7: national scale (people, reserves, commerce), fleet orders, airborne operations,
+  // anti-aircraft batteries and the AI's memory of offers. Nothing is refilled or paid out:
+  // pools, treasuries and losses stay as they were and the new rules apply from the next month.
+  6: (save, notices) => {
+    const st = save.state as Record<string, any>;
+    for (const n of Object.values<any>(st.nations ?? {})) {
+      n.reserveLost = 0;
+      if (n.ai) {
+        n.ai.peace = {};
+        n.ai.treatyAnswers = {};
+      }
+    }
+    // fleets keep doing what they did: on station, no standing order; no anti-aircraft
+    // batteries yet, no airborne operation under way
+    for (const f of Object.values<any>(st.fleets ?? {})) f.duty = null;
+    for (const p of Object.values<any>(st.provinces ?? {})) p.aa = 0;
+    for (const a of Object.values<any>(st.armies ?? {})) a.drop = null;
+    st.schema = 7;
+    save.schema = 7;
+    notices.push(
+      `This save was made before the military control and national scale update (save format 6) and was converted to format 7. ` +
+        `Population is now counted in people (a province of 40 holds 400,000), 5% of them fit for service; manpower pools and treasuries are unchanged and refill under the new rules. ` +
+        `Commerce from trade agreements now follows the partners' economies, so income from many small agreements falls.`,
+    );
+  },
 };
 
 /**

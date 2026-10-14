@@ -105,7 +105,7 @@
   --seal: var(--cf-brass);
 }
 /* the ivory register: content to read */
-.ivory, .drawer > .body, .inspector .ins-body, .inspector .ins-primary, .modal, .legend, .toast, .decision-card, .hover-tip, .tip, .tutorial, .page-body, .setup .col, .card-register {
+.ivory, .drawer > .body, .inspector .ins-body, .inspector .ins-primary, .modal, .legend, .toast, .decision-card, .hover-tip, .order-menu, .tip, .tutorial, .page-body, .setup .col, .card-register {
   --bg: var(--cf-ivory);
   --bg-raised: var(--cf-ivory-raised);
   --bg-inset: var(--cf-ivory-inset);
@@ -808,7 +808,7 @@ canvas.map.dragging { cursor: grabbing; }
 .choice.primary .eff { color: var(--cf-ink); }
 
 /* move-mode banner */
-.banner { position: absolute; z-index: 26; left: 50%; top: var(--s4); transform: translateX(-50%); display: flex; gap: var(--s5); align-items: center; padding: var(--s3) var(--s3) var(--s3) var(--s6); background: var(--cf-slate); color: var(--cf-ivory); border: 1px solid var(--cf-brass); box-shadow: var(--shadow-2); font-weight: 600; --text: var(--cf-ivory); --text-2: var(--cf-muted-on-slate); --line: var(--cf-line-on-slate); --bg-raised: var(--cf-slate-raised); --bg-inset: var(--cf-slate-inset); }
+.banner { position: absolute; z-index: 41; left: 50%; top: var(--s4); transform: translateX(-50%); max-width: calc(100% - 16px); display: flex; gap: var(--s5); align-items: center; padding: var(--s3) var(--s3) var(--s3) var(--s6); background: var(--cf-slate); color: var(--cf-ivory); border: 1px solid var(--cf-brass); box-shadow: var(--shadow-2); font-weight: 600; --text: var(--cf-ivory); --text-2: var(--cf-muted-on-slate); --line: var(--cf-line-on-slate); --bg-raised: var(--cf-slate-raised); --bg-inset: var(--cf-slate-inset); }
 .banner .ico { color: var(--cf-brass); }
 
 /* map tooltip */
@@ -828,6 +828,32 @@ canvas.map.dragging { cursor: grabbing; }
 .hover-tip .tt-title { display: flex; align-items: center; gap: 6px; font-family: var(--heading); font-size: var(--fs-md); color: var(--text); font-weight: 600; letter-spacing: 0.04em; text-transform: uppercase; }
 .hover-tip .tt-row { color: var(--text-2); }
 .hover-tip .tt-hint { margin-top: 4px; padding-top: 4px; border-top: 1px solid var(--line-soft); color: var(--text); }
+
+/* order menu: the orders a selected wing or fleet can take at a place on the map */
+.order-menu {
+  position: absolute;
+  z-index: 46;
+  width: min(calc(330px * var(--scale)), calc(100% - 16px));
+  max-height: min(70vh, 460px);
+  display: flex;
+  flex-direction: column;
+  background: var(--cf-ivory-raised);
+  border: 1px solid var(--cf-line-on-ivory);
+  border-top: 3px solid var(--cf-brass);
+  box-shadow: var(--shadow-2);
+  font-size: var(--fs-sm);
+}
+.order-menu .order-head { display: flex; align-items: center; gap: var(--s3); padding: var(--s3) var(--s3) var(--s3) var(--s5); border-bottom: 1px solid var(--line-soft); }
+.order-menu .order-title { flex: 1; font-family: var(--heading); font-weight: 600; letter-spacing: 0.04em; text-transform: uppercase; color: var(--text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.order-menu .order-list { overflow-y: auto; padding: var(--s2) 0; }
+.order-menu .order-item { display: flex; gap: var(--s4); align-items: flex-start; width: 100%; padding: var(--s3) var(--s5); background: none; border: 0; text-align: left; color: var(--text); cursor: pointer; min-height: 40px; }
+.order-menu .order-item:hover, .order-menu .order-item:focus-visible { background: var(--bg-inset); outline: none; box-shadow: inset 3px 0 0 var(--cf-brass); }
+.order-menu .order-item.is-disabled { color: var(--text-2); cursor: default; }
+.order-menu .order-key { flex: none; width: 1.4em; font-variant-numeric: tabular-nums; color: var(--text-2); font-weight: 600; }
+.order-menu .order-text { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.order-menu .order-label { font-weight: 600; }
+.order-menu .order-note { color: var(--text-2); font-size: var(--fs-xs); line-height: 1.3; }
+.order-menu .order-why { color: var(--bad); font-size: var(--fs-xs); line-height: 1.3; }
 
 /* rich tooltip for HUD and controls */
 .tip {

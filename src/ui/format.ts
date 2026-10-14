@@ -3,6 +3,7 @@
 export function fmt(n: number, digits = 0): string {
   if (!Number.isFinite(n)) return '∞';
   const abs = Math.abs(n);
+  if (abs >= 1e6) return `${(n / 1e6).toFixed(abs >= 1e7 ? 1 : 2)}M`;
   if (abs >= 100000) return `${(n / 1000).toFixed(0)}k`;
   if (abs >= 10000) return `${(n / 1000).toFixed(1)}k`;
   return n.toLocaleString('en-US', { maximumFractionDigits: digits, minimumFractionDigits: 0 });
@@ -15,8 +16,12 @@ export function signed(n: number, digits = 1): string {
 }
 
 export function men(n: number): string {
+  if (n >= 1e6) return `${(n / 1e6).toFixed(n >= 1e7 ? 1 : 2)}M`;
   return n >= 1000 ? `${(n / 1000).toFixed(n >= 10000 ? 0 : 1)}k` : String(Math.round(n));
 }
+
+/** A number of people: "360k", "4.7M". */
+export const people = men;
 
 export function pct(n: number): string {
   return `${Math.round(n * 100)}%`;

@@ -32,6 +32,7 @@ import { weeklyConstruction } from './construction';
 import { weeklyAir, weeklyHangars } from './air';
 import { monthlyEconomySteps } from './economy';
 import { bombardFireBack, weeklyNaval, weeklyShipyards } from './naval';
+import { resolveAirDrops } from './airborne';
 import { monthlyEvents } from './events';
 import { monthlyIntegration } from './integration';
 import { weeklyArmyCareSteps, weeklyRecruitment } from './military';
@@ -127,6 +128,8 @@ export function* weekSlices(sim: Sim, opts: StepOptions = {}): Generator<void, v
   // contact is made on arrival: battles are known before the air phase plans support for them
   yield* phase('movement', () => {
     weeklyMovement(sim);
+    // airborne operations land before contact is made: a drop on enemy troops is a battle this week
+    resolveAirDrops(sim);
     detectBattles(sim);
   });
   yield* phase('air', () => weeklyAir(sim));

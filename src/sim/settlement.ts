@@ -24,6 +24,7 @@
 // demands that suit it. A winner given less than half its fair share resents
 // the leader; one whose claim was handed to another resents the receiver.
 
+import { assessWar, warStanding } from './assess';
 import { C } from './config';
 import { PERSONALITIES } from './data/personalities';
 import { addMemory, type Evaluation, type OpinionPart } from './diplomacy';
@@ -178,7 +179,8 @@ export function evaluateSettlement(sim: Sim, warId: string, judge: NationId, dem
   if (!w) return { accept: false, score: -999, reasons: [{ label: 'The war is over', value: -999 }] };
   const t = st.nations[judge];
   const pers = PERSONALITIES[t.ai.personality];
-  const adv = scoreFor(w, judge);
+  const a = assessWar(sim, warId, judge);
+  const adv = a ? warStanding(a) : scoreFor(w, judge);
   const ageMonths = (st.tick - w.startTick) / 4;
   const giving = demands.some((d) => (sideOf(w, d.from) ?? '') === sideOf(w, judge));
   if (giving) {
@@ -191,7 +193,9 @@ export function evaluateSettlement(sim: Sim, warId: string, judge: NationId, dem
     }
     add(`Cost of their demands on us (${own})`, -own);
     if (allies) add(`Cost of their demands on our allies (${allies})`, -allies * C.settlement.allyWeight);
-    add(`War score in their favour (${Math.round(-adv)})`, Math.max(0, -adv));
+    if (adv < 0) add(`Our weak position (${Math.round(adv)})`, -adv * 0.9);
+    if (a && a.lost.length && a.recovery < 0.35) add('We cannot retake the occupied land', 10);
+    if (a && a.lost.length && a.recovery >= 0.6) add('We can still retake our land', -10 * pers.risk);
     add(`War exhaustion (${Math.round(t.warExhaustion)})`, t.warExhaustion * 0.4);
     if (!hasArmies(sim, judge) && adv < 0) add('We have no army left', 20);
     if (ageMonths > 60) add('A long war', 10);
@@ -203,7 +207,7 @@ export function evaluateSettlement(sim: Sim, warId: string, judge: NationId, dem
   } else {
     const value = settlementCost(sim, w, demands);
     add(`Value of their concessions (${value})`, value);
-    add(`War score in our favour (${Math.round(adv)})`, -Math.max(0, adv) * 0.7);
+    add(`Our standing in the war (${Math.round(adv)})`, -Math.max(0, adv) * 0.7 * pers.risk);
     add(`War exhaustion (${Math.round(t.warExhaustion)})`, t.warExhaustion * 0.3);
     add('Willing to settle', 5);
   }
@@ -244,15 +248,19 @@ export function counterOffer(sim: Sim, warId: string, judge: NationId, demands: 
  * from the war score and the losers' exhaustion, shared by contribution, each
  * share filled with the demands that suit that winner.
  */
-export function buildSettlement(sim: Sim, warId: string, leader: NationId): Demand[] {
+export function buildSettlement(sim: Sim, warId: string, leader: NationId, scale = 1): Demand[] {
   const st = sim.state;
   const w = st.wars[warId];
   if (!w) return [];
   const mySide = sideOf(w, leader) === 'attacker' ? w.attackers : w.defenders;
   const theirSide = mySide === w.attackers ? w.defenders : w.attackers;
   const theirLead = mySide === w.attackers ? w.defenderLead : w.attackerLead;
-  const adv = scoreFor(w, leader);
-  const budget = adv * 0.9 + st.nations[theirLead].warExhaustion * 0.3 - 3;
+  const a = assessWar(sim, warId, leader);
+  const adv = a ? warStanding(a) : scoreFor(w, leader);
+  let budget = (adv * 0.9 * PERSONALITIES[st.nations[leader].ai.personality].risk + st.nations[theirLead].warExhaustion * 0.3) * scale - 3;
+  // a total victory (most of their land held, no army of theirs left in the field) dictates
+  // at least the declared war goal, whatever the winner's temperament
+  if (a && a.landHeld >= 0.8 && a.enemyForces < 1 && scale >= 1) budget = Math.max(budget, 100 + st.nations[theirLead].warExhaustion * 0.3);
   if (budget <= 3) return [];
   const shares = contributionShares(w, mySide);
   const order = [...mySide].filter((n) => st.nations[n]?.alive).sort((a, b) => shares[b] - shares[a] || (a < b ? -1 : 1));
@@ -283,7 +291,8 @@ export function buildSettlement(sim: Sim, warId: string, leader: NationId): Dema
         const goal = win === leader && w.goal.provinces.includes(pid);
         const adj = sim.world.prov[pid].neighbors.some((nb) => mine.has(nb));
         if (!claim && !goal && !adj) continue;
-        if (st.nations[from].capital === pid && !claim) continue;
+        // a capital only when claimed or the declared war goal (a war over Riga can end with Riga)
+        if (st.nations[from].capital === pid && !claim && !goal) continue;
         land.push({ pid, from, v: (goal ? 20 : 0) + (claim ? 10 : 0) + (p.controller === win ? 5 : 0) + p.dev });
       }
     }

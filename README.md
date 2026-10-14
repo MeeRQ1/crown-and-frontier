@@ -50,10 +50,14 @@ economic prosperity or diplomatic leadership.
   sieges; **navies** (transports, torpedo boats, cruisers, battleships, submarines,
   carriers) that fight for sea zones, close straits, blockade coasts and carry armies to
   hostile shores, where a coast held with a fleet offshore becomes a beachhead that supplies
-  them, raid the trade on sea routes and shell battles on the coast; **air wings**
-  (reconnaissance, fighters, ground attack, bombers) flying from airfields or carriers, within a
+  them, raid the trade on sea routes and shell battles on the coast, each fleet under a
+  standing order (hold, patrol, blockade, raid, escort, shell a coast, return to port); **air wings**
+  (reconnaissance, fighters, ground attack, bombers, transports) flying from airfields or carriers, within a
   range counted over land and sea and with readiness to manage, for air superiority, ground
-  support committed to one battle, interdiction, bombing and naval strikes; wars on realms we
+  support committed to one battle, interdiction, bombing and naval strikes; **paratroopers**
+  dropped behind the front and **anti-aircraft** batteries and guns; a population counted in
+  people, with reserves that war dead deplete and an income that scales with each realm's land
+  and trade; wars on realms we
   do not border, with an assessment of whether we can reach them first; a five-era
   research tree of 73 technologies in five branches with horizon years; **national focus
   trees** (a generic tree and a national branch for every realm); diplomacy with coalitions,
@@ -61,7 +65,9 @@ economic prosperity or diplomatic leadership.
   several parties and graded demands, shared by each winner's contribution, with
   counter-offers; 20 events; and three victory paths.
 - **AI rivals:** five temperaments and three difficulty levels, using exactly the same rules
-  and commands as you.
+  and commands as you. They judge each war by the land held both ways, the forces left and
+  whether lost land can be retaken; they concede land, settle or fight on accordingly, remember
+  refused offers, and propose alliances and pacts for reasons they state.
 - **Help and saving:** a 15-step tutorial that you complete by doing each thing (the capital,
   a project, industry and resources, a regiment, a march, supply and the frontier, sea and
   air, diplomacy, a national focus, how wars end, victory), rich tooltips, visible reasons for
@@ -85,17 +91,21 @@ this if you try.
 
 | Action | Mouse / keyboard | Touch |
 |---|---|---|
-| Select a province, army, fleet or sea zone | Click | Tap |
+| Select a province, army, fleet, air wing or sea zone | Click (a wing counter again: the next wing there) | Tap |
+| Orders for the selected wing or fleet at a place | Right-click it, or **E** at the pointer: the orders that fit, each with its reason if it cannot be given; **Shift**+right-click sails a fleet at once | Long-press it |
 | Move the selected army | Right-click a province, or **G** / Move then click | Long-press a province, or "March here" in the province card |
-| Sail the selected fleet | Right-click a sea zone or coast, or **G** / Sail then click | "Sail" in the fleet card, then tap |
-| Carry an army by sea | "Ship by sea" in the army card (a fleet with transports off its coast), then click the beach | the same, with taps |
-| Air missions | Select a wing (in its airfield's province card, its carrier's fleet card or the Military ledger), choose a mission, click the target province or sea zone (the shading is its range; the hover says whether it can fly there); **Esc** cancels | the same, with taps |
+| Sail the selected fleet | Shift+right-click a sea zone or coast, or **G** / Sail then click | "Sail" in the fleet card, then tap |
+| Fleet orders | The fleet card's Orders (Patrol…, Blockade…, Raid trade…, Escort…, Shell a coast… then click the place), or right-click a place | the same, or long-press |
+| Carry an army by sea | "Ship by sea" in the army card, or "Embark …" in the fleet card, then click the beach | the same, with taps |
+| Air missions | Select a wing (its counter, its airfield's province card, its carrier's fleet card or the Military ledger), then right-click the target, or choose a mission in the card and click it (the shading is its range); several wings at one airfield take one order from the wing card | the same, with taps and long-presses |
+| Airborne drop | Select an army of airborne regiments at an airfield with transport wings, "Airborne drop", click the target, review the risks, launch | the same, with taps |
+| Cancel choosing a place | **Esc**, or Cancel on the banner | Cancel on the banner |
 | Add a waypoint | **Shift**+right-click | — |
 | Pan / zoom | Drag / mouse wheel, arrow keys, **+ / −** | Drag / pinch |
 | Pause, speed | **Space**, **1–4** | ▶ and speed pips |
 | Ledgers | **B** realm, **I** industry, **M** military, **T** research, **P** national focus, **D** diplomacy, **W** wars, **V** victory, **L** chronicle, **H** help | Bottom bar |
 | Map modes | **Shift+1…9**, **O** cycles | Mode bar |
-| Navigate | **F** whole map, **C** centre selection, **Home** capital, **N** next army, **Shift+N** next army group, **K** next battle, **J** latest alert | Navigation buttons |
+| Navigate | **F** whole map, **C** centre selection, **Home** capital, **N** next army (next wing or fleet when one is selected), **Shift+N** next army group, **K** next battle, **J** latest alert | Navigation buttons |
 | Close | **Esc** cancels, closes, then opens the menu | ✕ buttons |
 
 ### Saves
@@ -208,6 +218,9 @@ that the final state matches.
   ([AUDIT.md](docs/expansion/AUDIT.md)), the plan and requirement ledger
   ([PLAN.md](docs/expansion/PLAN.md)), the setting decision ([SETTING.md](docs/expansion/SETTING.md))
   and the recorded player-style session ([SESSIONS.md](docs/expansion/SESSIONS.md)).
+- [reports/military/](reports/military/): the naval and air update and the military control
+  update, each with its audit of `main` and its verification (workflows before and after,
+  scenario tests, AI campaigns, the reported peace case before and after, saves, performance).
 - [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md):
   - the two bundled OFL fonts and the atlas art, including four AI-generated landmark
     illustrations;
@@ -246,9 +259,13 @@ that the final state matches.
 - **Navy and air are abstracted:** fleets fight in sea zones and wings fly missions over a
   province and its neighbours, or over one sea zone; there are no individual ships' positions
   or air routes, and convoys are the trade on a route between two ports, raided zone by zone.
-  Troops at sea cannot be redirected until they land.
-- **Save format:** 6.
-  - Format-1 to format-5 saves are converted on load, each with a notice.
+  Troops at sea cannot be redirected until they land. Airborne drops are flown in one week and
+  cannot be supplied from the air; the AI does not plan airborne operations (it builds
+  anti-aircraft batteries and weighs them).
+- **Save format:** 7.
+  - Format-1 to format-6 saves are converted on load, each with a notice.
+  - A format-6 campaign keeps its treasuries, pools and forces; its population now reads in
+    people, its fleets are on station with no order, and commerce follows the new rule.
   - A format-5 campaign keeps its wings' missions (fully ready, at their airfields); its
     carriers start with empty decks.
   - A format-4 campaign keeps its running trade exchanges as 12-month contracts at list price.

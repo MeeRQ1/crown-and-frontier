@@ -184,9 +184,14 @@ describe('peace settlements', () => {
     const { sim, w } = twoAgainstOne();
     w.score = 25;
     sim.state.nations.b.warExhaustion = 10;
-    sim.state.nations.b.treasury = 500;
+    sim.state.nations.b.treasury = 100;
+    // the occupiers stand on the land they took, and b has no army (nor the crowns to raise one) to take it back
+    addArmy(sim, 'a', 'b3', { infantry: 6 });
+    addArmy(sim, 'c', 'b2', { infantry: 6 });
+    // greedy: the occupied land, and the capital no one has taken, and money besides
     const greedy: Demand[] = [
       { kind: 'cede', from: 'b', to: 'a', province: 'b3' },
+      { kind: 'cede', from: 'b', to: 'a', province: 'b1' },
       { kind: 'reparations', from: 'b', to: 'c', amount: 0.3 },
       { kind: 'gold', from: 'b', to: 'c', amount: 400 },
     ];
@@ -194,6 +199,8 @@ describe('peace settlements', () => {
     const counter = counterOffer(sim, w.id, 'b', greedy);
     expect(counter).not.toBeNull();
     expect(counter!.length).toBeLessThan(greedy.length);
+    // the capital it still holds is what it strikes out
+    expect(counter!.some((d) => d.kind === 'cede' && d.province === 'b1')).toBe(false);
     expect(evaluateSettlement(sim, w.id, 'b', counter!).accept).toBe(true);
     expect(settlementCost(sim, w, counter!)).toBeLessThan(settlementCost(sim, w, greedy));
   });

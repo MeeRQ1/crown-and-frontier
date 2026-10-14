@@ -1,9 +1,9 @@
 // New-game construction.
 
-import { C, SCHEMA_VERSION, STRATEGIC } from './config';
+import { C, SCHEMA_VERSION, STRATEGIC, UNITS } from './config';
 import { startingTechs } from './data/techs';
 import { PERSONALITIES } from './data/personalities';
-import { computeLedger, emptyFlows, materielCap, menServing, reserveCap, resourceCap, stockpileCap, totalDev } from './economy';
+import { computeLedger, emptyFlows, materielCap, menServing, provincialTaxes, reserveCap, resourceCap, stockpileCap, totalDev } from './economy';
 import { createArmy, newRegiment } from './military';
 import { startingFleets } from './naval';
 import { seedState } from './rng';
@@ -108,6 +108,7 @@ export function createGame(opts: NewGameOptions = {}): Sim {
       lastOwnerChange: 0,
       recruits: [],
       port: p.owner && world.provZones[p.id] ? (p.port ?? 0) : 0,
+      aa: 0,
       airfield: 0,
       dock: [],
       hangar: [],
@@ -126,6 +127,7 @@ export function createGame(opts: NewGameOptions = {}): Sim {
       treasury: 0,
       supplies: 0,
       manpower: 0,
+      reserveLost: 0,
       stock: { coal: 0, iron: 0, oil: 0, rubber: 0, nitrates: 0 },
       materiel: 0,
       shortages: [],
@@ -154,6 +156,8 @@ export function createGame(opts: NewGameOptions = {}): Sim {
         rally: null,
         lastPeaceTry: {},
         lastProposal: {},
+        peace: {},
+        treatyAnswers: {},
       },
       stats: {
         battlesWon: 0,
@@ -188,8 +192,13 @@ export function createGame(opts: NewGameOptions = {}): Sim {
     for (const r of STRATEGIC) n.stock[r] = Math.round(rcap * C.resources.startShare);
     n.materiel = Math.round(materielCap(sim, nid) * C.industry.startMaterielShare);
     n.stats.peakProvinces = ownedProvinces(sim, nid).length;
+    // a standing army the realm can pay for (a third of its taxes) and man (a quarter of
+    // its reserve), and never fewer than the start minimum where the reserve allows it
     const reserve = reserveCap(sim, nid);
-    const regs = Math.max(5, 3 + Math.round((reserve * 0.35) / C.regimentSize));
+    const taxes = provincialTaxes(sim, nid);
+    const byMeans = Math.round((taxes * C.start.armyShare) / (UNITS.infantry.upkeep * C.start.upkeepPerRegiment));
+    const byMen = Math.floor((reserve * C.start.reserveShare) / C.regimentSize);
+    const regs = Math.max(Math.min(C.start.minRegiments, byMen), Math.min(byMeans, byMen));
     let horse = Math.round(regs * pers.composition.cavalry);
     const guns = Math.round(regs * pers.composition.artillery);
     if (def.traits.cavalryCostMul) horse += 2;
@@ -211,7 +220,7 @@ export function createGame(opts: NewGameOptions = {}): Sim {
     } else createArmy(sim, nid, cap, regiments);
     n.manpower = Math.round(Math.max(0, reserve - menServing(sim, nid)) * C.population.startPoolShare);
   }
-  startingFleets(sim);
+  startingFleets(sim, (nid) => provincialTaxes(sim, nid) * C.start.fleetShare);
   for (const nid of world.nationIds) st.nations[nid].lastMonth = computeLedger(sim, nid);
   return sim;
 }

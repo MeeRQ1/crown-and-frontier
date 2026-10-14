@@ -13,7 +13,7 @@
 
 import { airfieldRoom, skiesAtSea, buildWingProblem, deckSlots, inRangeOf, MISSION_LABELS, missionProblem, rebaseProblem, wingsAboard, wingsAt, wingsOf, wingStatus, wingUnlocked } from '../air';
 import type { Place } from '../reach';
-import { SHIPS, WINGS } from '../config';
+import { C, SHIPS, WINGS } from '../config';
 import { armiesIn, armiesOfNation, memoWeek } from '../index';
 import { grossIncome } from '../economy';
 import {
@@ -32,8 +32,10 @@ import {
   shipUnlocked,
   subPower,
   surfacePower,
+  touchFleets,
   zoneBalance,
 } from '../naval';
+import { aaAgainst } from '../airborne';
 import { armiesOf, atWar, diag, enemiesOf, isFriendly, months, ownedProvinces, type Sim } from '../state';
 import type { AirMission, AirWing, Army, Fleet, NationId, Personality, ProvinceId, ShipType, UnitType, WingType, ZoneId } from '../types';
 import { aiRand, issue, reachFrom } from './common';
@@ -174,7 +176,7 @@ export function navalStrategy(sim: Sim, nid: NationId, reserve: number): void {
   const fields = ownedProvinces(sim, nid).filter((p) => st.provinces[p].airfield > 0);
   const budget = gross * AIR_SHARE[war ? 1 : 0];
   if (airUpkeepOf(sim, nid) >= budget) return;
-  const have: Record<WingType, number> = { recon: 0, fighter: 0, attack: 0, bomber: 0 };
+  const have: Record<WingType, number> = { recon: 0, fighter: 0, attack: 0, bomber: 0, transport: 0 };
   for (const w of wingsOf(sim, nid)) have[w.type]++;
   for (const pid of sim.world.provIds) for (const o of st.provinces[pid].hangar) if (o.nation === nid) have[o.wing]++;
   const total = Object.values(have).reduce((a, b) => a + b, 0);
@@ -369,7 +371,14 @@ function raiderOps(sim: Sim, nid: NationId): void {
   const st = sim.state;
   if (!enemiesOf(sim, nid).length) {
     // at peace raiders rejoin the fleet at home
-    for (const f of fleetsOf(sim, nid)) if (f.task === 'raid') f.task = null;
+    for (const f of fleetsOf(sim, nid))
+      if (f.task === 'raid') {
+        f.task = null;
+        if (f.duty?.kind === 'raid') {
+          f.duty = null;
+          touchFleets(sim);
+        }
+      }
     return;
   }
   for (const f of [...fleetsOf(sim, nid)]) {
@@ -397,10 +406,15 @@ function raiderOps(sim: Sim, nid: NationId): void {
     const home = f.home ? portZone(sim, f.home) : null;
     const hp = f.ships.reduce((s, x) => s + x.hp, 0) / f.ships.length;
     if (hp < 50 && home) {
-      if (f.zone !== home && f.path[f.path.length - 1] !== home) issue(sim, { type: 'moveFleet', nation: nid, fleet: f.id, zone: home }, `${f.name} returns from raiding to repair`);
+      if (f.duty?.kind !== 'port') issue(sim, { type: 'fleetDuty', nation: nid, fleet: f.id, duty: { kind: 'port' } }, `${f.name} returns from raiding to repair`);
       continue;
     }
-    if (f.path.length) continue;
+    // repaired in harbour: back to sea
+    if (f.duty?.kind === 'port' && hp >= 90) {
+      f.duty = null;
+      touchFleets(sim);
+    }
+    if (f.path.length || f.duty?.kind === 'port') continue;
     const power = subPower(f);
     let best: ZoneId | null = null;
     let bv = 0;
@@ -414,7 +428,8 @@ function raiderOps(sim: Sim, nid: NationId): void {
       const v = qty / (1 + escorts) / (1 + 0.3 * hops);
       if (v > bv + 1e-9 || (Math.abs(v - bv) <= 1e-9 && best !== null && z < best)) (bv = v), (best = z);
     }
-    if (best && best !== f.zone) issue(sim, { type: 'moveFleet', nation: nid, fleet: f.id, zone: best }, `${f.name} goes raiding in ${sim.world.zones[best].name}`);
+    // under a raid order: half as effective again where it lies, and it protects nothing
+    if (best && (f.duty?.kind !== 'raid' || f.duty.zone !== best)) issue(sim, { type: 'fleetDuty', nation: nid, fleet: f.id, duty: { kind: 'raid', zone: best } }, `${f.name} goes raiding in ${sim.world.zones[best].name}`);
   }
 }
 
@@ -738,6 +753,14 @@ function orderOptions(sim: Sim, w: AirWing, ctx: AirContext): AirOrder[] {
       const f = ctx.frontier().find(prov);
       if (f) opts.push({ mission: 'recon', target: f, zone: null, score: 1, why: 'watch the frontier' });
     }
+  }
+  // anti-aircraft fire where it would fly: it achieves less and loses more there
+  for (const o of opts) {
+    if (!o.target || (o.mission !== 'bombing' && o.mission !== 'interdiction' && o.mission !== 'support')) continue;
+    const aa = aaAgainst(sim, o.target, w.nation).total;
+    if (aa <= 0) continue;
+    o.score *= Math.max(0.2, 1 - C.air.aaEffect * aa) * Math.max(0.3, 1 - 0.06 * aa * WINGS[w.type].vulnerability);
+    o.why += ` (through anti-aircraft fire, level ${aa.toFixed(1)})`;
   }
   // at peace no mission meets anything: every wing rests, keeping its readiness for the
   // first weeks of a war and burning a third of the oil

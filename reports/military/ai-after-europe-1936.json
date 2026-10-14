@@ -1,0 +1,52 @@
+{
+ "scenario": "europe-1936",
+ "years": 6,
+ "seed": 2,
+ "wars": 17,
+ "warsEnded": 16,
+ "peace": {
+  "AI-AI settlement: agreed": 10,
+  "AI-AI settlement judged refused": 3,
+  "AI-AI conceding: agreed": 6,
+  "AI-AI white judged refused": 4,
+  "AI-AI concede judged refused": 3
+ },
+ "proposed": {
+  "trade": 443,
+  "nap": 60,
+  "alliance": 12
+ },
+ "signed": {
+  "trade": 443,
+  "nap": 60,
+  "alliance": 12
+ },
+ "treatiesAtEnd": {
+  "alliance": 29,
+  "trade": 433,
+  "nap": 39
+ },
+ "decisions": {
+  "Fighting on": 18,
+  "Pressing on": 39
+ },
+ "soundedOut": {
+  "nap": 60,
+  "alliance": 16
+ },
+ "maxProposalsPerRealmYear": 12,
+ "samples": [
+  "wk0 aut: Sounded out Germany on a nap (you are the stronger neighbour, and a pact keeps the peace between us): they would refuse",
+  "wk0 aut: Sounded out Italy on a nap (you are the stronger neighbour, and a pact keeps the peace between us): they would refuse",
+  "wk0 aut: Proposed nap to Czechoslovakia (you are the stronger neighbour, and a pact keeps the peace between us): Czechoslovakia accepts.",
+  "wk0 spa: Proposed nap to France (you are the stronger neighbour, and a pact keeps the peace between us): France accepts.",
+  "wk0 lit: Proposed nap to Poland (you are the stronger neighbour, and a pact keeps the peace between us): Poland accepts.",
+  "wk1 irl: Proposed nap to Britain (you are the stronger neighbour, and a pact keeps the peace between us): Britain accepts.",
+  "wk1 swi: Proposed nap to France (you are the stronger neighbour, and a pact keeps the peace between us): France accepts.",
+  "wk1 fin: Proposed nap to Sweden (you are the stronger neighbour, and a pact keeps the peace between us): Sweden accepts.",
+  "wk1 egy: Proposed nap to Britain (you are the stronger neighbour, and a pact keeps the peace between us): Britain accepts.",
+  "wk2 rom: Proposed nap to Poland (you are the stronger neighbour, and a pact keeps the peace between us): Poland accepts.",
+  "wk2 alb: Proposed nap to Yugoslavia (you are the stronger neighbour, and a pact keeps the peace between us): Yugoslavia accepts.",
+  "wk3 cze: Sounded out Germany on a nap (you are the stronger neighbour, and a pact keeps the peace between us): they would refuse"
+ ]
+}

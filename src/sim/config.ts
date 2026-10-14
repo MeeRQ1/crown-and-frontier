@@ -1,6 +1,8 @@
 // All tunable rule numbers. Formulas live in the modules; the numbers live here.
 // Units: time in ticks (1 tick = 1 week, 4 weeks = 1 month, 12 months = 1 year),
-// money in crowns, supplies in wagons, manpower in men, population in thousands.
+// money in crowns (a treasury is a stock of crowns; income, upkeep and costs paid
+// over time are crowns a month), supplies in wagons, manpower in men, population in
+// units of 10,000 people (`population.peoplePerPop`).
 
 import type { ShipType, StrategicResource, Terrain, UnitType, WingType } from './types';
 
@@ -80,6 +82,12 @@ export const UNITS: Record<UnitType, UnitRules> = {
     cost: 25, materiel: 20, resources: { iron: 2 }, weeks: 6, upkeep: 1.4, supplyUse: 0.6, burn: {},
     attack: 0.6, morale: 0.8, speed: 1.0, siege: 3, pursuit: 0,
     description: 'Sappers and bridging trains. Their army digs in twice as fast, besieges faster and crosses rivers without penalty.',
+  },
+  airborne: {
+    label: 'Airborne', plural: 'Airborne', abbr: 'P', role: 'line', requires: 'airborne_forces',
+    cost: 35, materiel: 18, resources: { rubber: 1 }, weeks: 10, upkeep: 1.6, supplyUse: 0.5, burn: {},
+    attack: 1.1, morale: 1.3, speed: 1.0, siege: 0.8, pursuit: 0.05,
+    description: 'Parachute infantry: picked, lightly armed troops. On the ground they fight like good infantry; from an airfield, transport wings can drop them on a province within reach, behind the front.',
   },
   armour: {
     label: 'Armour', plural: 'Armour', abbr: 'T', role: 'breakthrough', requires: 'tanks',
@@ -197,6 +205,8 @@ export interface WingRules {
   carrier: boolean;
   /** losses it suffers when intercepted or shot at, relative to the others */
   vulnerability: number;
+  /** regiments it carries in an airborne operation (transports) */
+  lift?: number;
   role: string;
   description: string;
 }
@@ -230,6 +240,13 @@ export const WINGS: Record<WingType, WingRules> = {
     role: 'Strategic and logistics bombing; long-range naval strike',
     description: 'Long-range bombers: wreck factories, shipyards, ports and airfields far behind the front, interdict supply, or strike fleets at range. Too heavy for carriers; needs fighters to survive defended skies.',
   },
+  transport: {
+    label: 'Transport wing', plural: 'Transport wings', abbr: 'Tr', requires: 'airborne_forces',
+    cost: 30, materiel: 20, resources: { rubber: 1, iron: 1 }, weeks: 8, upkeep: 0.8, fuel: 0.2,
+    air: 0.2, ground: 0, bomb: 0, naval: 0, range: 4, missions: [], carrier: false, vulnerability: 1.5, lift: 1,
+    role: 'Airborne operations',
+    description: 'Transport aircraft: each carries one airborne regiment from its airfield to a province within range, through whatever fighters and anti-aircraft guns wait there. It flies no other mission.',
+  },
 };
 export const WING_TYPES = Object.keys(WINGS) as WingType[];
 
@@ -254,15 +271,18 @@ export const C = {
 
   economy: {
     goldPerDev: 0.8,
-    goldPerPop: 0.012, // crowns / month per thousand people
-    capitalBonus: 3,
+    goldPerPop: 0.03, // crowns / month per population unit (10,000 people)
+    capitalBonus: 5, // the seat of government: courts, customs, the national bank
+
     occupierShare: 0.3, // share of a province's crowns levied by an occupier
     supplyPerDev: 0.5,
     foodBonus: 3, // food deposit
     stockpileBase: 60,
     stockpilePerDev: 5,
-    /** crowns each partner earns from a trade agreement's commerce, besides resource sales */
-    tradeCommerce: 1,
+    /** commerce from a trade agreement: this share of the smaller partner's provincial taxes, a month */
+    commerceShare: 0.04,
+    /** all of a realm's commerce together is at most this share of its own provincial taxes */
+    commerceCap: 0.25,
     fundingCost: [0, 0.08, 0.18, 0.32] as const, // share of gross income
     fundingMul: [1, 1.4, 1.8, 2.2] as const,
     interestRate: 0.02, // monthly interest on debt
@@ -294,12 +314,27 @@ export const C = {
     reinforceMateriel: 0.5, // share of a regiment's materiel cost to replace 1,000 men
   },
 
+  /** forces at the start of a campaign, sized to each realm's means */
+  start: {
+    armyShare: 0.33, // of provincial taxes spent on the standing army
+    upkeepPerRegiment: 1.2, // the average regiment's upkeep relative to infantry's
+    reserveShare: 0.25, // at most this share of the reserve under arms
+    minRegiments: 3, // where the reserve allows
+    fleetShare: 0.12, // of provincial taxes spent on the home fleet
+  },
+
   population: {
     growth: 0.0018, // monthly logistic growth rate
     occupationLoss: 0.002,
-    reservePerPop: 40, // men of military reserve per thousand people (fully integrated)
-    regenMonths: 40, // months to regenerate an empty reserve
-    startPoolShare: 0.6,
+    /** people per population unit: a province of 40 holds 400,000 people */
+    peoplePerPop: 10_000,
+    /** men fit for service per population unit when fully integrated (5% of the people) */
+    reservePerPop: 500,
+    /** the pool of men ready to call up refills at this share of the reserve a month */
+    regenMonths: 60,
+    startPoolShare: 0.5,
+    /** war dead leave the reserve; new cohorts make up this share of the losses a month */
+    lossRecovery: 0.01,
   },
 
   integration: {
@@ -334,7 +369,7 @@ export const C = {
   },
 
   construction: {
-    devBase: 20, // * dev * (1 + dev/4) * terrain multiplier
+    devBase: 14, // * dev * (1 + dev/5) * terrain multiplier
     devWeeks: 16,
     devOvercap: 3, // levels allowed beyond the terrain cap
     devOvercapMul: 2.5, // cost multiplier beyond the terrain cap
@@ -358,9 +393,15 @@ export const C = {
     airfieldIron: 3,
     airfieldWeeks: 12,
     airfieldMax: 2,
+    /** anti-aircraft batteries (format 7): crowns × (level + 1), iron, weeks, levels; upkeep a month per level */
+    flakBase: 20,
+    flakIron: 2,
+    flakWeeks: 6,
+    flakMax: 3,
+    flakUpkeep: 0.4,
     fortWeeks: 16,
     fortMax: 3,
-    fortUpkeep: 1, // crowns / month per level
+    fortUpkeep: 0.6, // crowns / month per level
     charterBase: 20, // + 6 per dev
     charterPerDev: 6,
     charterWeeks: 8,
@@ -455,12 +496,19 @@ export const C = {
     bombardPer: 0.02,
     bombardMax: 0.25,
     coastalGuns: 3,
+    /** coastal forts fire at ships blockading their coast at this share of their fire at bombarding ships */
+    blockadeFire: 0.5,
     /** air and naval fire support of a side together never exceeds this */
     supportCap: 0.5,
     /** raiding: share of sea trade lost per raid point in a zone on the route, after escorts (zone and route caps) */
     raidRate: 0.06,
     raidZoneMax: 0.4,
     raidRouteMax: 0.75,
+    /** a fleet ordered to shell a coast province our armies besiege speeds the siege by this share per bombard point (cap) */
+    siegePer: 0.04,
+    siegeMax: 0.5,
+    /** a fleet lying in harbour under orders repairs this much faster */
+    harbourRepair: 1.5,
   },
 
   air: {
@@ -508,6 +556,25 @@ export const C = {
     wingsPerAirfield: 2,
     /** a carrier below this hull condition cannot operate aircraft */
     deckHull: 40,
+    /**
+     * anti-aircraft defence of a province (format 7): its batteries (0–3) plus mobile guns of
+     * the defenders' artillery there (Air Defence: half a level a regiment, at most 1.5), at
+     * most `aaMax` in all. Enemy aircraft flying over it lose `aaPer` strength a week per level
+     * and achieve `aaEffect` less per level; an airborne drop loses `dropAA` of its men per level.
+     */
+    aaPer: 1.5,
+    aaEffect: 0.08,
+    aaMax: 4,
+    mobileAA: 0.5,
+    mobileAAMax: 1.5,
+    /** airborne drops: men lost by who holds the sky over the target (theirs, contested) and per AA level; cap */
+    dropIntercept: 0.3,
+    dropDisputed: 0.12,
+    dropAA: 0.05,
+    dropLossMax: 0.5,
+    /** landed troops fight at this share the week they land; transports lose this much readiness */
+    dropLanding: 0.7,
+    dropWear: 30,
   },
 
   siege: {
@@ -523,7 +590,7 @@ export const C = {
 
   diplomacy: {
     envoysBase: 2,
-    envoyCost: 1.5, // crowns / month
+    envoyCost: 1.5, // crowns / month for a realm of middling means; scaled by its taxes (economy.envoyCost)
     envoyMonths: 12,
     envoyGain: 2.5, // opinion / month
     envoyCap: 35,
@@ -705,4 +772,4 @@ export const C = {
  * guarantees, influence, loans and trade blocs. Older saves are migrated
  * (src/sim/migrate.ts).
  */
-export const SCHEMA_VERSION = 6;
+export const SCHEMA_VERSION = 7;

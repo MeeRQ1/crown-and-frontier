@@ -11,6 +11,7 @@
 // Unresolvable wars: a white peace is forced after 96 months, or after 36
 // months within ±10; a side holding ≥90 for 12 months imposes its war goal.
 
+import { assessWar, provinceWeight, warStanding } from './assess';
 import { C } from './config';
 import { PERSONALITIES } from './data/personalities';
 import {
@@ -352,13 +353,6 @@ export function answerCallToArms(sim: Sim, nid: NationId, warId: string, from: N
 
 // ───────────────────────────── War score ────────────────────────────────────
 
-function provWeight(sim: Sim, pid: ProvinceId): number {
-  const p = sim.state.provinces[pid];
-  let w = p.dev + 1;
-  if (p.owner && sim.state.nations[p.owner]?.capital === pid) w *= 2;
-  return w;
-}
-
 export interface ScoreBreakdown {
   total: number;
   occAtt: number;
@@ -376,7 +370,7 @@ export function computeWarScore(sim: Sim, w: War): ScoreBreakdown {
   for (const pid of sim.world.provIds) {
     const p = st.provinces[pid];
     if (!p.owner) continue;
-    const wt = provWeight(sim, pid);
+    const wt = provinceWeight(sim, pid);
     if (w.defenders.includes(p.owner)) {
       defTotal += wt;
       if (p.controller && w.attackers.includes(p.controller)) defOcc += wt;
@@ -407,8 +401,8 @@ export function weeklyWarScores(sim: Sim): void {
 
 export function provinceCost(sim: Sim, giver: NationId, receiverSide: NationId[], pid: ProvinceId): number {
   let total = 0;
-  for (const q of ownedProvinces(sim, giver)) total += provWeight(sim, q);
-  let cost = Math.max(C.war.provinceBaseCost, (100 * provWeight(sim, pid)) / Math.max(1, total));
+  for (const q of ownedProvinces(sim, giver)) total += provinceWeight(sim, q);
+  let cost = Math.max(C.war.provinceBaseCost, (100 * provinceWeight(sim, pid)) / Math.max(1, total));
   const ctrl = sim.state.provinces[pid].controller;
   if (!ctrl || !receiverSide.includes(ctrl)) cost *= C.war.unoccupiedMul;
   return Math.round(cost);
@@ -455,6 +449,12 @@ export function hasArmies(sim: Sim, nid: NationId): boolean {
 }
 
 /** How `target` would judge a peace offer from `proposer`. */
+/**
+ * How a realm judges peace terms: by its standing in the war (where it stands and
+ * where the war is heading, `assess.ts`), what the terms cost or give it,
+ * exhaustion, the length of the war and its temperament. The same rules judge an
+ * AI's and the player's offers.
+ */
 export function evaluatePeace(sim: Sim, warId: string, proposer: NationId, target: NationId, terms: PeaceTerms): Evaluation {
   const st = sim.state;
   const w = st.wars[warId];
@@ -464,31 +464,35 @@ export function evaluatePeace(sim: Sim, warId: string, proposer: NationId, targe
   };
   const t = st.nations[target];
   const pers = PERSONALITIES[t.ai.personality];
-  const adv = scoreFor(w, target); // target's advantage
+  const a = assessWar(sim, warId, target);
+  const standing = a ? warStanding(a) : scoreFor(w, target);
   const ageMonths = (st.tick - w.startTick) / 4;
   if (terms.mode === 'white') {
-    add(`War score in our favour (${Math.round(adv)})`, -Math.max(0, adv));
-    add('Willing to settle', 10);
+    // a white peace gives back what each side holds
+    add(`Our standing in the war (${Math.round(standing)})`, -Math.max(0, standing));
+    if (standing < 0) add('We are losing', -standing * 0.5);
+    add('Willing to settle', 8);
     add(`War exhaustion (${Math.round(t.warExhaustion)})`, t.warExhaustion * 0.4);
-    if (adv < 0) add('We are losing', -adv * 0.5);
-    if (ageMonths > 36) add('A long war', 10);
+    if (ageMonths > 36 * pers.patience) add('A long war', 10);
     add(`${pers.label} stubbornness`, -pers.stubborn);
     // the war goal is against the defending leader; a secondary defender cannot meet it
     if (target === w.attackerLead && proposer === w.defenderLead && ageMonths < 12) add('Our war goals are unmet', -15);
   } else if (terms.mode === 'demand') {
     const cost = termsCost(sim, w, target, proposer, terms);
     add(`Cost of their demands (${cost})`, -cost);
-    add(`War score in their favour (${Math.round(-adv)})`, Math.max(0, -adv));
+    if (standing < 0) add(`Our weak position (${Math.round(standing)})`, -standing * 0.9);
+    if (a && a.lost.length && a.recovery < 0.35) add('We cannot retake the occupied land', 10);
+    if (a?.capitalLost) add('Our capital is occupied', 8);
     add(`War exhaustion (${Math.round(t.warExhaustion)})`, t.warExhaustion * 0.4);
-    if (!hasArmies(sim, target) && adv < 0) add('We have no army left', 20);
+    if (!hasArmies(sim, target) && standing < 0) add('We have no army left', 20);
     if (ageMonths > 60) add('A long war', 10);
     add(`${pers.label} stubbornness`, -pers.stubborn);
+    if (a && a.recovery >= 0.6 && a.lost.length) add('We can still retake our land', -10 * pers.risk);
     add('Pride', -5);
   } else {
     const cost = termsCost(sim, w, proposer, target, terms);
     add(`Value of their concessions (${cost})`, cost);
-    const want = Math.max(0, adv) * 0.7;
-    add(`War score in our favour (${Math.round(adv)})`, -want);
+    add(`Our standing in the war (${Math.round(standing)})`, -Math.max(0, standing) * 0.6 * pers.risk);
     add(`War exhaustion (${Math.round(t.warExhaustion)})`, t.warExhaustion * 0.3);
     add('Willing to settle', 5);
   }
@@ -807,7 +811,7 @@ export function monthlyWars(sim: Sim): void {
       if (!p.owner || !p.controller || p.owner === p.controller) continue;
       const ownerSide = sideOf(w, p.owner);
       const ctrlSide = sideOf(w, p.controller);
-      if (ownerSide && ctrlSide && ownerSide !== ctrlSide) addContribution(w, p.controller, provWeight(sim, pid) / 10);
+      if (ownerSide && ctrlSide && ownerSide !== ctrlSide) addContribution(w, p.controller, provinceWeight(sim, pid) / 10);
     }
     if (held === w.goal.provinces.length && held > 0) w.goalScore = Math.min(C.war.goalScoreCap, w.goalScore + 1);
     else if (held === 0 && age >= C.war.goalTickMonths) w.goalScore = Math.max(-C.war.goalScoreCap, w.goalScore - 1);

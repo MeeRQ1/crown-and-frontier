@@ -1,0 +1,41 @@
+{
+ "scenario": "europe-1936",
+ "years": 6,
+ "seed": 2,
+ "wars": 18,
+ "warsEnded": 18,
+ "peace": {
+  "AI-AI offer judged refused": 26,
+  "AI-AI settlement: agreed": 18
+ },
+ "proposed": {
+  "nap": 45,
+  "alliance": 16,
+  "trade": 455
+ },
+ "signed": {
+  "nap": 45,
+  "alliance": 16,
+  "trade": 455
+ },
+ "treatiesAtEnd": {
+  "alliance": 33,
+  "trade": 440,
+  "nap": 29
+ },
+ "maxProposalsPerRealmYear": 12,
+ "samples": [
+  "wk84 gbr: Peace white to Spain would be refused (-5)",
+  "wk92 spa: Settlement with Portugal (score 17): agreed",
+  "wk95 ger: Settlement with Switzerland (score 32): agreed",
+  "wk95 tur: Settlement with Bulgaria (score 41): agreed (their counter-offer)",
+  "wk96 bul: Peace white to Yugoslavia would be refused (-48)",
+  "wk97 egy: Settlement with Italy would be refused; fighting on",
+  "wk99 yug: Settlement with Bulgaria (score 50): agreed",
+  "wk102 rom: Settlement with Bulgaria (score 22): agreed (their counter-offer)",
+  "wk102 est: Peace white to Poland would be refused (-3)",
+  "wk109 egy: Settlement with Italy would be refused; fighting on",
+  "wk114 fra: Settlement with Iraq (score 24): agreed",
+  "wk116 bul: Peace white to Greece would be refused (-56)"
+ ]
+}

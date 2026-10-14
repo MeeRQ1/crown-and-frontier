@@ -7,7 +7,7 @@ import { TECHS } from '../../sim/data/techs';
 import { orderStatus, readiness } from '../../sim/readiness';
 import { contractsBetween, dependence, monthlyValue, resLabel } from '../../sim/trade';
 import { claimsOn, coalitionAgainst, envoyProblem, envoySlots, evaluateTreaty, joinCoalitionProblem, opinion, opinionParts, TREATY_LABELS, treatyProblem } from '../../sim/diplomacy';
-import { menServing, reserveCap } from '../../sim/economy';
+import { envoyCost, menServing, reserveCap } from '../../sim/economy';
 import { checkCommand } from '../../sim/commands';
 import { armyCap, blocOf, evaluateBloc, evaluateLoan, foundBlocProblem, guaranteeProblem, guaranteesBy, guaranteeSlots, guarantorsOf, influenceGain, influenceOver, inviteProblem, joinProblem, loanProblem, sphereMembers, sphereOf } from '../../sim/influence';
 import { maxMorale, nationStrength, unitUnlocked } from '../../sim/military';
@@ -656,7 +656,7 @@ function nationDetail(app: App, o: NationId): HTMLElement {
       'Envoy and treaties',
       envoyHere
         ? action('Recall envoy', `Envoy at their court until ${dateOf(sim, envoyHere.until).short} (+${C.diplomacy.envoyGain}/month opinion, up to ${C.diplomacy.envoyCap}).`, () => app.do({ type: 'recallEnvoy', target: o }), null)
-        : action('Send envoy', `${C.diplomacy.envoyCost} crowns/month for 12 months: +${C.diplomacy.envoyGain} opinion each month (up to ${C.diplomacy.envoyCap}).`, () => app.do({ type: 'envoy', target: o }), envoyProblem(sim, me, o)),
+        : action('Send envoy', `${envoyCost(sim, me).toFixed(1)} crowns/month for 12 months: +${C.diplomacy.envoyGain} opinion each month (up to ${C.diplomacy.envoyCap}).`, () => app.do({ type: 'envoy', target: o }), envoyProblem(sim, me, o)),
       treaty('trade'),
       treaty('nap'),
       treaty('alliance'),

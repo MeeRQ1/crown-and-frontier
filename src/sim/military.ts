@@ -8,7 +8,7 @@
 import { interdiction } from './air';
 import { C, RESOURCE_INFO, UNITS, UNIT_TYPES } from './config';
 import { TECHS } from './data/techs';
-import { poolCap, removePopulation } from './economy';
+import { poolCap, warDead } from './economy';
 import { touchArmies } from './index';
 import { armyCap } from './influence';
 import { nationMods, type Mods } from './modifiers';
@@ -384,8 +384,7 @@ export function* weeklyArmyCareSteps(sim: Sim): Generator<void, void, void> {
         }
         return true;
       });
-      n.stats.menLost += lost;
-      removePopulation(sim, a.nation, lost);
+      warDead(sim, a.nation, lost);
       a.morale = Math.max(0, a.morale - 0.1);
       if (a.regiments.length === 0) {
         notify(sim, a.nation, 'urgent', 'attrition', `${a.name} has wasted away from attrition in ${provName(sim, a.location)}.`, { province: a.location });

@@ -45,3 +45,29 @@ export function seaAirSave(): { text: string; ids: Record<string, string> } {
   return { text: serialize(sim), ids: { zone, fleet: fleet.id, carrier: carrier.id, landing: landing.id, ours: ours.id, theirs: theirs.id, attack: attack.id, f1: fighters[0].id, f2: fighters[1].id, f3: fighters[2].id } };
 }
 
+
+/**
+ * The same war prepared for an airborne operation (format 7): Serrata with
+ * Airborne Forces and Air Defence, two airborne regiments and two transport wings
+ * at Serenna; Aurelian holds Duncairn with two regiments, anti-aircraft batteries
+ * (level 2) and fighters from Hollin over it.
+ */
+export function airborneSave(): { text: string; ids: Record<string, string> } {
+  const sim = createGame({ scenario: 'reach', seed: 5, playerNation: 'ser' });
+  const st = sim.state;
+  for (const n of ['ser', 'aur']) for (const t of ['aviation', 'fighters', 'ground_attack', 'all_metal_aircraft', 'air_defence', 'airborne_forces']) if (!st.nations[n].research.done.includes(t)) st.nations[n].research.done.push(t);
+  declareWar(sim, 'ser', 'aur', { type: 'conquest', provinces: ['westmere'] });
+  for (const a of Object.values(st.armies)) if (a.location === 'duncairn' || a.location === 'serenna') delete st.armies[a.id];
+  const regs = (t: UnitType, n: number) => Array.from({ length: n }, () => newRegiment(sim, t));
+  st.provinces.serenna.airfield = 2;
+  st.provinces.hollin.airfield = 1;
+  st.provinces.duncairn.aa = 2;
+  const para = createArmy(sim, 'ser', 'serenna', regs('airborne', 2));
+  createArmy(sim, 'aur', 'duncairn', regs('infantry', 2));
+  const t1 = createWing(sim, 'ser', 'serenna', 'transport');
+  const t2 = createWing(sim, 'ser', 'serenna', 'transport');
+  const f = createWing(sim, 'aur', 'hollin', 'fighter');
+  f.mission = 'superiority';
+  f.target = 'duncairn';
+  return { text: serialize(sim), ids: { para: para.id, t1: t1.id, t2: t2.id } };
+}

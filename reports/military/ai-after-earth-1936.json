@@ -1,0 +1,54 @@
+{
+ "scenario": "earth-1936",
+ "years": 6,
+ "seed": 2,
+ "wars": 35,
+ "warsEnded": 31,
+ "peace": {
+  "AI-AI white judged refused": 16,
+  "AI-AI concede judged refused": 7,
+  "AI-AI settlement: agreed": 23,
+  "AI-AI conceding: agreed": 8,
+  "AI-AI settlement judged refused": 8
+ },
+ "proposed": {
+  "trade": 1502,
+  "nap": 136,
+  "alliance": 39
+ },
+ "signed": {
+  "trade": 1502,
+  "nap": 136,
+  "alliance": 39
+ },
+ "treatiesAtEnd": {
+  "alliance": 57,
+  "trade": 1472,
+  "nap": 80
+ },
+ "decisions": {
+  "Fighting on": 29,
+  "Pressing on": 50,
+  "Holding out": 1,
+  "Left an alliance": 2
+ },
+ "soundedOut": {
+  "nap": 111,
+  "alliance": 84
+ },
+ "maxProposalsPerRealmYear": 12,
+ "samples": [
+  "wk0 aut: Sounded out Germany on a nap (you are the stronger neighbour, and a pact keeps the peace between us): they would refuse",
+  "wk0 aut: Sounded out Italy on a nap (you are the stronger neighbour, and a pact keeps the peace between us): they would refuse",
+  "wk0 aut: Proposed nap to Czechoslovakia (you are the stronger neighbour, and a pact keeps the peace between us): Czechoslovakia accepts.",
+  "wk0 spa: Proposed nap to Britain (you are the stronger neighbour, and a pact keeps the peace between us): Britain accepts.",
+  "wk0 swi: Proposed nap to France (you are the stronger neighbour, and a pact keeps the peace between us): France accepts.",
+  "wk0 egy: Proposed nap to Britain (you are the stronger neighbour, and a pact keeps the peace between us): Britain accepts.",
+  "wk0 gua: Proposed nap to Britain (you are the stronger neighbour, and a pact keeps the peace between us): Britain accepts.",
+  "wk0 pru: Proposed nap to Brazil (you are the stronger neighbour, and a pact keeps the peace between us): Brazil accepts.",
+  "wk0 uru: Proposed nap to Brazil (you are the stronger neighbour, and a pact keeps the peace between us): Brazil accepts.",
+  "wk1 irl: Sounded out Britain on a nap (you are the stronger neighbour, and a pact keeps the peace between us): they would refuse",
+  "wk1 yem: Proposed nap to Britain (you are the stronger neighbour, and a pact keeps the peace between us): Britain accepts.",
+  "wk1 man: Sounded out China on a nap (you are the stronger neighbour, and a pact keeps the peace between us): they would refuse"
+ ]
+}

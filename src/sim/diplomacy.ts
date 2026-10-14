@@ -8,7 +8,7 @@ import { C, RESOURCE_INFO } from './config';
 import { PERSONALITIES } from './data/personalities';
 import { claimsOnlyFocus } from './focus';
 import { sameBloc, sphereOf } from './influence';
-import { tradeValue } from './economy';
+import { envoyCost, tradeValue } from './economy';
 import { dependenceOn, endContractsBetween } from './trade';
 import { nationStrength } from './military';
 import { nationMods } from './modifiers';
@@ -181,7 +181,7 @@ export function envoyProblem(sim: Sim, from: NationId, to: NationId): string | n
   if (st.envoys.some((e) => e.from === from && e.to === to)) return 'An envoy is already at their court.';
   const used = st.envoys.filter((e) => e.from === from).length;
   if (used >= envoySlots(sim, from)) return `All ${envoySlots(sim, from)} envoys are busy.`;
-  if (st.nations[from].treasury < C.diplomacy.envoyCost) return 'Cannot afford the envoy.';
+  if (st.nations[from].treasury < envoyCost(sim, from)) return 'Cannot afford the envoy.';
   return null;
 }
 
@@ -243,6 +243,8 @@ export function evaluateTreaty(sim: Sim, from: NationId, to: NationId, type: Tre
     if (sFrom > sTo * 1.2) add('They are stronger: a pact keeps us safe', 15);
     else if (sTo > sFrom * 1.1 && pers.aggression >= 1) add('They are weaker: a pact would bind our hands', -Math.min(30, (sTo / Math.max(0.5, sFrom) - 1) * 20 * pers.aggression));
     if (claimsOn(sim, to, from).length) add('We claim their land', -15);
+    // a pact that frees their armies against a realm we are bound to defend
+    for (const e of enemiesOf(sim, from)) if (hasTreaty(sim, 'alliance', to, e) || st.guarantees.some((g) => g.by === to && g.of === e)) add(`It would free their armies against ${nationName(sim, e)}, whom we stand by`, -35);
     if (dist <= 1) add('Neighbours', 5);
     else if (dist > 3) add('Too distant to matter', -10);
     add(`${pers.label} outlook`, (pers.treaty.nap - 1) * 20);
@@ -260,6 +262,18 @@ export function evaluateTreaty(sim: Sim, from: NationId, to: NationId, type: Tre
     add(`Their trust (${Math.round(trust)})`, (trust - 50) * 0.5);
     const threat = sharedThreat(sim, from, to);
     if (threat) add(`Shared threat: ${nationName(sim, threat)}`, 25);
+    // the obligation: their enemies would become ours. Weighed against each realm
+    // they fight or fear that we do not fear ourselves, by its strength against ours.
+    for (const e of aliveNations(sim)) {
+      if (e === from || e === to || e === threat) continue;
+      const theyFight = atWar(sim, from, e);
+      if (!theyFight && (st.alarm[from]?.[e] ?? 0) < 30) continue;
+      if ((st.alarm[to]?.[e] ?? 0) >= 20 || atWar(sim, to, e)) continue;
+      const sE = nationStrength(sim, e);
+      const weight = Math.min(25, 12 * (sE / sTo)) * (theyFight ? 1 : 0.5);
+      add(`We would be drawn against ${nationName(sim, e)}`, -weight);
+      if (hasTreaty(sim, 'nap', to, e) || hasTreaty(sim, 'trade', to, e)) add(`We are at peace with ${nationName(sim, e)} by treaty`, theyFight ? -10 : -5);
+    }
     const ratio = sFrom / sTo;
     if (ratio >= 0.5) add('A useful military partner', 10);
     else if (ratio < 0.3) add('Too weak to help us', -15);
@@ -316,13 +330,14 @@ export function removeTreaty(sim: Sim, type: TreatyType, a: NationId, b: NationI
 }
 
 /** Offers a treaty. AI targets answer immediately; a human target gets a pending proposal. */
-export function proposeTreaty(sim: Sim, from: NationId, to: NationId, type: TreatyType): CommandResult {
+export function proposeTreaty(sim: Sim, from: NationId, to: NationId, type: TreatyType, reason?: string): CommandResult {
   const prob = treatyProblem(sim, from, to, type);
   if (prob) return { ok: false, reason: prob };
   const target = sim.state.nations[to];
+  const why = typeof reason === 'string' && reason.trim() ? reason.trim().slice(0, 200) : undefined;
   if (target.isPlayer) {
-    addProposal(sim, { kind: type, from, to });
-    notify(sim, to, 'normal', 'proposal', `${nationName(sim, from)} proposes a ${TREATY_LABELS[type].toLowerCase()}.`);
+    addProposal(sim, why ? { kind: type, from, to, reason: why } : { kind: type, from, to });
+    notify(sim, to, 'normal', 'proposal', `${nationName(sim, from)} proposes a ${TREATY_LABELS[type].toLowerCase()}${why ? `: ${why}` : ''}.`);
     return { ok: true, message: 'Proposal sent.' };
   }
   const ev = evaluateTreaty(sim, from, to, type);

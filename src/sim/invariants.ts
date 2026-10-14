@@ -69,12 +69,26 @@ export function checkInvariants(sim: Sim): string[] {
       from = step;
     }
   }
+  for (const pid in st.provinces) {
+    const aa = st.provinces[pid].aa;
+    if (!(aa >= 0 && aa <= C.construction.flakMax)) out.push(`${pid}: anti-aircraft level ${aa}`);
+  }
+  for (const id in st.armies) {
+    const d = st.armies[id].drop;
+    if (d && (!st.provinces[d.target] || !d.wings.length)) out.push(`${id}: airborne drop without a target or transports`);
+  }
   for (const fid in st.fleets) {
     const f = st.fleets[fid];
     if (f.id !== fid) out.push(`fleet key mismatch ${fid}`);
     if (!st.nations[f.nation]?.alive) out.push(`${fid}: fleet of dead realm`);
     if (!sim.world.zones[f.zone]) out.push(`${fid}: bad zone ${f.zone}`);
     if (!f.ships.length) out.push(`${fid}: fleet without ships`);
+    const d = f.duty;
+    if (d) {
+      if (d.kind === 'escort' && d.fleet === fid) out.push(`${fid}: escorts itself`);
+      if ((d.kind === 'patrol' || d.kind === 'blockade' || d.kind === 'raid') && !(d.zone && sim.world.zones[d.zone])) out.push(`${fid}: ${d.kind} order without a zone`);
+      if (d.kind === 'bombard' && !(d.province && st.provinces[d.province])) out.push(`${fid}: shelling order without a province`);
+    }
     for (const s of f.ships) if (!(s.hp > 0 && s.hp <= 100) || !SHIPS[s.type]) out.push(`${fid}: ship ${s.id} hp ${s.hp}`);
     let from = f.zone;
     for (const z of f.path) {
@@ -198,6 +212,7 @@ export function checkInvariants(sim: Sim): string[] {
   for (const nid of sim.world.nationIds) {
     const n = st.nations[nid];
     if (n.manpower < -1e-6) out.push(`${nid}: negative manpower`);
+    if (!(n.reserveLost >= 0)) out.push(`${nid}: reserve losses ${n.reserveLost}`);
     if (n.supplies < -1e-6) out.push(`${nid}: negative supplies`);
     if (n.warExhaustion < 0 || n.warExhaustion > 100) out.push(`${nid}: war exhaustion ${n.warExhaustion}`);
     if (n.alive && n.capital && st.provinces[n.capital].owner !== nid) out.push(`${nid}: capital not owned`);

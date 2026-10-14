@@ -103,14 +103,17 @@ describe('combat — live battles', () => {
       const loser = setup(sim);
       let ex = 0;
       let lost = 0;
+      let reserve = 0;
       for (let i = 0; i < 12 && sim.state.reports.length === 0; i++) {
         ex = sim.state.nations.b.warExhaustion;
         lost = sim.state.nations.b.stats.menLost;
+        reserve = reserveCap(sim, 'b');
         step(sim, { noAI: true });
       }
       expect(sim.state.reports.length).toBe(1);
       const men = sim.state.nations.b.stats.menLost - lost;
-      const expected = (men / Math.max(5000, reserveCap(sim, 'b'))) * C.war.exhaustionPerLossShare * Math.max(0.1, 1 + nationMods(sim, 'b').warExhaustion);
+      // the reserve shrinks as the men fall, so the share is at least that of the reserve before the week
+      const expected = (men / Math.max(5000, reserve)) * C.war.exhaustionPerLossShare * Math.max(0.1, 1 + nationMods(sim, 'b').warExhaustion);
       return { gained: sim.state.nations.b.warExhaustion - ex, expected, men, gone: !sim.state.armies[loser] };
     };
     // surrounded: the beaten army surrenders

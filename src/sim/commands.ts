@@ -28,16 +28,21 @@ import {
 import { choiceProblem, resolveEvent } from './events';
 import { cancelRecruits, disbandProblem, doDisband, doMerge, doSplit, mergeProblem, orderRecruit, recruitProblem, splitProblem } from './military';
 import { enterProblem, findPath, stationProblem } from './movement';
+import { airDropProblem, cancelAirDrop, launchAirDrop } from './airborne';
 import {
   buildShipProblem,
   cancelShip,
   disbandFleetProblem,
+  DUTY_LABELS,
+  fleetDutyProblem,
+  fleetEta,
   fleetOrderProblem,
   mergeFleets,
   mergeFleetsProblem,
   moveFleet,
   moveFleetProblem,
   removeFleet,
+  setFleetDuty,
   shipArmies,
   shipArmiesProblem,
   splitFleet,
@@ -64,8 +69,8 @@ import { applySettlement, counterOffer, evaluateSettlement, settlementProblem } 
 import { researchProblem } from './progression';
 import { cancelContract, cancelContractProblem, cleanTerms, contractProblem, offerContract, signContract } from './trade';
 import { serialize } from './save';
-import { nationName, notify, type Sim } from './state';
-import type { Command, CommandResult } from './types';
+import { nationName, notify, provName, type Sim } from './state';
+import type { Command, CommandResult, Proposal } from './types';
 import { answerCallToArms, applyPeace, declareWar, declareWarProblem, evaluatePeace, goalOptions, peaceProblem } from './war';
 
 function atSeaProblem(sim: Sim, fleet: string): string {
@@ -94,6 +99,7 @@ export function checkCommand(sim: Sim, cmd: Command): string | null {
       if (!st.provinces[cmd.dest]) return 'Unknown province.';
       if (a.battle) return 'The army is engaged in battle and cannot manoeuvre.';
       if (a.retreating) return 'The army is retreating and cannot take orders until it arrives.';
+      if (a.drop) return `The army is waiting at the airfield to be dropped on ${provName(sim, a.drop.target)}: call the drop off first.`;
       const from = cmd.append && a.path.length ? a.path[a.path.length - 1] : a.location;
       if (cmd.dest === from) return null;
       const ep = enterProblem(sim, cmd.nation, cmd.dest);
@@ -143,6 +149,12 @@ export function checkCommand(sim: Sim, cmd: Command): string | null {
       return moveFleetProblem(sim, cmd.nation, cmd.fleet, cmd.zone);
     case 'stopFleet':
       return fleetOrderProblem(sim, cmd.nation, cmd.fleet);
+    case 'fleetDuty':
+      return fleetDutyProblem(sim, cmd.nation, cmd.fleet, cmd.duty);
+    case 'airDrop':
+      return airDropProblem(sim, cmd.nation, cmd.army, cmd.target);
+    case 'cancelDrop':
+      return st.armies[cmd.army]?.nation === cmd.nation && st.armies[cmd.army].drop ? null : 'No airborne operation of this army to cancel.';
     case 'mergeFleets':
       return mergeFleetsProblem(sim, cmd.nation, cmd.fleets);
     case 'splitFleet':
@@ -337,7 +349,22 @@ function execute(sim: Sim, cmd: Command): CommandResult {
       const f = st.fleets[cmd.fleet];
       f.path = [];
       f.progress = 0;
+      if (f.duty) setFleetDuty(sim, f.id, null);
       return { ok: true };
+    }
+    case 'airDrop': {
+      launchAirDrop(sim, cmd.nation, cmd.army, cmd.target);
+      const a = st.armies[cmd.army];
+      return { ok: true, message: `${a.name} boards ${a.drop!.wings.length} transport wing${a.drop!.wings.length === 1 ? '' : 's'}: it is flown to ${sim.world.prov[cmd.target].name} in this week's air phase.` };
+    }
+    case 'cancelDrop':
+      cancelAirDrop(sim, cmd.army);
+      return { ok: true, message: 'Airborne operation called off.' };
+    case 'fleetDuty': {
+      setFleetDuty(sim, cmd.fleet, cmd.duty);
+      const f = st.fleets[cmd.fleet];
+      if (!cmd.duty) return { ok: true, message: `${f.name} is on station in ${sim.world.zones[f.zone].name}.` };
+      return { ok: true, message: `${f.name}: ${DUTY_LABELS[cmd.duty.kind].toLowerCase()}${f.path.length ? ` (${fleetEta(sim, f, f.path)} weeks under way)` : ''}.` };
     }
     case 'mergeFleets': {
       const f = mergeFleets(sim, cmd.fleets);
@@ -396,7 +423,7 @@ function execute(sim: Sim, cmd: Command): CommandResult {
       recallEnvoy(sim, cmd.nation, cmd.target);
       return { ok: true };
     case 'propose':
-      return proposeTreaty(sim, cmd.nation, cmd.target, cmd.treaty);
+      return proposeTreaty(sim, cmd.nation, cmd.target, cmd.treaty, cmd.reason);
     case 'cancelTreaty':
       cancelTreaty(sim, cmd.nation, cmd.target, cmd.treaty);
       return { ok: true };
@@ -497,6 +524,7 @@ function execute(sim: Sim, cmd: Command): CommandResult {
         answerCallToArms(sim, cmd.nation, p.war!, p.from, cmd.accept);
         return { ok: true };
       }
+      rememberAnswer(sim, p, cmd.accept);
       if (!cmd.accept) {
         addMemory(sim, p.from, cmd.nation, 'rebuffed', -5, 1);
         return { ok: true, message: p.kind === 'settlement' ? 'Settlement refused: the war goes on.' : 'Proposal declined.' };
@@ -596,8 +624,19 @@ export function weeklyProposals(sim: Sim): void {
   st.proposals = st.proposals.filter((p) => p.expires > st.tick);
   for (const p of expired) {
     if (p.kind === 'callToArms') answerCallToArms(sim, p.to, p.war!, p.from, true);
-    else notify(sim, p.from, 'low', 'proposal', `${nationName(sim, p.to)} did not answer our proposal.`);
+    else {
+      rememberAnswer(sim, p, false);
+      notify(sim, p.from, 'low', 'proposal', `${nationName(sim, p.to)} did not answer our proposal.`);
+    }
   }
+}
+
+/** The proposer remembers how its offer was answered (an unanswered offer counts as refused). */
+function rememberAnswer(sim: Sim, p: Proposal, accepted: boolean): void {
+  const ai = sim.state.nations[p.from]?.ai;
+  if (!ai) return;
+  if ((p.kind === 'peace' || p.kind === 'settlement') && p.war && ai.peace[p.war]) ai.peace[p.war].answer = accepted ? 'accepted' : 'rejected';
+  if (p.kind === 'alliance' || p.kind === 'nap' || p.kind === 'trade') ai.treatyAnswers[`${p.to}:${p.kind}`] = p.reason ? { tick: sim.state.tick, accepted, reason: p.reason } : { tick: sim.state.tick, accepted };
 }
 
 export { evaluateTreaty };

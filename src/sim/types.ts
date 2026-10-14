@@ -21,10 +21,10 @@ export type Tradeable = StrategicResource | 'food';
 export type ResourceKind = 'food' | StrategicResource;
 /** A province's deposit (one at most). */
 export type Resource = ResourceKind | null;
-export type UnitType = 'infantry' | 'cavalry' | 'artillery' | 'engineers' | 'armour';
-export type ProjectKind = 'dev' | 'infra' | 'fort' | 'charter' | 'settle' | 'factory' | 'port' | 'airfield';
+export type UnitType = 'infantry' | 'cavalry' | 'artillery' | 'engineers' | 'armour' | 'airborne';
+export type ProjectKind = 'dev' | 'infra' | 'fort' | 'charter' | 'settle' | 'factory' | 'port' | 'airfield' | 'flak';
 export type ShipType = 'transport' | 'screen' | 'cruiser' | 'capital' | 'submarine' | 'carrier';
-export type WingType = 'recon' | 'fighter' | 'attack' | 'bomber';
+export type WingType = 'recon' | 'fighter' | 'attack' | 'bomber' | 'transport';
 /** What an air wing does over its target area (land) or zone (sea). */
 export type AirMission = 'idle' | 'superiority' | 'support' | 'interdiction' | 'bombing' | 'naval' | 'recon';
 export type Personality = 'expansionist' | 'defensive' | 'commercial' | 'opportunist' | 'diplomat';
@@ -214,6 +214,8 @@ export interface ProvinceState {
   port: number;
   /** airfield level 0–2: bases for air wings */
   airfield: number;
+  /** anti-aircraft batteries 0–3 (format 7): fire at enemy aircraft over the province */
+  aa: number;
   /** ships under construction in this port */
   dock: ShipOrder[];
   /** air wings under construction at this airfield */
@@ -260,6 +262,32 @@ export interface Fleet {
   task: string | null;
   /** what the fleet did last week beyond sailing (bombardment, air attacks, raiding), for the interface */
   report?: FleetReport | null;
+  /** its standing order (format 7); none: on station, every duty it can */
+  duty?: FleetDuty | null;
+}
+
+/**
+ * A fleet's standing order (format 7). On station (no order) a fleet does every
+ * duty it can where it lies; an order sends it somewhere and puts its weight on
+ * one duty:
+ *   hold      stay; blockade and protect trade, no raiding or shelling
+ *   patrol    keep a zone: protect our trade there (×1.5) and fight its intruders
+ *   blockade  close a zone (×1.5 towards a blockade), no raiding or shelling
+ *   raid      prey on enemy trade in a zone (×1.5), no escort
+ *   escort    sail with another of our fleets and fight beside it
+ *   bombard   lie off a coast province and shell only it (battles and sieges there)
+ *   port      sail to a port and lie in harbour: repairs half as fast again, no duties
+ */
+export type FleetDutyKind = 'hold' | 'patrol' | 'blockade' | 'raid' | 'escort' | 'bombard' | 'port';
+export interface FleetDuty {
+  kind: FleetDutyKind;
+  /** patrol, blockade, raid: the zone; port: the port's zone (set when ordered) */
+  zone?: ZoneId | null;
+  /** bombard: the coast province shelled; port: the port */
+  province?: ProvinceId | null;
+  /** escort: the fleet escorted */
+  fleet?: FleetId | null;
+  since: number;
 }
 
 export interface FleetReport {
@@ -287,6 +315,8 @@ export interface AirWing {
   zone: ZoneId | null;
   /** last week's operations, for the interface (format 6) */
   report: WingReport | null;
+  /** its service so far (format 7): weeks flown, enemy aircraft downed and hull hit (summed), strength lost */
+  record?: { weeks: number; kills: number; hits: number; lost: number };
 }
 
 /** One week of a wing's operations, as the player is told it. */
@@ -343,6 +373,18 @@ export interface Army {
   landed?: number;
   /** standing order kept between marches */
   order?: ArmyOrder | null;
+  /** an airborne operation under way (format 7): flown to `target` by these transport wings in the air phase */
+  drop?: AirDrop | null;
+  /** tick it landed from the air (airborne landing penalty that week) */
+  dropped?: number;
+}
+
+/** An airborne operation: the army, at an airfield, is flown to a province and dropped there. */
+export interface AirDrop {
+  target: ProvinceId;
+  wings: WingId[];
+  /** tick it was ordered */
+  since: number;
 }
 
 /** Station: return to (and hold) this province whenever the army has nothing else to do. */
@@ -573,6 +615,8 @@ export interface Proposal {
   bloc?: string;
   /** a trade contract's terms */
   contract?: ContractTerms;
+  /** why the proposer offers a treaty, in its own words */
+  reason?: string;
 }
 
 /** The terms of a trade contract, as proposed (format 5). */
@@ -673,8 +717,26 @@ export interface AIState {
   rally: ProvinceId | null;
   lastPeaceTry: Record<string, number>;
   lastProposal: Record<string, number>;
+  /** per war: the last peace offer made, how it was answered, and the war's recent outlook (format 7) */
+  peace: Record<WarId, PeaceMemory>;
+  /** answers our treaty proposals got, by `${realm}:${type}` (format 7) */
+  treatyAnswers: Record<string, { tick: number; accepted: boolean; reason?: string }>;
   /** a planned landing: gather a force at `port`, carry it to `target` */
   invasion?: { target: ProvinceId; port: ProvinceId; since: number } | null;
+}
+
+/** What an AI realm remembers of making peace in one war. */
+export interface PeaceMemory {
+  /** the last offer: when, what kind, its value in war-score points and our standing then */
+  tick: number;
+  mode: 'white' | 'concede' | 'demand' | 'settlement' | null;
+  value: number;
+  standing: number;
+  answer: 'pending' | 'rejected' | 'accepted' | null;
+  /** the outlook each month, newest last (at most four): the war's momentum */
+  outlooks: number[];
+  /** when it next reconsiders the war */
+  next: number;
 }
 
 export interface NationStats {
@@ -708,6 +770,8 @@ export interface NationStats {
   navalStrikeHits: number;
   bombardWeeks: number;
   raidWeeks: number;
+  /** airborne operations flown (format 7; older saves: absent) */
+  airborneDrops?: number;
   /** diplomacy and focus (system-usage counts) */
   focusesDone: number;
   /** settlements dictated as the winning war leader */
@@ -745,6 +809,8 @@ export interface NationState {
   /** food: the provisions stockpile armies draw on (shown as "Food") */
   supplies: number;
   manpower: number;
+  /** men fit for service lost for good in war and not yet made up by new cohorts (format 7) */
+  reserveLost: number;
   /** strategic resource stockpiles */
   stock: Record<StrategicResource, number>;
   /** equipment produced by industry, spent on regiments and replacements */
@@ -918,6 +984,9 @@ export type Command =
   | { type: 'cancelShip'; nation: NationId; province: ProvinceId }
   | { type: 'moveFleet'; nation: NationId; fleet: FleetId; zone: ZoneId }
   | { type: 'stopFleet'; nation: NationId; fleet: FleetId }
+  | { type: 'fleetDuty'; nation: NationId; fleet: FleetId; duty: Omit<FleetDuty, 'since'> | null }
+  | { type: 'airDrop'; nation: NationId; army: ArmyId; target: ProvinceId }
+  | { type: 'cancelDrop'; nation: NationId; army: ArmyId }
   | { type: 'mergeFleets'; nation: NationId; fleets: FleetId[] }
   | { type: 'splitFleet'; nation: NationId; fleet: FleetId; ships: string[] }
   | { type: 'disbandFleet'; nation: NationId; fleet: FleetId }
@@ -936,7 +1005,7 @@ export type Command =
   | { type: 'focus'; nation: NationId; focus: FocusId }
   | { type: 'envoy'; nation: NationId; target: NationId }
   | { type: 'recallEnvoy'; nation: NationId; target: NationId }
-  | { type: 'propose'; nation: NationId; target: NationId; treaty: TreatyType }
+  | { type: 'propose'; nation: NationId; target: NationId; treaty: TreatyType; reason?: string }
   | { type: 'cancelTreaty'; nation: NationId; target: NationId; treaty: TreatyType }
   | { type: 'fabricate'; nation: NationId; province: ProvinceId }
   | { type: 'declareWar'; nation: NationId; target: NationId; goal: WarGoal }

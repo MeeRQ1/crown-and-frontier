@@ -9,7 +9,7 @@ import type { FocusTag } from '../data/focus';
 import { TECH_LIST } from '../data/techs';
 import { activeProjects, buildProblem, buildSlots, projectCost } from '../construction';
 import { addMemory, claimsOn, coalitionAgainst, envoySlots, evaluateTreaty, fabricateProblem, memoriesOf, opinion, sharedThreat, treatyProblem } from '../diplomacy';
-import { factoryCount, grossIncome, materielCap, poolCap, reserveCap, resourcePlan, totalDev, tradeValue } from '../economy';
+import { envoyCost, factoryCount, grossIncome, materielCap, poolCap, reserveCap, resourcePlan, totalDev, tradeValue } from '../economy';
 import { memoWeek } from '../index';
 import { overextension } from '../integration';
 import { nationPotential, nationStrength } from '../military';
@@ -42,7 +42,8 @@ import { fleetsOf } from '../naval';
 import { warReach } from '../reach';
 import type { NationId, PeaceTerms, ProjectKind, ProvinceId, TreatyType, VictoryPath, War, WarGoal } from '../types';
 import { VICTORY_MONTHS, victoryProgress } from '../victory';
-import { canJoin, evaluatePeace, goalOptions, provinceCost, scoreFor, termsCost } from '../war';
+import { canJoin, evaluatePeace, goalOptions, termsCost } from '../war';
+import { assessWar, warStanding } from '../assess';
 import { buildSettlement, counterOffer, describeDemand, evaluateSettlement, settlementCost } from '../settlement';
 import { aiRand, diffOf, issue } from './common';
 import { coastalShare, navalStrategy, planInvasion } from './navy';
@@ -117,7 +118,16 @@ function planBudget(sim: Sim, nid: NationId): void {
   const supplyCap = (supplyProd * 1.15) / AVG_SUPPLY;
   let target = Math.floor(Math.min(goldCap, mpCap, supplyCap));
   if (n.treasury < 0) target = Math.min(target, regimentCount(sim, nid) - 1);
-  n.ai.armyTarget = Math.max(3, target);
+  target = Math.max(3, target);
+  if (Math.abs(target - n.ai.armyTarget) >= Math.max(2, n.ai.armyTarget * 0.15)) {
+    // a marked change, with the binding limit, for the decision log
+    const bound = n.treasury < 0 ? 'debt' : goldCap <= mpCap && goldCap <= supplyCap ? `crowns (${Math.round(share * 100)}% of ${gross.toFixed(0)} a month)` : mpCap <= supplyCap ? 'men (three quarters of the reserve)' : 'supplies';
+    diag(sim, nid, 'strategic', `Army target ${n.ai.armyTarget} → ${target} regiments, limited by ${bound}`, [
+      `Crowns allow ${Math.floor(goldCap)}, men ${Math.floor(mpCap)}, supplies ${Math.floor(supplyCap)}`,
+      war ? 'At war' : threat ? `Threatened by ${nationName(sim, threat)}` : 'At peace',
+    ]);
+  }
+  n.ai.armyTarget = target;
   // research funding follows the surplus
   const net = n.lastMonth.net;
   const nothingLeft = !n.research.current && !TECH_LIST.some((t) => techAvailable(sim, nid, t.id));
@@ -257,6 +267,21 @@ function planConstruction(sim: Sim, nid: NationId): void {
     const coastShare = owned.filter((q) => sim.world.provZones[q]).length / Math.max(1, owned.length);
     const fields = owned.filter((q) => st.provinces[q].airfield > 0).length + building('airfield');
     const wantFields = n.research.done.includes('aviation') ? Math.min(3, 1 + Math.floor(owned.length / 14)) : 0;
+    // anti-aircraft batteries where enemy aircraft fly over us, or could: factories, airfields, the capital
+    const airDefence = n.research.done.includes('air_defence');
+    let enemyStrike = 0;
+    const overUs = new Set<ProvinceId>();
+    if (airDefence) {
+      for (const id of Object.keys(st.wings)) {
+        const w = st.wings[id];
+        if (!atWar(sim, nid, w.nation)) continue;
+        if (w.type === 'bomber' || w.type === 'attack') enemyStrike++;
+        if (w.target && (w.mission === 'bombing' || w.mission === 'interdiction' || w.mission === 'support')) {
+          overUs.add(w.target);
+          if (w.mission !== 'bombing') for (const q of sim.world.prov[w.target].neighbors) overUs.add(q);
+        }
+      }
+    }
     for (const pid of owned) {
       const pr = st.provinces[pid];
       if (pr.controller !== nid || pr.project) continue;
@@ -266,7 +291,8 @@ function planConstruction(sim: Sim, nid: NationId): void {
         const o = st.provinces[nb].owner;
         return !!o && o !== nid && (atWar(sim, nid, o) || opinion(sim, o, nid) < -10 || o === threat);
       });
-      for (const kind of ['dev', 'infra', 'factory', 'fort', 'charter', 'port', 'airfield'] as ProjectKind[]) {
+      for (const kind of ['dev', 'infra', 'factory', 'fort', 'charter', 'port', 'airfield', 'flak'] as ProjectKind[]) {
+        if (kind === 'flak' && (!airDefence || (!enemyStrike && !overUs.has(pid)))) continue;
         if (kind === 'port' && (!sim.world.provZones[pid] || (ports > 0 && !(pr.port > 0 && pr.port < 2 && coastShare > 0.4)))) continue;
         if (kind === 'airfield' && (fields >= wantFields || pr.airfield > 0)) continue;
         if (buildProblem(sim, nid, pid, kind, known)) continue;
@@ -291,6 +317,12 @@ function planConstruction(sim: Sim, nid: NationId): void {
         }
         if (kind === 'port') v = ports === 0 ? ((3 * (pr.dev + 2)) / cost) * 100 : ((0.6 * coastShare) / cost) * 100;
         if (kind === 'airfield') v = ((2.5 * (n.capital === pid ? 2 : 1) * (border ? 1.4 : 1) * (pr.dev + 2) * 0.3) / cost) * 100;
+        if (kind === 'flak') {
+          // worth guarding: industry, airfields, the capital; more so under the bombs now
+          const worth = pr.factories * 1.5 + (pr.airfield > 0 ? 3 : 0) + (n.capital === pid ? 3 : 0) + pr.dev * 0.2;
+          const pressure = overUs.has(pid) ? 3 : Math.min(1.5, enemyStrike * 0.3);
+          v = ((worth * pressure * (1 - (pr.aa ?? 0) / (C.construction.flakMax + 1))) / cost) * 100;
+        }
         if (kind === 'charter') v = pr.integration < 60 ? (((60 - pr.integration) / 60) * (pr.dev + 2) * 0.6 / cost) * 100 * (n.ai.goal.victory === 'territorial' ? 1.3 : 1) : 0;
         if (kind === 'fort') {
           if (!hostileBorder || forts >= 1 + (owned.length * p.fortLove) / 4 + (n.treasury > grossIncome(n.lastMonth) * 12 ? 2 : 0)) continue;
@@ -319,24 +351,65 @@ function planConstruction(sim: Sim, nid: NationId): void {
 
 // ───────────────────────────── Diplomacy ────────────────────────────────────
 
-function wantsTreaty(sim: Sim, nid: NationId, other: NationId, type: TreatyType): boolean {
+/**
+ * Why a realm wants a treaty with another, in words it can give them, or null.
+ *   alliance  a realm both have reason to fear; an enemy both are fighting; a threat
+ *             to us that they stand next to (for realms that seek allies); a lasting
+ *             friendship (for realms seeking diplomatic leadership)
+ *   nap       the realm that threatens us; a stronger neighbour (for cautious realms);
+ *             a neighbour whose border should stay quiet while our armies are needed
+ *             against someone else
+ *   trade     the commerce it would bring
+ * The recipient judges the treaty by its own interests (diplomacy.evaluateTreaty).
+ */
+export function treatyMotive(sim: Sim, nid: NationId, other: NationId, type: TreatyType): string | null {
+  // asked for every pair of realms each month (proposals, envoys): once a week, and never for a treaty already signed
+  if (hasTreaty(sim, type, nid, other)) return null;
+  return memoWeek(sim, 'treatyMotive', `${nid}|${other}|${type}`, () => motive(sim, nid, other, type));
+}
+
+function motive(sim: Sim, nid: NationId, other: NationId, type: TreatyType): string | null {
   const st = sim.state;
   const n = st.nations[nid];
   const p = pers(sim, nid);
-  if (n.ai.warPlan?.target === other) return false;
-  if (type === 'trade') return p.treaty.trade >= 0.6 && memoWeek(sim, 'tradeValue', `${nid}|${other}`, () => tradeValue(sim, nid, other)) > 1.5;
+  if (n.ai.warPlan?.target === other) return null;
+  if (type === 'trade') {
+    if (p.treaty.trade < 0.6) return null;
+    const v = memoWeek(sim, 'tradeValue', `${nid}|${other}`, () => tradeValue(sim, nid, other));
+    return v > 1.5 ? `trade between us would bring us about ${v.toFixed(1)} crowns a month` : null;
+  }
   if (type === 'alliance') {
-    if (alliesOf(sim, nid).length >= 3) return false;
-    if (nationDistance(sim, nid, other) > 2) return false;
-    return !!sharedThreat(sim, nid, other) || (!!isThreatened(sim, nid) && p.treaty.alliance >= 0.9) || (n.ai.goal.victory === 'diplomatic' && opinion(sim, nid, other) > 20);
+    if (alliesOf(sim, nid).length >= (p.treaty.alliance >= 1.1 ? 4 : 3)) return null;
+    if (nationDistance(sim, nid, other) > 2) return null;
+    const shared = sharedThreat(sim, nid, other);
+    if (shared) return `we both have reason to fear ${nationName(sim, shared)}`;
+    const common = enemiesOf(sim, nid).find((e) => atWar(sim, other, e));
+    if (common) return `we are both at war with ${nationName(sim, common)}`;
+    const threat = isThreatened(sim, nid);
+    if (threat && threat !== other && p.treaty.alliance >= 0.9 && nationDistance(sim, other, threat) <= 1) return `${nationName(sim, threat)} threatens us, and you stand next to it`;
+    if (n.ai.goal.victory === 'diplomatic' && opinion(sim, nid, other) > 20) return 'our friendship has lasted and should be bound';
+    return null;
   }
   const threat = isThreatened(sim, nid);
-  return threat === other || (p.treaty.nap >= 1.2 && borders(sim, nid, other) && nationStrength(sim, other) > nationStrength(sim, nid) * 1.2);
+  if (threat === other) return 'your strength on our border alarms us, and a pact would end the danger';
+  if (!borders(sim, nid, other)) return null;
+  const mine = Math.max(0.5, nationStrength(sim, nid));
+  const theirs = nationStrength(sim, other);
+  if (p.treaty.nap >= 1.2 && theirs > mine * 1.2) return 'you are the stronger neighbour, and a pact keeps the peace between us';
+  // our armies are needed elsewhere: quiet the border with a neighbour that could strike
+  const busy = n.ai.warPlan?.target ?? enemiesOf(sim, nid)[0] ?? null;
+  if (busy && busy !== other && theirs >= mine * 0.4 && !hasTreaty(sim, 'alliance', other, busy) && !atWar(sim, other, busy)) return `our armies are needed against ${nationName(sim, busy)}, and a pact keeps this border quiet`;
+  return null;
 }
 
-function diplomacy(sim: Sim, nid: NationId): void {
+function wantsTreaty(sim: Sim, nid: NationId, other: NationId, type: TreatyType): boolean {
+  return treatyMotive(sim, nid, other, type) !== null;
+}
+
+export function diplomacy(sim: Sim, nid: NationId): void {
   const st = sim.state;
   const n = st.nations[nid];
+  const p = pers(sim, nid);
   const others = aliveNations(sim).filter((o) => o !== nid);
   // proposals: at most one per month
   const order: TreatyType[] = n.ai.goal.victory === 'diplomatic' ? ['trade', 'alliance', 'nap'] : ['alliance', 'nap', 'trade'];
@@ -344,29 +417,53 @@ function diplomacy(sim: Sim, nid: NationId): void {
   for (const type of order) {
     if (proposed) break;
     for (const o of others) {
-      if (treatyProblem(sim, nid, o, type) || !wantsTreaty(sim, nid, o, type)) continue;
-      const last = n.ai.lastProposal[`${o}:${type}`] ?? -1e9;
+      if (treatyProblem(sim, nid, o, type)) continue;
+      const key = `${o}:${type}`;
+      const last = n.ai.lastProposal[key] ?? -1e9;
       const isPlayer = st.nations[o].isPlayer;
       if (st.tick - last < months(isPlayer ? 18 : 6)) continue;
+      const reason = treatyMotive(sim, nid, o, type);
+      if (!reason) continue;
+      // a refusal is remembered: the same request for the same reason waits a year or
+      // two (by temperament); a new reason may be put after the usual pause
+      const ans = n.ai.treatyAnswers[key];
+      if (ans && !ans.accepted && ans.reason === reason && st.tick - ans.tick < months((isPlayer ? 24 : 12) * p.patience)) continue;
       if (isPlayer) {
-        // do not flood a human: one open proposal at a time, at most one every 3 months
+        // do not flood a human: nothing in the first three months of a campaign (let them
+        // find their feet), then one open proposal at a time, at most one every 3 months
+        if (st.tick < months(3)) continue;
         const inbox = st.nations[o].ai.lastProposal['__incoming'] ?? -1e9;
         if (st.proposals.some((x) => x.to === o) || st.tick - inbox < months(3)) continue;
-        st.nations[o].ai.lastProposal['__incoming'] = st.tick;
       }
-      // mutual interest: would we accept the same from them?
+      // our own interest, by the rules the recipient applies
       if (!evaluateTreaty(sim, o, nid, type).accept) continue;
-      if (!isPlayer && !evaluateTreaty(sim, nid, o, type).accept) continue;
-      n.ai.lastProposal[`${o}:${type}`] = st.tick;
-      const r = issue(sim, { type: 'propose', nation: nid, target: o, treaty: type });
-      diag(sim, nid, 'strategic', `Proposed ${type} to ${nationName(sim, o)}: ${r.ok ? r.message ?? 'ok' : 'declined'}`);
+      n.ai.lastProposal[key] = st.tick;
+      if (!isPlayer) {
+        // sounded out through our ministers before a formal offer
+        const ev = evaluateTreaty(sim, nid, o, type);
+        if (!ev.accept) {
+          n.ai.treatyAnswers[key] = { tick: st.tick, accepted: false, reason };
+          if (type !== 'trade') {
+            const top = [...ev.reasons].sort((a, b) => a.value - b.value).slice(0, 3).map((r) => `${r.label}: ${r.value}`);
+            diag(sim, nid, 'strategic', `Sounded out ${nationName(sim, o)} on a ${type} (${reason}): they would refuse`, top);
+          }
+          continue;
+        }
+      } else st.nations[o].ai.lastProposal['__incoming'] = st.tick;
+      const r = issue(sim, { type: 'propose', nation: nid, target: o, treaty: type, reason });
+      if (!isPlayer) n.ai.treatyAnswers[key] = { tick: st.tick, accepted: r.ok, reason };
+      diag(sim, nid, 'strategic', `Proposed ${type} to ${nationName(sim, o)} (${reason}): ${r.ok ? r.message ?? 'ok' : 'declined'}`);
       proposed = true;
       break;
     }
   }
+  reviewAlliances(sim, nid);
   influencePolicy(sim, nid);
   // envoys toward nations we want as partners, or into our sphere
-  const free = envoySlots(sim, nid) - st.envoys.filter((e) => e.from === nid).length;
+  // envoys only as many as the realm can keep: about a tenth of its income
+  const sent = st.envoys.filter((e) => e.from === nid).length;
+  const affordable = Math.max(n.lastMonth.net > 0 ? 1 : 0, Math.floor((0.1 * grossIncome(n.lastMonth)) / envoyCost(sim, nid)));
+  const free = Math.min(envoySlots(sim, nid), affordable) - sent;
   const sphereMinded = n.ai.goal.victory === 'diplomatic' || pers(sim, nid).id === 'diplomat' || pers(sim, nid).id === 'commercial';
   const myDev = totalDev(sim, nid);
   if (free > 0 && n.treasury > 20) {
@@ -404,6 +501,27 @@ function diplomacy(sim: Sim, nid: NationId): void {
       const r = issue(sim, { type: 'coalitionWar', nation: nid, target: c.target });
       diag(sim, nid, 'strategic', `Coalition war against ${nationName(sim, c.target)}: ${r.ok ? 'declared' : 'failed'} (strength ${ours.toFixed(1)} vs ${theirs.toFixed(1)})`);
     }
+  }
+}
+
+/**
+ * Once a year a realm reviews its alliances: it leaves one whose partner it has come
+ * to fear, who claims its land, or with whom relations have soured, unless they share
+ * a threat or fight a war together. Leaving costs trust (diplomacy.cancelTreaty).
+ */
+function reviewAlliances(sim: Sim, nid: NationId): void {
+  const st = sim.state;
+  if (dateOf(sim).month !== 6) return;
+  for (const a of alliesOf(sim, nid)) {
+    if (warsOf(sim, nid).some((w) => w.attackers.includes(a) || w.defenders.includes(a))) continue;
+    if (sharedThreat(sim, nid, a)) continue;
+    const why: string[] = [];
+    if ((st.alarm[nid]?.[a] ?? 0) >= 40) why.push(`we have come to fear ${nationName(sim, a)}`);
+    if (claimsOn(sim, a, nid).length) why.push('they claim our land');
+    if (opinion(sim, nid, a) < -25) why.push(`relations have soured (${opinion(sim, nid, a)})`);
+    if (!why.length) continue;
+    const r = issue(sim, { type: 'cancelTreaty', nation: nid, target: a, treaty: 'alliance' });
+    diag(sim, nid, 'strategic', `Left the alliance with ${nationName(sim, a)}: ${why.join('; ')}${r.ok ? '' : ' (failed)'}`, ['Rejected: keeping an ally we no longer trust (no shared threat, no war together)']);
   }
 }
 
@@ -781,137 +899,204 @@ function issueCheck(sim: Sim, nid: NationId, t: NationId, goal: WarGoal): boolea
 
 // ───────────────────────────── Peace ────────────────────────────────────────
 
-function occupiedBy(sim: Sim, owner: NationId, side: NationId[]): ProvinceId[] {
-  return ownedProvinces(sim, owner).filter((pid) => {
-    const c = sim.state.provinces[pid].controller;
-    return !!c && side.includes(c);
-  });
-}
-
-function considerPeace(sim: Sim, nid: NationId): void {
+/**
+ * Peace, war by war, reconsidered once a month: the realm weighs where it stands
+ * and where the war is heading (assess.ts) and compares its options: fight on, a
+ * white peace, giving up land, or demanding terms (a settlement when it leads the
+ * winners). It offers the option the other side could plausibly take, remembers
+ * the offer and its answer, and does not repeat a refused offer until its standing
+ * has moved or its patience runs out; a refused concession is raised next time.
+ * Every decision is logged with the assessment and the options it set aside.
+ */
+export function considerPeace(sim: Sim, nid: NationId): void {
   const st = sim.state;
   const n = st.nations[nid];
   const p = pers(sim, nid);
   for (const w of warsOf(sim, nid)) {
-    const last = n.ai.lastPeaceTry[w.id] ?? -1e9;
-    if (st.tick - last < months(3)) continue;
+    const a = assessWar(sim, w.id, nid);
+    if (!a) continue;
+    const mem = (n.ai.peace[w.id] ??= { tick: -1e9, mode: null, value: 0, standing: 0, answer: null, outlooks: [], next: 0 });
+    if (st.tick < mem.next) continue;
+    mem.next = st.tick + months(1);
+    mem.outlooks = [...mem.outlooks, Math.round(a.outlook)].slice(-4);
+    if (st.proposals.some((x) => (x.kind === 'peace' || x.kind === 'settlement') && x.war === w.id && (x.from === nid || x.to === nid))) continue;
     const lead = w.attackerLead === nid || w.defenderLead === nid;
-    const myAdv = scoreFor(w, nid);
+    const other = a.enemyLead;
+    const mySide = a.ourSide;
+    const standing = warStanding(a);
     const age = (st.tick - w.startTick) / 4;
-    const other = lead ? (w.attackerLead === nid ? w.defenderLead : w.attackerLead) : w.attackers.includes(nid) ? w.defenderLead : w.attackerLead;
-    const mySide = w.attackers.includes(nid) ? w.attackers : w.defenders;
-    const tryPeace = (terms: PeaceTerms, why: string) => {
-      n.ai.lastPeaceTry[w.id] = st.tick;
-      const target = st.nations[other];
-      if (target.isPlayer) {
-        if (st.proposals.some((x) => x.kind === 'peace' && x.war === w.id)) return false;
-        const r = issue(sim, { type: 'peace', nation: nid, war: w.id, with: other, terms });
-        diag(sim, nid, 'strategic', `Offered peace to ${nationName(sim, other)} (${why}): ${r.ok ? 'sent' : 'invalid'}`);
-        return r.ok;
+    const momentum = mem.outlooks.length >= 3 ? (mem.outlooks[mem.outlooks.length - 1] - mem.outlooks[0]) / (mem.outlooks.length - 1) : 0;
+    const shifted = Math.abs(standing - mem.standing) >= 10;
+    const waited = (st.tick - mem.tick) / 4 >= 6 * p.patience;
+    const refused = mem.answer === 'rejected';
+    const trace = [...a.reasons, `Standing ${Math.round(standing)} (leverage ${Math.round(a.leverage)}, outlook ${Math.round(a.outlook)}, momentum ${momentum.toFixed(1)}/month)`];
+    const decide = (summary: string, extra: string[] = []) => diag(sim, nid, 'strategic', summary, [...trace, ...extra]);
+    const losing = a.outlook <= -20 || standing <= -25;
+    const winning = a.outlook >= 20 && standing >= 15;
+
+    // ── winning: settle when the war has given what it can, before total conquest
+    if (winning) {
+      if (!lead) continue; // an ally on the winning side leaves the spoils to the leader's settlement
+      const goalHeld = w.goal.provinces.length > 0 && w.goal.provinces.every((pid) => mySide.includes(st.provinces[pid].controller ?? ''));
+      const collapse = a.landHeld >= 0.5 || a.enemyForces < Math.max(1, a.forces) * 0.15;
+      const elsewhere = warsOf(sim, nid).length > 1 || (!!isThreatened(sim, nid) && isThreatened(sim, nid) !== other);
+      const tired = a.exhaustion >= 45 * p.patience;
+      const stalled = mem.outlooks.length >= 3 && momentum <= 1 && age >= 6;
+      const why = [goalHeld && 'our war goals are held', collapse && 'the enemy is close to collapse', elsewhere && 'another threat needs our armies', tired && 'our own exhaustion', stalled && 'the advance has stalled'].filter(Boolean) as string[];
+      if (!why.length) {
+        if (mem.tick < 0 || st.tick - mem.tick >= months(6)) decide(`Pressing on against ${nationName(sim, other)}: winning and still advancing`, ['Rejected: a settlement now (nothing yet makes stopping better than advancing)']);
+        continue;
       }
-      const ev = evaluatePeace(sim, w.id, nid, other, terms);
-      if (!ev.accept) {
-        diag(sim, nid, 'strategic', `Peace ${terms.mode} to ${nationName(sim, other)} would be refused (${Math.round(ev.score)})`);
-        return false;
-      }
-      const r = issue(sim, { type: 'peace', nation: nid, war: w.id, with: other, terms });
-      diag(sim, nid, 'strategic', `Peace with ${nationName(sim, other)} (${why}): ${r.ok ? 'agreed' : 'failed'}`);
-      return r.ok;
-    };
-    if (myAdv >= 15 && lead) {
-      // winning as the war leader: a settlement for us and our allies, shared by contribution
-      if (trySettlement(sim, nid, w.id, other, myAdv)) return;
+      if (refused && !shifted && !waited) continue;
+      // a refused settlement comes back more moderate unless our position improved
+      const scale = refused && !shifted ? 0.75 : 1;
+      trySettlement(sim, nid, w.id, other, standing, scale, `winning (${why.join(', ')})`, trace);
       continue;
     }
-    if (myAdv >= 15 && !lead && n.warExhaustion < 30) {
-      // an ally on the winning side leaves the spoils to the settlement
-      continue;
-    }
-    if (myAdv >= 15) {
-      // winning: demand occupied land, war-goal provinces first
-      const occ = occupiedBy(sim, other, mySide);
-      const goalFirst = [...occ].sort((a, b) => {
-        const ga = w.goal.provinces.includes(a) ? 1 : 0;
-        const gb = w.goal.provinces.includes(b) ? 1 : 0;
-        return gb - ga || st.provinces[b].dev - st.provinces[a].dev || (a < b ? -1 : 1);
-      });
-      const recvSide = mySide;
-      const budget = myAdv * 0.9 + st.nations[other].warExhaustion * 0.3 - 3;
-      const provs: ProvinceId[] = [];
-      let cost = 0;
-      // restraint: large annexations alarm everyone
-      const worried = aliveNations(sim).filter((o) => (st.alarm[o]?.[nid] ?? 0) >= 30).length;
-      const maxProvs = worried >= 2 ? 2 : 3;
-      for (const pid of goalFirst) {
-        if (provs.length >= maxProvs) break;
-        const c = provinceCost(sim, other, recvSide, pid);
-        if (cost + c > budget) continue;
-        provs.push(pid);
-        cost += c;
-      }
-      const gold = Math.max(0, Math.min(Math.floor(Math.max(0, st.nations[other].treasury) * 0.5), Math.floor((budget - cost) * C.war.goldPerPoint)));
-      if (provs.length || gold >= 50) {
-        const terms: PeaceTerms = { mode: 'demand', provinces: provs, gold: provs.length ? Math.min(gold, 200) : gold };
-        if (lead || other === w.attackerLead || other === w.defenderLead) if (tryPeace(terms, `winning, score ${Math.round(myAdv)}`)) return;
-      }
-      continue;
-    }
-    const tired = n.warExhaustion > 45 || (age > 36 && myAdv < 10) || (!lead && (n.warExhaustion > 30 || myAdv < -10));
-    if (myAdv <= -25 || tired) {
-      if (tryPeace({ mode: 'white', provinces: [], gold: 0 }, `losing/tired, score ${Math.round(myAdv)}`)) return;
-      if (myAdv <= -35 && lead) {
-        // concede occupied land to end a losing war
-        const theirSide = w.attackers.includes(nid) ? w.defenders : w.attackers;
-        const lost = occupiedBy(sim, nid, theirSide).filter((pid) => pid !== n.capital).sort((a, b) => st.provinces[a].dev - st.provinces[b].dev || (a < b ? -1 : 1));
-        const provs: ProvinceId[] = [];
-        let cost = 0;
-        const want = -myAdv * 0.75 + p.stubborn * -0.2;
-        for (const pid of lost) {
-          if (cost >= want) break;
-          provs.push(pid);
-          cost = termsCost(sim, w, nid, other, { mode: 'concede', provinces: provs, gold: 0 });
+
+    // ── losing: concede land if the war cannot be turned, fight on if it can
+    if (losing) {
+      const recoverable = a.lost.length > 0 && a.recovery >= 0.55 && a.exhaustion < 70 * p.patience && !(a.capitalLost && a.recovery < 0.7);
+      const holding = a.lost.length === 0 && a.outlook > -35 && a.exhaustion < 50;
+      if (recoverable || holding) {
+        if (st.tick - mem.tick >= months(6)) {
+          decide(`Fighting on against ${nationName(sim, other)}: ${recoverable ? 'the lost land can be retaken' : 'we still hold our land'}`, ['Rejected: conceding land while the war can still be turned']);
+          mem.tick = st.tick;
+          mem.standing = standing;
         }
-        if (provs.length) tryPeace({ mode: 'concede', provinces: provs, gold: 0 }, 'conceding to end a lost war');
+        continue;
       }
+      if (!lead && other !== w.attackerLead && other !== w.defenderLead) continue;
+      // what it would take: our deficit, more when exhausted, less for the stubborn
+      let needed = Math.max(5, (-standing * 0.6) / p.risk + (a.exhaustion > 60 ? 10 : 0) - p.stubborn);
+      if (refused && mem.mode === 'concede' && !shifted) needed = Math.max(needed, mem.value * 1.35);
+      const lostLand = a.lost.filter((pid) => st.provinces[pid].owner === nid && pid !== n.capital).sort((x, y) => st.provinces[x].dev - st.provinces[y].dev || (x < y ? -1 : 1));
+      const capital = n.capital && a.lost.includes(n.capital) && a.exhaustion >= 85 ? [n.capital] : [];
+      const provinces: ProvinceId[] = [];
+      let value = 0;
+      for (const pid of [...lostLand, ...capital]) {
+        if (value >= needed) break;
+        provinces.push(pid);
+        value = termsCost(sim, w, nid, other, { mode: 'concede', provinces, gold: 0 });
+      }
+      let gold = 0;
+      if (value < needed) {
+        gold = Math.min(Math.floor(Math.max(0, n.treasury) * 0.3), Math.ceil((needed - value) * C.war.goldPerPoint));
+        if (gold < 20) gold = 0;
+        value = termsCost(sim, w, nid, other, { mode: 'concede', provinces, gold });
+      }
+      if (!provinces.length && !gold) {
+        // nothing of ours left to give (only the capital, or nothing occupied, and an empty
+        // treasury): ask for a white peace now and then; the enemy decides
+        if (mem.mode === 'white' && (refused || mem.answer === 'pending') && !shifted && !waited) {
+          if (st.tick - mem.tick >= months(6)) {
+            decide(`Holding out against ${nationName(sim, other)}: nothing left to concede, and our white peace was refused`, ['Rejected: repeating the same offer']);
+            mem.tick = st.tick;
+          }
+          continue;
+        }
+        offerPeace(sim, nid, w.id, other, { mode: 'white', provinces: [], gold: 0 }, 'nothing left to concede but the capital: asking for a white peace', standing, 0, trace, ['Rejected: ceding the capital (not yet exhausted enough to give up the realm)', 'Rejected: paying (the treasury is empty)']);
+        continue;
+      }
+      if (refused && mem.mode === 'concede' && value <= mem.value * 1.05 && !waited) {
+        decide(`Holding out against ${nationName(sim, other)}: our best concession (${value}) was already refused`, ['Rejected: repeating the same offer']);
+        mem.tick = st.tick;
+        mem.standing = standing;
+        continue;
+      }
+      const terms: PeaceTerms = { mode: 'concede', provinces, gold };
+      const desc = `${provinces.map((x) => provName(sim, x)).join(', ') || 'no land'}${gold ? ` and ${gold} crowns` : ''}`;
+      offerPeace(sim, nid, w.id, other, terms, `conceding ${desc} to end a war we cannot turn`, standing, value, trace, ['Rejected: fighting on (the lost land cannot be retaken)', 'Rejected: a white peace, which a winning enemy would refuse']);
+      continue;
+    }
+
+    // ── stalemate: a white peace once both sides are worn down
+    const long = age >= 18 * p.patience;
+    if ((long && a.exhaustion >= 30 && a.enemyExhaustion >= 25) || a.exhaustion >= 70) {
+      if (refused && mem.mode === 'white' && !shifted && !waited) continue;
+      if (!lead && other !== w.attackerLead && other !== w.defenderLead) continue;
+      offerPeace(sim, nid, w.id, other, { mode: 'white', provinces: [], gold: 0 }, `a stalemate: ${long ? `${Math.round(age)} months of war` : 'exhaustion'}, neither side gaining`, standing, 0, trace, ['Rejected: demanding terms (no leverage)', 'Rejected: conceding land (the enemy cannot take it)']);
     }
   }
+}
+
+/** Sends (to a player) or settles (with an AI) a peace offer, and remembers it and its answer. */
+function offerPeace(sim: Sim, nid: NationId, warId: string, other: NationId, terms: PeaceTerms, why: string, standing: number, value: number, trace: string[], rejected: string[]): boolean {
+  const st = sim.state;
+  const n = st.nations[nid];
+  const mem = n.ai.peace[warId];
+  n.ai.lastPeaceTry[warId] = st.tick;
+  mem.tick = st.tick;
+  mem.mode = terms.mode;
+  mem.value = value;
+  mem.standing = standing;
+  const target = st.nations[other];
+  if (target.isPlayer) {
+    const r = issue(sim, { type: 'peace', nation: nid, war: warId, with: other, terms });
+    mem.answer = r.ok ? 'pending' : null;
+    // how the offer looks from their side, by what can be seen of the war
+    const appeal = evaluatePeace(sim, warId, nid, other, terms);
+    diag(sim, nid, 'strategic', `Offered peace to ${nationName(sim, other)} (${why}): ${r.ok ? 'sent' : 'invalid'}; we expect them to ${appeal.accept ? 'accept' : 'hesitate'} (${Math.round(appeal.score)})`, [...trace, ...rejected]);
+    return r.ok;
+  }
+  const ev = evaluatePeace(sim, warId, nid, other, terms);
+  if (!ev.accept) {
+    mem.answer = 'rejected';
+    diag(sim, nid, 'strategic', `Peace ${terms.mode} to ${nationName(sim, other)} would be refused (${Math.round(ev.score)}): ${why}`, [...trace, ...ev.reasons.map((r) => `${r.label}: ${r.value}`)]);
+    return false;
+  }
+  const r = issue(sim, { type: 'peace', nation: nid, war: warId, with: other, terms });
+  mem.answer = r.ok ? 'accepted' : null;
+  diag(sim, nid, 'strategic', `Peace with ${nationName(sim, other)} (${why}): ${r.ok ? 'agreed' : 'failed'}`, [...trace, ...rejected]);
+  return r.ok;
 }
 
 /**
  * A winning war leader dictates a settlement (src/sim/settlement.ts). An AI
  * opponent accepts it, or offers the part it would accept; the AI takes a
  * counter-offer worth at least half of its demands. A player gets a proposal.
+ * `scale` moderates the demands after a refusal.
  */
-function trySettlement(sim: Sim, nid: NationId, warId: string, other: NationId, adv: number): boolean {
+function trySettlement(sim: Sim, nid: NationId, warId: string, other: NationId, standing: number, scale: number, why: string, trace: string[]): boolean {
   const st = sim.state;
   const n = st.nations[nid];
+  const mem = n.ai.peace[warId];
   n.ai.lastPeaceTry[warId] = st.tick;
-  const demands = buildSettlement(sim, warId, nid);
-  if (!demands.length) return false;
+  const demands = buildSettlement(sim, warId, nid, scale);
+  if (!demands.length) {
+    // nothing we could ask of them (no land we may take, nothing to pay): say so, not silently
+    if (st.tick - mem.tick >= months(6)) {
+      diag(sim, nid, 'strategic', `No terms to ask of ${nationName(sim, other)} (${why}): no land we may take and nothing they can pay; fighting on`, trace);
+      mem.tick = st.tick;
+    }
+    return false;
+  }
   const w = st.wars[warId];
+  mem.tick = st.tick;
+  mem.mode = 'settlement';
+  mem.value = settlementCost(sim, w, demands);
+  mem.standing = standing;
+  const lines = demands.map((d) => describeDemand(sim, d));
   if (st.nations[other].isPlayer) {
-    if (st.proposals.some((x) => (x.kind === 'settlement' || x.kind === 'peace') && x.war === warId)) return false;
     const r = issue(sim, { type: 'settle', nation: nid, war: warId, demands });
-    diag(sim, nid, 'strategic', `Proposed a settlement to ${nationName(sim, other)} (${demands.length} demands, score ${Math.round(adv)}): ${r.ok ? 'sent' : 'invalid'}`);
+    mem.answer = r.ok ? 'pending' : null;
+    const appeal = evaluateSettlement(sim, warId, other, demands);
+    diag(sim, nid, 'strategic', `Proposed a settlement to ${nationName(sim, other)} (${why}; ${demands.length} demands${scale < 1 ? ', moderated after a refusal' : ''}): ${r.ok ? 'sent' : 'invalid'}; we expect them to ${appeal.accept ? 'accept' : 'hesitate'}`, [...trace, ...lines]);
     return r.ok;
   }
   let terms = demands;
   if (!evaluateSettlement(sim, warId, other, demands).accept) {
     const counter = counterOffer(sim, warId, other, demands);
     if (!counter || settlementCost(sim, w, counter) < settlementCost(sim, w, demands) * 0.5) {
-      diag(sim, nid, 'strategic', `Settlement with ${nationName(sim, other)} would be refused; fighting on`);
+      mem.answer = 'rejected';
+      diag(sim, nid, 'strategic', `Settlement with ${nationName(sim, other)} would be refused; fighting on`, [...trace, ...lines]);
       return false;
     }
     terms = counter;
   }
   const r = issue(sim, { type: 'settle', nation: nid, war: warId, demands: terms });
-  diag(
-    sim,
-    nid,
-    'strategic',
-    `Settlement with ${nationName(sim, other)} (score ${Math.round(adv)}): ${r.ok ? 'agreed' : 'failed'}${terms !== demands ? ' (their counter-offer)' : ''}`,
-    terms.map((d) => describeDemand(sim, d)),
-  );
+  mem.answer = r.ok ? 'accepted' : null;
+  diag(sim, nid, 'strategic', `Settlement with ${nationName(sim, other)} (${why}, standing ${Math.round(standing)}): ${r.ok ? 'agreed' : 'failed'}${terms !== demands ? ' (their counter-offer)' : ''}`, terms.map((d) => describeDemand(sim, d)));
   return r.ok;
 }
 

@@ -30,6 +30,7 @@ export const PROJECT_LABELS: Record<ProjectKind, string> = {
   settle: 'Settle',
   port: 'Build port',
   airfield: 'Build airfield',
+  flak: 'Build anti-aircraft batteries',
 };
 
 export interface ProjectCost {
@@ -61,7 +62,7 @@ export function projectCost(sim: Sim, nid: NationId, pid: ProvinceId, kind: Proj
   switch (kind) {
     case 'dev':
       return {
-        crowns: Math.round(C.construction.devBase * p.dev * (1 + p.dev / 4) * terr.devCost * Math.max(0.3, 1 + m.devCost) * (p.dev >= terr.devCap ? C.construction.devOvercapMul : 1)),
+        crowns: Math.round(C.construction.devBase * p.dev * (1 + p.dev / 5) * terr.devCost * Math.max(0.3, 1 + m.devCost) * (p.dev >= terr.devCap ? C.construction.devOvercapMul : 1)),
         supplies: 0,
         iron: 0,
         manpower: 0,
@@ -105,6 +106,8 @@ export function projectCost(sim: Sim, nid: NationId, pid: ProvinceId, kind: Proj
       return { crowns: Math.round(C.construction.portBase * (p.port + 1) * Math.max(0.3, 1 + m.portCost)), supplies: 0, iron: C.construction.portIron, manpower: 0, weeks: C.construction.portWeeks };
     case 'airfield':
       return { crowns: Math.round(C.construction.airfieldBase * (p.airfield + 1)), supplies: 0, iron: C.construction.airfieldIron, manpower: 0, weeks: C.construction.airfieldWeeks };
+    case 'flak':
+      return { crowns: Math.round(C.construction.flakBase * ((p.aa ?? 0) + 1)), supplies: 0, iron: C.construction.flakIron, manpower: 0, weeks: C.construction.flakWeeks };
   }
 }
 
@@ -156,6 +159,10 @@ export function buildProblem(sim: Sim, nid: NationId, pid: ProvinceId, kind: Pro
     if (kind === 'airfield') {
       if (!n.research.done.includes('aviation')) return 'Airfields need the Aviation technology.';
       if (p.airfield >= C.construction.airfieldMax) return 'The airfield is already at the maximum level.';
+    }
+    if (kind === 'flak') {
+      if (!n.research.done.includes('air_defence')) return 'Anti-aircraft batteries need the Air Defence technology.';
+      if ((p.aa ?? 0) >= C.construction.flakMax) return `The batteries are at the maximum level (${C.construction.flakMax}).`;
     }
   }
   const slots = known?.slots ?? buildSlots(sim, nid);
@@ -240,6 +247,10 @@ export function weeklyConstruction(sim: Sim): void {
       case 'airfield':
         p.airfield = Math.min(C.construction.airfieldMax, p.airfield + 1);
         notify(sim, pr.nation, 'low', 'build', `The airfield at ${provName(sim, pid)} is now level ${p.airfield}.`, { province: pid });
+        break;
+      case 'flak':
+        p.aa = Math.min(C.construction.flakMax, (p.aa ?? 0) + 1);
+        notify(sim, pr.nation, 'low', 'build', `Anti-aircraft batteries at ${provName(sim, pid)} are now level ${p.aa}.`, { province: pid });
         break;
       case 'charter':
         p.integration = Math.min(100, p.integration + C.construction.charterGain);

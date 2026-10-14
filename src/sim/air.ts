@@ -42,6 +42,7 @@
 // land missions, plans ground support for this week's battles, resolves losses,
 // readiness and replacements; the battle round then reads the support plan.
 
+import { aaAgainst } from './airborne';
 import { C, SHIPS, WINGS, WING_TYPES } from './config';
 import { armiesIn, battleGen, geoRev, memoEpochNow } from './index';
 import { nationMods } from './modifiers';
@@ -656,7 +657,7 @@ export function supportPlan(sim: Sim): Map<string, { att: SidePlan; def: SidePla
       if (w.mission === 'support') {
         const b = supportBattle(sim, w)!;
         const side = friendlySide(sim, b, w.nation)!;
-        const g = WINGS[w.type].ground * s.eff * Math.max(0.2, 1 + nationMods(sim, w.nation).airAttack) * (reconOver(sim, b.province, w.nation) ? 1 + C.air.reconBoost : 1);
+        const g = WINGS[w.type].ground * s.eff * Math.max(0.2, 1 + nationMods(sim, w.nation).airAttack) * (reconOver(sim, b.province, w.nation) ? 1 + C.air.reconBoost : 1) * aaFactor(sim, b.province, w.nation);
         const p = slot(b)[side];
         p.ground += g;
         p.lines.push({ kind: 'air', id: w.id, nation: w.nation, name: w.name, value: g });
@@ -678,6 +679,12 @@ export function supportPlan(sim: Sim): Map<string, { att: SidePlan; def: SidePla
     }
     return out;
   });
+}
+
+/** What a mission over a province still achieves through its anti-aircraft fire (8% less a level). */
+export function aaFactor(sim: Sim, pid: ProvinceId, by: NationId): number {
+  const aa = aaAgainst(sim, pid, by).total;
+  return aa > 0 ? Math.max(0.2, 1 - C.air.aaEffect * aa) : 1;
 }
 
 /** Do we (or friends) fly reconnaissance over this province? */
@@ -882,7 +889,7 @@ export function interdiction(sim: Sim, pid: ProvinceId, nid: NationId): { supply
   if (power <= 0) return { supply: 0, move: 0 };
   // their sky, our sky: what their aircraft achieve over our army
   if (by) {
-    power *= controlFactor(airControl(sim, { prov: pid }, by));
+    power *= controlFactor(airControl(sim, { prov: pid }, by)) * aaFactor(sim, pid, by);
     if (reconOver(sim, pid, by)) power *= 1 + C.air.reconBoost;
   }
   return { supply: Math.min(C.air.interdictSupplyMax, C.air.interdictSupply * power), move: Math.min(C.air.interdictMoveMax, C.air.interdictMove * power) };
@@ -908,7 +915,7 @@ function bombingMap(sim: Sim): Map<ProvinceId, number> {
     const out = new Map<ProvinceId, number>();
     for (const [pid, { bomb, by }] of raw) {
       const ctl = st.provinces[pid].controller!;
-      out.set(pid, bomb * Math.max(0.1, 1 - nationMods(sim, ctl).airDefence) * controlFactor(airControl(sim, { prov: pid }, by)));
+      out.set(pid, bomb * Math.max(0.1, 1 - nationMods(sim, ctl).airDefence) * controlFactor(airControl(sim, { prov: pid }, by)) * aaFactor(sim, pid, by));
     }
     return out;
   });
@@ -1242,15 +1249,18 @@ export function weeklyAir(sim: Sim): void {
     const i = interception(sim, w, cells, s.eff);
     let loss = i.loss;
     if (i.loss > 0 && i.cell) creditKills(sim, i.cell, w.nation, i.loss, kills);
-    // flak over enemy forts; ground fire over the battle supported
+    // flak over enemy forts; ground fire over the battle supported; anti-aircraft
+    // batteries and mobile guns where it flies (airborne.ts)
     if (w.mission === 'bombing' || w.mission === 'interdiction') {
       const p = st.provinces[w.target!];
       if (p.controller && atWar(sim, w.nation, p.controller) && p.fort > 0) loss += C.air.flak * p.fort * Math.max(0.2, 1 + nationMods(sim, p.controller).airDefence);
+      loss += C.air.aaPer * aaAgainst(sim, w.target!, w.nation).total * WINGS[w.type].vulnerability;
     }
     if (w.mission === 'support') {
       const b = supportBattle(sim, w);
       const enemy = b ? (friendlySide(sim, b, w.nation) === 'att' ? b.defenderNations : b.attackerNations)[0] : null;
       loss += C.air.groundFire * (enemy ? Math.max(0.2, 1 + nationMods(sim, enemy).airDefence) : 1);
+      if (b) loss += C.air.aaPer * aaAgainst(sim, b.province, w.nation).total * WINGS[w.type].vulnerability;
     }
     if (loss > 0) losses.set(w.id, loss);
     st.nations[w.nation].stats.airMissionWeeks++;
@@ -1296,6 +1306,14 @@ export function weeklyAir(sim: Sim): void {
     if (s) w.report = { tick: st.tick, flew: true, note: s.note, kills: k, hits: s.hits, lost: s.lost };
     else if (didFly) w.report = { tick: st.tick, flew: true, note: notes.get(id) ?? '', kills: k, hits: 0, lost: lostNow };
     else if (!w.report || w.report.tick !== st.tick) w.report = { tick: st.tick, flew: false, note: wingStatus(sim, w).reason, kills: 0, hits: 0, lost: 0 };
+    // its service so far (format 7): weeks flown, what it shot down and hit, what it lost
+    if (w.report.tick === st.tick && w.report.flew) {
+      const r = (w.record ??= { weeks: 0, kills: 0, hits: 0, lost: 0 });
+      r.weeks++;
+      r.kills += w.report.kills;
+      r.hits += w.report.hits;
+      r.lost += w.report.lost;
+    }
   }
   touchWings(sim);
 }

@@ -19,12 +19,13 @@ import type { Army, Battle, SupportLine, ProjectKind, ProvinceId, StrategicResou
 import type { App } from '../app';
 import { orderStatus, readiness } from '../../sim/readiness';
 import { action, bar, button, h, rebuild, row, setChildren } from '../dom';
-import { fmt, men, plural, signed, weeks } from '../format';
+import { fmt, men, people, plural, signed, weeks } from '../format';
 import { icon, type IconName } from '../icons';
 import { section, shield, tip } from './common';
 import { confirmDialog } from './dialogs';
-import { airfieldSection, fleetCard, portSection, wingCard, zoneCard } from './sea';
-import { fleetCapacity, fleetsIn, transportFor } from '../../sim/naval';
+import { airDefenceSection, airfieldSection, fleetCard, portSection, wingCard, zoneCard } from './sea';
+import { airDropRisk, transportsAt } from '../../sim/airborne';
+import { fleetCapacity, fleetEta, fleetsIn, routeThreats, transportFor, zoneName } from '../../sim/naval';
 
 export function renderInspector(app: App): void {
   const sim = app.sim!;
@@ -152,7 +153,7 @@ function provinceCard(app: App, pid: ProvinceId): HTMLElement[] {
         return row('Deposit', h('span', { title: RESOURCE_INFO[res].use }, `${RESOURCE_INFO[res].label}${p.owner ? ` · ${out}` : ''}`));
       })(),
       p.owner ? row('Factories', h('span', { title: `Factories make materiel for regiments and sell the surplus as manufactured goods. Each burns ${C.industry.coalPerFactory} coal a month.` }, `${p.factories}/${factoryMax(sim, pid)}`)) : null,
-      row('Population', `${fmt(p.pop, 1)}k`),
+      row('Population', h('span', { title: `${fmt(C.population.reservePerPop * p.pop)} of them fit for service at full integration (${Math.round((C.population.reservePerPop / C.population.peoplePerPop) * 100)}%).` }, people(p.pop * C.population.peoplePerPop))),
       me ? row('Supply capacity', plural(Math.floor(provinceSupplyCapacity(sim, me, pid)), 'regiment')) : null,
       me ? skyRow(app, pid) : null,
       (() => {
@@ -205,7 +206,7 @@ function provinceCard(app: App, pid: ProvinceId): HTMLElement[] {
       items.push(bar(p.project.progress, p.project.total, 'info', 'Project progress'));
       if (p.project.nation === me) items.push(button('Cancel project (50% refund)', () => app.do({ type: 'cancelBuild', province: pid }), { cls: 'small' }));
     } else {
-      const kinds: ProjectKind[] = p.owner === me ? ['dev', 'infra', 'factory', 'fort', 'charter', ...(sim.world.provZones[pid] ? (['port'] as ProjectKind[]) : []), ...(sim.state.nations[me].research.done.includes('aviation') ? (['airfield'] as ProjectKind[]) : [])] : ['settle'];
+      const kinds: ProjectKind[] = p.owner === me ? ['dev', 'infra', 'factory', 'fort', 'charter', ...(sim.world.provZones[pid] ? (['port'] as ProjectKind[]) : []), ...(sim.state.nations[me].research.done.includes('aviation') ? (['airfield'] as ProjectKind[]) : []), ...(sim.state.nations[me].research.done.includes('air_defence') ? (['flak'] as ProjectKind[]) : [])] : ['settle'];
       const what: Record<ProjectKind, string> = {
         dev: '+1 development: more crowns, food and research, and room for factories',
         infra: '+1 railway: faster marches, more supply, faster integration',
@@ -215,6 +216,7 @@ function provinceCard(app: App, pid: ProvinceId): HTMLElement[] {
         settle: 'Claim this land as a new frontier province',
         port: '+1 port: a slipway for shipbuilding, faster repairs for fleets off this coast',
         airfield: `+1 airfield: base for ${C.air.wingsPerAirfield} air wings`,
+        flak: `+1 anti-aircraft batteries (up to ${C.construction.flakMax}): enemy aircraft over this province lose ${C.air.aaPer} strength a week and achieve ${Math.round(C.air.aaEffect * 100)}% less per level, airborne drops lose ${Math.round(C.air.dropAA * 100)}% of their men; ${C.construction.flakUpkeep} crowns a month a level`,
       };
       items.push(
         h(
@@ -262,6 +264,8 @@ function provinceCard(app: App, pid: ProvinceId): HTMLElement[] {
   if (port) body.appendChild(port);
   const air = airfieldSection(app, pid);
   if (air) body.appendChild(air);
+  const aa = airDefenceSection(app, pid);
+  if (aa) body.appendChild(aa);
   if (me && p.owner && p.owner !== me) {
     body.appendChild(
       section(
@@ -300,10 +304,24 @@ export function armyStatus(app: App, a: Army): string {
 /** Why the army cannot ship by sea from this coast, said plainly (a tooltip alone is lost on touch screens). */
 function shipNote(app: App, a: Army): HTMLElement | null {
   const sim = app.sim!;
+  if (a.drop) {
+    const risk = airDropRisk(sim, a.nation, a.drop.target);
+    return h('div', { class: 'small warn', style: 'flex-basis:100%', 'data-sk': 'army-drop' }, `Airborne drop on ${provName(sim, a.drop.target)} with ${a.drop.wings.length} transport wing${a.drop.wings.length === 1 ? '' : 's'}: flown in this week's air phase; expected losses about ${Math.round(risk.loss * 100)}%.`);
+  }
+  if (a.embarked) {
+    // at sea: the fleet, the beach, the time, and what lies in wait on the way
+    const f = sim.state.fleets[a.embarked];
+    if (!f) return null;
+    const threats = routeThreats(sim, f);
+    const when = f.landing ? `lands at ${provName(sim, f.landing)}${f.path.length ? ` in ${weeks(fleetEta(sim, f, f.path))}` : ' once no enemy warships outgun ours off the beach'}` : 'no landing chosen';
+    const risk = threats.length ? ` Danger on the way: ${threats.map((t) => `${zoneName(sim, t.zone)}${t.air ? ' (enemy air)' : ''}`).join(', ')}; transports sunk drown their troops.` : ' No enemy warships known on the route.';
+    return h('div', { class: `small ${threats.length ? 'warn' : 'muted'}`, style: 'flex-basis:100%', 'data-sk': 'army-at-sea' }, `Aboard ${f.name}: ${when}.${risk}`);
+  }
   const zones = sim.world.provZones[a.location];
-  if (!zones?.length || a.embarked || a.battle || a.retreating) return null;
+  if (!zones?.length || a.battle || a.retreating) return null;
   const regs = a.regiments.length;
-  if (transportFor(sim, a.nation, a.location, regs)) return null;
+  const ready = transportFor(sim, a.nation, a.location, regs);
+  if (ready) return h('div', { class: 'small muted', style: 'flex-basis:100%' }, `${ready.name} lies off this coast with room for ${fleetCapacity(ready)} regiments: Ship by sea, then click the beach (or select the fleet and embark from it).`);
   let room = 0;
   for (const z of zones) for (const f of fleetsIn(sim, z)) if (f.nation === a.nation && !f.cargo.length) room = Math.max(room, fleetCapacity(f));
   const need = `${regs} regiments need ${plural(Math.ceil(regs / 2), 'transport')}`;
@@ -342,6 +360,23 @@ function armyCard(app: App, a: Army): HTMLElement[] {
           'A fleet with transports in a sea zone on this coast carries the army to another coast (yours, a friend’s, unclaimed, or an enemy’s). Troops landing under fire fight at a disadvantage that week.',
         ),
       );
+    }
+    // airborne operations: an army of airborne regiments at an airfield, with transports there
+    if (a.regiments.some((r) => r.type === 'airborne') && !a.embarked) {
+      if (a.drop) prim.push(quick('stop', 'Call off the drop', () => app.do({ type: 'cancelDrop', army: a.id }), null, `Waiting at ${provName(sim, a.location)} to be flown to ${provName(sim, a.drop.target)} this week.`));
+      else {
+        const lift = transportsAt(sim, a.nation, a.location).length;
+        const why = !sim.state.nations[a.nation].research.done.includes('airborne_forces')
+          ? 'Needs the Airborne Forces technology.'
+          : a.regiments.some((r) => r.type !== 'airborne')
+            ? 'Only airborne regiments can be dropped: detach the others first.'
+            : !(sim.state.provinces[a.location].airfield > 0) || sim.state.provinces[a.location].controller !== a.nation
+              ? 'Bring the army to one of our airfields with transport wings.'
+              : lift < a.regiments.length
+                ? `Needs ${a.regiments.length} ready transport wings here (${lift} ready).`
+                : moveProb;
+        prim.push(quick('plane', app.targeting?.kind === 'drop' ? 'Choose where…' : 'Airborne drop', () => app.startDropTarget(a.id), why, 'Transport wings at this airfield fly the army to a province within their range: review the risks (enemy fighters, anti-aircraft fire, troops waiting), then launch. It lands in this week’s air phase.'));
+      }
     }
     const others = armiesAt(sim, a.location).filter((x) => x.nation === a.nation && x.id !== a.id);
     if (others.length && !a.embarked) {
