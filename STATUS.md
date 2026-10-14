@@ -33,7 +33,14 @@ verification by browser, scenarios, campaigns, saves and profiles.
 
 ### Evidence
 
-_Pending: being measured on the final build; filled in before the pull request is opened._
+| Kind | Result |
+|---|---|
+| Unit and scenario tests | 323 passing (28 files): fleet orders 13, airborne and anti-aircraft 10, combined warfare 4, AI decisions 16, format 7 conversion 1, and the earlier suites |
+| Browser check | `npm run verify:web`, headless Chromium 141: 96 of 97 at the site root, the project subpath, the unpacked release ZIP and in an iframe. The one failure is the performance probe (map draw 30.1 ms against 16 ms in this run, 16.6 ms in the run before), marginal on this machine for `main` as well; the controlled profile shows no drawing difference |
+| Control workflows | 20 steps at 1366 × 768 and 8 by touch on a phone, no page errors ([docs/screenshots/control/](docs/screenshots/control/)) |
+| The reported peace case | before/after traces ([reports/military/half-country-before.md](reports/military/half-country-before.md), [-after.md](reports/military/half-country-after.md)) |
+| AI campaigns | World 1936 and Europe 1936, six years each from seed 2, `main` and now ([reports/military/control-verification.md](reports/military/control-verification.md)) |
+| External players | **None.** No one but me has played this update. |
 
 ### Known gaps
 

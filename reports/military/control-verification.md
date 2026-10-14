@@ -91,11 +91,70 @@ refused proposal not repeated within the realm's patience, and envoys kept withi
 
 ### AI-only campaigns (six years, seed 2; `tools/ai-behaviour.ts`)
 
-_Pending: being measured on the final build; filled in before the pull request is opened._
+| | World 1936, `main` | World 1936, now | Europe 1936, `main` | Europe 1936, now |
+|---|---|---|---|---|
+| Wars; ended | 37; 33 | 35; 31 | 18; 18 | 17; 16 |
+| Settlements dictated by a winner (agreed) | 30 | 23 | 18 | 10 |
+| Settlements judged refused by the loser | not counted | 8 | not counted | 3 |
+| **Concessions offered by a losing realm and agreed** | **0** | **8** | **0** | **6** |
+| Concessions judged refused (raised next time) | 0 | 7 | 0 | 3 |
+| White peace agreed | 4 | 0 | 0 | 0 |
+| White peace judged refused | 18 | 16 | 26 | 4 |
+| Decisions logged: fighting on / pressing on / holding out | not logged | 29 / 50 / 1 | not logged | 18 / 39 / 0 |
+| Treaty proposals: trade; pact; alliance | 2253; 114; 40 | 1502; 136; 39 | 455; 45; 16 | 443; 60; 12 |
+| Sounded out and found unwelcome (pact; alliance) | — | 111; 84 | — | 60; 16 |
+| Treaties standing at the end: trade; pact; alliance | 2224; 66; 62 | 1472; 80; 57 | 440; 29; 33 | 433; 39; 29 |
+| Alliances left | 0 | 2 | 0 | 0 |
+
+On `main` no losing realm ever conceded anything in these twelve campaign-years; its white peace
+offers were refused 44 times. Now losing realms concede land that cannot be retaken (14 such
+peaces agreed), refused concessions come back larger, realms fight on while lost land can be
+retaken and say so, and white peace is asked for only by a realm with nothing left to give.
+Trade proposals fall by a third on the World (commerce is no longer free money); the files are
+`ai-before-*.json` and `ai-after-*.json` here.
 
 ## National scale
 
-_Pending: being measured on the final build; filled in before the pull request is opened._
+`tools/national-scale.ts` (World 1936, seed 1; [`national-scale.md`](national-scale.md)). On
+`main`, 19 of 69 realms started with no men to call up or in deficit, Albania had 36,000
+people and a reserve of 1,152 men against a minimum army of 3,000, and small realms earned
+more from flat commerce than from their land (`control-audit.md`).
+
+### At the start
+
+| Realm | People | Fit for service | Serving | Pool | Regiments | Gross income | Spending | Balance |
+|---|---|---|---|---|---|---|---|---|
+| Kingdom of Albania | 360k | 29k | 3k | 13k | 3 | 9.6 | 6.2 | +3.4 |
+| Republic of Latvia | 520k | 42k | 3k | 19k | 3 | 12.3 | 6.4 | +5.9 |
+| Portuguese Republic | 4.15M | 209k | 9k | 100k | 9 | 33.9 | 18.4 | +15.5 |
+| Kingdom of Yugoslavia | 3.51M | 281k | 10k | 135k | 10 | 40.9 | 20.5 | +20.4 |
+| Kingdom of Italy | 7.55M | 561k | 20k | 270k | 20 | 77.7 | 39.1 | +38.6 |
+| German Reich | 11.65M | 932k | 30k | 451k | 30 | 130.1 | 54.1 | +76.0 |
+| United Kingdom | 46.85M | 1.89M | 67k | 914k | 67 | 288.4 | 114.8 | +173.6 |
+
+Realms in deficit: 0 of 69; with no men to call up: 0.
+
+### After 3 years of AI play
+
+| Realm | People | Fit for service | Serving | Pool | Regiments | Gross income | Spending | Balance |
+|---|---|---|---|---|---|---|---|---|
+| Kingdom of Albania | 388k | 31k | 4k | 27k | 4 | 16.8 | 10.5 | +6.2 |
+| lat | (gone) | | | | | | | |
+| Portuguese Republic | 4.44M | 333k | 19k | 314k | 18 | 90.5 | 53.3 | +37.3 |
+| Kingdom of Yugoslavia | 3.74M | 299k | 19k | 280k | 19 | 67.6 | 46.7 | +21.0 |
+| Kingdom of Italy | 8.02M | 641k | 56k | 584k | 54 | 133.8 | 110.9 | +22.9 |
+| German Reich | 12.27M | 856k | 77k | 777k | 72 | 149.2 | 134.9 | +14.3 |
+| United Kingdom | 50.02M | 2.45M | 110k | 2.32M | 109 | 542.2 | 316.5 | +225.7 |
+
+Realms in deficit: 0 of 68; with no men to call up: 0.
+
+
+Latvia is gone after three years: Poland conquered it (its war goal, Riga, the capital, now
+ends the war by settlement at week 102 instead of the war running on). Population is in people;
+5% are fit for service at full integration; the pool refills at 1/60 of the reserve a month;
+the war dead stay missing from the reserve and recover at 1% a month. Income scales with land
+and trade from Albania's 10 to Britain's 288 crowns a month at the start, and every realm
+starts in balance.
 
 ## Saves
 
@@ -134,7 +193,16 @@ The map, `tools/profile-web.ts` on the same machine, headless Chromium without a
 
 ## Checks and browsers
 
-_Pending: being measured on the final build; filled in before the pull request is opened._
+- `npm run typecheck`, `npm test` (28 files, 323 tests), `npm run build`, `npm run package`: pass.
+- `npm run verify:web` on the final build: **96 of 97** at the site root, the project subpath,
+  the unpacked release ZIP and in an iframe ([`reports/web-verification.md`](../web-verification.md)).
+  The one failure is the performance probe (average map draw under 16 ms at the fastest speed,
+  headless Chromium with software rendering): 30.1 ms in this run, 16.6 ms in the run before it
+  on the same build family; the previous update measured `main` at 16.5–30.5 ms on this machine.
+  The controlled comparison above (`tools/profile-web.ts`, both builds, same machine, same
+  workloads) shows no difference in drawing cost.
+- An earlier full check found new campaigns pausing in their first week (an AI trade proposal
+  to the player); fixed: a human gets three quiet months.
 
 Untested: Firefox, Safari and real phones and tablets (the touch run emulates a phone in
 Chromium); screen readers.

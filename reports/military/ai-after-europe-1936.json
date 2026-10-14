@@ -2,36 +2,37 @@
  "scenario": "europe-1936",
  "years": 6,
  "seed": 2,
- "wars": 16,
- "warsEnded": 13,
+ "wars": 17,
+ "warsEnded": 16,
  "peace": {
-  "AI-AI settlement: agreed": 8,
-  "AI-AI settlement judged refused": 12,
-  "AI-AI conceding: agreed": 5,
-  "AI-AI concede judged refused": 1
+  "AI-AI settlement: agreed": 10,
+  "AI-AI settlement judged refused": 3,
+  "AI-AI conceding: agreed": 6,
+  "AI-AI white judged refused": 4,
+  "AI-AI concede judged refused": 3
  },
  "proposed": {
-  "trade": 444,
-  "nap": 61,
-  "alliance": 16
+  "trade": 443,
+  "nap": 60,
+  "alliance": 12
  },
  "signed": {
-  "trade": 444,
-  "nap": 61,
-  "alliance": 16
+  "trade": 443,
+  "nap": 60,
+  "alliance": 12
  },
  "treatiesAtEnd": {
-  "alliance": 33,
-  "trade": 431,
-  "nap": 40
+  "alliance": 29,
+  "trade": 433,
+  "nap": 39
  },
  "decisions": {
-  "Fighting on": 26,
-  "Pressing on": 37
+  "Fighting on": 18,
+  "Pressing on": 39
  },
  "soundedOut": {
-  "nap": 69,
-  "alliance": 27
+  "nap": 60,
+  "alliance": 16
  },
  "maxProposalsPerRealmYear": 12,
  "samples": [

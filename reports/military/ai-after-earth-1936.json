@@ -2,38 +2,39 @@
  "scenario": "earth-1936",
  "years": 6,
  "seed": 2,
- "wars": 32,
- "warsEnded": 30,
+ "wars": 35,
+ "warsEnded": 31,
  "peace": {
-  "AI-AI concede judged refused": 12,
-  "AI-AI settlement: agreed": 20,
-  "AI-AI conceding: agreed": 10,
-  "AI-AI settlement judged refused": 12
+  "AI-AI white judged refused": 16,
+  "AI-AI concede judged refused": 7,
+  "AI-AI settlement: agreed": 23,
+  "AI-AI conceding: agreed": 8,
+  "AI-AI settlement judged refused": 8
  },
  "proposed": {
-  "trade": 1429,
-  "nap": 134,
-  "alliance": 38
+  "trade": 1502,
+  "nap": 136,
+  "alliance": 39
  },
  "signed": {
-  "trade": 1429,
-  "nap": 134,
-  "alliance": 38
+  "trade": 1502,
+  "nap": 136,
+  "alliance": 39
  },
  "treatiesAtEnd": {
-  "alliance": 59,
-  "trade": 1421,
-  "nap": 81
+  "alliance": 57,
+  "trade": 1472,
+  "nap": 80
  },
  "decisions": {
-  "Fighting on": 31,
-  "Holding out": 80,
+  "Fighting on": 29,
   "Pressing on": 50,
+  "Holding out": 1,
   "Left an alliance": 2
  },
  "soundedOut": {
-  "nap": 122,
-  "alliance": 85
+  "nap": 111,
+  "alliance": 84
  },
  "maxProposalsPerRealmYear": 12,
  "samples": [
