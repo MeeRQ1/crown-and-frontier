@@ -178,6 +178,7 @@ describe('treaties for stated reasons', () => {
   it('realms that fear the same neighbour propose an alliance and say so; a human sees the reason', () => {
     const sim = lineGame({ playerNation: 'c' });
     const st = sim.state;
+    st.tick = months(6); // a human hears no proposals in the first three months
     st.alarm.b = { a: 40 };
     st.alarm.c = { a: 40 };
     st.memories = {};
@@ -215,6 +216,22 @@ describe('treaties for stated reasons', () => {
     signTreaty(sim, 'alliance', 'c', 'b');
     const nap = evaluateTreaty(sim, 'a', 'c', 'nap');
     expect(nap.reasons.some((r) => /free their armies against B,/.test(r.label) && r.value < 0)).toBe(true);
+  });
+
+  it('a human hears no treaty proposals in the first three months of a campaign', () => {
+    const sim = lineGame({ playerNation: 'c' });
+    const st = sim.state;
+    st.alarm.b = { a: 40 };
+    st.alarm.c = { a: 40 };
+    st.memories = {};
+    signTreaty(sim, 'trade', 'b', 'c');
+    st.nations.b.trust = 90;
+    st.nations.c.trust = 90;
+    diplomacy(sim, 'b');
+    expect(st.proposals.filter((x) => x.to === 'c')).toEqual([]);
+    st.tick = months(3);
+    diplomacy(sim, 'b');
+    expect(st.proposals.filter((x) => x.to === 'c' && x.kind === 'alliance').length).toBe(1);
   });
 
   it('a refused proposal is not put again for the same reason until patience runs out', () => {

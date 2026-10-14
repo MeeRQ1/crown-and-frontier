@@ -429,7 +429,9 @@ export function diplomacy(sim: Sim, nid: NationId): void {
       const ans = n.ai.treatyAnswers[key];
       if (ans && !ans.accepted && ans.reason === reason && st.tick - ans.tick < months((isPlayer ? 24 : 12) * p.patience)) continue;
       if (isPlayer) {
-        // do not flood a human: one open proposal at a time, at most one every 3 months
+        // do not flood a human: nothing in the first three months of a campaign (let them
+        // find their feet), then one open proposal at a time, at most one every 3 months
+        if (st.tick < months(3)) continue;
         const inbox = st.nations[o].ai.lastProposal['__incoming'] ?? -1e9;
         if (st.proposals.some((x) => x.to === o) || st.tick - inbox < months(3)) continue;
       }
