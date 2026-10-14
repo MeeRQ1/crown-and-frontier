@@ -8,7 +8,7 @@ import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { createServer } from 'node:http';
 import { extname, join, normalize } from 'node:path';
 import { chromium } from 'playwright';
-import { seaAirSave } from './sea-air-save';
+import { airborneSave, seaAirSave } from './sea-air-save';
 
 const args = process.argv.slice(2);
 const get = (k: string, d: string) => {
@@ -205,6 +205,47 @@ async function main(): Promise<void> {
     if (canEmbark && wp) await page.mouse.click(wp.x, wp.y);
     await page.waitForTimeout(250);
     await record('order-embark', canEmbark ? 'from the fleet card: Embark the army on its coast, then click the beach' : 'the fleet card offers no embarking', 2);
+
+    // 9. an airborne operation: select the paratroopers, Airborne drop, review the risks, launch
+    const ab = airborneSave();
+    writeFileSync('reports/tmp/airborne.json', ab.text);
+    await page.getByRole('button', { name: 'Game menu' }).click();
+    const [ch2] = await Promise.all([page.waitForEvent('filechooser'), page.getByRole('button', { name: 'Import file' }).click()]);
+    await ch2.setFiles('reports/tmp/airborne.json');
+    await page.waitForTimeout(800);
+    await page.evaluate(() => {
+      const app = (window as any).cnf;
+      app.setSpeed(0);
+      document.querySelectorAll<HTMLButtonElement>('.modal-layer:not(.hidden) footer button').forEach((b) => b.click());
+      app.refresh();
+    });
+    await page.evaluate((a) => (window as any).cnf.selectArmy(a, true), ab.ids.para);
+    await page.waitForTimeout(300);
+    const drop = page.locator('aside.inspector button', { hasText: /^Airborne drop$/ }).first();
+    const canDrop = await drop.count();
+    if (canDrop) await drop.click();
+    await centre('duncairn', 46);
+    await page.waitForTimeout(200);
+    const tp = await point('duncairn');
+    if (tp) await page.mouse.move(tp.x, tp.y);
+    await page.waitForTimeout(250);
+    const tipText = ((await page.locator('.hover-tip').innerText().catch(() => '')) || '').replace(/\s+/g, ' ');
+    await record('airborne-target', canDrop ? `Airborne drop, then point at Duncairn: ${tipText.slice(0, 200)}` : 'no Airborne drop action', 2);
+    if (tp) await page.mouse.click(tp.x, tp.y);
+    await page.waitForTimeout(300);
+    const dialogText = ((await page.locator('.modal-layer:not(.hidden)').innerText().catch(() => '')) || '').replace(/\s+/g, ' ');
+    await record('airborne-review', `click it: the review: ${dialogText.slice(0, 220)}`, 1);
+    await page.locator('.modal-layer:not(.hidden) button', { hasText: 'Launch the drop' }).first().click().catch(() => undefined);
+    await page.waitForTimeout(300);
+    await record('airborne-launched', 'Launch the drop: the army card shows the operation pending, with Call off', 1);
+    const dp3 = await point('duncairn');
+    if (dp3) await page.mouse.click(dp3.x, dp3.y);
+    await page.waitForTimeout(300);
+    await page.locator('aside.inspector').evaluate((el) => {
+      const s = [...el.querySelectorAll('h3, .section-title, .eyebrow')].find((x) => /Air defence/i.test(x.textContent ?? ''));
+      s?.scrollIntoView();
+    });
+    await record('airborne-aa', 'the target province: its air defence and the enemy aircraft over it', 1);
   } finally {
     await browser.close();
     server.close();

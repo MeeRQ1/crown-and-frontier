@@ -1,10 +1,53 @@
 # Status
 
-Last updated at the **Naval, Air and Combined Warfare update** (save format 6, map format 3).
-It follows the performance update and the 1936 maps, and before them the Atlas & Strategy
-Refinement update and Stages A–F of the strategic depth expansion. This update is a draft pull
-request that has not been merged or published. The sections after this one are kept for
-their evidence; where a later change altered a fact, it is corrected in place.
+Last updated at the **Military Control, Combined Warfare, National Scale and Adaptive AI
+update** (save format 7, map format 3). It follows the Naval, Air and Combined Warfare update,
+the performance update and the 1936 maps, and before them the Atlas & Strategy Refinement
+update and Stages A–F of the strategic depth expansion. This update is a draft pull request
+that has not been merged or published. The sections after this one are kept for their
+evidence; where a later change altered a fact, it is corrected in place.
+
+## Military Control, Combined Warfare, National Scale and Adaptive AI update
+
+The brief asked that land, air and sea forces be found, inspected and ordered the same way;
+that aircraft, fleets and carriers do their jobs and say why not; wars on realms we do not
+border; a believable population, manpower and crowns at every realm size; paratroopers and
+anti-aircraft defence; combined warfare in every direction; an AI that assesses whole wars,
+makes peace from either side, proposes treaties for stated reasons and manages its realm; and
+verification by browser, scenarios, campaigns, saves and profiles.
+
+| Requirement | Status | What was built | Evidence |
+|---|---|---|---|
+| Audit first | ✅ | The workflows played and counted on `main`, the national scale of every realm, the AI's peace and treaty record | [reports/military/control-audit.md](reports/military/control-audit.md), [docs/screenshots/control/before/](docs/screenshots/control/before/) |
+| Consistent control | ✅ | Wing counters selectable (and cycled) on the map at every zoom; right-click / long-press / E opens the orders that fit a place for the selected wing or fleet, each with its reason; card buttons start the same orders with a map pick, a previewing tooltip and a banner with Cancel; bulk orders for the wings at a base; C and N for wings and fleets | `tools/audit-control.ts` (20 steps), `tools/touch-control.ts` (8 steps), [docs/screenshots/control/](docs/screenshots/control/) |
+| Aircraft | ✅ | Base kept apart from mission; the airfields and carriers it can move to ringed on the map; service record and costs; group orders; transports for airborne operations; missions blunted by anti-aircraft fire. Aircraft never take ground | the same runs; `tests/airborne-aa.test.ts` |
+| Fleets | ✅ | Standing orders: hold, patrol, blockade, raid, escort, shell a coast, return to port, each weighting its duties, sailing by sea at its own speed, lapsing with a reason, ending when sailed by hand or beaten; embarking from the fleet; route threats on fleet and army cards; coastal forts against close blockaders; sieges supported from the sea | `tests/fleet-orders.test.ts` (13), `tests/combined-warfare.test.ts` |
+| Carriers | ✅ | Wings aboard drawn with their fleet and selectable there; orders from the fleet's air group and the map | browser runs |
+| Wars without a shared border | ✅ | Kept from the previous update; the AI's assessment now weighs whether lost land can be retaken | Albania browser check; AI tests |
+| Population, manpower, crowns | ✅ | People (×10,000 per unit); 5% fit for service; war dead deplete the reserve and recover at 1% a month; pool refills at 1/60; commerce a share of the partners' economies, capped; starting forces by means; envoys by means; the units of every figure stated | DESIGN "Economy and population"; `tools/national-scale.ts`; `tests/format7.test.ts` |
+| Paratroopers and anti-aircraft | ✅ | Airborne regiments and transport wings (Airborne Forces); prepare, review, launch, land, call off, abort; batteries (0–3) and mobile guns, capped; AI builds batteries and weighs them | `tests/airborne-aa.test.ts` (10); browser airborne steps |
+| Combined warfare in every direction | ✅ | Navy↔ground, air↔ground, air↔navy as tabled in DESIGN; port and battery capture effects; nothing counted twice | coastal campaign: 12.8 weeks by land, 12 with air, 10 with ships, 9 together |
+| Adaptive AI | ✅ | War assessment (land both ways, forces and depth, recovery, exhaustion, capitals); peace from winning, losing and stalemated sides, the player included; offer and treaty memory; treaties for stated reasons judged by the recipient's obligations; alliance review; national management (army target logged with its limit, envoys by means); personalities with risk and patience; decision traces | `tests/ai-decisions.test.ts` (13); the half-country case before/after; six-year campaigns |
+| Saves | ✅ | Format 7 with a format-6 migration and a notice; nothing paid out or refilled | `tests/format7.test.ts` |
+| Performance | ✅ | A regression found in profiling (judging trade agreements) was fixed; the war week matches `main` while fielding a third more regiments; map drawing unchanged | [reports/military/control-verification.md](reports/military/control-verification.md), `reports/perf/control-*` |
+
+### Evidence
+
+_Pending: being measured on the final build; filled in before the pull request is opened._
+
+### Known gaps
+
+- **Untested browsers and hardware.** Headless Chromium only (desktop and an emulated phone);
+  Firefox, Safari, GPUs and real touch devices were not tried.
+- **The AI does not plan airborne operations** (it builds anti-aircraft batteries and weighs
+  them when choosing air targets), and it gives its fleets standing orders only for raiding and
+  returning to repair; its other fleets stay on station, as before.
+- **Trade agreements remain common** among AI realms (1,421 standing on the World after six
+  years, against 2,224), but their income is now bounded by each realm's own economy.
+- **Europe 1936 weeks cost more** than on `main` in the benchmark because realms no longer make
+  white peace at once: a war is under way in most weeks of the measured stretch.
+- **Abstractions.** A drop is flown and lands within one week and cannot be resupplied from the
+  air; aircraft have ranges, not routes.
 
 ## Naval, Air and Combined Warfare update
 

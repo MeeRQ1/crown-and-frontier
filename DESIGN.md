@@ -109,7 +109,12 @@ changes outcomes: `step()` is a pure function of state.
 
 ## Economy and population (`economy.ts`)
 
-- **Crowns per province per month:** (0.8 × dev + 0.012 × pop + 3 at the capital)
+**Units.** Crowns are the currency. A treasury is a stock of crowns; income, upkeep and
+costs are crowns a month (the ledger and the HUD say "/mo"), and one-off prices are crowns.
+Population is counted in units of 10,000 people (a province of 40 holds 400,000), and every
+figure the player sees is in people or men.
+
+- **Crowns per province per month:** (0.8 × dev + 0.03 × pop + 5 at the capital)
   × efficiency. Efficiency is integration factor × (1 − unrest/200), and 0 if the
   province is occupied or in revolt. An occupier levies 30% of the base value.
 - **Food per province per month:** (0.5 × dev × terrain factor + 3 for a food deposit) ×
@@ -138,14 +143,25 @@ changes outcomes: `step()` is a pure function of state.
   flows to the other's need (up to 40% of the buyer's cap), resource by resource and
   agreement by agreement in id order, at fixed prices (food 1, coal 1.5, iron 2, oil 3,
   rubber 3, nitrates 2.5; the exporter's trade modifier raises its price). The buyer pays,
-  the seller earns, and both get 1 crown of commerce per agreement. A realm in debt does not
-  buy. All flows of a month are computed from the state at the start of the settlement, so
+  the seller earns. A realm in debt does not buy.
+- **Commerce** (format 7): each trade agreement brings each partner 4% of the smaller
+  partner's provincial taxes a month (less what blockades and raiders stop; +bloc bonus), and
+  all of a realm's commerce together is at most 25% of its own provincial taxes. Before, every
+  agreement paid a flat crown each, so small realms signed with everyone and earned more from
+  commerce than from their land (Albania 73 against 7 of taxes after two years). All flows of a month are computed from the state at the start of the settlement, so
   the order of realms does not matter.
 - **Expenses per month:** regiment upkeep (infantry 1, cavalry 1.6, artillery 2, engineers
-  1.4, armour 3 crowns, scaled by strength), 1 crown per fort level, 1.5 per envoy, research
+  1.4, armour 3, airborne 1.6 crowns, scaled by strength), 0.6 crown per fort level, 0.4 per
+  anti-aircraft battery level, an envoy 1.5 crowns × the realm's provincial taxes ÷ 25 (between
+  0.75 and 3.75: a small realm can keep one), fleet and air wing upkeep, research
   funding (0 / 8 / 18 / 32% of gross income for ×1.0 / 1.4 / 1.8 / 2.2 research), resource
   purchases, and 2% interest on debt.
-- **Military reserve:** pop × 40 men per thousand × (0.2 + 0.8 × integration).
+- **Military reserve** (format 7): 5% of the people, scaled by integration (pop × 500 ×
+  (0.2 + 0.8 × integration)), less the **war dead** still missing from it. A man killed
+  leaves the population and the reserve for good; new cohorts make up 1% of the missing men a
+  month (about ten years to recover a war's losses). Albania (36,000 people before, 360,000
+  now) had a reserve of 1,152 men against a minimum army of 3,000; it now has 12,900 in its
+  pool and three regiments.
   The **manpower pool** can never exceed reserve minus men already serving
   (regiments plus recruits in training), so soldiers are never double-counted. A shrinking
   reserve shrinks the pool. It is trimmed to the cap at every monthly settlement, and at once
@@ -153,7 +169,14 @@ changes outcomes: `step()` is a pure function of state.
   men from the pool into training. Reinforcement moves men from the pool into regiments
   (10% of the missing men per week, only when supplied on friendly ground, and only as far as
   materiel allows). Disbanding returns survivors to the pool up to its limit. Casualties are
-  permanent and reduce population. The pool refills at reserve/40 per month.
+  permanent and reduce population. The pool refills at reserve/60 per month. Nothing is
+  counted twice: a man is in the pool, serving (a regiment or a recruit), dead, or not called
+  up; the HUD's manpower tooltip lists people, fit for service, war dead, serving and the pool
+  limit.
+- **Starting forces follow the realm's means.** The standing army costs at most a third of
+  provincial taxes (at least three regiments if the reserve allows, never more than a quarter
+  of the reserve); the home fleet only what 12% of taxes keeps afloat (transport, screen,
+  cruiser, screen, battleship, in that order). No realm starts in deficit.
 - **Population** grows logistically: 0.18% per month × (1 − pop/cap), where cap =
   terrain capacity × (1 + 0.15 × dev). Occupied provinces lose 0.2% a month.
 - **Debt, in stages:** a negative treasury means *in debt*, paying 2% monthly interest, and
@@ -526,6 +549,30 @@ provinces, and coasts on other zones, are out of reach. Coastal forts of the pro
 back: 3 hull a week per fort level, spread over the gun ships. Air and naval fire support of a
 side together never exceed +50%.
 
+**Standing orders** (format 7). A fleet takes an order and sails there by sea at its own
+speed (never jumping a zone); what it does where it lies is weighted by the order. On
+station (no order) it does every duty it can, as before:
+
+| Order | Sails to | Blockade | Raids | Protects trade | Shells |
+|---|---|---|---|---|---|
+| On station | — | 1 | 1 | 1 | the largest battle on its coast |
+| Hold position | stays | 1 | 0 | 1 | no |
+| Patrol | a zone | 1 | 0 | 1.5 | no |
+| Blockade | a zone | 1.5 | 0 | 0.5 | no |
+| Raid trade | a zone | 0.5 | 1.5 | 0 | no |
+| Escort | follows a fleet of ours | 0 | 0 | 1 | no |
+| Shell the coast | a zone off one province | 0.5 | 0 | 0.5 | only that province: battles and sieges there |
+| Return to port | a port | 0 | 0 | 0 | no; repairs ×1.5 in harbour |
+
+In transit an order counts as presence (blockade 1, protects trade at half). Sailing by hand
+ends an order; carrying troops ends it too. A fleet beaten in battle is sent to port to
+repair. An order that can no longer be carried out (the escorted fleet is gone, the port
+lost, no route) lapses with a note. Ships shelling a fortified province under siege add 4% a
+point of gun power to the siege (at most +50%), and its forts fire back. Coastal forts also
+fire on ships that keep their coast blockaded close inshore (on station, hold, patrol or
+blockade): half the shelling rate, never twice in a week. When a port changes hands, the
+fleets based there make another port their home.
+
 **Armies by sea.** Armies standing on a coast board a fleet with room (two regiments per
 transport) lying in a zone on that coast, and name a beach: our own or a friendly coast,
 unclaimed land, or an enemy's coast. Aboard, they are out of every land phase: the fleet sails
@@ -598,6 +645,28 @@ paid in materiel (aboard a carrier only off a friendly port). Wings burn oil (30
 and cost their upkeep (+25% with All-Metal Monoplanes). A wing whose airfield falls flies to
 the nearest airfield of ours within twice its range, or is lost.
 
+**Transport wings and airborne operations** (Airborne Forces, 1936). A transport wing (30
+crowns, upkeep 0.8, range 4, no missions) carries one **airborne** regiment (35 crowns,
+upkeep 1.6, fights like good infantry: attack 1.1, morale 1.3). An army made only of airborne
+regiments, at one of our airfields with a ready transport wing per regiment there, is ordered
+to a province within the transports' range: our own or a friend's, unclaimed, or an enemy's at
+war with us. The player reviews the risks first. It is flown in the week's movement phase,
+after armies move and before battles are found: fighters take 30% of the men if the enemy holds
+the sky over the target (12% contested), anti-aircraft fire 5% a level, at most half in all.
+The transports lose strength in proportion and 30 readiness. The army lands as an ordinary
+army: it fights at 70% that week, besieges and takes ground like any other, and is supplied
+only if a supply line reaches it. **Aircraft never take ground; airborne troops do, by
+siege.** The drop can be called off before it is flown; it is aborted, with the reason, if the
+airfield is lost, the transports are not fit, or the army is caught in a battle first.
+
+**Anti-aircraft defence** (Air Defence). A province's **batteries** (a construction project,
+levels 0–3, 20 × (level + 1) crowns and 2 iron, 0.4 crowns a month a level) and the **mobile
+guns** of artillery with Air Defence in armies there (half a level a regiment, at most 1.5)
+fire at enemy aircraft over it, at most 4 levels in all. Wings bombing or interdicting it, or
+supporting a battle there, lose 1.5 strength a week per level (× vulnerability) and achieve 8%
+less per level (bombing, interdiction and support); a drop loses 5% of its men per level.
+Batteries taken by an enemy are wrecked. Forts keep their own flak; ships keep their own AA.
+
 **Every wing says what it did.** Each week it records whether it flew, what it achieved
 (battles supported, enemy aircraft downed, hull damage, armies interdicted, industry and
 shipyards hit) or exactly why not: out of range (with the steps), not ready, no oil, flight
@@ -617,6 +686,23 @@ Land, sea and air meet in the battle round and in supply, never as a national bo
 - **Effects end with their conditions.** Out of range, grounded, a base or carrier lost, the
   target no longer an enemy's, peace: the next week the effect is gone (bombing orders fall idle
   with a note; other orders are kept but do nothing, and say why).
+
+**In every direction** (format 7):
+
+| From → to | What it does | What answers it |
+|---|---|---|
+| Navy → ground | shells battles (+25% cap) and sieges (+50% cap) on its coast; blockades cut crowns, shipyards and trade; beachheads supply troops ashore; lands armies | coastal forts fire on shelling and close blockading ships |
+| Ground → navy | taking a port moves the fleets based there to another home and stops its yards; holding the coast denies repairs; forts fire on ships | — |
+| Air → ground | ground support, interdiction, bombing; airborne troops take ground | fighters; anti-aircraft batteries and mobile guns |
+| Ground → air | anti-aircraft fire (losses, less achieved); taking an airfield forces its wings to rebase or be lost; taking batteries wrecks them | — |
+| Air → navy | naval strikes; reconnaissance exposes submarines; air cover | ships' AA; fighters over the fleet |
+| Navy → air | carriers base wings at sea; ships' AA blunts strikes | naval strikes on the carriers |
+
+No effect is counted twice: air and naval support of a side share one +50% cap, anti-aircraft
+fire one cap of 4 levels, a ship is fired on by forts once a week. A coastal assault on a
+fortified port in `tests/combined-warfare.test.ts` (6 seeds) took 12.8 weeks by land alone
+(1,936 men lost), 12 with aircraft (1,567), 10 with ships shelling the fort (1,617) and 9 with
+both (1,261).
 
 The worked scenarios in `tests/naval-air-scenarios.test.ts` exercise each of these through the
 weekly tick, and `tools/matrix.ts` checks that no fleet composition dominates (a carrier group
@@ -640,6 +726,31 @@ East Water; c is an island realm.
 | Two of a's ground-attack wings on call over b1 | attacker wins with even rolls | Air support on call +40% (2 wings) |
 | Three of b's fighter wings hold the sky over b1 | support +16% | the enemy holds the sky: support falls to 40% |
 | a answers with three fighter wings | support +30% | the sky is contested: 75% |
+
+## Commanding forces (`ui/app.ts`, `ui/orders.ts`, `ui/panels/sea.ts`)
+
+Armies, fleets and air wings are found, selected, inspected and ordered the same way:
+
+- **Find and select.** Click a counter on the map (army, fleet, or the wings at an airfield or
+  aboard a fleet; clicking a wing counter again selects the next wing there), or a row in the
+  Military ledger, a province card or a fleet's air group. N cycles armies, or wings or fleets
+  when one is selected; C centres the selection (a wing: its airfield or carrier). Our own
+  counters are drawn at every zoom.
+- **Inspect.** Each card states where the force is, what it is made of, its condition and
+  readiness, its current order and what it did last week, and why it does nothing when it does
+  nothing. A wing's card keeps its base apart from its mission and shows its service record
+  and costs; a fleet's card its order, the armies it can embark and the threats on its route;
+  an army's card the fleet that can carry it, or at sea where and when it lands.
+- **Order.** A right-click (a long-press on touch; E at the pointer) on a place opens the
+  orders the selected wing or fleet could take there, each with what it does or why it cannot
+  be given, ground support first over a battle; armies march on a plain right-click as before.
+  Card buttons start the same orders with a map pick; while a place is being chosen the
+  tooltip previews it (route, weeks, range, risks or the reason it would fail) and a banner
+  offers Cancel. Several wings at an airfield take one order; fleets merge; armies use groups.
+- **Observe, cancel, adjust.** Routes, mission areas, the airfields and carriers a selected
+  wing can move to, and a fleet's order target are drawn on the map. Orders are ended from the
+  card (stand down, on station, call off a drop, halt) or replaced by another; the selection
+  stays where it was.
 
 ## Wars and peace (`war.ts`)
 
@@ -959,11 +1070,63 @@ of fighters, ground attack and bombers, with one or two reconnaissance wings. We
   regiments, a navy 1.2× theirs (with their allies'), and a coast within four sea zones of its
   ports; their value is discounted for the trouble of holding a beach overseas.
 
+**War assessment and peace** (`assess.ts`, format 7). Each month, for each war, a realm
+assesses where it stands from what any realm can see: the weighted share of its land the enemy
+holds and of theirs it holds (a province weighs dev + 1, a capital twice), field strength of
+both sides (allies at 70%) and what each could still raise from its pool and treasury, whether
+the lost land can be retaken (our strength in and next to it, half of our armies elsewhere,
+against theirs there), exhaustion, capitals and the war score. *Leverage* is where it stands
+now, *outlook* where the war is heading; their average, the *standing*, is how it judges any
+terms, the player's included.
+
+- **Winning** (outlook ≥ 20, standing ≥ 15): the war leader settles once its goals are held,
+  the enemy is close to collapse, another threat needs its armies, it is tired, or the advance
+  has stalled; otherwise it presses on and logs the settlement it set aside. Its demands grow
+  with its daring (risk) and the enemy's exhaustion; after a refusal they come back more
+  moderate unless its position improved. It offers the player too.
+- **Losing** (outlook ≤ −20 or standing ≤ −25): it fights on while the lost land can be
+  retaken; otherwise it concedes land it has lost (the capital only when exhausted) and gold,
+  enough to close the gap, more after a refusal. It never repeats a refused offer, and a white
+  peace is no longer the first and only offer of a realm that has lost half its land (the
+  reported case: `tools/half-country.ts`, before and after in `reports/military/`).
+- **Stalemate:** a white peace once both sides are worn down, or it is exhausted.
+- **Memory:** each war remembers the last offer, its value, the standing then, and the answer;
+  a refusal is not repeated until the standing moves by 10 or its patience runs out.
+
+**Treaties for stated reasons** (format 7). An alliance is proposed to a realm within two of
+a threat both fear, to a realm fighting the same enemy, to a neighbour of a realm threatening
+us (for temperaments that seek allies), or to an old friend on the diplomatic path; a pact to
+the realm threatening us, to a stronger neighbour (cautious temperaments), or to a neighbour
+whose border should stay quiet while our armies are needed against someone else; trade for the
+commerce and goods it would bring, counted only where present partners do not already cover
+them. The reason goes with the proposal and the player's dialog shows it. The recipient
+weighs its own interests by the same rules: an alliance's obligations (it would be drawn
+against every realm the proposer fights or fears and it does not, more so if it has a treaty
+with them), a pact that frees the proposer's armies against a realm it stands by. A realm
+sounds others out before a formal offer; a refusal is remembered with its reason and the same
+request waits 12 months × patience (24 for a human). Once a year a realm leaves an alliance
+whose partner it now fears, who claims its land or with whom relations have soured, unless they
+share a threat or a war.
+
+**National management.** The army target is the least of what crowns (a share of income by
+temperament and danger), men (three quarters of the reserve) and supplies allow; its marked
+changes are logged with the limit that binds. Envoys are kept within about a tenth of income.
+Anti-aircraft batteries go where enemy aircraft fly or could (industry, airfields, the capital);
+air missions weigh the anti-aircraft fire they would fly through.
+
+**Personality.** Risk tolerance (expansionist 1.25, opportunist 1.15, diplomat 0.9, commercial
+0.85, defensive 0.8) scales demands and how far a realm presses; patience (defensive 1.3,
+expansionist 1.1, diplomat 0.9, opportunist 0.8, commercial 0.7) how long it waits before
+repeating an offer, settling a stalemate, or asking again.
+
 **Stability.** Commitment bonuses keep plans from flip-flopping; emergencies reassign armies at once.
 
 **Diagnostics** go to `state.diagnostics` (the last 400): chosen research, policies, war candidates with
-ratios and scores (once a year per realm), declarations, peace attempts, army objectives,
-attacks held back by forecasts, and rejected orders. They are included in bug reports.
+ratios and scores (once a year per realm), declarations, peace decisions with the assessment
+behind them and the options rejected (fighting on, holding out, pressing on, offers and
+settlements), treaties proposed and sounded out with their reasons and the recipient's
+objections, alliances left, army-target changes, army objectives, attacks held back by
+forecasts, and rejected orders. They are included in bug reports.
 
 | Personality | War ratio | Aggression | Preferred path | Realms |
 |---|---|---|---|---|
@@ -989,12 +1152,14 @@ default and disclosed in the setup screen and the game menu.
   noise) lives only in the UI. A test forbids `Math.random` and wall-clock time in `src/sim`.
 - **Reproducibility:** the same seed, settings and command sequence reproduce identical states.
   Tests assert this, and that a game saved mid-war continues exactly like the original.
-- **Save format 6** (`src/sim/save.ts`): versioned and checksummed JSON of the complete state,
+- **Save format 7** (`src/sim/save.ts`): versioned and checksummed JSON of the complete state,
   including movement progress, battles, queues, treaties, events, stockpiles, factories,
   fleets (with troops aboard and last week's report), ports, slipways, air wings (base or
   carrier, mission, sea target, readiness, last week's report), airfields, national focus,
   influence, guarantees, loans, trade blocs, reparations, army limits, war contributions and
-  AI commitments. (Stage C extended format 3 rather than starting a new one: a format-3 save
+  AI commitments; format 7 adds the war dead missing from each reserve, fleet orders,
+  anti-aircraft batteries, airborne operations under way, wings' service records, and the
+  AI's memory of peace offers and treaty answers. (Stage C extended format 3 rather than starting a new one: a format-3 save
   written before fleets existed loads with empty navies and air arms, starting ports from the
   map, and a notice.)
 - **Saves keep their map.** The state records the map's fingerprint: its id, content revision and
@@ -1018,7 +1183,12 @@ default and disclosed in the setup screen and the game menu.
   longer be replayed). Format 4 becomes format 5 (trade contracts): running exchanges become
   12-month contracts at list price. Format 5 becomes format 6 (the naval and air update): every
   wing starts fully ready at its airfield with its mission kept, carriers start with empty
-  decks, and the new force statistics start at zero. The notice says all of this. A save that cannot
+  decks, and the new force statistics start at zero. Format 6 becomes format 7 (military
+  control and national scale): nothing is paid out or refilled (treasuries, pools, stocks and
+  forces stay as they were; no war dead are charged retroactively), fleets are on station with
+  no order, there are no batteries and no drops under way, and the AI's offer memory starts
+  empty; population now reads in people and commerce follows the partners' economies from the
+  next month (`tests/format7.test.ts`). The notice says all of this. A save that cannot
   be converted (for example an embedded map that no longer validates) is refused with the
   reason, stays listed, and can still be exported from the load screen. The tests convert a
   save from the first release (`tests/fixtures/reach-save-main-c29aea6.json`) and two format-2

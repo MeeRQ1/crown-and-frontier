@@ -35,7 +35,7 @@ import {
   zoneRaid,
 } from '../../sim/naval';
 import { isBeachhead } from '../../sim/supply';
-import { aaOwn } from '../../sim/airborne';
+import { aaAgainst, aaOwn } from '../../sim/airborne';
 import { atWar, dateOf, provName } from '../../sim/state';
 import type { AirWing, Fleet, FleetDuty, FleetDutyKind, ProvinceId, ShipType, StrategicResource, WingType } from '../../sim/types';
 import type { App } from '../app';
@@ -667,6 +667,17 @@ export function airDefenceSection(app: App, pid: ProvinceId): HTMLElement | null
     .sort()
     .map((id) => st.wings[id])
     .filter((w) => atWar(sim, me, w.nation) && (w.mission === 'bombing' || w.mission === 'interdiction' || w.mission === 'support') && w.target && (w.target === pid || (w.mission !== 'bombing' && sim.world.prov[w.target].neighbors.includes(pid))));
+  // an enemy province: the fire our aircraft and paratroopers would meet there
+  if (p.controller && atWar(sim, me, p.controller)) {
+    const theirs = aaAgainst(sim, pid, me);
+    if (!theirs.total) return null;
+    return section(
+      'Air defence (enemy)',
+      row('Their batteries', `level ${theirs.batteries}`),
+      row('Mobile guns of their armies here', theirs.mobile ? `level ${fmt(theirs.mobile, 1)}` : 'none'),
+      h('p', { class: 'small muted' }, `Our aircraft bombing, interdicting or supporting a battle here lose ${fmt(C.air.aaPer * theirs.total, 1)} strength a week (more for fragile types) and achieve ${Math.round(Math.min(0.8, C.air.aaEffect * theirs.total) * 100)}% less; an airborne drop here loses ${Math.round(C.air.dropAA * theirs.total * 100)}% of its men to the guns, besides any fighters overhead.`),
+    );
+  }
   if (!own.total && !raiders.length && !(ours && st.nations[me].research.done.includes('air_defence'))) return null;
   const items: Array<HTMLElement | null> = [
     row('Batteries', `level ${p.aa ?? 0} of ${C.construction.flakMax}`),

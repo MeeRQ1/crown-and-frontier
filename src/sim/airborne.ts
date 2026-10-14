@@ -23,7 +23,7 @@
 // the target can no longer be reached.
 
 import { airControl, stepsTo, wingRange, wingStatus } from './air';
-import { C, UNITS, WINGS } from './config';
+import { C, WINGS } from './config';
 import { warDead } from './economy';
 import { armiesIn, touchArmies } from './index';
 import { atWar, isFriendly, notify, provName, type Sim } from './state';
@@ -238,5 +238,4 @@ export function resolveAirDrops(sim: Sim): void {
     if (owner && atWar(sim, a.nation, owner)) notify(sim, owner, 'urgent', 'air', `Enemy airborne troops have landed at ${provName(sim, d.target)}!`, { province: d.target });
   }
   if (moved) touchArmies(sim);
-  void UNITS;
 }
