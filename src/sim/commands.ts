@@ -65,7 +65,7 @@ import { researchProblem } from './progression';
 import { cancelContract, cancelContractProblem, cleanTerms, contractProblem, offerContract, signContract } from './trade';
 import { serialize } from './save';
 import { nationName, notify, type Sim } from './state';
-import type { Command, CommandResult } from './types';
+import type { Command, CommandResult, Proposal } from './types';
 import { answerCallToArms, applyPeace, declareWar, declareWarProblem, evaluatePeace, goalOptions, peaceProblem } from './war';
 
 function atSeaProblem(sim: Sim, fleet: string): string {
@@ -497,6 +497,7 @@ function execute(sim: Sim, cmd: Command): CommandResult {
         answerCallToArms(sim, cmd.nation, p.war!, p.from, cmd.accept);
         return { ok: true };
       }
+      rememberAnswer(sim, p, cmd.accept);
       if (!cmd.accept) {
         addMemory(sim, p.from, cmd.nation, 'rebuffed', -5, 1);
         return { ok: true, message: p.kind === 'settlement' ? 'Settlement refused: the war goes on.' : 'Proposal declined.' };
@@ -596,8 +597,19 @@ export function weeklyProposals(sim: Sim): void {
   st.proposals = st.proposals.filter((p) => p.expires > st.tick);
   for (const p of expired) {
     if (p.kind === 'callToArms') answerCallToArms(sim, p.to, p.war!, p.from, true);
-    else notify(sim, p.from, 'low', 'proposal', `${nationName(sim, p.to)} did not answer our proposal.`);
+    else {
+      rememberAnswer(sim, p, false);
+      notify(sim, p.from, 'low', 'proposal', `${nationName(sim, p.to)} did not answer our proposal.`);
+    }
   }
+}
+
+/** The proposer remembers how its offer was answered (an unanswered offer counts as refused). */
+function rememberAnswer(sim: Sim, p: Proposal, accepted: boolean): void {
+  const ai = sim.state.nations[p.from]?.ai;
+  if (!ai) return;
+  if ((p.kind === 'peace' || p.kind === 'settlement') && p.war && ai.peace[p.war]) ai.peace[p.war].answer = accepted ? 'accepted' : 'rejected';
+  if (p.kind === 'alliance' || p.kind === 'nap' || p.kind === 'trade') ai.treatyAnswers[`${p.to}:${p.kind}`] = { tick: sim.state.tick, accepted };
 }
 
 export { evaluateTreaty };

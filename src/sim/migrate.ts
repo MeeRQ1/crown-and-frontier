@@ -197,7 +197,13 @@ const STEPS: Record<number, Step> = {
   // pools, treasuries and losses stay as they were and the new rules apply from the next month.
   6: (save, notices) => {
     const st = save.state as Record<string, any>;
-    for (const n of Object.values<any>(st.nations ?? {})) n.reserveLost = 0;
+    for (const n of Object.values<any>(st.nations ?? {})) {
+      n.reserveLost = 0;
+      if (n.ai) {
+        n.ai.peace = {};
+        n.ai.treatyAnswers = {};
+      }
+    }
     st.schema = 7;
     save.schema = 7;
     notices.push(

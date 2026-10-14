@@ -155,6 +155,8 @@ export function createGame(opts: NewGameOptions = {}): Sim {
         rally: null,
         lastPeaceTry: {},
         lastProposal: {},
+        peace: {},
+        treatyAnswers: {},
       },
       stats: {
         battlesWon: 0,

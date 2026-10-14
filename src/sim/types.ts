@@ -673,8 +673,26 @@ export interface AIState {
   rally: ProvinceId | null;
   lastPeaceTry: Record<string, number>;
   lastProposal: Record<string, number>;
+  /** per war: the last peace offer made, how it was answered, and the war's recent outlook (format 7) */
+  peace: Record<WarId, PeaceMemory>;
+  /** answers our treaty proposals got, by `${realm}:${type}` (format 7) */
+  treatyAnswers: Record<string, { tick: number; accepted: boolean }>;
   /** a planned landing: gather a force at `port`, carry it to `target` */
   invasion?: { target: ProvinceId; port: ProvinceId; since: number } | null;
+}
+
+/** What an AI realm remembers of making peace in one war. */
+export interface PeaceMemory {
+  /** the last offer: when, what kind, its value in war-score points and our standing then */
+  tick: number;
+  mode: 'white' | 'concede' | 'demand' | 'settlement' | null;
+  value: number;
+  standing: number;
+  answer: 'pending' | 'rejected' | 'accepted' | null;
+  /** the outlook each month, newest last (at most four): the war's momentum */
+  outlooks: number[];
+  /** when it next reconsiders the war */
+  next: number;
 }
 
 export interface NationStats {

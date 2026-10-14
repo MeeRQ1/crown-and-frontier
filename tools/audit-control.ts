@@ -7,7 +7,7 @@
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { createServer } from 'node:http';
 import { extname, join, normalize } from 'node:path';
-import { chromium, type Page } from 'playwright';
+import { chromium } from 'playwright';
 import { seaAirSave } from './sea-air-save';
 
 const args = process.argv.slice(2);
