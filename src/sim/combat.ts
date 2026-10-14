@@ -59,6 +59,8 @@ interface ArmySnap {
   stationary: number;
   /** came ashore from the sea this week (amphibious landing) */
   landed: boolean;
+  /** dropped from the air this week (airborne landing) */
+  dropped?: boolean;
   regs: RegSnap[];
 }
 export interface SideSnap {
@@ -74,6 +76,7 @@ export function snapArmy(sim: Sim, a: Army): ArmySnap {
     supply: a.supply,
     stationary: a.stationary,
     landed: !!a.embarked || a.landed === sim.state.tick,
+    dropped: a.dropped === sim.state.tick,
     regs: a.regiments.map((r) => ({ type: r.type, men: r.men, key: r.id })),
   };
 }
@@ -172,6 +175,7 @@ function sideCalc(sim: Sim, pid: ProvinceId, s: SideSnap, enemyAntiCav = 0, fire
   let unfuelled = false;
   let noShells = false;
   let landing = false;
+  let dropped = false;
   for (const e of [...f, ...g]) {
     const nat = e.army.nation;
     const m = nationMods(sim, nat);
@@ -195,6 +199,10 @@ function sideCalc(sim: Sim, pid: ProvinceId, s: SideSnap, enemyAntiCav = 0, fire
     if (e.army.landed) {
       v *= 1 - (1 - C.naval.landing) * Math.max(0, 1 - m.landing);
       landing = true;
+    }
+    if (e.army.dropped) {
+      v *= C.air.dropLanding;
+      dropped = true;
     }
     v = Math.max(0, v);
     engaged.push({ army: e.army, reg: e.reg, weight: e.reg.men * (u.role === 'support' ? 0.5 : 1), fire: v });
@@ -220,6 +228,7 @@ function sideCalc(sim: Sim, pid: ProvinceId, s: SideSnap, enemyAntiCav = 0, fire
     const pen = (1 - C.naval.landing) * Math.max(0, 1 - nationMods(sim, s.armies[0].nation).landing);
     notes.push(`Landing from the sea −${Math.round(pen * 100)}%`);
   }
+  if (dropped) notes.push(`Dropped from the air this week, still gathering −${Math.round((1 - C.air.dropLanding) * 100)}%`);
   // fire support from the air and from the sea (committed to this battle; see battleSupport)
   if (fireSupport && fireSupport.share > 0) {
     fire *= 1 + fireSupport.share;

@@ -566,8 +566,13 @@ export function computeLedger(sim: Sim, nid: NationId, contracts: ContractPlan =
   if (airUp) expenses['Air wing upkeep'] = airUp;
 
   let forts = 0;
-  for (const pid of ownedProvinces(sim, nid)) forts += sim.state.provinces[pid].fort;
+  let aa = 0;
+  for (const pid of ownedProvinces(sim, nid)) {
+    forts += sim.state.provinces[pid].fort;
+    aa += sim.state.provinces[pid].aa ?? 0;
+  }
   if (forts) expenses['Fort upkeep'] = forts * C.construction.fortUpkeep * Math.max(0, 1 + mods.fortUpkeep);
+  if (aa) expenses['Anti-aircraft batteries'] = aa * C.construction.flakUpkeep;
 
   const envoys = sim.state.envoys.filter((e) => e.from === nid).length;
   if (envoys) expenses['Envoys'] = envoys * envoyCost(sim, nid);

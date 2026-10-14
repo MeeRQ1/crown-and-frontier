@@ -204,8 +204,11 @@ const STEPS: Record<number, Step> = {
         n.ai.treatyAnswers = {};
       }
     }
-    // fleets keep doing what they did: on station, no standing order
+    // fleets keep doing what they did: on station, no standing order; no anti-aircraft
+    // batteries yet, no airborne operation under way
     for (const f of Object.values<any>(st.fleets ?? {})) f.duty = null;
+    for (const p of Object.values<any>(st.provinces ?? {})) p.aa = 0;
+    for (const a of Object.values<any>(st.armies ?? {})) a.drop = null;
     st.schema = 7;
     save.schema = 7;
     notices.push(

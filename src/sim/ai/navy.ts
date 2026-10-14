@@ -13,7 +13,7 @@
 
 import { airfieldRoom, skiesAtSea, buildWingProblem, deckSlots, inRangeOf, MISSION_LABELS, missionProblem, rebaseProblem, wingsAboard, wingsAt, wingsOf, wingStatus, wingUnlocked } from '../air';
 import type { Place } from '../reach';
-import { SHIPS, WINGS } from '../config';
+import { C, SHIPS, WINGS } from '../config';
 import { armiesIn, armiesOfNation, memoWeek } from '../index';
 import { grossIncome } from '../economy';
 import {
@@ -35,6 +35,7 @@ import {
   touchFleets,
   zoneBalance,
 } from '../naval';
+import { aaAgainst } from '../airborne';
 import { armiesOf, atWar, diag, enemiesOf, isFriendly, months, ownedProvinces, type Sim } from '../state';
 import type { AirMission, AirWing, Army, Fleet, NationId, Personality, ProvinceId, ShipType, UnitType, WingType, ZoneId } from '../types';
 import { aiRand, issue, reachFrom } from './common';
@@ -175,7 +176,7 @@ export function navalStrategy(sim: Sim, nid: NationId, reserve: number): void {
   const fields = ownedProvinces(sim, nid).filter((p) => st.provinces[p].airfield > 0);
   const budget = gross * AIR_SHARE[war ? 1 : 0];
   if (airUpkeepOf(sim, nid) >= budget) return;
-  const have: Record<WingType, number> = { recon: 0, fighter: 0, attack: 0, bomber: 0 };
+  const have: Record<WingType, number> = { recon: 0, fighter: 0, attack: 0, bomber: 0, transport: 0 };
   for (const w of wingsOf(sim, nid)) have[w.type]++;
   for (const pid of sim.world.provIds) for (const o of st.provinces[pid].hangar) if (o.nation === nid) have[o.wing]++;
   const total = Object.values(have).reduce((a, b) => a + b, 0);
@@ -752,6 +753,14 @@ function orderOptions(sim: Sim, w: AirWing, ctx: AirContext): AirOrder[] {
       const f = ctx.frontier().find(prov);
       if (f) opts.push({ mission: 'recon', target: f, zone: null, score: 1, why: 'watch the frontier' });
     }
+  }
+  // anti-aircraft fire where it would fly: it achieves less and loses more there
+  for (const o of opts) {
+    if (!o.target || (o.mission !== 'bombing' && o.mission !== 'interdiction' && o.mission !== 'support')) continue;
+    const aa = aaAgainst(sim, o.target, w.nation).total;
+    if (aa <= 0) continue;
+    o.score *= Math.max(0.2, 1 - C.air.aaEffect * aa) * Math.max(0.3, 1 - 0.06 * aa * WINGS[w.type].vulnerability);
+    o.why += ` (through anti-aircraft fire, level ${aa.toFixed(1)})`;
   }
   // at peace no mission meets anything: every wing rests, keeping its readiness for the
   // first weeks of a war and burning a third of the oil

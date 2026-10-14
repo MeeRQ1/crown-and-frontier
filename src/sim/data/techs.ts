@@ -121,6 +121,7 @@ export const TECH_LIST: TechDef[] = [
   tech('fleet_carriers', 'Fleet Carriers', 'naval', 5, 1930, ['naval_aviation'], { carrierDeck: 1, carrierAir: 0.25 }, 'Large carriers: a third air wing on every deck, and dive and torpedo bombers that strike ships 25% harder.'),
   tech('air_defence', 'Air Defence', 'air', 5, 1933, ['all_metal_aircraft'], { airDefence: 0.4 }, 'Flak belts, observers and interceptor control.'),
   tech('radar', 'Radar', 'air', 5, 1936, ['air_defence'], { airAttack: 0.2, airDefence: 0.2 }, 'Radio location sees raiders coming a hundred miles away: fighters intercept harder and bombing does less.'),
+  tech('airborne_forces', 'Airborne Forces', 'air', 5, 1936, ['all_metal_aircraft'], {}, 'Transport aircraft and parachute troops: airborne regiments that transport wings drop on a province behind the front.', 'airborne'),
   tech('synthetic_fuel', 'Synthetic Fuel', 'industry', 5, 1927, ['haber_process'], { syntheticOil: 0.25 }, 'Coal hydrogenated into petrol.'),
   tech('mechanised', 'Mechanised Infantry', 'land', 5, 1928, ['combined_arms'], { moveSpeed: 0.15, infantryAttack: 0.1, armourAttack: 0.15 }, 'Infantry rides into battle beside the tanks.'),
   tech('welfare_state', 'Welfare State', 'society', 5, 1928, ['social_insurance'], { unrest: -5, popGrowth: 0.2 }, 'Health, housing and schooling for all.'),

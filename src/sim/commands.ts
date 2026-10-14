@@ -28,6 +28,7 @@ import {
 import { choiceProblem, resolveEvent } from './events';
 import { cancelRecruits, disbandProblem, doDisband, doMerge, doSplit, mergeProblem, orderRecruit, recruitProblem, splitProblem } from './military';
 import { enterProblem, findPath, stationProblem } from './movement';
+import { airDropProblem, cancelAirDrop, launchAirDrop } from './airborne';
 import {
   buildShipProblem,
   cancelShip,
@@ -68,7 +69,7 @@ import { applySettlement, counterOffer, evaluateSettlement, settlementProblem } 
 import { researchProblem } from './progression';
 import { cancelContract, cancelContractProblem, cleanTerms, contractProblem, offerContract, signContract } from './trade';
 import { serialize } from './save';
-import { nationName, notify, type Sim } from './state';
+import { nationName, notify, provName, type Sim } from './state';
 import type { Command, CommandResult, Proposal } from './types';
 import { answerCallToArms, applyPeace, declareWar, declareWarProblem, evaluatePeace, goalOptions, peaceProblem } from './war';
 
@@ -98,6 +99,7 @@ export function checkCommand(sim: Sim, cmd: Command): string | null {
       if (!st.provinces[cmd.dest]) return 'Unknown province.';
       if (a.battle) return 'The army is engaged in battle and cannot manoeuvre.';
       if (a.retreating) return 'The army is retreating and cannot take orders until it arrives.';
+      if (a.drop) return `The army is waiting at the airfield to be dropped on ${provName(sim, a.drop.target)}: call the drop off first.`;
       const from = cmd.append && a.path.length ? a.path[a.path.length - 1] : a.location;
       if (cmd.dest === from) return null;
       const ep = enterProblem(sim, cmd.nation, cmd.dest);
@@ -149,6 +151,10 @@ export function checkCommand(sim: Sim, cmd: Command): string | null {
       return fleetOrderProblem(sim, cmd.nation, cmd.fleet);
     case 'fleetDuty':
       return fleetDutyProblem(sim, cmd.nation, cmd.fleet, cmd.duty);
+    case 'airDrop':
+      return airDropProblem(sim, cmd.nation, cmd.army, cmd.target);
+    case 'cancelDrop':
+      return st.armies[cmd.army]?.nation === cmd.nation && st.armies[cmd.army].drop ? null : 'No airborne operation of this army to cancel.';
     case 'mergeFleets':
       return mergeFleetsProblem(sim, cmd.nation, cmd.fleets);
     case 'splitFleet':
@@ -346,6 +352,14 @@ function execute(sim: Sim, cmd: Command): CommandResult {
       if (f.duty) setFleetDuty(sim, f.id, null);
       return { ok: true };
     }
+    case 'airDrop': {
+      launchAirDrop(sim, cmd.nation, cmd.army, cmd.target);
+      const a = st.armies[cmd.army];
+      return { ok: true, message: `${a.name} boards ${a.drop!.wings.length} transport wing${a.drop!.wings.length === 1 ? '' : 's'}: it is flown to ${sim.world.prov[cmd.target].name} in this week's air phase.` };
+    }
+    case 'cancelDrop':
+      cancelAirDrop(sim, cmd.army);
+      return { ok: true, message: 'Airborne operation called off.' };
     case 'fleetDuty': {
       setFleetDuty(sim, cmd.fleet, cmd.duty);
       const f = st.fleets[cmd.fleet];

@@ -83,6 +83,12 @@ export const UNITS: Record<UnitType, UnitRules> = {
     attack: 0.6, morale: 0.8, speed: 1.0, siege: 3, pursuit: 0,
     description: 'Sappers and bridging trains. Their army digs in twice as fast, besieges faster and crosses rivers without penalty.',
   },
+  airborne: {
+    label: 'Airborne', plural: 'Airborne', abbr: 'P', role: 'line', requires: 'airborne_forces',
+    cost: 35, materiel: 18, resources: { rubber: 1 }, weeks: 10, upkeep: 1.6, supplyUse: 0.5, burn: {},
+    attack: 1.1, morale: 1.3, speed: 1.0, siege: 0.8, pursuit: 0.05,
+    description: 'Parachute infantry: picked, lightly armed troops. On the ground they fight like good infantry; from an airfield, transport wings can drop them on a province within reach, behind the front.',
+  },
   armour: {
     label: 'Armour', plural: 'Armour', abbr: 'T', role: 'breakthrough', requires: 'tanks',
     cost: 50, materiel: 80, resources: { iron: 8, rubber: 3, oil: 2 }, weeks: 12, upkeep: 3.0, supplyUse: 0.4, burn: { oil: 0.6 },
@@ -199,6 +205,8 @@ export interface WingRules {
   carrier: boolean;
   /** losses it suffers when intercepted or shot at, relative to the others */
   vulnerability: number;
+  /** regiments it carries in an airborne operation (transports) */
+  lift?: number;
   role: string;
   description: string;
 }
@@ -231,6 +239,13 @@ export const WINGS: Record<WingType, WingRules> = {
     air: 0.8, ground: 1, bomb: 3, naval: 2, range: 5, missions: ['bombing', 'interdiction', 'naval'], carrier: false, vulnerability: 1.2,
     role: 'Strategic and logistics bombing; long-range naval strike',
     description: 'Long-range bombers: wreck factories, shipyards, ports and airfields far behind the front, interdict supply, or strike fleets at range. Too heavy for carriers; needs fighters to survive defended skies.',
+  },
+  transport: {
+    label: 'Transport wing', plural: 'Transport wings', abbr: 'Tr', requires: 'airborne_forces',
+    cost: 30, materiel: 20, resources: { rubber: 1, iron: 1 }, weeks: 8, upkeep: 0.8, fuel: 0.2,
+    air: 0.2, ground: 0, bomb: 0, naval: 0, range: 4, missions: [], carrier: false, vulnerability: 1.5, lift: 1,
+    role: 'Airborne operations',
+    description: 'Transport aircraft: each carries one airborne regiment from its airfield to a province within range, through whatever fighters and anti-aircraft guns wait there. It flies no other mission.',
   },
 };
 export const WING_TYPES = Object.keys(WINGS) as WingType[];
@@ -378,6 +393,12 @@ export const C = {
     airfieldIron: 3,
     airfieldWeeks: 12,
     airfieldMax: 2,
+    /** anti-aircraft batteries (format 7): crowns × (level + 1), iron, weeks, levels; upkeep a month per level */
+    flakBase: 20,
+    flakIron: 2,
+    flakWeeks: 6,
+    flakMax: 3,
+    flakUpkeep: 0.4,
     fortWeeks: 16,
     fortMax: 3,
     fortUpkeep: 0.6, // crowns / month per level
@@ -533,6 +554,25 @@ export const C = {
     wingsPerAirfield: 2,
     /** a carrier below this hull condition cannot operate aircraft */
     deckHull: 40,
+    /**
+     * anti-aircraft defence of a province (format 7): its batteries (0–3) plus mobile guns of
+     * the defenders' artillery there (Air Defence: half a level a regiment, at most 1.5), at
+     * most `aaMax` in all. Enemy aircraft flying over it lose `aaPer` strength a week per level
+     * and achieve `aaEffect` less per level; an airborne drop loses `dropAA` of its men per level.
+     */
+    aaPer: 1.5,
+    aaEffect: 0.08,
+    aaMax: 4,
+    mobileAA: 0.5,
+    mobileAAMax: 1.5,
+    /** airborne drops: men lost by who holds the sky over the target (theirs, contested) and per AA level; cap */
+    dropIntercept: 0.3,
+    dropDisputed: 0.12,
+    dropAA: 0.05,
+    dropLossMax: 0.5,
+    /** landed troops fight at this share the week they land; transports lose this much readiness */
+    dropLanding: 0.7,
+    dropWear: 30,
   },
 
   siege: {

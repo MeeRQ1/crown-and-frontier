@@ -127,7 +127,7 @@ const SEA_INK = '#4d6d73';
 const RANGE_INK = '#5f5f50';
 
 /** The branch symbol for an army: its most numerous regiment type. */
-const BRANCH: Record<UnitType, string> = { infantry: 'infantry', cavalry: 'cavalry', artillery: 'artillery', engineers: 'support', armour: 'armor' };
+const BRANCH: Record<UnitType, string> = { infantry: 'infantry', cavalry: 'cavalry', artillery: 'artillery', engineers: 'support', armour: 'armor', airborne: 'infantry' };
 function branchOf(a: Army): string {
   const n = new Map<UnitType, number>();
   for (const r of a.regiments) n.set(r.type, (n.get(r.type) ?? 0) + 1);

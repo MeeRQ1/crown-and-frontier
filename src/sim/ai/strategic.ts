@@ -267,6 +267,21 @@ function planConstruction(sim: Sim, nid: NationId): void {
     const coastShare = owned.filter((q) => sim.world.provZones[q]).length / Math.max(1, owned.length);
     const fields = owned.filter((q) => st.provinces[q].airfield > 0).length + building('airfield');
     const wantFields = n.research.done.includes('aviation') ? Math.min(3, 1 + Math.floor(owned.length / 14)) : 0;
+    // anti-aircraft batteries where enemy aircraft fly over us, or could: factories, airfields, the capital
+    const airDefence = n.research.done.includes('air_defence');
+    let enemyStrike = 0;
+    const overUs = new Set<ProvinceId>();
+    if (airDefence) {
+      for (const id of Object.keys(st.wings)) {
+        const w = st.wings[id];
+        if (!atWar(sim, nid, w.nation)) continue;
+        if (w.type === 'bomber' || w.type === 'attack') enemyStrike++;
+        if (w.target && (w.mission === 'bombing' || w.mission === 'interdiction' || w.mission === 'support')) {
+          overUs.add(w.target);
+          if (w.mission !== 'bombing') for (const q of sim.world.prov[w.target].neighbors) overUs.add(q);
+        }
+      }
+    }
     for (const pid of owned) {
       const pr = st.provinces[pid];
       if (pr.controller !== nid || pr.project) continue;
@@ -276,7 +291,8 @@ function planConstruction(sim: Sim, nid: NationId): void {
         const o = st.provinces[nb].owner;
         return !!o && o !== nid && (atWar(sim, nid, o) || opinion(sim, o, nid) < -10 || o === threat);
       });
-      for (const kind of ['dev', 'infra', 'factory', 'fort', 'charter', 'port', 'airfield'] as ProjectKind[]) {
+      for (const kind of ['dev', 'infra', 'factory', 'fort', 'charter', 'port', 'airfield', 'flak'] as ProjectKind[]) {
+        if (kind === 'flak' && (!airDefence || (!enemyStrike && !overUs.has(pid)))) continue;
         if (kind === 'port' && (!sim.world.provZones[pid] || (ports > 0 && !(pr.port > 0 && pr.port < 2 && coastShare > 0.4)))) continue;
         if (kind === 'airfield' && (fields >= wantFields || pr.airfield > 0)) continue;
         if (buildProblem(sim, nid, pid, kind, known)) continue;
@@ -301,6 +317,12 @@ function planConstruction(sim: Sim, nid: NationId): void {
         }
         if (kind === 'port') v = ports === 0 ? ((3 * (pr.dev + 2)) / cost) * 100 : ((0.6 * coastShare) / cost) * 100;
         if (kind === 'airfield') v = ((2.5 * (n.capital === pid ? 2 : 1) * (border ? 1.4 : 1) * (pr.dev + 2) * 0.3) / cost) * 100;
+        if (kind === 'flak') {
+          // worth guarding: industry, airfields, the capital; more so under the bombs now
+          const worth = pr.factories * 1.5 + (pr.airfield > 0 ? 3 : 0) + (n.capital === pid ? 3 : 0) + pr.dev * 0.2;
+          const pressure = overUs.has(pid) ? 3 : Math.min(1.5, enemyStrike * 0.3);
+          v = ((worth * pressure * (1 - (pr.aa ?? 0) / (C.construction.flakMax + 1))) / cost) * 100;
+        }
         if (kind === 'charter') v = pr.integration < 60 ? (((60 - pr.integration) / 60) * (pr.dev + 2) * 0.6 / cost) * 100 * (n.ai.goal.victory === 'territorial' ? 1.3 : 1) : 0;
         if (kind === 'fort') {
           if (!hostileBorder || forts >= 1 + (owned.length * p.fortLove) / 4 + (n.treasury > grossIncome(n.lastMonth) * 12 ? 2 : 0)) continue;

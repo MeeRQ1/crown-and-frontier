@@ -69,6 +69,14 @@ export function checkInvariants(sim: Sim): string[] {
       from = step;
     }
   }
+  for (const pid in st.provinces) {
+    const aa = st.provinces[pid].aa;
+    if (!(aa >= 0 && aa <= C.construction.flakMax)) out.push(`${pid}: anti-aircraft level ${aa}`);
+  }
+  for (const id in st.armies) {
+    const d = st.armies[id].drop;
+    if (d && (!st.provinces[d.target] || !d.wings.length)) out.push(`${id}: airborne drop without a target or transports`);
+  }
   for (const fid in st.fleets) {
     const f = st.fleets[fid];
     if (f.id !== fid) out.push(`fleet key mismatch ${fid}`);

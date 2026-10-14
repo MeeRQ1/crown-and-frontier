@@ -21,10 +21,10 @@ export type Tradeable = StrategicResource | 'food';
 export type ResourceKind = 'food' | StrategicResource;
 /** A province's deposit (one at most). */
 export type Resource = ResourceKind | null;
-export type UnitType = 'infantry' | 'cavalry' | 'artillery' | 'engineers' | 'armour';
-export type ProjectKind = 'dev' | 'infra' | 'fort' | 'charter' | 'settle' | 'factory' | 'port' | 'airfield';
+export type UnitType = 'infantry' | 'cavalry' | 'artillery' | 'engineers' | 'armour' | 'airborne';
+export type ProjectKind = 'dev' | 'infra' | 'fort' | 'charter' | 'settle' | 'factory' | 'port' | 'airfield' | 'flak';
 export type ShipType = 'transport' | 'screen' | 'cruiser' | 'capital' | 'submarine' | 'carrier';
-export type WingType = 'recon' | 'fighter' | 'attack' | 'bomber';
+export type WingType = 'recon' | 'fighter' | 'attack' | 'bomber' | 'transport';
 /** What an air wing does over its target area (land) or zone (sea). */
 export type AirMission = 'idle' | 'superiority' | 'support' | 'interdiction' | 'bombing' | 'naval' | 'recon';
 export type Personality = 'expansionist' | 'defensive' | 'commercial' | 'opportunist' | 'diplomat';
@@ -214,6 +214,8 @@ export interface ProvinceState {
   port: number;
   /** airfield level 0–2: bases for air wings */
   airfield: number;
+  /** anti-aircraft batteries 0–3 (format 7): fire at enemy aircraft over the province */
+  aa: number;
   /** ships under construction in this port */
   dock: ShipOrder[];
   /** air wings under construction at this airfield */
@@ -371,6 +373,18 @@ export interface Army {
   landed?: number;
   /** standing order kept between marches */
   order?: ArmyOrder | null;
+  /** an airborne operation under way (format 7): flown to `target` by these transport wings in the air phase */
+  drop?: AirDrop | null;
+  /** tick it landed from the air (airborne landing penalty that week) */
+  dropped?: number;
+}
+
+/** An airborne operation: the army, at an airfield, is flown to a province and dropped there. */
+export interface AirDrop {
+  target: ProvinceId;
+  wings: WingId[];
+  /** tick it was ordered */
+  since: number;
 }
 
 /** Station: return to (and hold) this province whenever the army has nothing else to do. */
@@ -756,6 +770,8 @@ export interface NationStats {
   navalStrikeHits: number;
   bombardWeeks: number;
   raidWeeks: number;
+  /** airborne operations flown (format 7; older saves: absent) */
+  airborneDrops?: number;
   /** diplomacy and focus (system-usage counts) */
   focusesDone: number;
   /** settlements dictated as the winning war leader */
@@ -969,6 +985,8 @@ export type Command =
   | { type: 'moveFleet'; nation: NationId; fleet: FleetId; zone: ZoneId }
   | { type: 'stopFleet'; nation: NationId; fleet: FleetId }
   | { type: 'fleetDuty'; nation: NationId; fleet: FleetId; duty: Omit<FleetDuty, 'since'> | null }
+  | { type: 'airDrop'; nation: NationId; army: ArmyId; target: ProvinceId }
+  | { type: 'cancelDrop'; nation: NationId; army: ArmyId }
   | { type: 'mergeFleets'; nation: NationId; fleets: FleetId[] }
   | { type: 'splitFleet'; nation: NationId; fleet: FleetId; ships: string[] }
   | { type: 'disbandFleet'; nation: NationId; fleet: FleetId }

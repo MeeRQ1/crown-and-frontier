@@ -12,6 +12,8 @@ import { atWar, dateOf, months, ownedProvinces, provName, type Sim } from '../si
 import { isOver, step, weekSlices } from '../sim/tick';
 import { DUTY_HELP, DUTY_LABELS, dutyDestination, fleetDutyProblem, fleetEta, fleetsIn, fleetSummary, pathToCoast, transportFor, zoneName, zonePath } from '../sim/naval';
 import { closeOrderMenu, openOrderMenu, orderMenuOpen, rebaseTargets } from './orders';
+import { airDropProblem, airDropRisk } from '../sim/airborne';
+import { confirmDialog } from './panels/dialogs';
 import type { AirMission, Army, Command, CommandResult, ContractTerms, Demand, DemandKind, FleetDuty, FleetDutyKind, NationId, ProvinceId, Tradeable } from '../sim/types';
 import { Sound } from './audio';
 import { h, setChildren } from './dom';
@@ -125,6 +127,7 @@ export class App {
     | { kind: 'ship'; armies: string[]; fleet: string }
     | { kind: 'air'; wing: string; mission: AirMission; group?: string[] }
     | { kind: 'duty'; fleet: string; duty: FleetDutyKind }
+    | { kind: 'drop'; army: string }
     | null = null;
   hoverProvince: ProvinceId | null = null;
   moveMode = false;
@@ -739,7 +742,7 @@ export class App {
     if (this.orderArmy && !st.armies[this.orderArmy]) this.orderArmy = null;
     if (this.selectedFleet && !st.fleets[this.selectedFleet]) this.selectedFleet = null;
     if (this.selectedWing && !st.wings[this.selectedWing]) this.selectedWing = null;
-    if (this.targeting && (((this.targeting.kind === 'fleet' || this.targeting.kind === 'duty') && !st.fleets[this.targeting.fleet]) || (this.targeting.kind === 'air' && !st.wings[this.targeting.wing]))) this.targeting = null;
+    if (this.targeting && (((this.targeting.kind === 'fleet' || this.targeting.kind === 'duty') && !st.fleets[this.targeting.fleet]) || (this.targeting.kind === 'air' && !st.wings[this.targeting.wing]) || (this.targeting.kind === 'drop' && !st.armies[this.targeting.army]))) this.targeting = null;
   }
 
   /**
@@ -920,6 +923,36 @@ export class App {
     };
     this.toast(`${DUTY_LABELS[duty]}: ${what[duty]} Esc cancels.`);
     this.refresh();
+  }
+
+  /** The next map click picks the province an airborne army is dropped on. */
+  startDropTarget(army: string): void {
+    this.targeting = { kind: 'drop', army };
+    this.canvas.classList.add('move-mode');
+    this.toast('Click the province to drop on: the tooltip shows the range and the risks. Esc cancels.');
+    this.refresh();
+  }
+
+  /** Reviews an airborne operation's risks and launches it on confirmation. */
+  confirmDrop(army: string, target: ProvinceId): void {
+    const sim = this.sim;
+    const a = sim?.state.armies[army];
+    if (!sim || !a) return;
+    const prob = airDropProblem(sim, a.nation, a.id, target);
+    if (prob) {
+      this.toast(prob, 'fail');
+      return;
+    }
+    const risk = airDropRisk(sim, a.nation, target);
+    const men = a.regiments.reduce((n, r) => n + r.men, 0);
+    confirmDialog(
+      this,
+      `Drop ${a.name} on ${provName(sim, target)}?`,
+      [h('p', null, `${a.regiments.length} airborne regiments (${men.toLocaleString()} men) fly from ${provName(sim, a.location)} in this week's air phase. Expected losses on the way in: about ${Math.round(risk.loss * 100)}% (${Math.round(men * risk.loss).toLocaleString()} men).`), h('ul', { class: 'notes small' }, risk.notes.map((n) => h('li', null, n)))],
+      () => this.do({ type: 'airDrop', army: a.id, target }),
+      'Launch the drop',
+      false,
+    );
   }
 
   /** The order a duty would be at a screen point (null: nothing fitting there). */
@@ -1580,6 +1613,26 @@ export class App {
       tipEl.style.top = `${Math.min(y + 18, H - (tipEl.offsetHeight || 70) - 8)}px`;
       return;
     }
+    if (tg?.kind === 'drop' && sim.state.armies[tg.army]) {
+      // choosing where to drop: range, and the sky, guns and troops waiting there
+      const a = sim.state.armies[tg.army];
+      const pid = this.renderer.provinceAt(x, y);
+      const prob = pid ? airDropProblem(sim, a.nation, a.id, pid) : 'Choose a province.';
+      const risk = pid && !prob ? airDropRisk(sim, a.nation, pid) : null;
+      setChildren(
+        tipEl,
+        h('div', { class: 'tt-title' }, icon('plane'), `Airborne drop${pid ? `: ${provName(sim, pid)}` : ''}`),
+        risk ? h('div', { class: 'tt-row' }, `Expected losses on the way in: ${Math.round(risk.loss * 100)}%`) : null,
+        ...(risk ? risk.notes.slice(0, 3).map((n) => h('div', { class: 'tt-row' }, n)) : []),
+        h('div', { class: prob ? 'tt-hint bad' : 'tt-hint' }, prob ?? 'Click to review and launch. Esc cancels.'),
+      );
+      tipEl.classList.remove('hidden');
+      const W = this.stageEl.clientWidth;
+      const H = this.stageEl.clientHeight;
+      tipEl.style.left = `${Math.min(x + 16, W - (tipEl.offsetWidth || 260) - 8)}px`;
+      tipEl.style.top = `${Math.min(y + 18, H - (tipEl.offsetHeight || 70) - 8)}px`;
+      return;
+    }
     if (tg?.kind === 'duty' && sim.state.fleets[tg.fleet]) {
       // choosing where a fleet's order applies: say whether it can be given there, and why not
       const f = sim.state.fleets[tg.fleet];
@@ -1683,7 +1736,10 @@ export class App {
       this.canvas.classList.remove('move-mode');
       if (tg.kind === 'fleet') this.orderFleet(tg.fleet, x, y);
       else if (tg.kind === 'ship' && pid) this.do({ type: 'shipArmies', armies: tg.armies, fleet: tg.fleet, dest: pid });
-      else if (tg.kind === 'duty') {
+      else if (tg.kind === 'drop') {
+        if (pid) this.confirmDrop(tg.army, pid);
+        else this.refresh();
+      } else if (tg.kind === 'duty') {
         const d = this.dutyAt(tg.fleet, tg.duty, x, y);
         if (d) this.do({ type: 'fleetDuty', fleet: tg.fleet, duty: d });
         else this.refresh();
@@ -1891,6 +1947,8 @@ export class App {
             ? 'Choose the coast to land on.'
             : tg.kind === 'duty'
               ? `${DUTY_LABELS[tg.duty]}: choose the place for ${sim.state.fleets[tg.fleet]?.name ?? 'the fleet'}.`
+              : tg.kind === 'drop'
+                ? `Airborne drop: choose where ${sim.state.armies[tg.army]?.name ?? 'the army'} lands.`
               : `${MISSION_LABELS[tg.mission]}: choose where ${tg.group ? `${tg.group.length} wings fly` : `${sim.state.wings[tg.wing]?.name ?? 'the wing'} flies`}.`;
       this.bannerEl.classList.remove('hidden');
       const cancel = h('button', { class: 'btn small quiet', type: 'button', 'data-fk': 'banner-cancel' }, 'Cancel (Esc)');

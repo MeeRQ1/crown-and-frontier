@@ -108,6 +108,7 @@ export function createGame(opts: NewGameOptions = {}): Sim {
       lastOwnerChange: 0,
       recruits: [],
       port: p.owner && world.provZones[p.id] ? (p.port ?? 0) : 0,
+      aa: 0,
       airfield: 0,
       dock: [],
       hangar: [],

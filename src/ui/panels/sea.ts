@@ -34,6 +34,7 @@ import {
   zoneRaid,
 } from '../../sim/naval';
 import { isBeachhead } from '../../sim/supply';
+import { aaOwn } from '../../sim/airborne';
 import { atWar, dateOf, provName } from '../../sim/state';
 import type { AirWing, Fleet, FleetDuty, FleetDutyKind, ProvinceId, ShipType, StrategicResource, WingType } from '../../sim/types';
 import type { App } from '../app';
@@ -551,7 +552,8 @@ export function wingCard(app: App, w: AirWing): HTMLElement[] {
       // from a carrier, the sea missions can simply cover the fleet wherever it sails
       if (w.carrier && sea) acts.push(action(`${MISSION_LABELS[m]} over the fleet`, `Over the zone the carrier lies in, wherever it sails.`, () => app.do({ type: 'airMission', wing: w.id, mission: m, target: null, zone: null }), missionProblem(sim, w.nation, w.id, m, null, null)));
     }
-    body.appendChild(section('Missions', h('div', { class: 'actions', 'data-sk': 'wing-missions' }, acts)));
+    if (w.type === 'transport') body.appendChild(section('Airborne operations', h('p', { class: 'small' }, `Transport wings fly no missions of their own: each carries one airborne regiment from this airfield to a province within ${rng} steps. Select an army of airborne regiments standing at ${provName(sim, w.base)} and choose Airborne drop.`)));
+    else body.appendChild(section('Missions', h('div', { class: 'actions', 'data-sk': 'wing-missions' }, acts)));
     // where it can fly from: airfields and carriers within ferry range
     const ferry = ferryRange(sim, w);
     const fields = sim.world.provIds.filter((pid) => st.provinces[pid].airfield > 0 && st.provinces[pid].owner === w.nation && st.provinces[pid].controller === w.nation && (pid !== w.base || w.carrier));
@@ -641,6 +643,35 @@ export function airfieldSection(app: App, pid: ProvinceId): HTMLElement | null {
     if (p.hangar.some((o) => o.nation === me)) items.push(button('Cancel the newest wing', () => app.do({ type: 'cancelWing', province: pid }), { cls: 'small quiet' }));
   }
   return section('Airfield and air wings', ...items);
+}
+
+/**
+ * Anti-aircraft defence of a province: our batteries and the mobile guns of our
+ * armies there, what they do to enemy aircraft and drops, and the enemy aircraft
+ * flying over it this week.
+ */
+export function airDefenceSection(app: App, pid: ProvinceId): HTMLElement | null {
+  const sim = app.sim!;
+  const st = sim.state;
+  const me = app.player;
+  const p = st.provinces[pid];
+  if (!me) return null;
+  const ours = p.controller === me || p.owner === me;
+  const own = aaOwn(sim, pid, me);
+  // enemy aircraft flying over it this week
+  const raiders = Object.keys(st.wings)
+    .sort()
+    .map((id) => st.wings[id])
+    .filter((w) => atWar(sim, me, w.nation) && (w.mission === 'bombing' || w.mission === 'interdiction' || w.mission === 'support') && w.target && (w.target === pid || (w.mission !== 'bombing' && sim.world.prov[w.target].neighbors.includes(pid))));
+  if (!own.total && !raiders.length && !(ours && st.nations[me].research.done.includes('air_defence'))) return null;
+  const items: Array<HTMLElement | null> = [
+    row('Batteries', `level ${p.aa ?? 0} of ${C.construction.flakMax}`),
+    row('Mobile guns of our armies here', own.mobile ? `level ${fmt(own.mobile, 1)} (artillery with Air Defence, ${C.air.mobileAA} a regiment, at most ${C.air.mobileAAMax})` : 'none'),
+    row('Anti-aircraft fire', own.total ? `level ${fmt(own.total, 1)} of ${C.air.aaMax}` : 'none'),
+  ];
+  if (own.total) items.push(h('p', { class: 'small muted' }, `Enemy aircraft bombing, interdicting or supporting a battle here lose ${fmt(C.air.aaPer * own.total, 1)} strength a week (more for fragile types) and achieve ${Math.round(Math.min(0.8, C.air.aaEffect * own.total) * 100)}% less; an airborne drop here loses ${Math.round(C.air.dropAA * own.total * 100)}% of its men on the way in.`));
+  if (raiders.length) items.push(h('div', { class: 'callout warn' }, icon('alert'), h('span', null, `Enemy aircraft over ${provName(sim, pid)} this week: ${raiders.map((w) => `${w.name} (${MISSION_LABELS[w.mission].toLowerCase()})`).join(', ')}. ${own.total ? '' : 'Build anti-aircraft batteries here, or bring fighters on air superiority.'}`)));
+  return section('Air defence', ...items);
 }
 
 /** The Military ledger's navy and air section. */

@@ -38,7 +38,7 @@ export const PERSONALITIES: Record<Personality, PersonalityDef> = {
     research: { land: 1.4, naval: 1.0, air: 1.1, industry: 1.1, society: 0.6 }, victory: 'territorial',
     treaty: { nap: 0.6, trade: 0.6, alliance: 0.8 },
     focus: { national: 1.4, army: 1.3, industry: 1.1, sea: 0.9, diplomacy: 0.7, state: 0.9 },
-    composition: { infantry: 0.5, cavalry: 0.18, artillery: 0.15, engineers: 0.05, armour: 0.12 }, fortLove: 0.6, stubborn: 10, risk: 1.25, patience: 1.1, settle: 1.0,
+    composition: { infantry: 0.5, cavalry: 0.18, artillery: 0.15, engineers: 0.05, armour: 0.12, airborne: 0 }, fortLove: 0.6, stubborn: 10, risk: 1.25, patience: 1.1, settle: 1.0,
   },
   defensive: {
     id: 'defensive', label: 'Defensive',
@@ -47,7 +47,7 @@ export const PERSONALITIES: Record<Personality, PersonalityDef> = {
     research: { land: 1.0, naval: 0.9, air: 1.0, industry: 1.1, society: 1.1 }, victory: 'economic',
     treaty: { nap: 1.3, trade: 1.0, alliance: 1.3 },
     focus: { national: 1.2, army: 1.1, industry: 1.0, sea: 0.9, diplomacy: 1.0, state: 1.2 },
-    composition: { infantry: 0.55, cavalry: 0.1, artillery: 0.22, engineers: 0.08, armour: 0.05 }, fortLove: 1.6, stubborn: 5, risk: 0.8, patience: 1.3, settle: 0.7,
+    composition: { infantry: 0.55, cavalry: 0.1, artillery: 0.22, engineers: 0.08, armour: 0.05, airborne: 0 }, fortLove: 1.6, stubborn: 5, risk: 0.8, patience: 1.3, settle: 0.7,
   },
   commercial: {
     id: 'commercial', label: 'Commercial',
@@ -56,7 +56,7 @@ export const PERSONALITIES: Record<Personality, PersonalityDef> = {
     research: { land: 0.8, naval: 1.2, air: 0.8, industry: 1.5, society: 1.0 }, victory: 'economic',
     treaty: { nap: 1.0, trade: 1.6, alliance: 0.9 },
     focus: { national: 1.2, army: 0.7, industry: 1.3, sea: 1.0, diplomacy: 1.2, state: 1.0 },
-    composition: { infantry: 0.52, cavalry: 0.13, artillery: 0.2, engineers: 0.06, armour: 0.09 }, fortLove: 0.9, stubborn: 0, risk: 0.85, patience: 0.7, settle: 1.1,
+    composition: { infantry: 0.52, cavalry: 0.13, artillery: 0.2, engineers: 0.06, armour: 0.09, airborne: 0 }, fortLove: 0.9, stubborn: 0, risk: 0.85, patience: 0.7, settle: 1.1,
   },
   opportunist: {
     id: 'opportunist', label: 'Opportunist',
@@ -65,7 +65,7 @@ export const PERSONALITIES: Record<Personality, PersonalityDef> = {
     research: { land: 1.2, naval: 1.0, air: 1.0, industry: 1.1, society: 0.8 }, victory: 'territorial',
     treaty: { nap: 0.9, trade: 0.9, alliance: 0.9 },
     focus: { national: 1.3, army: 1.2, industry: 1.0, sea: 1.0, diplomacy: 0.9, state: 0.9 },
-    composition: { infantry: 0.48, cavalry: 0.22, artillery: 0.14, engineers: 0.04, armour: 0.12 }, fortLove: 0.8, stubborn: 5, risk: 1.15, patience: 0.8, settle: 1.2,
+    composition: { infantry: 0.48, cavalry: 0.22, artillery: 0.14, engineers: 0.04, armour: 0.12, airborne: 0 }, fortLove: 0.8, stubborn: 5, risk: 1.15, patience: 0.8, settle: 1.2,
   },
   diplomat: {
     id: 'diplomat', label: 'Diplomat',
@@ -74,6 +74,6 @@ export const PERSONALITIES: Record<Personality, PersonalityDef> = {
     research: { land: 0.7, naval: 0.9, air: 0.7, industry: 1.0, society: 1.6 }, victory: 'diplomatic',
     treaty: { nap: 1.4, trade: 1.5, alliance: 1.4 },
     focus: { national: 1.2, army: 0.7, industry: 1.0, sea: 0.9, diplomacy: 1.5, state: 1.1 },
-    composition: { infantry: 0.52, cavalry: 0.13, artillery: 0.2, engineers: 0.06, armour: 0.09 }, fortLove: 1.0, stubborn: 0, risk: 0.9, patience: 0.9, settle: 0.9,
+    composition: { infantry: 0.52, cavalry: 0.13, artillery: 0.2, engineers: 0.06, armour: 0.09, airborne: 0 }, fortLove: 1.0, stubborn: 0, risk: 0.9, patience: 0.9, settle: 0.9,
   },
 };
