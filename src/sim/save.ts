@@ -9,7 +9,8 @@
 // changed since (another revision), the save loads only when the provinces and
 // realms are the same, with a notice; otherwise it is refused.
 
-import { RESOURCE_INFO, SCHEMA_VERSION } from './config';
+import { C, RESOURCE_INFO, SCHEMA_VERSION } from './config';
+import { provincialTaxes } from './economy';
 import { convertLegacyTrade } from './trade';
 import { checkInvariants } from './invariants';
 import { addForceDefaults, MigrationError, migrateSave, type RawSave } from './migrate';
@@ -173,7 +174,7 @@ export function readSave(text: string): LoadedSave {
   }
   if (raw.pendingFleets) {
     delete raw.pendingFleets;
-    startingFleets(sim);
+    startingFleets(sim, (nid) => provincialTaxes(sim, nid) * C.start.fleetShare);
   }
   if (raw.pendingContracts) {
     delete raw.pendingContracts;

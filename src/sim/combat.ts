@@ -32,7 +32,7 @@
 
 import { airSupportFor, airSupportForecast } from './air';
 import { C, TERRAIN, UNITS } from './config';
-import { isShort, removePopulation, reserveCap } from './economy';
+import { isShort, reserveCap, warDead } from './economy';
 import { maxMorale, removeArmy } from './military';
 import { armiesIn, touchBattles } from './index';
 import { nationMods, type Mods } from './modifiers';
@@ -692,9 +692,9 @@ export function weeklyCombat(sim: Sim): void {
  */
 function recordLosses(sim: Sim, nid: NationId, men: number): void {
   const n = sim.state.nations[nid];
-  n.stats.menLost += men;
-  removePopulation(sim, nid, men);
+  // exhaustion: the share of the reserve these men were, before they leave it
   const rc = Math.max(5000, reserveCap(sim, nid));
+  warDead(sim, nid, men);
   n.warExhaustion = Math.min(100, n.warExhaustion + (men / rc) * C.war.exhaustionPerLossShare * Math.max(0.1, 1 + nationMods(sim, nid).warExhaustion));
 }
 

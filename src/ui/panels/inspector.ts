@@ -19,7 +19,7 @@ import type { Army, Battle, SupportLine, ProjectKind, ProvinceId, StrategicResou
 import type { App } from '../app';
 import { orderStatus, readiness } from '../../sim/readiness';
 import { action, bar, button, h, rebuild, row, setChildren } from '../dom';
-import { fmt, men, plural, signed, weeks } from '../format';
+import { fmt, men, people, plural, signed, weeks } from '../format';
 import { icon, type IconName } from '../icons';
 import { section, shield, tip } from './common';
 import { confirmDialog } from './dialogs';
@@ -152,7 +152,7 @@ function provinceCard(app: App, pid: ProvinceId): HTMLElement[] {
         return row('Deposit', h('span', { title: RESOURCE_INFO[res].use }, `${RESOURCE_INFO[res].label}${p.owner ? ` · ${out}` : ''}`));
       })(),
       p.owner ? row('Factories', h('span', { title: `Factories make materiel for regiments and sell the surplus as manufactured goods. Each burns ${C.industry.coalPerFactory} coal a month.` }, `${p.factories}/${factoryMax(sim, pid)}`)) : null,
-      row('Population', `${fmt(p.pop, 1)}k`),
+      row('Population', h('span', { title: `${fmt(C.population.reservePerPop * p.pop)} of them fit for service at full integration (${Math.round((C.population.reservePerPop / C.population.peoplePerPop) * 100)}%).` }, people(p.pop * C.population.peoplePerPop))),
       me ? row('Supply capacity', plural(Math.floor(provinceSupplyCapacity(sim, me, pid)), 'regiment')) : null,
       me ? skyRow(app, pid) : null,
       (() => {

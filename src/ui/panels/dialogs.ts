@@ -279,7 +279,7 @@ function proposalCard(app: App, id: string, n: number): HTMLElement | null {
     title = `${from} proposes a ${TREATY_LABELS[p.kind].toLowerCase()}`;
     const what: Record<string, string> = {
       nap: 'Neither side may declare war on the other for 5 years. Cancelling early costs trust and imposes a 12-month cooling-off.',
-      trade: `The framework for trade contracts between us (goods move only under a contract), and ${C.economy.tradeCommerce} crown of commerce a month each. War ends it, and every contract under it.`,
+      trade: `The framework for trade contracts between us (goods move only under a contract), and commerce for each of us: ${Math.round(C.economy.commerceShare * 100)}% of the smaller economy's provincial taxes a month (all our agreements together at most ${Math.round(C.economy.commerceCap * 100)}% of our own taxes). War ends it, and every contract under it.`,
       alliance: 'Each side is called to arms when the other is attacked (defensive only). Grants military access.',
     };
     body.push(h('p', null, what[p.kind]));

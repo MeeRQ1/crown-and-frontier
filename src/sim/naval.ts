@@ -33,6 +33,7 @@
 
 import { mergeAir, outrangedThisWeek, portBombed, relocateAir, reportFleet, seaAir, splitAir, subsExposed, wingsAboard } from './air';
 import { C, SHIPS, SHIP_TYPES } from './config';
+import { warDead } from './economy';
 import { memoGeo, memoize, ownedBy, touchArmies } from './index';
 import { armyCap } from './influence';
 import { nationMods } from './modifiers';
@@ -221,7 +222,7 @@ export function removeFleet(sim: Sim, f: Fleet, drownCargo = true): void {
       if (!a) continue;
       let men = 0;
       for (const r of a.regiments) men += r.men;
-      st.nations[a.nation].stats.menLost += men;
+      warDead(sim, a.nation, men);
       delete st.armies[id];
     }
     if (f.cargo.length) touchArmies(sim);
@@ -241,7 +242,8 @@ export function homePortFor(sim: Sim, nid: NationId, zone: ZoneId | null): Provi
 }
 
 /** Starting fleets: every realm with a port gets a squadron at its best port. */
-export function startingFleets(sim: Sim): void {
+/** Every realm with a port starts with a home fleet it can keep afloat on `budget` crowns a month. */
+export function startingFleets(sim: Sim, budget: (nid: NationId) => number): void {
   const st = sim.state;
   for (const nid of sim.world.nationIds) {
     const n = st.nations[nid];
@@ -251,9 +253,18 @@ export function startingFleets(sim: Sim): void {
     const capital = n.capital && ports.includes(n.capital) ? n.capital : null;
     const home = capital ?? [...ports].sort((a, b) => st.provinces[b].port - st.provinces[a].port || st.provinces[b].dev - st.provinces[a].dev || (a < b ? -1 : 1))[0];
     const zone = portZone(sim, home)!;
-    const types: ShipType[] = ['cruiser', 'transport'];
-    if (n.research.done.includes('torpedo_boats')) types.push('screen', 'screen');
-    if (ports.length >= C.naval.startFleetPorts) types.push('capital');
+    // what the realm can keep afloat: a share of its taxes, in this order, never more
+    // than a transport, a cruiser, two torpedo boats and (with several ports) a battleship
+    const screens = n.research.done.includes('torpedo_boats');
+    const wanted: ShipType[] = ['transport', ...(screens ? (['screen'] as ShipType[]) : []), 'cruiser', ...(screens ? (['screen'] as ShipType[]) : []), ...(ports.length >= C.naval.startFleetPorts ? (['capital'] as ShipType[]) : [])];
+    const funds = budget(nid);
+    const types: ShipType[] = [];
+    let cost = 0;
+    for (const t of wanted) {
+      if (types.length && cost + SHIPS[t].upkeep > funds) break;
+      types.push(t);
+      cost += SHIPS[t].upkeep;
+    }
     createFleet(sim, nid, zone, types.map((t) => newShip(sim, t)), home, `${sim.world.nationDefs[nid].adjective} Home Fleet`);
   }
 }
@@ -762,7 +773,7 @@ export function drownExcess(sim: Sim, f: Fleet): void {
     if (!a) continue;
     while (excess > 0 && a.regiments.length) {
       const reg = a.regiments.pop()!;
-      st.nations[a.nation].stats.menLost += reg.men;
+      warDead(sim, a.nation, reg.men);
       excess--;
     }
     if (!a.regiments.length) {

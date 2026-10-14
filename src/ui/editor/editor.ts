@@ -386,7 +386,7 @@ export function renderEditor(app: App, initial: MapPackage | null, fromLibrary?:
         field('Terrain', selectInput<Terrain>(TERRAINS.map((t) => [t, TERRAIN[t].label] as [Terrain, string]), p.terrain, (v) => edit(() => E.paintTerrain(pkg, [pid], v)))),
         field('Deposit', selectInput<string>([['', 'None'], ...RESOURCES.map((r) => [r, RESOURCE_LABEL[r]] as [string, string])], p.resource ?? '', (v) => edit(() => E.paintDeposit(pkg, [pid], (v || null) as Resource)))),
         field('Development', numInput(p.dev, 1, E.devCap(p.terrain), (v) => edit(() => E.setProvince(pkg, pid, { dev: v })))),
-        field('Population', numInput(Math.round(p.pop), 1, 10000, (v) => edit(() => E.setProvince(pkg, pid, { pop: v })))),
+        field('Population (× 10,000 people)', numInput(Math.round(p.pop), 1, 10000, (v) => edit(() => E.setProvince(pkg, pid, { pop: v })))),
         field('Fort', numInput(p.fort, 0, 3, (v) => edit(() => E.setProvince(pkg, pid, { fort: v })))),
         field('Roads', numInput(p.infra, 0, 3, (v) => edit(() => E.setProvince(pkg, pid, { infra: v })))),
         field('Factories', numInput(p.factories ?? 0, 0, 5, (v) => edit(() => E.setProvince(pkg, pid, { factories: v })))),

@@ -198,6 +198,7 @@ export function checkInvariants(sim: Sim): string[] {
   for (const nid of sim.world.nationIds) {
     const n = st.nations[nid];
     if (n.manpower < -1e-6) out.push(`${nid}: negative manpower`);
+    if (!(n.reserveLost >= 0)) out.push(`${nid}: reserve losses ${n.reserveLost}`);
     if (n.supplies < -1e-6) out.push(`${nid}: negative supplies`);
     if (n.warExhaustion < 0 || n.warExhaustion > 100) out.push(`${nid}: war exhaustion ${n.warExhaustion}`);
     if (n.alive && n.capital && st.provinces[n.capital].owner !== nid) out.push(`${nid}: capital not owned`);

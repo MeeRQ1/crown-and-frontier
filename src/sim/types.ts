@@ -745,6 +745,8 @@ export interface NationState {
   /** food: the provisions stockpile armies draw on (shown as "Food") */
   supplies: number;
   manpower: number;
+  /** men fit for service lost for good in war and not yet made up by new cohorts (format 7) */
+  reserveLost: number;
   /** strategic resource stockpiles */
   stock: Record<StrategicResource, number>;
   /** equipment produced by industry, spent on regiments and replacements */

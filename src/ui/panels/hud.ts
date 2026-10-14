@@ -3,8 +3,8 @@
 
 import { TECHS, TECH_LIST } from '../../sim/data/techs';
 import { coalitionAgainst } from '../../sim/diplomacy';
-import { computeLedger, debtStage, factoryCount, grossIncome, materielCap, poolCap, stockpileCap } from '../../sim/economy';
-import { RESOURCE_INFO, STRATEGIC } from '../../sim/config';
+import { computeLedger, debtStage, factoryCount, grossIncome, materielCap, menServing, nationPopulation, poolCap, reserveCap, stockpileCap } from '../../sim/economy';
+import { C, RESOURCE_INFO, STRATEGIC } from '../../sim/config';
 import { activeProjects, buildSlots } from '../../sim/construction';
 import { overextension } from '../../sim/integration';
 import { researchRate, techAvailable, techCost } from '../../sim/progression';
@@ -14,7 +14,7 @@ import { VICTORY_LABELS } from '../../sim/victory';
 import { scoreFor } from '../../sim/war';
 import { SPEEDS, type App } from '../app';
 import { h, rebuild, setChildren } from '../dom';
-import { fmt, signed } from '../format';
+import { fmt, men, people, signed } from '../format';
 import { icon, type IconName } from '../icons';
 import { shield, tip } from './common';
 
@@ -117,7 +117,7 @@ export function renderHud(app: App): void {
           state: stage >= 2 ? 'alert' : stage ? 'caution' : '',
           tip: () =>
             breakdown(
-              'Treasury (crowns)',
+              'Treasury: a stock of crowns; the lines are crowns a month',
               [...Object.entries(l.income).map(([k, v]) => [k, v] as [string, number]), ...Object.entries(l.expenses).map(([k, v]) => [k, -v] as [string, number])],
               `Income ${fmt(gross, 1)} − costs ${fmt(costs, 1)} = ${signed(l.net)} per month.${stage ? ' In debt: see the Realm ledger.' : ''}`,
             ),
@@ -153,7 +153,16 @@ export function renderHud(app: App): void {
               null,
               h('b', { class: 't' }, 'Manpower'),
               h('p', null, `Men ready to recruit and reinforce: ${fmt(n.manpower)} of a current limit of ${fmt(cap)}.`),
-              h('p', { class: 'faint' }, `About ${fmt(l.manpowerIn)} men join each month. Regiments in training: ${training}. When occupation or lost integration shrinks the reserve, the pool shrinks with it.`),
+              h(
+                'ul',
+                { class: 'reasons' },
+                h('li', null, h('span', null, 'Population'), h('span', null, people(nationPopulation(sim, pid)))),
+                h('li', null, h('span', null, `Fit for service (${Math.round((C.population.reservePerPop / C.population.peoplePerPop) * 100)}%, by integration)`), h('span', null, men(reserveCap(sim, pid) + (n.reserveLost ?? 0)))),
+                n.reserveLost >= 1 ? h('li', { class: 'bad' }, h('span', null, 'War dead not yet replaced'), h('span', null, `−${men(n.reserveLost)}`)) : null,
+                h('li', null, h('span', null, 'Serving or in training'), h('span', null, `−${men(menServing(sim, pid))}`)),
+                h('li', null, h('span', null, 'Limit of the pool'), h('span', null, men(cap))),
+              ),
+              h('p', { class: 'faint' }, `About ${fmt(l.manpowerIn)} men join the pool each month (1/${C.population.regenMonths} of the reserve). A regiment takes ${fmt(C.regimentSize)} men and its materiel; losses are replaced from the pool. New cohorts make up ${Math.round(C.population.lossRecovery * 100)}% of the war dead a month. Regiments in training: ${training}.`),
             ),
           onClick: () => app.openLedger('military'),
         }),

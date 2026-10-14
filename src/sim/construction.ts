@@ -61,7 +61,7 @@ export function projectCost(sim: Sim, nid: NationId, pid: ProvinceId, kind: Proj
   switch (kind) {
     case 'dev':
       return {
-        crowns: Math.round(C.construction.devBase * p.dev * (1 + p.dev / 4) * terr.devCost * Math.max(0.3, 1 + m.devCost) * (p.dev >= terr.devCap ? C.construction.devOvercapMul : 1)),
+        crowns: Math.round(C.construction.devBase * p.dev * (1 + p.dev / 5) * terr.devCost * Math.max(0.3, 1 + m.devCost) * (p.dev >= terr.devCap ? C.construction.devOvercapMul : 1)),
         supplies: 0,
         iron: 0,
         manpower: 0,

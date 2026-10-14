@@ -1,6 +1,8 @@
 // All tunable rule numbers. Formulas live in the modules; the numbers live here.
 // Units: time in ticks (1 tick = 1 week, 4 weeks = 1 month, 12 months = 1 year),
-// money in crowns, supplies in wagons, manpower in men, population in thousands.
+// money in crowns (a treasury is a stock of crowns; income, upkeep and costs paid
+// over time are crowns a month), supplies in wagons, manpower in men, population in
+// units of 10,000 people (`population.peoplePerPop`).
 
 import type { ShipType, StrategicResource, Terrain, UnitType, WingType } from './types';
 
@@ -254,15 +256,18 @@ export const C = {
 
   economy: {
     goldPerDev: 0.8,
-    goldPerPop: 0.012, // crowns / month per thousand people
-    capitalBonus: 3,
+    goldPerPop: 0.03, // crowns / month per population unit (10,000 people)
+    capitalBonus: 5, // the seat of government: courts, customs, the national bank
+
     occupierShare: 0.3, // share of a province's crowns levied by an occupier
     supplyPerDev: 0.5,
     foodBonus: 3, // food deposit
     stockpileBase: 60,
     stockpilePerDev: 5,
-    /** crowns each partner earns from a trade agreement's commerce, besides resource sales */
-    tradeCommerce: 1,
+    /** commerce from a trade agreement: this share of the smaller partner's provincial taxes, a month */
+    commerceShare: 0.04,
+    /** all of a realm's commerce together is at most this share of its own provincial taxes */
+    commerceCap: 0.25,
     fundingCost: [0, 0.08, 0.18, 0.32] as const, // share of gross income
     fundingMul: [1, 1.4, 1.8, 2.2] as const,
     interestRate: 0.02, // monthly interest on debt
@@ -294,12 +299,27 @@ export const C = {
     reinforceMateriel: 0.5, // share of a regiment's materiel cost to replace 1,000 men
   },
 
+  /** forces at the start of a campaign, sized to each realm's means */
+  start: {
+    armyShare: 0.33, // of provincial taxes spent on the standing army
+    upkeepPerRegiment: 1.2, // the average regiment's upkeep relative to infantry's
+    reserveShare: 0.25, // at most this share of the reserve under arms
+    minRegiments: 3, // where the reserve allows
+    fleetShare: 0.12, // of provincial taxes spent on the home fleet
+  },
+
   population: {
     growth: 0.0018, // monthly logistic growth rate
     occupationLoss: 0.002,
-    reservePerPop: 40, // men of military reserve per thousand people (fully integrated)
-    regenMonths: 40, // months to regenerate an empty reserve
-    startPoolShare: 0.6,
+    /** people per population unit: a province of 40 holds 400,000 people */
+    peoplePerPop: 10_000,
+    /** men fit for service per population unit when fully integrated (5% of the people) */
+    reservePerPop: 500,
+    /** the pool of men ready to call up refills at this share of the reserve a month */
+    regenMonths: 60,
+    startPoolShare: 0.5,
+    /** war dead leave the reserve; new cohorts make up this share of the losses a month */
+    lossRecovery: 0.01,
   },
 
   integration: {
@@ -334,7 +354,7 @@ export const C = {
   },
 
   construction: {
-    devBase: 20, // * dev * (1 + dev/4) * terrain multiplier
+    devBase: 14, // * dev * (1 + dev/5) * terrain multiplier
     devWeeks: 16,
     devOvercap: 3, // levels allowed beyond the terrain cap
     devOvercapMul: 2.5, // cost multiplier beyond the terrain cap
@@ -360,7 +380,7 @@ export const C = {
     airfieldMax: 2,
     fortWeeks: 16,
     fortMax: 3,
-    fortUpkeep: 1, // crowns / month per level
+    fortUpkeep: 0.6, // crowns / month per level
     charterBase: 20, // + 6 per dev
     charterPerDev: 6,
     charterWeeks: 8,
@@ -705,4 +725,4 @@ export const C = {
  * guarantees, influence, loans and trade blocs. Older saves are migrated
  * (src/sim/migrate.ts).
  */
-export const SCHEMA_VERSION = 6;
+export const SCHEMA_VERSION = 7;
