@@ -363,6 +363,12 @@ function planConstruction(sim: Sim, nid: NationId): void {
  * The recipient judges the treaty by its own interests (diplomacy.evaluateTreaty).
  */
 export function treatyMotive(sim: Sim, nid: NationId, other: NationId, type: TreatyType): string | null {
+  // asked for every pair of realms each month (proposals, envoys): once a week, and never for a treaty already signed
+  if (hasTreaty(sim, type, nid, other)) return null;
+  return memoWeek(sim, 'treatyMotive', `${nid}|${other}|${type}`, () => motive(sim, nid, other, type));
+}
+
+function motive(sim: Sim, nid: NationId, other: NationId, type: TreatyType): string | null {
   const st = sim.state;
   const n = st.nations[nid];
   const p = pers(sim, nid);

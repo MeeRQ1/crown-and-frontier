@@ -1621,7 +1621,6 @@ export class MapRenderer {
   }
 
   private drawWings(sim: Sim, rs: RenderState, tier: Tier): void {
-    if (tier === 'far' && !rs.selectedWing) return;
     const me = rs.player;
     // one counter per airfield, and one per fleet for the wings aboard its carriers
     const at = new Map<string, { nation: NationId; wings: string[]; sel: boolean; base: ProvinceId | null; fleet: string | null }>();
@@ -1630,7 +1629,8 @@ export class MapRenderer {
       const mine = w.nation === me;
       const hostile = me ? atWar(sim, me, w.nation) : false;
       if (!mine && !hostile && w.id !== rs.selectedWing && rs.presentation.armies !== 'all') continue;
-      if (tier === 'far' && w.id !== rs.selectedWing) continue;
+      // far out, only our own wings (as with fleets): they stay easy to find and select
+      if (tier === 'far' && w.id !== rs.selectedWing && !mine) continue;
       const fleet = w.carrier && sim.state.fleets[w.carrier] ? w.carrier : null;
       const key = fleet ? `f${fleet}` : `p${w.base}`;
       const cur = at.get(key) ?? { nation: w.nation, wings: [], sel: false, base: fleet ? null : w.base, fleet };

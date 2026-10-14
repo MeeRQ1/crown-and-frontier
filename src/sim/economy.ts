@@ -87,9 +87,13 @@ function commerceWith(sim: Sim, nid: NationId, other: NationId): number {
 }
 
 function commerceRaw(sim: Sim, nid: NationId): number {
-  let v = 0;
-  for (const o of treatyPartners(sim, 'trade', nid)) v += commerceWith(sim, nid, o);
-  return v;
+  // a realm's commerce before its cap, worked out once a week: judging one more agreement
+  // (commerceGain, every pair of realms each month) then costs one partner, not all of them
+  return memoWeek(sim, 'commerceRaw', nid, () => {
+    let v = 0;
+    for (const o of treatyPartners(sim, 'trade', nid)) v += commerceWith(sim, nid, o);
+    return v;
+  });
 }
 
 /**

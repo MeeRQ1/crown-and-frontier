@@ -133,7 +133,6 @@ export function fleetCard(app: App, f: Fleet): HTMLElement[] {
         quick('target', 'Change beach', () => {
           app.targeting = { kind: 'ship', armies: [...f.cargo], fleet: f.id };
           app.canvas.classList.add('move-mode');
-          app.toast('Click the coastal province to land on. Esc cancels.');
           app.refresh();
         }, null, 'Choose another coast for the troops aboard.'),
       );
@@ -289,7 +288,6 @@ function embarkSection(app: App, f: Fleet): HTMLElement | null {
       action(`Embark ${a.name} (${a.regiments.length} regiments, at ${provName(sim, a.location)})…`, `Then click the coast to land on: theirs, ours, a friend’s or unclaimed. Troops landing under fire fight at a disadvantage that week.${f.duty ? ' Carrying troops ends the fleet’s current order.' : ''}`, () => {
         app.targeting = { kind: 'ship', armies: [a.id], fleet: f.id };
         app.canvas.classList.add('move-mode');
-        app.toast('Click the coastal province to land on. Esc cancels.');
         app.refresh();
       }, prob),
     );

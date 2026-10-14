@@ -122,6 +122,8 @@ export class App {
   selectedWing: string | null = null;
   hoverZone: string | null = null;
   /** what the next map click chooses: a fleet's destination, a beach for armies, an air target */
+  /** what to click for the fleet order being placed (the banner says it) */
+  private dutyHint = '';
   targeting:
     | { kind: 'fleet'; fleet: string }
     | { kind: 'ship'; armies: string[]; fleet: string }
@@ -887,7 +889,6 @@ export class App {
   startFleetMove(fleet: string): void {
     this.targeting = { kind: 'fleet', fleet };
     this.canvas.classList.add('move-mode');
-    this.toast('Click a sea zone (or a coast) for the fleet’s destination. Esc cancels.');
     this.refresh();
   }
 
@@ -904,7 +905,6 @@ export class App {
     }
     this.targeting = { kind: 'ship', armies, fleet: f.id };
     this.canvas.classList.add('move-mode');
-    this.toast(`${f.name} will carry the troops. Click the coastal province to land on. Esc cancels.`);
     this.refresh();
   }
 
@@ -921,7 +921,7 @@ export class App {
       bombard: 'Click the coast province to shell.',
       port: 'Click the port to return to.',
     };
-    this.toast(`${DUTY_LABELS[duty]}: ${what[duty]} Esc cancels.`);
+    this.dutyHint = what[duty];
     this.refresh();
   }
 
@@ -929,7 +929,6 @@ export class App {
   startDropTarget(army: string): void {
     this.targeting = { kind: 'drop', army };
     this.canvas.classList.add('move-mode');
-    this.toast('Click the province to drop on: the tooltip shows the range and the risks. Esc cancels.');
     this.refresh();
   }
 
@@ -978,7 +977,6 @@ export class App {
     this.targeting = group && group.length > 1 ? { kind: 'air', wing, mission, group } : { kind: 'air', wing, mission };
     this.canvas.classList.add('move-mode');
     this.mapDirty = true;
-    this.toast(mission === 'naval' ? 'Click the sea zone to strike (the shaded area is within range). Esc cancels.' : SEA_MISSIONS.includes(mission) ? 'Click a province, or a sea zone, to fly the mission over (the shaded area is within range). Esc cancels.' : 'Click the province to fly the mission over (the shaded area is within range). Esc cancels.');
     this.refresh();
   }
 
@@ -1942,14 +1940,14 @@ export class App {
       const sim = this.sim;
       const text =
         tg.kind === 'fleet'
-          ? `Choose where ${sim.state.fleets[tg.fleet]?.name ?? 'the fleet'} sails.`
+          ? `Click the sea zone (or a coast) where ${sim.state.fleets[tg.fleet]?.name ?? 'the fleet'} sails.`
           : tg.kind === 'ship'
-            ? 'Choose the coast to land on.'
+            ? `Click the coast where the troops land (${sim.state.fleets[tg.fleet]?.name ?? 'the fleet'} carries them).`
             : tg.kind === 'duty'
-              ? `${DUTY_LABELS[tg.duty]}: choose the place for ${sim.state.fleets[tg.fleet]?.name ?? 'the fleet'}.`
+              ? `${DUTY_LABELS[tg.duty]} (${sim.state.fleets[tg.fleet]?.name ?? 'the fleet'}): ${this.dutyHint}`
               : tg.kind === 'drop'
-                ? `Airborne drop: choose where ${sim.state.armies[tg.army]?.name ?? 'the army'} lands.`
-              : `${MISSION_LABELS[tg.mission]}: choose where ${tg.group ? `${tg.group.length} wings fly` : `${sim.state.wings[tg.wing]?.name ?? 'the wing'} flies`}.`;
+                ? `Airborne drop: click where ${sim.state.armies[tg.army]?.name ?? 'the army'} lands; the tooltip shows the range and the risks.`
+              : `${MISSION_LABELS[tg.mission]}: click where ${tg.group ? `${tg.group.length} wings fly` : `${sim.state.wings[tg.wing]?.name ?? 'the wing'} flies`} (${tg.mission === 'naval' ? 'a sea zone' : SEA_MISSIONS.includes(tg.mission) ? 'a province or a sea zone' : 'a province'}; the shaded area is within range).`;
       this.bannerEl.classList.remove('hidden');
       const cancel = h('button', { class: 'btn small quiet', type: 'button', 'data-fk': 'banner-cancel' }, 'Cancel (Esc)');
       cancel.addEventListener('click', () => this.cancelTargeting());

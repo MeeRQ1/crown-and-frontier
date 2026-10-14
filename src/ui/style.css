@@ -808,7 +808,7 @@ canvas.map.dragging { cursor: grabbing; }
 .choice.primary .eff { color: var(--cf-ink); }
 
 /* move-mode banner */
-.banner { position: absolute; z-index: 26; left: 50%; top: var(--s4); transform: translateX(-50%); display: flex; gap: var(--s5); align-items: center; padding: var(--s3) var(--s3) var(--s3) var(--s6); background: var(--cf-slate); color: var(--cf-ivory); border: 1px solid var(--cf-brass); box-shadow: var(--shadow-2); font-weight: 600; --text: var(--cf-ivory); --text-2: var(--cf-muted-on-slate); --line: var(--cf-line-on-slate); --bg-raised: var(--cf-slate-raised); --bg-inset: var(--cf-slate-inset); }
+.banner { position: absolute; z-index: 41; left: 50%; top: var(--s4); transform: translateX(-50%); max-width: calc(100% - 16px); display: flex; gap: var(--s5); align-items: center; padding: var(--s3) var(--s3) var(--s3) var(--s6); background: var(--cf-slate); color: var(--cf-ivory); border: 1px solid var(--cf-brass); box-shadow: var(--shadow-2); font-weight: 600; --text: var(--cf-ivory); --text-2: var(--cf-muted-on-slate); --line: var(--cf-line-on-slate); --bg-raised: var(--cf-slate-raised); --bg-inset: var(--cf-slate-inset); }
 .banner .ico { color: var(--cf-brass); }
 
 /* map tooltip */

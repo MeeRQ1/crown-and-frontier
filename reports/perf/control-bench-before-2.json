@@ -1,0 +1,284 @@
+{
+ "/home/user/crown-and-frontier/.scratch/profile-saves/earth-1936-w280.json": {
+  "weeks": 48,
+  "wings": 376,
+  "fleets": 85,
+  "meanMs": 330.3,
+  "p95Ms": 526.4,
+  "maxMs": 723.5,
+  "phases": {
+   "ai": {
+    "mean": 226.85,
+    "p95": 309.01
+   },
+   "ai.strategic": {
+    "mean": 153.58,
+    "p95": 209.72
+   },
+   "m.economy": {
+    "mean": 126.39,
+    "p95": 184.91
+   },
+   "ai.operational": {
+    "mean": 72.76,
+    "p95": 99.79
+   },
+   "m.diplomacy": {
+    "mean": 50.42,
+    "p95": 95.29
+   },
+   "armyCare": {
+    "mean": 31.27,
+    "p95": 54.12
+   },
+   "m.victory": {
+    "mean": 16.78,
+    "p95": 34.93
+   },
+   "m.integration": {
+    "mean": 9.37,
+    "p95": 18.23
+   },
+   "naval": {
+    "mean": 6.29,
+    "p95": 10.85
+   },
+   "m.events": {
+    "mean": 5.03,
+    "p95": 13.35
+   },
+   "air": {
+    "mean": 3.73,
+    "p95": 5.9
+   },
+   "m.wars": {
+    "mean": 2.54,
+    "p95": 5.27
+   },
+   "movement": {
+    "mean": 1.99,
+    "p95": 4.38
+   },
+   "m.research": {
+    "mean": 1.98,
+    "p95": 6.29
+   },
+   "recruitment": {
+    "mean": 1.54,
+    "p95": 2.48
+   },
+   "sieges": {
+    "mean": 1.38,
+    "p95": 3.29
+   },
+   "warScores": {
+    "mean": 1.35,
+    "p95": 2.53
+   },
+   "battles": {
+    "mean": 1.17,
+    "p95": 5.42
+   },
+   "construction": {
+    "mean": 0.28,
+    "p95": 0.42
+   },
+   "orders": {
+    "mean": 0.07,
+    "p95": 0.11
+   },
+   "proposals": {
+    "mean": 0.04,
+    "p95": 0.11
+   }
+  }
+ },
+ "/home/user/crown-and-frontier/.scratch/profile-saves/earth-1936-w280-navalair.json": {
+  "weeks": 48,
+  "wings": 418,
+  "fleets": 86,
+  "meanMs": 266.3,
+  "p95Ms": 410.4,
+  "maxMs": 503.2,
+  "phases": {
+   "ai": {
+    "mean": 180.71,
+    "p95": 273.58
+   },
+   "ai.strategic": {
+    "mean": 111.46,
+    "p95": 172.21
+   },
+   "m.economy": {
+    "mean": 96.98,
+    "p95": 123.54
+   },
+   "ai.operational": {
+    "mean": 68.78,
+    "p95": 100.74
+   },
+   "m.diplomacy": {
+    "mean": 41.95,
+    "p95": 66.99
+   },
+   "armyCare": {
+    "mean": 26.76,
+    "p95": 48.62
+   },
+   "m.victory": {
+    "mean": 14.5,
+    "p95": 22.14
+   },
+   "m.integration": {
+    "mean": 7.68,
+    "p95": 14.05
+   },
+   "naval": {
+    "mean": 5.49,
+    "p95": 8.75
+   },
+   "air": {
+    "mean": 3.84,
+    "p95": 5.86
+   },
+   "m.events": {
+    "mean": 3.83,
+    "p95": 6.42
+   },
+   "movement": {
+    "mean": 2.05,
+    "p95": 4.52
+   },
+   "m.wars": {
+    "mean": 1.96,
+    "p95": 4.94
+   },
+   "m.research": {
+    "mean": 1.49,
+    "p95": 7.1
+   },
+   "recruitment": {
+    "mean": 1.32,
+    "p95": 2.26
+   },
+   "battles": {
+    "mean": 1.07,
+    "p95": 4.23
+   },
+   "sieges": {
+    "mean": 0.93,
+    "p95": 1.79
+   },
+   "warScores": {
+    "mean": 0.81,
+    "p95": 1.21
+   },
+   "construction": {
+    "mean": 0.17,
+    "p95": 0.33
+   },
+   "orders": {
+    "mean": 0.07,
+    "p95": 0.1
+   },
+   "proposals": {
+    "mean": 0.02,
+    "p95": 0.05
+   }
+  }
+ },
+ "/home/user/crown-and-frontier/.scratch/profile-saves/europe-1936-w280.json": {
+  "weeks": 48,
+  "wings": 179,
+  "fleets": 41,
+  "meanMs": 52.3,
+  "p95Ms": 90.8,
+  "maxMs": 106.7,
+  "phases": {
+   "ai": {
+    "mean": 31.98,
+    "p95": 39.9
+   },
+   "ai.strategic": {
+    "mean": 25.07,
+    "p95": 33.87
+   },
+   "m.economy": {
+    "mean": 19.89,
+    "p95": 29.37
+   },
+   "m.diplomacy": {
+    "mean": 9.98,
+    "p95": 19.4
+   },
+   "ai.operational": {
+    "mean": 6.76,
+    "p95": 13.64
+   },
+   "armyCare": {
+    "mean": 6.18,
+    "p95": 12.36
+   },
+   "m.victory": {
+    "mean": 4.83,
+    "p95": 10.03
+   },
+   "m.integration": {
+    "mean": 3.44,
+    "p95": 8.06
+   },
+   "m.events": {
+    "mean": 1.57,
+    "p95": 2.72
+   },
+   "air": {
+    "mean": 1.19,
+    "p95": 1.8
+   },
+   "naval": {
+    "mean": 0.95,
+    "p95": 2.5
+   },
+   "movement": {
+    "mean": 0.7,
+    "p95": 1.3
+   },
+   "m.wars": {
+    "mean": 0.52,
+    "p95": 3.78
+   },
+   "m.research": {
+    "mean": 0.38,
+    "p95": 1.1
+   },
+   "recruitment": {
+    "mean": 0.27,
+    "p95": 0.53
+   },
+   "sieges": {
+    "mean": 0.22,
+    "p95": 0.34
+   },
+   "battles": {
+    "mean": 0.12,
+    "p95": 0.07
+   },
+   "construction": {
+    "mean": 0.07,
+    "p95": 0.1
+   },
+   "orders": {
+    "mean": 0.04,
+    "p95": 0.06
+   },
+   "warScores": {
+    "mean": 0.03,
+    "p95": 0.19
+   },
+   "proposals": {
+    "mean": 0.01,
+    "p95": 0.03
+   }
+  }
+ }
+}
