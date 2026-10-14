@@ -15,6 +15,7 @@ import { poolCap } from './economy';
 import { cancelRecruits } from './military';
 import { armiesIn } from './index';
 import { nationMods } from './modifiers';
+import { siegeGuns } from './naval';
 import { atWar, bump, isFriendly, nationName, notify, provName, type Sim } from './state';
 import { supplyStatus } from './supply';
 import type { Army, NationId, ProvinceId } from './types';
@@ -58,6 +59,12 @@ export function siegeInfo(sim: Sim, pid: ProvinceId, battleAt?: Set<ProvinceId>)
   if (g && p.fort > 0) {
     rate *= 1 + C.siege.artilleryBonus * g;
     notes.push(`${g} artillery regiment${g === 1 ? '' : 's'} +${Math.round(C.siege.artilleryBonus * g * 100)}%`);
+  }
+  // naval guns: a fleet ordered to shell this coast province (capped; forts fire back)
+  const naval = p.fort > 0 || regiments > 0 ? siegeGuns(sim, pid, lead) : null;
+  if (naval && naval.bonus > 0) {
+    rate *= 1 + naval.bonus;
+    notes.push(`Naval guns offshore (${naval.fleets.map((f) => f.name).join(', ')}) +${Math.round(naval.bonus * 100)}%`);
   }
   const sm = nationMods(sim, lead).siege;
   if (sm) {

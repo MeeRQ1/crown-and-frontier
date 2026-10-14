@@ -260,6 +260,32 @@ export interface Fleet {
   task: string | null;
   /** what the fleet did last week beyond sailing (bombardment, air attacks, raiding), for the interface */
   report?: FleetReport | null;
+  /** its standing order (format 7); none: on station, every duty it can */
+  duty?: FleetDuty | null;
+}
+
+/**
+ * A fleet's standing order (format 7). On station (no order) a fleet does every
+ * duty it can where it lies; an order sends it somewhere and puts its weight on
+ * one duty:
+ *   hold      stay; blockade and protect trade, no raiding or shelling
+ *   patrol    keep a zone: protect our trade there (×1.5) and fight its intruders
+ *   blockade  close a zone (×1.5 towards a blockade), no raiding or shelling
+ *   raid      prey on enemy trade in a zone (×1.5), no escort
+ *   escort    sail with another of our fleets and fight beside it
+ *   bombard   lie off a coast province and shell only it (battles and sieges there)
+ *   port      sail to a port and lie in harbour: repairs half as fast again, no duties
+ */
+export type FleetDutyKind = 'hold' | 'patrol' | 'blockade' | 'raid' | 'escort' | 'bombard' | 'port';
+export interface FleetDuty {
+  kind: FleetDutyKind;
+  /** patrol, blockade, raid: the zone; port: the port's zone (set when ordered) */
+  zone?: ZoneId | null;
+  /** bombard: the coast province shelled; port: the port */
+  province?: ProvinceId | null;
+  /** escort: the fleet escorted */
+  fleet?: FleetId | null;
+  since: number;
 }
 
 export interface FleetReport {
@@ -940,6 +966,7 @@ export type Command =
   | { type: 'cancelShip'; nation: NationId; province: ProvinceId }
   | { type: 'moveFleet'; nation: NationId; fleet: FleetId; zone: ZoneId }
   | { type: 'stopFleet'; nation: NationId; fleet: FleetId }
+  | { type: 'fleetDuty'; nation: NationId; fleet: FleetId; duty: Omit<FleetDuty, 'since'> | null }
   | { type: 'mergeFleets'; nation: NationId; fleets: FleetId[] }
   | { type: 'splitFleet'; nation: NationId; fleet: FleetId; ships: string[] }
   | { type: 'disbandFleet'; nation: NationId; fleet: FleetId }

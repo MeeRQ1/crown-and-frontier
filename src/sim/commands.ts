@@ -32,12 +32,16 @@ import {
   buildShipProblem,
   cancelShip,
   disbandFleetProblem,
+  DUTY_LABELS,
+  fleetDutyProblem,
+  fleetEta,
   fleetOrderProblem,
   mergeFleets,
   mergeFleetsProblem,
   moveFleet,
   moveFleetProblem,
   removeFleet,
+  setFleetDuty,
   shipArmies,
   shipArmiesProblem,
   splitFleet,
@@ -143,6 +147,8 @@ export function checkCommand(sim: Sim, cmd: Command): string | null {
       return moveFleetProblem(sim, cmd.nation, cmd.fleet, cmd.zone);
     case 'stopFleet':
       return fleetOrderProblem(sim, cmd.nation, cmd.fleet);
+    case 'fleetDuty':
+      return fleetDutyProblem(sim, cmd.nation, cmd.fleet, cmd.duty);
     case 'mergeFleets':
       return mergeFleetsProblem(sim, cmd.nation, cmd.fleets);
     case 'splitFleet':
@@ -337,7 +343,14 @@ function execute(sim: Sim, cmd: Command): CommandResult {
       const f = st.fleets[cmd.fleet];
       f.path = [];
       f.progress = 0;
+      if (f.duty) setFleetDuty(sim, f.id, null);
       return { ok: true };
+    }
+    case 'fleetDuty': {
+      setFleetDuty(sim, cmd.fleet, cmd.duty);
+      const f = st.fleets[cmd.fleet];
+      if (!cmd.duty) return { ok: true, message: `${f.name} is on station in ${sim.world.zones[f.zone].name}.` };
+      return { ok: true, message: `${f.name}: ${DUTY_LABELS[cmd.duty.kind].toLowerCase()}${f.path.length ? ` (${fleetEta(sim, f, f.path)} weeks under way)` : ''}.` };
     }
     case 'mergeFleets': {
       const f = mergeFleets(sim, cmd.fleets);

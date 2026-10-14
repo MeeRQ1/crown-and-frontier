@@ -32,6 +32,7 @@ import {
   shipUnlocked,
   subPower,
   surfacePower,
+  touchFleets,
   zoneBalance,
 } from '../naval';
 import { armiesOf, atWar, diag, enemiesOf, isFriendly, months, ownedProvinces, type Sim } from '../state';
@@ -369,7 +370,14 @@ function raiderOps(sim: Sim, nid: NationId): void {
   const st = sim.state;
   if (!enemiesOf(sim, nid).length) {
     // at peace raiders rejoin the fleet at home
-    for (const f of fleetsOf(sim, nid)) if (f.task === 'raid') f.task = null;
+    for (const f of fleetsOf(sim, nid))
+      if (f.task === 'raid') {
+        f.task = null;
+        if (f.duty?.kind === 'raid') {
+          f.duty = null;
+          touchFleets(sim);
+        }
+      }
     return;
   }
   for (const f of [...fleetsOf(sim, nid)]) {
@@ -397,10 +405,15 @@ function raiderOps(sim: Sim, nid: NationId): void {
     const home = f.home ? portZone(sim, f.home) : null;
     const hp = f.ships.reduce((s, x) => s + x.hp, 0) / f.ships.length;
     if (hp < 50 && home) {
-      if (f.zone !== home && f.path[f.path.length - 1] !== home) issue(sim, { type: 'moveFleet', nation: nid, fleet: f.id, zone: home }, `${f.name} returns from raiding to repair`);
+      if (f.duty?.kind !== 'port') issue(sim, { type: 'fleetDuty', nation: nid, fleet: f.id, duty: { kind: 'port' } }, `${f.name} returns from raiding to repair`);
       continue;
     }
-    if (f.path.length) continue;
+    // repaired in harbour: back to sea
+    if (f.duty?.kind === 'port' && hp >= 90) {
+      f.duty = null;
+      touchFleets(sim);
+    }
+    if (f.path.length || f.duty?.kind === 'port') continue;
     const power = subPower(f);
     let best: ZoneId | null = null;
     let bv = 0;
@@ -414,7 +427,8 @@ function raiderOps(sim: Sim, nid: NationId): void {
       const v = qty / (1 + escorts) / (1 + 0.3 * hops);
       if (v > bv + 1e-9 || (Math.abs(v - bv) <= 1e-9 && best !== null && z < best)) (bv = v), (best = z);
     }
-    if (best && best !== f.zone) issue(sim, { type: 'moveFleet', nation: nid, fleet: f.id, zone: best }, `${f.name} goes raiding in ${sim.world.zones[best].name}`);
+    // under a raid order: half as effective again where it lies, and it protects nothing
+    if (best && (f.duty?.kind !== 'raid' || f.duty.zone !== best)) issue(sim, { type: 'fleetDuty', nation: nid, fleet: f.id, duty: { kind: 'raid', zone: best } }, `${f.name} goes raiding in ${sim.world.zones[best].name}`);
   }
 }
 

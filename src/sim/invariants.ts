@@ -75,6 +75,12 @@ export function checkInvariants(sim: Sim): string[] {
     if (!st.nations[f.nation]?.alive) out.push(`${fid}: fleet of dead realm`);
     if (!sim.world.zones[f.zone]) out.push(`${fid}: bad zone ${f.zone}`);
     if (!f.ships.length) out.push(`${fid}: fleet without ships`);
+    const d = f.duty;
+    if (d) {
+      if (d.kind === 'escort' && d.fleet === fid) out.push(`${fid}: escorts itself`);
+      if ((d.kind === 'patrol' || d.kind === 'blockade' || d.kind === 'raid') && !(d.zone && sim.world.zones[d.zone])) out.push(`${fid}: ${d.kind} order without a zone`);
+      if (d.kind === 'bombard' && !(d.province && st.provinces[d.province])) out.push(`${fid}: shelling order without a province`);
+    }
     for (const s of f.ships) if (!(s.hp > 0 && s.hp <= 100) || !SHIPS[s.type]) out.push(`${fid}: ship ${s.id} hp ${s.hp}`);
     let from = f.zone;
     for (const z of f.path) {

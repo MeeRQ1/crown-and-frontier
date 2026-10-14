@@ -481,6 +481,11 @@ export const C = {
     raidRate: 0.06,
     raidZoneMax: 0.4,
     raidRouteMax: 0.75,
+    /** a fleet ordered to shell a coast province our armies besiege speeds the siege by this share per bombard point (cap) */
+    siegePer: 0.04,
+    siegeMax: 0.5,
+    /** a fleet lying in harbour under orders repairs this much faster */
+    harbourRepair: 1.5,
   },
 
   air: {

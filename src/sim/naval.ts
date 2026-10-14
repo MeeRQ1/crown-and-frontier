@@ -38,8 +38,8 @@ import { memoGeo, memoize, ownedBy, touchArmies } from './index';
 import { armyCap } from './influence';
 import { nationMods } from './modifiers';
 import { range } from './rng';
-import { addContribution, atWar, borders, isFriendly, notify, provName, type Sim } from './state';
-import type { Army, BattleReport, Fleet, FleetId, NationId, ProvinceId, Ship, ShipType, StrategicResource, ZoneId } from './types';
+import { addContribution, atWar, borders, isFriendly, nationName, notify, provName, type Sim } from './state';
+import type { Army, BattleReport, Fleet, FleetDuty, FleetDutyKind, FleetId, NationId, ProvinceId, Ship, ShipType, StrategicResource, ZoneId } from './types';
 import { edgeKey } from './world';
 
 // ───────────────────────────── Lookups ──────────────────────────────────────
@@ -202,7 +202,7 @@ export function createFleet(sim: Sim, nid: NationId, zone: ZoneId, ships: Ship[]
   const id = `f${st.counters.fleet}`;
   const n = fleetsOf(sim, nid).length;
   const adj = sim.world.nationDefs[nid]?.adjective ?? nid;
-  const f: Fleet = { id, nation: nid, name: name ?? `${adj} ${ORDINALS[n] ?? `${n + 1}th`} Squadron`, zone, path: [], progress: 0, ships, home, cargo: [], landing: null, task: null };
+  const f: Fleet = { id, nation: nid, name: name ?? `${adj} ${ORDINALS[n] ?? `${n + 1}th`} Squadron`, zone, path: [], progress: 0, ships, home, cargo: [], landing: null, task: null, duty: null };
   st.fleets[id] = f;
   touchFleets(sim);
   return f;
@@ -436,9 +436,13 @@ export function straitBlocked(sim: Sim, nid: NationId, a: ProvinceId, b: Provinc
 
 /** Is this zone blockaded against `nid`? */
 export function zoneBlockaded(sim: Sim, zone: ZoneId, nid: NationId): boolean {
-  const z = zoneBalance(sim, zone, nid);
-  const hostile = z.hostileSurface + 0.5 * z.hostileSubs;
-  return hostile > 0 && z.friendSurface * C.naval.blockadeRatio < hostile;
+  return memoGeo(sim, 'zoneBlockaded', `${zone}|${nid}|${fleetEpoch(sim)}`, () => {
+    // hostile ships count by their orders: a fleet ordered to blockade here at 1.5, one
+    // raiding or shelling at half, one in harbour or escorting not at all (dutyWeights)
+    let hostile = 0;
+    for (const f of fleetsIn(sim, zone)) if (atWar(sim, nid, f.nation)) hostile += (surfacePower(f) + 0.5 * subPower(f)) * dutyWeights(sim, f).blockade;
+    return hostile > 0 && zoneBalance(sim, zone, nid).friendSurface * C.naval.blockadeRatio < hostile;
+  });
 }
 
 /** Is a coastal province blockaded (every zone on its coast)? */
@@ -524,13 +528,15 @@ export function raidBalance(sim: Sim, zone: ZoneId, nid: NationId): { raid: numb
       if (atWar(sim, nid, f.nation)) {
         let r = 0;
         for (const s of f.ships) r += SHIPS[s.type].raid * (s.hp / 100);
+        r *= dutyWeights(sim, f).raid;
         if (r > 0) {
           raid += r;
           if (!raiders.includes(f.nation)) raiders.push(f.nation);
         }
       } else if (isFriendly(sim, nid, f.nation)) {
         const m = nationMods(sim, f.nation);
-        for (const s of f.ships) escort += SHIPS[s.type].escort * (s.hp / 100) * Math.max(0.2, 1 + m.antiSub * 0.5);
+        const w = dutyWeights(sim, f).escort;
+        for (const s of f.ships) escort += SHIPS[s.type].escort * (s.hp / 100) * Math.max(0.2, 1 + m.antiSub * 0.5) * w;
       }
     }
     return { raid, escort, raiders };
@@ -551,7 +557,7 @@ function raiderZones(sim: Sim): Set<ZoneId> {
     const out = new Set<ZoneId>();
     for (const id of Object.keys(sim.state.fleets)) {
       const f = sim.state.fleets[id];
-      if (f.ships.some((s) => SHIPS[s.type].raid > 0)) out.add(f.zone);
+      if (f.ships.some((s) => SHIPS[s.type].raid > 0) && dutyWeights(sim, f).raid > 0) out.add(f.zone);
     }
     return out;
   });
@@ -867,6 +873,15 @@ function navalBattle(sim: Sim, zone: ZoneId, A: Fleet[], B: Fleet[]): void {
       f.path = [];
       f.progress = 0;
     }
+    // and are sent to port to repair; whatever they were doing is over
+    const port = f.home && st.provinces[f.home].port > 0 && isFriendly(sim, f.nation, st.provinces[f.home].controller) ? f.home : homePortFor(sim, f.nation, f.zone);
+    const pz = port ? portZone(sim, port) : null;
+    if (port && pz) {
+      const was = f.duty ? DUTY_LABELS[f.duty.kind].toLowerCase() : null;
+      f.duty = { kind: 'port', zone: pz, province: port, since: st.tick };
+      f.path = f.zone === pz ? [] : zonePath(sim, f.zone, pz) ?? [];
+      reportFleet(sim, f, `Beaten off in ${zoneName(sim, zone)}${was ? ` (its order, ${was}, is cancelled)` : ''}: falling back to ${provName(sim, port)} to repair.`);
+    }
   }
   for (const f of [...A, ...B]) if (!f.ships.length) removeFleet(sim, f);
   touchFleets(sim);
@@ -959,7 +974,8 @@ function repairAndWear(sim: Sim): void {
     if (port > 0 && !contested) {
       // a port under the bombs repairs at half rate
       const bombed = coast.some((pid) => sim.state.provinces[pid].port > 0 && portBombed(sim, pid));
-      const gain = C.naval.repair * port * Math.max(0.2, 1 + nationMods(sim, f.nation).repair) * (bombed ? 0.5 : 1);
+      const harbour = f.duty?.kind === 'port' && f.duty.zone === f.zone && !f.path.length ? C.naval.harbourRepair : 1;
+      const gain = C.naval.repair * port * Math.max(0.2, 1 + nationMods(sim, f.nation).repair) * (bombed ? 0.5 : 1) * harbour;
       for (const s of f.ships) s.hp = Math.min(100, s.hp + gain);
       continue;
     }
@@ -990,6 +1006,7 @@ function blockadeStats(sim: Sim): void {
 /** The weekly naval phase (before army movement). */
 export function weeklyNaval(sim: Sim): void {
   if (!sim.world.zoneIds.length) return;
+  steerFleets(sim);
   moveFleets(sim);
   // aircraft strike and cover at sea before the guns close
   sinkStruck(sim, seaAir(sim));
@@ -997,6 +1014,7 @@ export function weeklyNaval(sim: Sim): void {
   landArmies(sim);
   repairAndWear(sim);
   blockadeStats(sim);
+  dutyReports(sim);
 }
 
 /** Sea trade by zone: the realm pairs whose contracts pass through each zone this week (one pass over the contracts). */
@@ -1052,12 +1070,17 @@ export function bombardPlan(sim: Sim): Map<string, { att: Array<{ fleet: Fleet; 
     for (const id of Object.keys(st.fleets).sort()) {
       const f = st.fleets[id];
       if (f.path.length || f.cargo.length) continue;
+      // on station a fleet shells the largest battle on its coast; under orders, only the
+      // province it was told to shell (other orders keep its guns for their own duty)
+      const d = f.duty;
+      if (d && d.kind !== 'bombard') continue;
       const power = bombardPower(sim, f);
       if (power <= 0) continue;
       const coast = sim.world.zones[f.zone]?.coasts ?? [];
       let best: { b: typeof battles[number]; side: 'att' | 'def'; men: number } | null = null;
       for (const b of battles) {
         if (!coast.includes(b.province)) continue;
+        if (d && b.province !== d.province) continue;
         const ours = (list: NationId[]) => list.some((n) => n === f.nation || (isFriendly(sim, f.nation, n) && !atWar(sim, f.nation, n)));
         const theirs = (list: NationId[]) => list.some((n) => atWar(sim, f.nation, n));
         const side = ours(b.attackerNations) && theirs(b.defenderNations) ? 'att' : ours(b.defenderNations) && theirs(b.attackerNations) ? 'def' : null;
@@ -1074,9 +1097,29 @@ export function bombardPlan(sim: Sim): Map<string, { att: Array<{ fleet: Fleet; 
   });
 }
 
-/** Coastal forts fire back at the ships that shelled their province this week. */
+/** Coastal forts fire back at the ships that shelled their province this week (battles and sieges). */
 export function bombardFireBack(sim: Sim): void {
   const st = sim.state;
+  // ships shelling a siege: the besieged fort answers them
+  const shelling = new Set<ProvinceId>();
+  for (const id of Object.keys(st.fleets).sort()) {
+    const d = st.fleets[id].duty;
+    if (d?.kind === 'bombard' && d.province) shelling.add(d.province);
+  }
+  for (const pid of [...shelling].sort()) {
+    const p = st.provinces[pid];
+    if (!p.siege || !p.controller) continue;
+    for (const f of siegeGuns(sim, pid, p.siege.nation).fleets) {
+      if (!atWar(sim, f.nation, p.controller)) continue;
+      st.nations[f.nation].stats.bombardWeeks++;
+      if (p.fort > 0) {
+        const guns = f.ships.filter((s) => SHIPS[s.type].bombard > 0);
+        const dmg = (C.naval.coastalGuns * p.fort) / Math.max(1, guns.length);
+        for (const s of guns) s.hp = Math.max(1, s.hp - dmg);
+        reportFleet(sim, f, `Shelled the fort at ${provName(sim, pid)} for the siege; its guns (level ${p.fort}) hit back for ${Math.round(C.naval.coastalGuns * p.fort)} hull damage.`);
+      } else reportFleet(sim, f, `Shelled ${provName(sim, pid)} for the siege.`);
+    }
+  }
   for (const [bid, sides] of bombardPlan(sim)) {
     const b = st.battles[bid];
     const pid = b?.province ?? null;
@@ -1153,6 +1196,11 @@ export function moveFleetProblem(sim: Sim, nid: NationId, fleetId: FleetId, zone
 
 export function moveFleet(sim: Sim, fleetId: FleetId, zone: ZoneId): void {
   const f = sim.state.fleets[fleetId];
+  // sailing by hand ends a standing order: the fleet goes on station where it arrives
+  if (f.duty) {
+    f.duty = null;
+    touchFleets(sim);
+  }
   const path = zonePath(sim, f.zone, zone) ?? [];
   if (f.path[0] !== path[0]) f.progress = 0;
   f.path = path;
@@ -1218,4 +1266,297 @@ export function disbandFleetProblem(sim: Sim, nid: NationId, fleetId: FleetId): 
   if (sim.state.fleets[fleetId].cargo.length) return 'Land the troops aboard first.';
   if (wingsAboard(sim, fleetId).length) return 'Fly the air wings aboard to an airfield first.';
   return null;
+}
+
+// ───────────────────────────── Standing orders ──────────────────────────────
+//
+// A fleet on station (no order) does every duty it can where it lies, as before
+// format 7. An order sends it to its place and weights its duties there (in
+// transit it blockades by its presence and protects trade at half weight):
+//
+//              blockade  raid  escort  shells
+//   station        1       1      1    the largest battle on its coast
+//   hold           1       0      1    no
+//   patrol         1       0     1.5   no
+//   blockade      1.5      0     0.5   no
+//   raid          0.5     1.5     0    no
+//   escort         0       0      1    no (sails with the fleet it escorts)
+//   bombard       0.5      0     0.5   only its province: battles and sieges there
+//   port           0       0      0    no; repairs ×1.5 in harbour
+//
+// Sailing by hand ends an order; a fleet beaten in battle is sent to port. An
+// order that can no longer be carried out (the escorted fleet is gone, the port
+// lost, no route) lapses with a note in the fleet's report.
+
+type DutyWeights = { blockade: number; raid: number; escort: number };
+const STATION: DutyWeights = { blockade: 1, raid: 1, escort: 1 };
+const TRANSIT: DutyWeights = { blockade: 1, raid: 0, escort: 0.5 };
+const DUTY_WEIGHT: Record<FleetDutyKind, DutyWeights> = {
+  hold: { blockade: 1, raid: 0, escort: 1 },
+  patrol: { blockade: 1, raid: 0, escort: 1.5 },
+  blockade: { blockade: 1.5, raid: 0, escort: 0.5 },
+  raid: { blockade: 0.5, raid: 1.5, escort: 0 },
+  escort: { blockade: 0, raid: 0, escort: 1 },
+  bombard: { blockade: 0.5, raid: 0, escort: 0.5 },
+  port: { blockade: 0, raid: 0, escort: 0 },
+};
+
+export const DUTY_LABELS: Record<FleetDutyKind, string> = {
+  hold: 'Hold position',
+  patrol: 'Patrol',
+  blockade: 'Blockade',
+  raid: 'Raid trade',
+  escort: 'Escort',
+  bombard: 'Shell the coast',
+  port: 'Return to port',
+};
+
+export const DUTY_HELP: Record<FleetDutyKind | 'station', string> = {
+  station: 'On station: blockades, raids, protects our trade and shells the largest battle on its coast, wherever it lies.',
+  hold: 'Stays where it is: blockades and protects our trade there; no raiding or shelling.',
+  patrol: 'Keeps a sea zone: protects our trade there half as well again and fights any enemy who enters.',
+  blockade: 'Closes a sea zone to the enemy: counts half as much again towards a blockade of the coasts on it.',
+  raid: 'Preys on enemy trade passing through a sea zone (submarines and cruisers), half as well again; protects nothing.',
+  escort: 'Sails with another of our fleets and fights beside it: transports behind warships are hard to hit.',
+  bombard: 'Lies off one coast province and shells only it: battles there, and sieges by our armies. Coastal forts fire back.',
+  port: 'Sails to a port and lies in harbour: repairs half as fast again; no blockade, raiding or escort.',
+};
+
+/** How much a fleet counts towards each duty where it lies this week. */
+export function dutyWeights(sim: Sim, f: Fleet): DutyWeights {
+  const d = f.duty;
+  if (!d) return STATION;
+  if (d.kind === 'port' || d.kind === 'escort' || d.kind === 'hold') return DUTY_WEIGHT[d.kind];
+  if (f.path.length) return TRANSIT;
+  const there = d.kind === 'bombard' ? !!d.province && (sim.world.provZones[d.province] ?? []).includes(f.zone) : f.zone === d.zone;
+  return there ? DUTY_WEIGHT[d.kind] : TRANSIT;
+}
+
+/** The port a fleet would return to: its home if still a friendly port, else the best one. */
+export function returnPort(sim: Sim, f: Fleet): ProvinceId | null {
+  const st = sim.state;
+  const h = f.home ? st.provinces[f.home] : null;
+  if (f.home && h && h.port > 0 && h.controller && isFriendly(sim, f.nation, h.controller) && portZone(sim, f.home)) return f.home;
+  return homePortFor(sim, f.nation, f.zone);
+}
+
+/** Where a duty takes the fleet: the zone it sails for (null: it stays where it is). */
+export function dutyDestination(sim: Sim, f: Fleet, d: Omit<FleetDuty, 'since'>): ZoneId | null {
+  const st = sim.state;
+  switch (d.kind) {
+    case 'hold':
+      return null;
+    case 'patrol':
+    case 'blockade':
+    case 'raid':
+      return d.zone ?? null;
+    case 'port': {
+      const port = d.province ?? returnPort(sim, f);
+      return port ? portZone(sim, port) : null;
+    }
+    case 'bombard': {
+      if (!d.province) return null;
+      const coast = sim.world.provZones[d.province] ?? [];
+      if (coast.includes(f.zone)) return f.zone;
+      return pathToCoast(sim, f.zone, d.province)?.at(-1) ?? null;
+    }
+    case 'escort':
+      return d.fleet ? st.fleets[d.fleet]?.zone ?? null : null;
+  }
+}
+
+/** Why a fleet cannot take this order (null: it can). */
+export function fleetDutyProblem(sim: Sim, nid: NationId, fleetId: FleetId, d: Omit<FleetDuty, 'since'> | null): string | null {
+  const own = fleetOrderProblem(sim, nid, fleetId);
+  if (own) return own;
+  if (!d) return null;
+  const st = sim.state;
+  const f = st.fleets[fleetId];
+  if (!d || typeof d !== 'object' || !(d.kind in DUTY_LABELS)) return 'Unknown order.';
+  const warships = f.ships.some((s) => s.type !== 'transport');
+  const route = (z: ZoneId) => z === f.zone || !!zonePath(sim, f.zone, z);
+  switch (d.kind) {
+    case 'hold':
+      return null;
+    case 'patrol':
+    case 'blockade':
+    case 'raid': {
+      if (!d.zone || !sim.world.zones[d.zone]) return 'Choose a sea zone.';
+      if (!warships) return 'Transports alone cannot patrol, blockade or raid: join warships to them.';
+      if (f.cargo.length) return 'Land the troops aboard first: a fleet carrying troops keeps out of action.';
+      if (d.kind === 'raid' && !f.ships.some((s) => SHIPS[s.type].raid > 0)) return 'No ship in this fleet raids trade: submarines and cruisers do.';
+      if (!route(d.zone)) return `No sea route from ${zoneName(sim, f.zone)} to ${zoneName(sim, d.zone)}.`;
+      return null;
+    }
+    case 'bombard': {
+      const pid = d.province;
+      if (!pid || !st.provinces[pid]) return 'Choose a coast province.';
+      if (!isCoastal(sim, pid)) return `${provName(sim, pid)} is not on the coast: ship guns reach only coastal provinces.`;
+      if (bombardPower(sim, f) <= 0) return 'Only battleships and cruisers can shell a coast.';
+      if (f.cargo.length) return 'Land the troops aboard first.';
+      if (!dutyDestination(sim, f, d)) return `No sea route to the coast of ${provName(sim, pid)}.`;
+      return null;
+    }
+    case 'escort': {
+      const g = d.fleet ? st.fleets[d.fleet] : undefined;
+      if (!g) return 'Choose one of our fleets to escort.';
+      if (g.id === f.id) return 'A fleet cannot escort itself.';
+      if (g.nation !== nid) return 'We can escort only our own fleets.';
+      if (g.duty?.kind === 'escort' && g.duty.fleet === f.id) return `${g.name} is already escorting this fleet.`;
+      if (!warships) return 'Transports cannot escort: join warships to them.';
+      if (!route(g.zone)) return `No sea route to ${g.name}.`;
+      return null;
+    }
+    case 'port': {
+      const port = d.province ?? returnPort(sim, f);
+      if (!port) return 'We have no port to return to.';
+      const p = st.provinces[port];
+      if (!p || p.port <= 0) return `${port ? provName(sim, port) : 'That province'} has no port.`;
+      if (!p.controller || !isFriendly(sim, nid, p.controller)) return `${provName(sim, port)} is not in friendly hands.`;
+      const z = portZone(sim, port);
+      if (!z || !route(z)) return `No sea route to ${provName(sim, port)}.`;
+      return null;
+    }
+  }
+  return 'Unknown order.';
+}
+
+/** Gives a fleet a standing order (null: back on station where it is) and sets it sailing. */
+export function setFleetDuty(sim: Sim, fleetId: FleetId, d: Omit<FleetDuty, 'since'> | null): void {
+  const st = sim.state;
+  const f = st.fleets[fleetId];
+  if (!d) f.duty = null;
+  else {
+    const duty: FleetDuty = { kind: d.kind, since: st.tick };
+    if (d.kind === 'patrol' || d.kind === 'blockade' || d.kind === 'raid') duty.zone = d.zone ?? null;
+    if (d.kind === 'bombard') duty.province = d.province ?? null;
+    if (d.kind === 'escort') duty.fleet = d.fleet ?? null;
+    if (d.kind === 'port') {
+      duty.province = d.province ?? returnPort(sim, f);
+      duty.zone = duty.province ? portZone(sim, duty.province) : null;
+    }
+    f.duty = duty;
+    steer(sim, f);
+  }
+  touchFleets(sim);
+}
+
+/** Sets a fleet with an order on its way (or holds it where it is). */
+function steer(sim: Sim, f: Fleet): void {
+  if (!f.duty) return;
+  if (f.duty.kind === 'hold') {
+    f.path = [];
+    f.progress = 0;
+    return;
+  }
+  const dest = dutyDestination(sim, f, f.duty);
+  if (!dest || dest === f.zone) {
+    if (f.path.length) {
+      f.path = [];
+      f.progress = 0;
+    }
+    return;
+  }
+  if (f.path.at(-1) === dest) return;
+  const path = zonePath(sim, f.zone, dest) ?? [];
+  if (f.path[0] !== path[0]) f.progress = 0;
+  f.path = path;
+}
+
+/** Weekly, before fleets move: orders that lapsed are dropped, the rest steer. */
+function steerFleets(sim: Sim): void {
+  const st = sim.state;
+  for (const id of Object.keys(st.fleets).sort()) {
+    const f = st.fleets[id];
+    const d = f.duty;
+    if (!d) continue;
+    let lapse: string | null = null;
+    if (d.kind === 'escort') {
+      const g = d.fleet ? st.fleets[d.fleet] : undefined;
+      if (!g || g.nation !== f.nation) lapse = 'the fleet it escorted is gone';
+    } else if (d.kind === 'port') {
+      const p = d.province ? st.provinces[d.province] : null;
+      if (!p || p.port <= 0 || !p.controller || !isFriendly(sim, f.nation, p.controller)) {
+        const other = returnPort(sim, f);
+        if (other) {
+          d.province = other;
+          d.zone = portZone(sim, other);
+          reportFleet(sim, f, `Its port was lost: making for ${provName(sim, other)} instead.`);
+        } else lapse = 'we have no friendly port left';
+      }
+    }
+    if (!lapse && d.kind !== 'hold' && !dutyDestination(sim, f, d)) lapse = 'there is no sea route to its station';
+    if (lapse) {
+      reportFleet(sim, f, `${DUTY_LABELS[d.kind]} order lapsed: ${lapse}. On station in ${zoneName(sim, f.zone)}.`);
+      notify(sim, f.nation, 'normal', 'navy', `${f.name}: ${DUTY_LABELS[d.kind].toLowerCase()} order lapsed (${lapse}).`);
+      f.duty = null;
+      touchFleets(sim);
+      continue;
+    }
+    steer(sim, f);
+  }
+}
+
+/** What each fleet under orders achieved this week, for its report. */
+function dutyReports(sim: Sim): void {
+  const st = sim.state;
+  for (const id of Object.keys(st.fleets).sort()) {
+    const f = st.fleets[id];
+    const d = f.duty;
+    if (!d || f.path.length) continue;
+    const here = zoneName(sim, f.zone);
+    if (d.kind === 'patrol') {
+      const raiders = fleetsIn(sim, f.zone).filter((o) => atWar(sim, f.nation, o.nation) && o.ships.some((s) => SHIPS[s.type].raid > 0));
+      reportFleet(sim, f, `Patrolling ${here}: our trade through these waters is escorted${raiders.length ? `; enemy raiders are here (${raiders.map((o) => o.name).join(', ')})` : ''}.`);
+    } else if (d.kind === 'blockade' || d.kind === 'hold') {
+      const coast = (sim.world.zones[f.zone]?.coasts ?? []).filter((pid) => {
+        const o = st.provinces[pid].owner;
+        return !!o && atWar(sim, f.nation, o);
+      });
+      if (!coast.length) {
+        if (d.kind === 'blockade') reportFleet(sim, f, `Blockading ${here}: no enemy coast lies on these waters, so nothing is cut off.`);
+        else reportFleet(sim, f, `Holding ${here}.`);
+        continue;
+      }
+      const owners = [...new Set(coast.map((pid) => st.provinces[pid].owner!))];
+      const closed = owners.filter((o) => zoneBlockaded(sim, f.zone, o));
+      const cut = coast.filter((pid) => provinceBlockaded(sim, pid));
+      if (!closed.length) reportFleet(sim, f, `${d.kind === 'blockade' ? 'Blockading' : 'Holding'} ${here}: too weak to close these waters (enemy warships here need to be outgunned ${C.naval.blockadeRatio} to 1).`);
+      else reportFleet(sim, f, `${d.kind === 'blockade' ? 'Blockading' : 'Holding'} ${here}: closed to ${closed.map((o) => nationName(sim, o)).join(', ')}; ${cut.length} of ${coast.length} enemy coastal provinces here cut off (a province falls only when every water on its coast is closed).`);
+    } else if (d.kind === 'raid') {
+      const prey = raidingHere(sim, f);
+      reportFleet(sim, f, prey.length ? `Raiding in ${here}: preying on the trade of ${prey.map((o) => nationName(sim, o)).join(', ')}.` : `Raiding in ${here}: no enemy trade passes through these waters this week.`);
+    } else if (d.kind === 'escort') {
+      const g = d.fleet ? st.fleets[d.fleet] : undefined;
+      if (g) reportFleet(sim, f, g.zone === f.zone ? `Escorting ${g.name} in ${here}.` : `Following ${g.name} (now in ${zoneName(sim, g.zone)}).`);
+    } else if (d.kind === 'port' && d.zone === f.zone) {
+      reportFleet(sim, f, `In harbour at ${d.province ? provName(sim, d.province) : here}: repairing half as fast again.`);
+    } else if (d.kind === 'bombard' && d.province) {
+      const shelled = [...bombardPlan(sim).values()].some((x) => [...x.att, ...x.def].some((e) => e.fleet.id === f.id));
+      const siege = siegeGuns(sim, d.province, f.nation).fleets.includes(f);
+      if (!shelled && !siege) reportFleet(sim, f, `Lying off ${provName(sim, d.province)}: no battle or siege of ours there to shell.`);
+    }
+  }
+}
+
+/**
+ * Naval guns at a siege: our fleets (and friends') ordered to shell a coast
+ * province, lying still on its coast, while `nid`'s side besieges it. The
+ * speed-up is capped (C.naval.siegeMax); the province's forts fire back.
+ */
+export function siegeGuns(sim: Sim, pid: ProvinceId, nid: NationId): { fleets: Fleet[]; bonus: number } {
+  const zones = sim.world.provZones[pid];
+  if (!zones?.length) return { fleets: [], bonus: 0 };
+  const fleets: Fleet[] = [];
+  let power = 0;
+  for (const z of zones)
+    for (const f of fleetsIn(sim, z)) {
+      if (f.duty?.kind !== 'bombard' || f.duty.province !== pid || f.path.length || f.cargo.length) continue;
+      if (f.nation !== nid && !isFriendly(sim, nid, f.nation)) continue;
+      const p = bombardPower(sim, f);
+      if (p <= 0) continue;
+      fleets.push(f);
+      power += p;
+    }
+  return { fleets, bonus: Math.min(C.naval.siegeMax, C.naval.siegePer * power) };
 }
