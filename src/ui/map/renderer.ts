@@ -24,6 +24,7 @@ import { Camera } from './camera';
 import { geoIndex, pairKey, type GeoIndex, type MapGeometry, type ProvGeo } from './geometry';
 import { buildContext, fillFor, realmFill, realmInk, realmWash, type MapMode } from './modes';
 import { LANDMARK_BOUNDS, landmark, sprite } from './sprites';
+import { unitFilter, type UnitFilter } from './visibility';
 
 export interface Presentation {
   labels: 'few' | 'normal' | 'many';
@@ -63,6 +64,8 @@ export interface RenderState {
   fleetPreviewLabel?: string | null;
   /** trade deliveries to draw (Industry & Trade open): [from province, to province] */
   tradeRoutes?: Array<{ from: ProvinceId; to: ProvinceId; sea: boolean }> | null;
+  /** which forces are shown (ui/map/visibility.ts); without one, the presentation mode alone decides */
+  units?: UnitFilter;
 }
 
 export interface Marker {
@@ -1574,14 +1577,13 @@ export class MapRenderer {
   private drawFleets(sim: Sim, rs: RenderState, tier: Tier): void {
     const cam = this.camera;
     const me = rs.player;
+    const units = this.unitsOf(sim, rs);
     const byZone = new Map<string, Fleet[]>();
     for (const id of Object.keys(sim.state.fleets).sort()) {
       const f = sim.state.fleets[id];
-      const mine = f.nation === me;
-      const hostile = me ? atWar(sim, me, f.nation) : false;
-      if (!mine && !hostile && f.id !== rs.selectedFleet && rs.presentation.armies === 'mine') continue;
-      if (!mine && !hostile && tier === 'far' && f.id !== rs.selectedFleet) continue;
-      const k = f.path.length && f.progress > 0 ? `m${f.id}` : f.zone;
+      if (f.id !== rs.selectedFleet && !units.shows(f.nation, { zone: f.zone })) continue;
+      // at a distance one counter per zone and realm (with every ship of its fleets)
+      const k = tier === 'far' ? `${f.zone}|${f.nation}` : f.path.length && f.progress > 0 ? `m${f.id}` : f.zone;
       (byZone.get(k) ?? byZone.set(k, []).get(k)!).push(f);
     }
     for (const list of byZone.values()) {
@@ -1589,6 +1591,18 @@ export class MapRenderer {
       const base = this.fleetPos(list[0]);
       const s = cam.toScreen(base.x, base.y);
       if (s.x < -80 || s.y < -80 || s.x > this.width + 80 || s.y > this.height + 80) continue;
+      if (tier === 'far' && list.length > 1) {
+        // one realm's fleets in one zone: a single counter with all their ships
+        const ships = list.reduce((n, f) => n + f.ships.length, 0);
+        const sel = list.find((f) => f.id === rs.selectedFleet) ?? list[0];
+        const { w, h } = this.counterSize('pill', String(ships));
+        const x = s.x - w / 2;
+        const y = s.y - h / 2;
+        this.counter(sim, { kind: 'pill', nation: sel.nation, x, y, symbol: 'naval', count: String(ships), detail: '', bars: null, status: null, relation: this.relation(sim, sel.nation, me), selected: list.some((f) => f.id === rs.selectedFleet) });
+        this.fleetMarkers.push({ fleet: sel.id, x, y, w, h });
+        this.placed.add({ x, y, w, h });
+        continue;
+      }
       const kind = this.counterKind(tier);
       const dims = list.map((f) => this.counterSize(kind, String(f.ships.length)));
       const total = dims.reduce((x, d) => x + d.w + 3, -3);
@@ -1622,16 +1636,14 @@ export class MapRenderer {
 
   private drawWings(sim: Sim, rs: RenderState, tier: Tier): void {
     const me = rs.player;
+    const units = this.unitsOf(sim, rs);
+    void tier;
     // one counter per airfield, and one per fleet for the wings aboard its carriers
     const at = new Map<string, { nation: NationId; wings: string[]; sel: boolean; base: ProvinceId | null; fleet: string | null }>();
     for (const id of Object.keys(sim.state.wings).sort()) {
       const w = sim.state.wings[id];
-      const mine = w.nation === me;
-      const hostile = me ? atWar(sim, me, w.nation) : false;
-      if (!mine && !hostile && w.id !== rs.selectedWing && rs.presentation.armies !== 'all') continue;
-      // far out, only our own wings (as with fleets): they stay easy to find and select
-      if (tier === 'far' && w.id !== rs.selectedWing && !mine) continue;
       const fleet = w.carrier && sim.state.fleets[w.carrier] ? w.carrier : null;
+      if (w.id !== rs.selectedWing && !units.shows(w.nation, fleet ? { zone: sim.state.fleets[fleet].zone } : { prov: w.base })) continue;
       const key = fleet ? `f${fleet}` : `p${w.base}`;
       const cur = at.get(key) ?? { nation: w.nation, wings: [], sel: false, base: fleet ? null : w.base, fleet };
       cur.wings.push(w.id);
@@ -1865,6 +1877,17 @@ export class MapRenderer {
     void rs;
   }
 
+  /** The unit filter for this frame: the app's, or one from the presentation mode alone (no focus). */
+  private unitsOf(sim: Sim, rs: RenderState): UnitFilter {
+    if (rs.units) return rs.units;
+    if (this.unitsMemo?.sim !== sim || this.unitsMemo.key !== `${rs.player}|${rs.presentation.armies}|${sim.state.rev}`) {
+      this.unitsMemo = { sim, key: `${rs.player}|${rs.presentation.armies}|${sim.state.rev}`, f: unitFilter(sim, rs.player, rs.presentation.armies, { allies: true, focus: null }) };
+    }
+    return this.unitsMemo.f;
+  }
+
+  private unitsMemo: { sim: Sim; key: string; f: UnitFilter } | null = null;
+
   private relation(sim: Sim, nid: NationId, me: NationId | null): 'own' | 'allied' | 'hostile' | 'other' {
     if (nid === me) return 'own';
     if (!me) return 'other';
@@ -2031,14 +2054,8 @@ export class MapRenderer {
     const st = sim.state;
     const cam = this.camera;
     const me = rs.player;
-    const mode = rs.presentation.armies;
-    const relevant = (a: Army) => {
-      if (a.nation === me || a.id === rs.selectedArmy) return true;
-      if (!me) return mode === 'all';
-      if (atWar(sim, me, a.nation)) return mode !== 'mine';
-      if (mode === 'all') return true;
-      return mode === 'relevant' && isFriendly(sim, me, a.nation) && tier !== 'far';
-    };
+    const units = this.unitsOf(sim, rs);
+    const relevant = (a: Army) => a.id === rs.selectedArmy || units.shows(a.nation, { prov: a.location });
     // group stacks by rounded screen position
     const stacks = new Map<string, Army[]>();
     for (const a of Object.values(st.armies)) {

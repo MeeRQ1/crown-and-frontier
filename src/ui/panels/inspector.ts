@@ -20,6 +20,7 @@ import type { App } from '../app';
 import { orderStatus, readiness } from '../../sim/readiness';
 import { action, bar, button, h, rebuild, row, setChildren } from '../dom';
 import { fmt, men, people, plural, signed, weeks } from '../format';
+import { VIEW_LABELS } from '../map/visibility';
 import { icon, type IconName } from '../icons';
 import { section, shield, tip } from './common';
 import { confirmDialog } from './dialogs';
@@ -257,8 +258,12 @@ function provinceCard(app: App, pid: ProvinceId): HTMLElement[] {
       ),
     );
   }
-  const here = armiesAt(sim, pid);
-  if (here.length) body.appendChild(section('Armies here', ...here.map((a) => armyRow(app, a))));
+  // the forces here, by the map's unit view (the rest are counted, so nothing is silently missing)
+  const units = app.unitFilter();
+  const all = armiesAt(sim, pid);
+  const here = all.filter((a) => a.id === app.selectedArmy || units.shows(a.nation, { prov: pid }));
+  const hidden = all.length - here.length;
+  if (all.length) body.appendChild(section('Armies here', ...here.map((a) => armyRow(app, a)), hidden ? h('p', { class: 'small faint', 'data-fk': 'hidden-armies' }, `${plural(hidden, 'army', 'armies')} of other realms here ${hidden === 1 ? 'is' : 'are'} hidden by the unit view (${VIEW_LABELS[units.mode]}); "All" shows them.`) : null));
   // the navy and the air arm
   const port = portSection(app, pid);
   if (port) body.appendChild(port);

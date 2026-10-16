@@ -2,7 +2,7 @@
 // bridge between interface actions and simulation commands. All game actions
 // go through applyCommand() — the same validation the AI uses.
 
-import { MISSION_LABELS, missionProblem, SEA_MISSIONS, stepsTo, wingHome, wingRange } from '../sim/air';
+import { MISSION_LABELS, missionProblem, SEA_MISSIONS, stepsTo, wingCoverage, wingHome, wingRange } from '../sim/air';
 import { applyCommand } from '../sim/commands';
 import { buildProblem, projectCost } from '../sim/construction';
 import { createGame, type NewGameOptions } from '../sim/game';
@@ -27,6 +27,7 @@ import { parseMapPackage, type MapCheck } from '../maps/validate';
 import { isBuiltinMap, registerMapScenario } from '../sim/world';
 import { MODES, type MapMode } from './map/modes';
 import { MapRenderer } from './map/renderer';
+import { provincesNear, unitFilter, zonesNear, type Focus, type UnitFilter } from './map/visibility';
 import { hideTip, installTips, shield, tip } from './panels/common';
 import { dialog, pendingDecisions, renderDock } from './panels/dialogs';
 import { attention, renderHud } from './panels/hud';
@@ -574,6 +575,7 @@ export class App {
         fleetPreview,
         fleetPreviewLabel,
         tradeRoutes: this.ui.ledgerTab === 'industry' && this.player ? this.tradeRoutes(sim, this.player) : null,
+        units: this.unitFilter(),
       },
       now,
     );
@@ -589,6 +591,44 @@ export class App {
   }
 
   private legendKey = '';
+  private focusMemo: { key: string; value: Focus | null } | null = null;
+  private filterMemo: { key: string; value: UnitFilter } | null = null;
+
+  /** What the selection is about, for the "Relevant" unit view (worked out when the selection or the week changes). */
+  viewFocus(): Focus | null {
+    const sim = this.sim;
+    if (!sim) return null;
+    const st = sim.state;
+    const a = this.selectedArmy ? st.armies[this.selectedArmy] : undefined;
+    const f = this.selectedFleet ? st.fleets[this.selectedFleet] : undefined;
+    const w = this.selectedWing ? st.wings[this.selectedWing] : undefined;
+    const key = `${a?.id}|${a?.location}|${a?.path.join(',')}|${f?.id}|${f?.zone}|${w?.id}|${w?.base}|${w?.carrier}|${st.tick}|${st.rev}`;
+    if (this.focusMemo?.key === key) return this.focusMemo.value;
+    let value: Focus | null = null;
+    if (a) {
+      const provinces = provincesNear(sim, [a.location, ...a.path], 3);
+      value = { label: a.name, provinces, zones: zonesNear(sim, [], 0, provinces) };
+    } else if (f) {
+      const zones = zonesNear(sim, [f.zone, ...f.path], 2);
+      value = { label: f.name, provinces: new Set([...zones].flatMap((z) => sim.world.zones[z].coasts)), zones };
+    } else if (w) {
+      const c = wingCoverage(sim, w);
+      value = { label: w.name, provinces: new Set(c.provs), zones: new Set(c.zones) };
+    }
+    this.focusMemo = { key, value };
+    return value;
+  }
+
+  /** Which forces the map and the panels show (ui/map/visibility.ts). */
+  unitFilter(): UnitFilter {
+    const sim = this.sim!;
+    const focus = this.viewFocus();
+    const s = this.settings;
+    const key = `${this.player}|${s.armyMarkers}|${s.relevantAllies}|${sim.state.rev}|${sim.state.tick}|${focus ? this.focusMemo?.key : ''}`;
+    if (this.filterMemo?.key !== key) this.filterMemo = { key, value: unitFilter(sim, this.player, s.armyMarkers, { allies: s.relevantAllies, focus }) };
+    return this.filterMemo.value;
+  }
+
   private rebaseMemo: { key: string; value: { provinces: ProvinceId[]; fleets: string[] } } | null = null;
 
   /** The airfields and carriers the selected wing of ours could move to (worked out once a week). */

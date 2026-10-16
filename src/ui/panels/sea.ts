@@ -41,6 +41,7 @@ import type { AirWing, Fleet, FleetDuty, FleetDutyKind, ProvinceId, ShipType, St
 import type { App } from '../app';
 import { action, button, h, row } from '../dom';
 import { fmt, plural, weeks } from '../format';
+import { VIEW_LABELS } from '../map/visibility';
 import { icon } from '../icons';
 import { section, shield } from './common';
 import { confirmDialog } from './dialogs';
@@ -379,8 +380,17 @@ export function zoneCard(app: App, zone: string): HTMLElement[] {
   const sel = app.selectedFleet ? st.fleets[app.selectedFleet] : undefined;
   void sel;
   const body = h('div', { class: 'ins-body scroll', 'data-sk': 'ins' });
-  const here = fleetsIn(sim, zone);
-  body.appendChild(section('Fleets here', ...(here.length ? here.map((f) => fleetRow(app, f)) : [h('p', { class: 'small muted' }, 'No fleets in these waters.')])));
+  const units = app.unitFilter();
+  const all = fleetsIn(sim, zone);
+  const here = all.filter((f) => f.id === app.selectedFleet || units.shows(f.nation, { zone }));
+  const hidden = all.length - here.length;
+  body.appendChild(
+    section(
+      'Fleets here',
+      ...(here.length ? here.map((f) => fleetRow(app, f)) : [h('p', { class: 'small muted' }, all.length ? 'No fleets shown in these waters.' : 'No fleets in these waters.')]),
+      hidden ? h('p', { class: 'small faint', 'data-fk': 'hidden-fleets' }, `${hidden} fleet${hidden === 1 ? '' : 's'} of other realms here hidden by the unit view (${VIEW_LABELS[units.mode]}); "All" shows them.`) : null,
+    ),
+  );
   const mine = me ? [...Object.values(st.fleets)].filter((f) => f.nation === me && f.zone !== zone) : [];
   if (mine.length) {
     body.appendChild(

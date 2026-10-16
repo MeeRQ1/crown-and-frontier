@@ -22,6 +22,8 @@ export interface UISettings {
   terrainDetail: 'full' | 'reduced' | 'off';
   borderEmphasis: 'subtle' | 'normal' | 'strong';
   armyMarkers: 'all' | 'relevant' | 'mine';
+  /** "Relevant" includes realms allied to us by treaty or fighting on our side */
+  relevantAllies: boolean;
   mapMode: string;
 }
 
@@ -44,6 +46,7 @@ export const DEFAULT_SETTINGS: UISettings = {
   terrainDetail: 'full',
   borderEmphasis: 'normal',
   armyMarkers: 'relevant',
+  relevantAllies: true,
   mapMode: 'political',
 };
 
