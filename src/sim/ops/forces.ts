@@ -138,7 +138,7 @@ export function planForces(sim: Sim, op: Operation, f: OpForces, issue: (cmd: Re
   }
 
   // ── the landing ──
-  if (op.kind === 'landing' && op.landing && op.landing.stage !== 'ashore') landing(sim, op, f, plan, give, prev, ok, setDuty, setMission);
+  if (op.kind === 'landing' && op.landing && op.landing.stage !== 'ashore') landing(sim, op, f, plan, give, prev, ok, setDuty, setMission, handledFleets);
 
   // ── airborne ──
   airborne(sim, op, f, plan, give, prev, issue);
@@ -361,18 +361,22 @@ type SetDuty = (fl: Fleet, d: Omit<FleetDuty, 'since'>, kind: OpTaskKind, note: 
 type SetMission = (w: AirWing, mission: AirMission, target: ProvinceId | null, zone: ZoneId | null, kind: OpTaskKind, note: string) => boolean;
 
 /** The landing: gather at a port, bring the transports and escorts, cover the beach, sail; ashore, the area is taken like a conquest. */
-function landing(sim: Sim, op: Operation, f: OpForces, plan: ForcesPlan, give: Give, prev: Record<string, OpTask>, ok: (cmd: RealmCommand) => boolean, setDuty: SetDuty, setMission: SetMission): void {
+function landing(sim: Sim, op: Operation, f: OpForces, plan: ForcesPlan, give: Give, prev: Record<string, OpTask>, ok: (cmd: RealmCommand) => boolean, setDuty: SetDuty, setMission: SetMission, handled: Set<string>): void {
   const st = sim.state;
   const nid = op.nation;
   const L = op.landing!;
   const beach = op.area[0];
   const armies = f.armies.filter((a) => st.armies[a.id] && !isPara(a));
   for (const a of armies) plan.reserved.add(a.id);
-  // at sea: wait for the landing
+  // at sea: the transports sail on, the escorts stay with them, until the troops are ashore
   if (L.stage === 'sail') {
     const aboard = armies.filter((a) => a.embarked);
     if (aboard.length) {
       for (const a of aboard) give(a.id, task(sim, prev[a.id], 'transport', beach, `at sea, bound for ${provName(sim, beach)}`));
+      const carriers = new Set(aboard.map((a) => a.embarked!));
+      for (const id of carriers) handled.add(id);
+      const lead = [...carriers].sort()[0];
+      for (const e of f.fleets) if (!carriers.has(e.id) && warships(e) && !transportsOnly(e) && (prev[e.id]?.kind === 'escort' || e.duty?.kind === 'escort')) setDuty(e, { kind: 'escort', fleet: lead }, 'escort', `escorting the landing to ${provName(sim, beach)}`);
       return;
     }
     L.stage = 'ashore';
@@ -471,6 +475,8 @@ function landing(sim: Sim, op: Operation, f: OpForces, plan: ForcesPlan, give: G
     return;
   }
   if (ok({ type: 'shipArmies', nation: nid, armies: armies.map((a) => a.id), fleet: carrier.id, dest: beach })) {
+    handled.add(carrier.id);
+    give(carrier.id, task(sim, prev[carrier.id], 'transport', beach, `carrying the landing force to ${provName(sim, beach)}`));
     L.stage = 'sail';
     clearIssue(op, 'landing');
     opLog(sim, op, `${armies.length} arm${armies.length === 1 ? 'y' : 'ies'} (${regs} regiments) embarked at ${provName(sim, port)} for ${provName(sim, beach)}${escorts.length ? `, escorted by ${escorts[0].name}` : ''}.`, 'good');

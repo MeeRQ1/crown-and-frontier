@@ -662,9 +662,10 @@ export function planOperation(sim: Sim, op: Operation): void {
     op.detached.push(d);
     st.armies[d].op = op.id;
   }
+  // support follows the ground plan (where the armies fight and besiege)
+  forces.support(ground);
   for (const [id, t] of Object.entries(ground.tasks)) op.tasks[id] = t;
   for (const [id, t] of Object.entries(forces.tasks)) op.tasks[id] = t;
-  forces.support(ground);
   checkProgress(sim, op, ground, f);
 }
 
