@@ -217,5 +217,28 @@ export function checkInvariants(sim: Sim): string[] {
     if (n.warExhaustion < 0 || n.warExhaustion > 100) out.push(`${nid}: war exhaustion ${n.warExhaustion}`);
     if (n.alive && n.capital && st.provinces[n.capital].owner !== nid) out.push(`${nid}: capital not owned`);
   }
+  // operations (format 8): members belong to a live operation of their own realm; bounded state
+  const ops = st.operations ?? {};
+  for (const [id, op] of Object.entries(ops)) {
+    if (op.id !== id) out.push(`operation key mismatch ${id}`);
+    if (!st.nations[op.nation]?.alive) out.push(`${id}: operation of a dead realm`);
+    if (op.area.some((p) => !st.provinces[p])) out.push(`${id}: unknown province in the area`);
+    if (op.zones.some((z) => !sim.world.zones[z])) out.push(`${id}: unknown zone`);
+    if (op.log.length > 40) out.push(`${id}: log not bounded (${op.log.length})`);
+    if (op.detached.length > 6) out.push(`${id}: ${op.detached.length} detachments`);
+    if (!['active', 'paused', 'complete'].includes(op.status)) out.push(`${id}: status ${op.status}`);
+  }
+  const member = (kind: string, uid: string, u: { nation: string; op?: string | null; opHold?: boolean }) => {
+    if (!u.op) {
+      if (u.opHold) out.push(`${kind} ${uid}: under direct command of no operation`);
+      return;
+    }
+    const op = ops[u.op];
+    if (!op) out.push(`${kind} ${uid}: member of a missing operation ${u.op}`);
+    else if (op.nation !== u.nation) out.push(`${kind} ${uid}: member of another realm's operation`);
+  };
+  for (const [id, a] of Object.entries(st.armies)) member('army', id, a);
+  for (const [id, f] of Object.entries(st.fleets)) member('fleet', id, f);
+  for (const [id, w] of Object.entries(st.wings)) member('wing', id, w);
   return out;
 }

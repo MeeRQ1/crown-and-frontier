@@ -11,6 +11,7 @@ import { TECHS } from './data/techs';
 import { poolCap, warDead } from './economy';
 import { touchArmies } from './index';
 import { armyCap } from './influence';
+import { noteOpLoss } from './ops/losses';
 import { nationMods, type Mods } from './modifiers';
 import { armiesAt, armiesOf, atWar, bump, enemiesOf, isFriendly, notify, provName, type Sim } from './state';
 import { supplyAt, supplyStatus } from './supply';
@@ -68,6 +69,23 @@ function hostileArmyIn(sim: Sim, nid: NationId, pid: ProvinceId): boolean {
 
 export function recruitProblem(sim: Sim, nid: NationId, pid: ProvinceId, unit: UnitType): string | null {
   const n = sim.state.nations[nid];
+  const e = recruitEligible(sim, nid, pid, unit);
+  if (e) return e;
+  const cap = armyCap(sim, nid);
+  if (cap !== null && regimentsOf(sim, nid) >= cap) return `Disarmed by treaty: at most ${cap} regiments until the limit expires.`;
+  const cost = unitCost(sim, nid, unit);
+  if (n.treasury < cost.crowns) return `Needs ${cost.crowns} crowns (treasury ${Math.floor(n.treasury)}).`;
+  if (n.materiel < cost.materiel) return `Needs ${cost.materiel} materiel (stockpile ${Math.floor(n.materiel)}): build factories or wait for industry.`;
+  for (const [r, amt] of Object.entries(cost.resources) as Array<[StrategicResource, number]>) {
+    if (n.stock[r] < amt) return `Needs ${amt} ${RESOURCE_INFO[r].label.toLowerCase()} (stockpile ${Math.floor(n.stock[r])}).`;
+  }
+  if (n.manpower < cost.manpower) return `Needs ${cost.manpower.toLocaleString()} men in the manpower pool (pool ${Math.floor(n.manpower).toLocaleString()}).`;
+  return null;
+}
+
+/** Why a province cannot raise this regiment at all (null: it can, given the means): technology, ownership, integration, enemies. */
+export function recruitEligible(sim: Sim, nid: NationId, pid: ProvinceId, unit: UnitType): string | null {
+  const n = sim.state.nations[nid];
   const p = sim.state.provinces[pid];
   if (!n?.alive) return 'Your realm has fallen.';
   if (!p) return 'Unknown province.';
@@ -78,15 +96,6 @@ export function recruitProblem(sim: Sim, nid: NationId, pid: ProvinceId, unit: U
   if (p.revoltUntil > sim.state.tick) return 'The province is in revolt.';
   if (p.integration < C.integration.recruitMin) return `Frontier province: integration ${Math.floor(p.integration)}/${C.integration.recruitMin} needed to raise troops.`;
   if (hostileArmyIn(sim, nid, pid)) return 'Enemy troops are in the province.';
-  const cap = armyCap(sim, nid);
-  if (cap !== null && regimentsOf(sim, nid) >= cap) return `Disarmed by treaty: at most ${cap} regiments until the limit expires.`;
-  const cost = unitCost(sim, nid, unit);
-  if (n.treasury < cost.crowns) return `Needs ${cost.crowns} crowns (treasury ${Math.floor(n.treasury)}).`;
-  if (n.materiel < cost.materiel) return `Needs ${cost.materiel} materiel (stockpile ${Math.floor(n.materiel)}): build factories or wait for industry.`;
-  for (const [r, amt] of Object.entries(cost.resources) as Array<[StrategicResource, number]>) {
-    if (n.stock[r] < amt) return `Needs ${amt} ${RESOURCE_INFO[r].label.toLowerCase()} (stockpile ${Math.floor(n.stock[r])}).`;
-  }
-  if (n.manpower < cost.manpower) return `Needs ${cost.manpower.toLocaleString()} men in the manpower pool (pool ${Math.floor(n.manpower).toLocaleString()}).`;
   return null;
 }
 
@@ -254,6 +263,11 @@ export function doSplit(sim: Sim, id: ArmyId, counts: Partial<Record<UnitType, n
   b.stationary = a.stationary;
   b.supply = a.supply;
   if (a.group) b.group = a.group;
+  // a detachment serves where its parent serves (and under the same command)
+  if (a.op) {
+    b.op = a.op;
+    b.opHold = a.opHold ?? false;
+  }
   return b;
 }
 
@@ -385,6 +399,7 @@ export function* weeklyArmyCareSteps(sim: Sim): Generator<void, void, void> {
         return true;
       });
       warDead(sim, a.nation, lost);
+      noteOpLoss(sim, a.op, 'men', lost);
       a.morale = Math.max(0, a.morale - 0.1);
       if (a.regiments.length === 0) {
         notify(sim, a.nation, 'urgent', 'attrition', `${a.name} has wasted away from attrition in ${provName(sim, a.location)}.`, { province: a.location });

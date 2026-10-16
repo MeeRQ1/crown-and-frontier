@@ -129,6 +129,24 @@ export function buildProblem(sim: Sim, nid: NationId, pid: ProvinceId, kind: Pro
   const st = sim.state;
   const n = st.nations[nid];
   const p = st.provinces[pid];
+  const e = buildEligible(sim, nid, pid, kind);
+  if (e) return e;
+  const slots = known?.slots ?? buildSlots(sim, nid);
+  if ((known?.active ?? activeProjects(sim, nid).length) >= slots) return `All ${slots} construction slots are in use.`;
+  const cost = projectCost(sim, nid, pid, kind);
+  if (n.treasury < cost.crowns) return `Needs ${cost.crowns} crowns (treasury ${Math.floor(n.treasury)}).`;
+  if (n.supplies < cost.supplies) return `Needs ${cost.supplies} food.`;
+  if (n.stock.iron < cost.iron) return `Needs ${cost.iron} iron (stockpile ${Math.floor(n.stock.iron)}).`;
+  if (n.manpower < cost.manpower) return `Needs ${cost.manpower} men from the manpower pool.`;
+  void p;
+  return null;
+}
+
+/** Why a project cannot be built here at all (null: it can, given a free slot and the means): levels, prerequisites, ownership. */
+export function buildEligible(sim: Sim, nid: NationId, pid: ProvinceId, kind: ProjectKind): string | null {
+  const st = sim.state;
+  const n = st.nations[nid];
+  const p = st.provinces[pid];
   if (!n?.alive) return 'Your realm has fallen.';
   if (!p) return 'Unknown province.';
   if (!(kind in PROJECT_LABELS)) return 'Unknown project.';
@@ -165,13 +183,6 @@ export function buildProblem(sim: Sim, nid: NationId, pid: ProvinceId, kind: Pro
       if ((p.aa ?? 0) >= C.construction.flakMax) return `The batteries are at the maximum level (${C.construction.flakMax}).`;
     }
   }
-  const slots = known?.slots ?? buildSlots(sim, nid);
-  if ((known?.active ?? activeProjects(sim, nid).length) >= slots) return `All ${slots} construction slots are in use.`;
-  const cost = projectCost(sim, nid, pid, kind);
-  if (n.treasury < cost.crowns) return `Needs ${cost.crowns} crowns (treasury ${Math.floor(n.treasury)}).`;
-  if (n.supplies < cost.supplies) return `Needs ${cost.supplies} food.`;
-  if (n.stock.iron < cost.iron) return `Needs ${cost.iron} iron (stockpile ${Math.floor(n.stock.iron)}).`;
-  if (n.manpower < cost.manpower) return `Needs ${cost.manpower} men from the manpower pool.`;
   return null;
 }
 

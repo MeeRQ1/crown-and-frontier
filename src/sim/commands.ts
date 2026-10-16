@@ -5,7 +5,9 @@
 import { buildWingProblem, cancelWing, missionPlace, missionProblem, MISSION_LABELS, placeName, rebaseProblem, rebaseWing, startWing, touchWings, wingHome } from './air';
 import { C, SHIPS, WINGS } from './config';
 import { nextMemoEpoch } from './index';
-import { buildProblem, cancelProblem, cancelProject, startProject } from './construction';
+import { buildProblem, cancelProblem, cancelProject, PROJECT_LABELS, startProject } from './construction';
+import { runBatchBuild, runBatchRecruit } from './batch';
+import { assignUnits, cancelOperation, createOperation, createOpProblem, editOperation, editOpProblem, opSummaryLine, releaseUnits, resumeUnits, setOpStatus, takeUnderDirectCommand, unitRef } from './ops/operations';
 import {
   cancelTreaty,
   cancelTreatyProblem,
@@ -152,7 +154,7 @@ export function checkCommand(sim: Sim, cmd: Command): string | null {
     case 'fleetDuty':
       return fleetDutyProblem(sim, cmd.nation, cmd.fleet, cmd.duty);
     case 'airDrop':
-      return airDropProblem(sim, cmd.nation, cmd.army, cmd.target);
+      return airDropProblem(sim, cmd.nation, cmd.army, cmd.target, cmd.wings);
     case 'cancelDrop':
       return st.armies[cmd.army]?.nation === cmd.nation && st.armies[cmd.army].drop ? null : 'No airborne operation of this army to cancel.';
     case 'mergeFleets':
@@ -246,25 +248,77 @@ export function checkCommand(sim: Sim, cmd: Command): string | null {
       if (!goal) return 'No coalition war goal is available.';
       return declareWarProblem(sim, cmd.nation, cmd.target, goal);
     }
+    case 'createOp':
+      return createOpProblem(sim, cmd.nation, cmd.kind, cmd.area ?? [], cmd.zones ?? [], cmd.settings ?? {}, cmd.units ?? []);
+    case 'editOp':
+      return editOpProblem(sim, cmd.nation, cmd.op, cmd.area, cmd.zones, cmd.settings ?? {});
+    case 'assignOp': {
+      const op = st.operations?.[cmd.op];
+      if (!op || op.nation !== cmd.nation) return 'Not our operation.';
+      if (!cmd.units.length) return 'Choose the forces to assign.';
+      for (const id of cmd.units) {
+        const r = unitRef(sim, id);
+        if (!r || r.unit.nation !== cmd.nation) return 'Not our force.';
+      }
+      return null;
+    }
+    case 'releaseOp':
+    case 'resumeUnits':
+      for (const id of cmd.units) {
+        const r = unitRef(sim, id);
+        if (!r || r.unit.nation !== cmd.nation) return 'Not our force.';
+        if (!r.unit.op) return `${r.unit.name} serves in no operation.`;
+      }
+      return cmd.units.length ? null : 'Choose the forces.';
+    case 'opState':
+    case 'cancelOp': {
+      const op = st.operations?.[cmd.op];
+      if (!op || op.nation !== cmd.nation) return 'Not our operation.';
+      if (cmd.type === 'opState' && !['active', 'paused'].includes(cmd.state)) return 'Unknown state.';
+      return null;
+    }
+    case 'keepFormation': {
+      const a = st.armies[cmd.army];
+      return a && a.nation === cmd.nation ? null : 'Not your army.';
+    }
+    case 'batchBuild': {
+      if (!cmd.provinces.length) return 'Choose the provinces.';
+      if (cmd.provinces.length > 400 || new Set(cmd.provinces).size !== cmd.provinces.length) return 'Each province once, at most 400.';
+      if (cmd.provinces.some((p) => !st.provinces[p])) return 'Unknown province.';
+      return null;
+    }
+    case 'batchRecruit': {
+      if (!cmd.alloc.length) return 'Nothing to recruit.';
+      if (cmd.alloc.some((x) => !st.provinces[x.province] || !Number.isInteger(x.count) || x.count < 1 || x.count > 10)) return 'Between 1 and 10 regiments a province.';
+      if (new Set(cmd.alloc.map((x) => x.province)).size !== cmd.alloc.length) return 'Each province once.';
+      return null;
+    }
     default:
       return 'Unknown command.';
   }
 }
 
-export function applyCommand(sim: Sim, cmd: Command): CommandResult {
+export interface ApplyOptions {
+  /** an operation's routine order: not a player order (no override, not in the player's command log; the operation is replayed instead) */
+  auto?: boolean;
+}
+
+export function applyCommand(sim: Sim, cmd: Command, opts: ApplyOptions = {}): CommandResult {
   const problem = checkCommand(sim, cmd);
   if (problem) return { ok: false, reason: problem };
   const player = cmd.type === 'continueCampaign' || sim.state.nations[cmd.nation].isPlayer;
-  const r = execute(sim, cmd);
+  // a player's order to a member of an operation takes it under direct command first
+  if (player && !opts.auto && cmd.type !== 'continueCampaign') takeUnderDirectCommand(sim, cmd);
+  const r = execute(sim, cmd, !!opts.auto);
   // derived values shown to the player (air cover, sea control…) are recomputed after
   // each player order; replays apply the same commands, so they see the same thing
   if (player && r.ok) nextMemoEpoch();
   return r;
 }
 
-function execute(sim: Sim, cmd: Command): CommandResult {
+function execute(sim: Sim, cmd: Command, auto = false): CommandResult {
   const st = sim.state;
-  if (cmd.type === 'continueCampaign' || st.nations[cmd.nation].isPlayer) logCommand(sim, cmd);
+  if (!auto && (cmd.type === 'continueCampaign' || st.nations[cmd.nation].isPlayer)) logCommand(sim, cmd);
   switch (cmd.type) {
     case 'continueCampaign':
       st.continueAfterResult = true;
@@ -353,7 +407,7 @@ function execute(sim: Sim, cmd: Command): CommandResult {
       return { ok: true };
     }
     case 'airDrop': {
-      launchAirDrop(sim, cmd.nation, cmd.army, cmd.target);
+      launchAirDrop(sim, cmd.nation, cmd.army, cmd.target, cmd.wings);
       const a = st.armies[cmd.army];
       return { ok: true, message: `${a.name} boards ${a.drop!.wings.length} transport wing${a.drop!.wings.length === 1 ? '' : 's'}: it is flown to ${sim.world.prov[cmd.target].name} in this week's air phase.` };
     }
@@ -598,6 +652,50 @@ function execute(sim: Sim, cmd: Command): CommandResult {
       const goal = goalOptions(sim, cmd.nation, cmd.target).find((g) => g.type === 'coalition')!;
       const w = declareWar(sim, cmd.nation, cmd.target, goal);
       return { ok: true, message: `${w.name} begins.` };
+    }
+    case 'createOp': {
+      const op = createOperation(sim, cmd.nation, cmd.kind, cmd.area ?? [], cmd.zones ?? [], cmd.settings ?? {}, cmd.units ?? [], cmd.name, !!cmd.activate);
+      return { ok: true, message: `${op.name} ${op.status === 'active' ? 'begins' : 'is prepared'}: ${opSummaryLine(sim, op)}.` };
+    }
+    case 'editOp': {
+      const op = st.operations[cmd.op];
+      editOperation(sim, op, cmd.area, cmd.zones, cmd.settings ?? {}, cmd.name);
+      return { ok: true, message: `${op.name} updated.` };
+    }
+    case 'assignOp': {
+      const op = st.operations[cmd.op];
+      assignUnits(sim, op, cmd.units);
+      return { ok: true, message: `${cmd.units.length} force${cmd.units.length === 1 ? '' : 's'} assigned to ${op.name}.` };
+    }
+    case 'releaseOp':
+      releaseUnits(sim, cmd.units);
+      return { ok: true, message: `${cmd.units.length === 1 ? 'The force is' : `${cmd.units.length} forces are`} under your direct command.` };
+    case 'resumeUnits':
+      resumeUnits(sim, cmd.units);
+      return { ok: true, message: 'Back under the operation’s command.' };
+    case 'opState': {
+      const op = st.operations[cmd.op];
+      setOpStatus(sim, op, cmd.state);
+      return { ok: true, message: `${op.name} ${cmd.state === 'active' ? 'resumed' : 'paused'}.` };
+    }
+    case 'cancelOp': {
+      const op = st.operations[cmd.op];
+      cancelOperation(sim, op);
+      return { ok: true, message: `${op.name} cancelled: its forces keep their last orders under your direct command.` };
+    }
+    case 'keepFormation': {
+      const a = st.armies[cmd.army];
+      a.keep = cmd.keep;
+      return { ok: true, message: cmd.keep ? `${a.name} will not be split or merged by operations.` : `Operations may split and merge ${a.name} again (if their settings allow).` };
+    }
+    case 'batchBuild': {
+      const r = runBatchBuild(sim, cmd.nation, cmd.project, cmd.provinces);
+      return { ok: true, message: `${PROJECT_LABELS[cmd.project]}: ${r.done.length} of ${cmd.provinces.length} queued.`, details: r.details };
+    }
+    case 'batchRecruit': {
+      const r = runBatchRecruit(sim, cmd.nation, cmd.unit, cmd.alloc);
+      const asked = cmd.alloc.reduce((s, x) => s + x.count, 0);
+      return { ok: true, message: `${r.done} of ${asked} regiments in training.`, details: r.details };
     }
   }
 }

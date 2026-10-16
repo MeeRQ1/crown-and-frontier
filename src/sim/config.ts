@@ -772,4 +772,4 @@ export const C = {
  * guarantees, influence, loans and trade blocs. Older saves are migrated
  * (src/sim/migrate.ts).
  */
-export const SCHEMA_VERSION = 7;
+export const SCHEMA_VERSION = 8;

@@ -264,6 +264,9 @@ export interface Fleet {
   report?: FleetReport | null;
   /** its standing order (format 7); none: on station, every duty it can */
   duty?: FleetDuty | null;
+  /** the player's operation it serves, and whether a player order has taken it under direct command (format 8) */
+  op?: string | null;
+  opHold?: boolean;
 }
 
 /**
@@ -317,6 +320,9 @@ export interface AirWing {
   report: WingReport | null;
   /** its service so far (format 7): weeks flown, enemy aircraft downed and hull hit (summed), strength lost */
   record?: { weeks: number; kills: number; hits: number; lost: number };
+  /** the player's operation it serves, and whether a player order has taken it under direct command (format 8) */
+  op?: string | null;
+  opHold?: boolean;
 }
 
 /** One week of a wing's operations, as the player is told it. */
@@ -377,6 +383,12 @@ export interface Army {
   drop?: AirDrop | null;
   /** tick it landed from the air (airborne landing penalty that week) */
   dropped?: number;
+  /** the player's operation it serves (format 8); null: under direct command only */
+  op?: string | null;
+  /** a member taken under direct command by a player order: the operation leaves it alone until it is resumed */
+  opHold?: boolean;
+  /** the player keeps this formation as it is: operations never split it or merge it into another */
+  keep?: boolean;
 }
 
 /** An airborne operation: the army, at an airfield, is flown to a province and dropped there. */
@@ -711,6 +723,10 @@ export interface AIState {
   nextOperational: number;
   /** remembers per-front objective commitments: armyId -> objective province */
   objectives: Record<ArmyId, { target: ProvinceId; since: number; kind: string; value: number }>;
+  /** provinces where an attack of ours failed (format 8): no new attack there until the wait is over, and only stronger */
+  failures?: Record<ProvinceId, { tick: number; count: number }>;
+  /** armies it detached or merged recently (format 8): they wait before reorganising again */
+  reorganized?: Record<ArmyId, number>;
   /** desired regiment count set by the strategic layer */
   armyTarget: number;
   /** province where idle forces gather */
@@ -919,6 +935,97 @@ export interface MapFingerprint {
   checksum: string;
 }
 
+// ───────────────────────────── Operations (format 8) ─────────────────────────
+
+/**
+ * A player's operation: forces assigned to an objective with constraints; the
+ * planner (sim/ops) carries out the routine orders through the same commands
+ * as the player, weekly, until it is done, paused or cancelled.
+ *   conquer   take the enemy-held provinces of an area
+ *   advance   push through to one province, taking what lies on the way
+ *   hold      defend an area: cover its threatened border, counter-attack inside it
+ *   sea       keep sea zones: patrol and intercept, escort, strike enemy fleets
+ *   landing   carry the armies to an enemy coast under escort and cover, then take the area
+ */
+export type OperationKind = 'conquer' | 'advance' | 'hold' | 'sea' | 'landing';
+export type OpPosture = 'cautious' | 'balanced' | 'aggressive';
+export type OpStatus = 'active' | 'paused' | 'complete';
+/** when the objective is reached: hold the area, regroup in it, return home, or stand and wait */
+export type OpCompletion = 'hold' | 'regroup' | 'return' | 'await';
+
+export interface OperationSettings {
+  posture: OpPosture;
+  /** 1 low, 2 normal, 3 high: higher plans first where operations share bases or airfields */
+  priority: 1 | 2 | 3;
+  /** share of the ground strength held back as a reserve (0–0.4) */
+  reserve: number;
+  /** when the reserve goes in: never, to win battles our forces are fighting, or wherever a target needs it */
+  commitReserve: 'never' | 'battles' | 'freely';
+  /** armies below this share of full morale rest instead of attacking (0.2–0.8) */
+  minReadiness: number;
+  /** attack only where our supply reaches */
+  supplyLimit: boolean;
+  /** may split and merge the operation's armies, move ships between its fleets */
+  reorganize: boolean;
+  /** may move the operation's air wings to other airfields */
+  rebase: boolean;
+  /** airborne drops: none, one (the mandate ends with it), or as often as the forces allow */
+  airborne: 'off' | 'once' | 'repeat';
+  /** the most of a drop's men it may expect to lose on the way in (0.05–0.5) */
+  airborneRisk: number;
+  /** a member given a direct order rejoins the operation once that order is carried out */
+  resumeAfterOrder: boolean;
+  onComplete: OpCompletion;
+}
+
+export type OpTaskKind =
+  | 'attack' | 'stage' | 'occupy' | 'defend' | 'hold' | 'reserve' | 'recover' | 'regroup' | 'return' | 'wait'
+  | 'patrol' | 'escort' | 'blockade' | 'bombard' | 'repair' | 'transport' | 'strike'
+  | 'cover' | 'support' | 'interdict' | 'rest' | 'rebase' | 'drop' | 'embark' | 'manual';
+
+/** What the planner last had a member do, and why (shown in the operation's panel). */
+export interface OpTask {
+  kind: OpTaskKind;
+  /** province or sea zone */
+  target: string | null;
+  note: string;
+  since: number;
+}
+
+export interface Operation extends OperationSettings {
+  id: string;
+  nation: NationId;
+  name: string;
+  kind: OperationKind;
+  status: OpStatus;
+  /** provinces: to take (conquer), to reach (advance: one), to hold (hold), the beach then the area (landing) */
+  area: ProvinceId[];
+  /** sea zones to keep (sea) */
+  zones: ZoneId[];
+  created: number;
+  /** tick it was activated (or last resumed) */
+  since: number;
+  /** current task of each member (unit id) */
+  tasks: Record<string, OpTask>;
+  /** each army's target, kept until it is taken, lost or hopeless (commitment against order churn) */
+  assigned: Record<ArmyId, { target: ProvinceId; since: number; kind: string }>;
+  /** area provinces held by our side at the last planning (to count what changes hands) */
+  held: ProvinceId[];
+  /** targets where an attack failed: no new attack until the posture's wait is over (and only stronger) */
+  failures: Record<ProvinceId, { tick: number; count: number }>;
+  /** armies the planner detached (ids), and when an army last split or merged: it waits before reorganising again */
+  detached: string[];
+  reorganized: Record<string, number>;
+  /** what happened, newest last (at most 40 lines) */
+  log: Array<{ tick: number; text: string; tone?: 'good' | 'bad' }>;
+  /** a decision the player is asked for (raised once, kept until it no longer applies) */
+  issue: { code: string; text: string; since: number } | null;
+  /** results since it began */
+  stats: { taken: number; lost: number; menLost: number; shipsLost: number; wingStrengthLost: number; drops: number; landings: number };
+  /** a landing's progress (landing operations) */
+  landing?: { stage: 'gather' | 'sail' | 'ashore'; port: ProvinceId | null } | null;
+}
+
 export interface GameState {
   schema: number;
   scenarioId: string;
@@ -935,6 +1042,8 @@ export interface GameState {
   armies: Record<ArmyId, Army>;
   fleets: Record<FleetId, Fleet>;
   wings: Record<WingId, AirWing>;
+  /** the player's operations (format 8) */
+  operations: Record<string, Operation>;
   battles: Record<string, Battle>;
   wars: Record<WarId, War>;
   treaties: Treaty[];
@@ -959,7 +1068,7 @@ export interface GameState {
   proposals: Proposal[];
   reports: BattleReport[];
   notifications: Notification[];
-  counters: { army: number; battle: number; war: number; treaty: number; note: number; proposal: number; event: number; regiment: number; coalition: number; fleet: number; ship: number; wing: number; loan: number; bloc: number; contract: number };
+  counters: { army: number; battle: number; war: number; treaty: number; note: number; proposal: number; event: number; regiment: number; coalition: number; fleet: number; ship: number; wing: number; loan: number; bloc: number; contract: number; op?: number };
   result: GameResult | null;
   continueAfterResult: boolean;
   diagnostics: AIDiagnostic[];
@@ -985,7 +1094,8 @@ export type Command =
   | { type: 'moveFleet'; nation: NationId; fleet: FleetId; zone: ZoneId }
   | { type: 'stopFleet'; nation: NationId; fleet: FleetId }
   | { type: 'fleetDuty'; nation: NationId; fleet: FleetId; duty: Omit<FleetDuty, 'since'> | null }
-  | { type: 'airDrop'; nation: NationId; army: ArmyId; target: ProvinceId }
+  /** `wings`: flown by these transport wings only (an operation flies its own) */
+  | { type: 'airDrop'; nation: NationId; army: ArmyId; target: ProvinceId; wings?: WingId[] }
   | { type: 'cancelDrop'; nation: NationId; army: ArmyId }
   | { type: 'mergeFleets'; nation: NationId; fleets: FleetId[] }
   | { type: 'splitFleet'; nation: NationId; fleet: FleetId; ships: string[] }
@@ -1000,6 +1110,23 @@ export type Command =
   | { type: 'rebaseWing'; nation: NationId; wing: WingId; base?: ProvinceId; carrier?: FleetId }
   | { type: 'disbandWing'; nation: NationId; wing: WingId }
   | { type: 'cancelBuild'; nation: NationId; province: ProvinceId }
+  /** operations (format 8): create one (prepared, or active at once) with forces assigned */
+  | { type: 'createOp'; nation: NationId; kind: OperationKind; area: ProvinceId[]; zones?: ZoneId[]; settings?: Partial<OperationSettings>; units?: string[]; name?: string; activate?: boolean }
+  | { type: 'editOp'; nation: NationId; op: string; area?: ProvinceId[]; zones?: ZoneId[]; settings?: Partial<OperationSettings>; name?: string }
+  /** armies, fleets and wings (by id) join the operation (leaving any other) */
+  | { type: 'assignOp'; nation: NationId; op: string; units: string[] }
+  /** members leave their operation and keep their last orders under direct command */
+  | { type: 'releaseOp'; nation: NationId; units: string[] }
+  /** members under direct command hand back to their operation */
+  | { type: 'resumeUnits'; nation: NationId; units: string[] }
+  | { type: 'opState'; nation: NationId; op: string; state: 'active' | 'paused' }
+  | { type: 'cancelOp'; nation: NationId; op: string }
+  /** protect an army from being split or merged by operations */
+  | { type: 'keepFormation'; nation: NationId; army: ArmyId; keep: boolean }
+  /** the same project in several provinces at once (in the order given; each checked again) */
+  | { type: 'batchBuild'; nation: NationId; project: ProjectKind; provinces: ProvinceId[] }
+  /** regiments in several provinces at once: the allocation previewed (each checked again, in order) */
+  | { type: 'batchRecruit'; nation: NationId; unit: UnitType; alloc: Array<{ province: ProvinceId; count: number }> }
   | { type: 'research'; nation: NationId; tech: TechId }
   | { type: 'funding'; nation: NationId; level: 0 | 1 | 2 | 3 }
   | { type: 'focus'; nation: NationId; focus: FocusId }
@@ -1036,4 +1163,4 @@ export type Command =
 /** A command issued by a realm (everything except the campaign-level ones). */
 export type RealmCommand = Exclude<Command, { type: 'continueCampaign' }>;
 
-export type CommandResult = { ok: true; message?: string } | { ok: false; reason: string };
+export type CommandResult = { ok: true; message?: string; /** per-item outcome of a batch */ details?: string[] } | { ok: false; reason: string };

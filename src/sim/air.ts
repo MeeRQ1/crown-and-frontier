@@ -43,6 +43,7 @@
 // readiness and replacements; the battle round then reads the support plan.
 
 import { aaAgainst } from './airborne';
+import { noteOpLoss } from './ops/losses';
 import { C, SHIPS, WINGS, WING_TYPES } from './config';
 import { armiesIn, battleGen, geoRev, memoEpochNow } from './index';
 import { nationMods } from './modifiers';
@@ -1184,6 +1185,7 @@ function applyLosses(sim: Sim, losses: Map<WingId, number>, kills: Map<WingId, n
   for (const id of [...losses.keys()].sort()) {
     const w = st.wings[id];
     if (!w) continue;
+    noteOpLoss(sim, w.op, 'wings', Math.min(w.strength, losses.get(id)!));
     w.strength = Math.max(0, w.strength - losses.get(id)!);
     if (w.strength < 5) {
       const where = placeName(sim, missionPlace(sim, w));

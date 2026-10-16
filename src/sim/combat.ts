@@ -31,6 +31,7 @@
 // with no legal retreat they surrender.
 
 import { airSupportFor, airSupportForecast } from './air';
+import { noteOpLoss } from './ops/losses';
 import { C, TERRAIN, UNITS } from './config';
 import { isShort, reserveCap, warDead } from './economy';
 import { maxMorale, removeArmy } from './military';
@@ -38,7 +39,7 @@ import { armiesIn, touchBattles } from './index';
 import { nationMods, type Mods } from './modifiers';
 import { canEnter, isRiver } from './movement';
 import { range } from './rng';
-import { addContribution, atWar, bump, isFriendly, nationName, notify, provName, type Sim } from './state';
+import { addContribution, atWar, bump, isFriendly, menOf, nationName, notify, provName, type Sim } from './state';
 import { supplyCombatMul, supplyDistances, supplyStatus } from './supply';
 import { bombardPlan, bombardPower } from './naval';
 import type { Army, Battle, BattleReport, NationId, ProvinceId, SupportLine, UnitType } from './types';
@@ -712,7 +713,9 @@ function writeBack(sim: Sim, snap: ArmySnap): void {
   if (!a) return;
   a.morale = snap.morale;
   const alive = new Map(snap.regs.map((r) => [r.key, r.men]));
+  const before = a.op ? menOf(a) : 0;
   a.regiments = a.regiments.filter((r) => alive.has(r.id)).map((r) => ({ ...r, men: alive.get(r.id)! }));
+  if (a.op) noteOpLoss(sim, a.op, 'men', before - menOf(a));
   if (a.regiments.length === 0) {
     removeArmy(sim, a.id);
     bump(sim);
