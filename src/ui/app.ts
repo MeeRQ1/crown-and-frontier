@@ -2348,8 +2348,11 @@ export class App {
       this.bannerEl.classList.remove('hidden');
       const done = h('button', { class: 'btn small quiet', type: 'button', 'data-fk': 'banner-cancel' }, 'Done');
       done.addEventListener('click', () => this.setSelectMode('off'));
+      // switch what is being selected (the map buttons are hidden under an open card on small screens)
+      const other = h('button', { class: 'btn small quiet', type: 'button', 'data-fk': 'banner-switch' }, this.selectMode === 'forces' ? 'Provinces' : 'Forces');
+      other.addEventListener('click', () => this.setSelectMode(this.selectMode === 'forces' ? 'provinces' : 'forces'));
       const n = this.selectMode === 'forces' ? this.forceSel.length : this.provSel.length;
-      setChildren(this.bannerEl, icon('check'), h('span', null, this.selectMode === 'forces' ? `Selecting forces: tap ours to add or remove, drag a box to add several (${n} selected).` : `Selecting provinces: tap to add or remove, drag a box to add several (${n} selected).`), done);
+      setChildren(this.bannerEl, icon('check'), h('span', null, `${this.selectMode === 'forces' ? 'Forces' : 'Provinces'} (${n}): tap to add or remove, drag for a box.`), other, done);
     } else if (this.moveMode && a) {
       this.bannerEl.classList.remove('hidden');
       const cancel = h('button', { class: 'btn small quiet', type: 'button' }, 'Cancel (Esc)');

@@ -52,6 +52,31 @@ export async function loadSave(page: Page, origin: string, file: string, player:
   });
 }
 
+
+/** A screen point inside a province (not on a counter), after centring the camera on it (centring is not an input). */
+async function provincePoint(page: Page, pid: string): Promise<{ x: number; y: number } | null> {
+  await page.evaluate((id) => {
+    const app = (window as any).cnf;
+    const c0 = app.renderer.provinceCenter(id);
+    app.renderer.camera.centerOn(c0.x, c0.y, Math.max(app.renderer.camera.zoom, app.renderer.camera.zoomForProvincePx(40)), false);
+    app.mapDirty = true;
+  }, pid);
+  await page.waitForTimeout(120);
+  return page.evaluate((id) => {
+    const app = (window as any).cnf;
+    const r = app.canvas.getBoundingClientRect();
+    const c = app.renderer.provinceCenter(id);
+    const s = app.renderer.camera.toScreen(c.x, c.y);
+    for (let d = 0; d < 80; d += 4)
+      for (const [dx, dy] of [[0, d], [d, 0], [0, -d], [-d, 0], [d, d], [-d, -d]]) {
+        const x = s.x + dx;
+        const y = s.y + dy;
+        if (app.renderer.provinceAt(x, y) === id && !app.renderer.armyAt(x, y) && !app.renderer.fleetAt(x, y) && !app.renderer.wingAt(x, y)) return { x: x + r.left, y: y + r.top };
+      }
+    return null;
+  }, pid);
+}
+
 /** Markers on screen by relation to the player: armies (with the units they stand for), fleets, wings. */
 async function markerCensus(page: Page): Promise<Record<string, Record<string, number>>> {
   return page.evaluate(() => {
@@ -131,6 +156,27 @@ async function main(): Promise<void> {
         await page.waitForTimeout(60);
       }
     }
+    if (PHASE === 'after') {
+      // Ctrl+click each of the ten provinces on the map, then confirm once (the card opens on Build, railway)
+      for (const pid of ten) {
+        const pt = await provincePoint(page, pid);
+        if (!pt) continue;
+        await page.keyboard.down('Control');
+        await page.mouse.click(pt.x, pt.y);
+        await page.keyboard.up('Control');
+        inputs++;
+        await page.waitForTimeout(60);
+      }
+      await page.screenshot({ path: join(OUT, 'build-ten-preview.png') });
+      const ok = page.locator('[data-fk="batch-confirm"]:not([aria-disabled="true"])');
+      if (await ok.count()) {
+        await ok.click();
+        inputs++;
+        built = await page.evaluate(() => (window as any).cnf.batch.last?.details.filter((d: string) => /queued/.test(d)).length ?? 0);
+      }
+      // a second click on the same request sends nothing
+      await page.locator('[data-fk="batch-confirm"]').click({ force: true }).catch(() => undefined);
+    }
     const projects = await page.evaluate((list) => list.filter((p: string) => (window as any).cnf.sim.state.provinces[p].project?.kind === 'infra').length, ten);
     report.buildTen = { provinces: ten.length, inputs, clicked: built, railwaysQueued: projects, note: 'one click on the province, one on Build railway; finding each province on the map is not counted' };
     await page.screenshot({ path: join(OUT, 'build-ten.png') });
@@ -149,8 +195,67 @@ async function main(): Promise<void> {
         await page.waitForTimeout(60);
       }
     }
+    if (PHASE === 'after') {
+      await page.evaluate(() => (window as any).cnf.clearProvSel());
+      rInputs++; // Esc
+      for (const pid of ten) {
+        const pt = await provincePoint(page, pid);
+        if (!pt) continue;
+        await page.keyboard.down('Control');
+        await page.mouse.click(pt.x, pt.y);
+        await page.keyboard.up('Control');
+        rInputs++;
+        await page.waitForTimeout(60);
+      }
+      await page.locator('[data-fk="batch-tab-recruit"]').click();
+      rInputs++;
+      await page.screenshot({ path: join(OUT, 'recruit-ten-preview.png') });
+      const ok = page.locator('[data-fk="batch-confirm"]:not([aria-disabled="true"])');
+      if (await ok.count()) {
+        await ok.click();
+        rInputs++;
+      }
+      await page.evaluate(() => (window as any).cnf.clearProvSel());
+    }
     const queued = await page.evaluate((list) => list.reduce((s: number, p: string) => s + (window as any).cnf.sim.state.provinces[p].recruits.filter((r: any) => r.nation === 'ger').length, 0), ten);
     report.recruitTen = { provinces: ten.length, inputs: rInputs, regimentsQueued: queued };
+    if (PHASE === 'after') {
+      // the quick way: a box over a region (Ctrl+drag), Only ours, Recruit, confirm
+      await page.evaluate(() => {
+        const app = (window as any).cnf;
+        const c = app.renderer.provinceCenter(app.sim.state.nations.ger.capital);
+        app.renderer.camera.centerOn(c.x, c.y, app.renderer.camera.zoomForProvincePx(36), false);
+        app.mapDirty = true;
+      });
+      await page.waitForTimeout(300);
+      const before = await page.evaluate(() => Object.values((window as any).cnf.sim.state.provinces).reduce((s: number, p: any) => s + p.recruits.filter((r: any) => r.nation === 'ger').length, 0));
+      let bInputs = 0;
+      await page.keyboard.down('Control');
+      await page.mouse.move(420, 260);
+      await page.mouse.down();
+      await page.mouse.move(560, 380, { steps: 4 });
+      await page.mouse.move(700, 500, { steps: 4 });
+      await page.mouse.up();
+      await page.keyboard.up('Control');
+      bInputs++;
+      const selected = await page.evaluate(() => (window as any).cnf.provSel.length);
+      const ours = page.locator('[data-fk="batch-ours"]:not([aria-disabled="true"])');
+      if (await ours.count()) {
+        await ours.click();
+        bInputs++;
+      }
+      await page.locator('[data-fk="batch-tab-recruit"]').click();
+      bInputs++;
+      const ok = page.locator('[data-fk="batch-confirm"]:not([aria-disabled="true"])');
+      if (await ok.count()) {
+        await ok.click();
+        bInputs++;
+      }
+      const after = await page.evaluate(() => Object.values((window as any).cnf.sim.state.provinces).reduce((s: number, p: any) => s + p.recruits.filter((r: any) => r.nation === 'ger').length, 0));
+      await page.screenshot({ path: join(OUT, 'recruit-box.png') });
+      report.recruitBox = { provincesSelected: selected, provincesOurs: await page.evaluate(() => (window as any).cnf.provSel.length), inputs: bInputs, regimentsQueued: after - before };
+      await page.evaluate(() => (window as any).cnf.clearProvSel());
+    }
 
     // ── ordering the army: every army towards the nearest enemy province, one at a time ──
     let oInputs = 0;
@@ -196,7 +301,119 @@ async function main(): Promise<void> {
       }
       report.orderAll = { armies: plan.length, ordered, inputs: oInputs, note: 'each army: click its counter, right-click the target (and pick the march if a menu opens); repeated for every new province and every week the situation changes' };
     }
+    if (PHASE === 'after') {
+      // every army at once: Shift+drag a box over Germany, New operation, Enemy land within reach, Activate
+      await page.evaluate(() => {
+        const app = (window as any).cnf;
+        const c = app.renderer.provinceCenter(app.sim.state.nations.ger.capital);
+        app.renderer.camera.centerOn(c.x, c.y, app.renderer.camera.zoomForProvincePx(18), false);
+        app.mapDirty = true;
+      });
+      await page.waitForTimeout(400);
+      const box = await page.evaluate(() => {
+        const app = (window as any).cnf;
+        const r = app.canvas.getBoundingClientRect();
+        const ms = app.renderer.markers.filter((m: any) => app.sim.state.armies[m.army]?.nation === 'ger');
+        const xs = ms.flatMap((m: any) => [m.x, m.x + m.w]);
+        const ys = ms.flatMap((m: any) => [m.y, m.y + m.h]);
+        return { x0: Math.min(...xs) - 6 + r.left, y0: Math.min(...ys) - 6 + r.top, x1: Math.max(...xs) + 6 + r.left, y1: Math.max(...ys) + 6 + r.top };
+      });
+      await page.keyboard.down('Shift');
+      await page.mouse.move(box.x0, box.y0);
+      await page.mouse.down();
+      await page.mouse.move((box.x0 + box.x1) / 2, (box.y0 + box.y1) / 2, { steps: 4 });
+      await page.mouse.move(box.x1, box.y1, { steps: 4 });
+      await page.mouse.up();
+      await page.keyboard.up('Shift');
+      oInputs++;
+      const selected = await page.evaluate(() => (window as any).cnf.forceSel.filter((id: string) => (window as any).cnf.sim.state.armies[id]).length);
+      await page.locator('[data-fk="op-new"]').click();
+      oInputs++;
+      await page.locator('[data-fk="op-fill"]').click();
+      oInputs++;
+      await page.screenshot({ path: join(OUT, 'op-editor.png') });
+      await page.locator('[data-fk="op-activate"]').click();
+      oInputs++;
+      await page.waitForTimeout(200);
+      const members = await page.evaluate(() => Object.values((window as any).cnf.sim.state.armies).filter((a: any) => a.nation === 'ger' && a.op).length);
+      await page.evaluate(() => (window as any).cnf.debugAdvance(1));
+      await page.waitForTimeout(300);
+      ordered = await page.evaluate(() => Object.values((window as any).cnf.sim.state.armies).filter((a: any) => a.nation === 'ger' && a.op && (a.path.length || a.battle)).length);
+      const tasks = await page.evaluate(() => {
+        const op = Object.values((window as any).cnf.sim.state.operations)[0] as any;
+        return op ? Object.values(op.tasks).reduce((m: any, t: any) => ((m[t.kind] = (m[t.kind] ?? 0) + 1), m), {}) : {};
+      });
+      await page.screenshot({ path: join(OUT, 'op-card.png') });
+      report.orderAll = { armies: 13, selectedByBox: selected, members, marchingOrFighting: ordered, tasks, inputs: oInputs, note: 'Shift+drag a box over our armies, New operation, Enemy land within reach, Activate; the operation then gives the routine orders every week' };
+    }
     await page.screenshot({ path: join(OUT, 'orders.png') });
+
+    // ── touch sizes: the Select tool, the selection and batch cards, the editor on a narrow screen ──
+    if (PHASE === 'after') {
+      const touch: Record<string, unknown> = {};
+      for (const vp of [
+        { name: 'tablet', width: 1024, height: 768 },
+        { name: 'phone', width: 390, height: 844 },
+      ]) {
+        const tp = await browser.newPage({ viewport: { width: vp.width, height: vp.height }, hasTouch: true, isMobile: vp.name === 'phone' });
+        tp.on('pageerror', (e) => errors.push(`${vp.name}: ${e.message}`));
+        await loadSave(tp, origin, 'reports/tmp/qol-large.json', 'ger');
+        await tp.evaluate(() => {
+          const app = (window as any).cnf;
+          const c = app.renderer.provinceCenter(app.sim.state.nations.pol.capital);
+          app.renderer.camera.centerOn(c.x - 200, c.y, app.renderer.camera.zoomForProvincePx(40), false);
+          app.mapDirty = true;
+        });
+        await tp.waitForTimeout(400);
+        const sel = tp.locator('[data-fk="nav-select"]');
+        const hasTool = await sel.count();
+        if (hasTool) await sel.tap();
+        await tp.waitForTimeout(200);
+        const pts = await tp.evaluate(() => {
+          const app = (window as any).cnf;
+          const r = app.canvas.getBoundingClientRect();
+          return app.renderer.markers.filter((m: any) => app.sim.state.armies[m.army]?.nation === 'ger').slice(0, 3).map((m: any) => ({ x: m.x + m.w / 2 + r.left, y: m.y + m.h / 2 + r.top }));
+        });
+        for (const p of pts) await tp.touchscreen.tap(p.x, p.y);
+        await tp.waitForTimeout(250);
+        const forces = await tp.evaluate(() => (window as any).cnf.forceSel.length);
+        await tp.screenshot({ path: join(OUT, `touch-${vp.name}-forces.png`) });
+        // to provinces: the banner's switch (the map buttons are under the card on small screens)
+        const sw = tp.locator('[data-fk="banner-switch"]');
+        if (await sw.count()) await sw.tap();
+        await tp.waitForTimeout(150);
+        const ppts = await tp.evaluate(() => {
+          const app = (window as any).cnf;
+          const r = app.canvas.getBoundingClientRect();
+          const out: Array<{ x: number; y: number }> = [];
+          for (let y = 120; y < r.height - 120 && out.length < 3; y += 37)
+            for (let x = 40; x < r.width - 40 && out.length < 3; x += 53) {
+              const p = app.renderer.provinceAt(x, y);
+              if (p && app.sim.state.provinces[p].owner === 'ger' && !app.renderer.armyAt(x, y) && !app.renderer.wingAt(x, y) && !out.some((q) => app.renderer.provinceAt(q.x - r.left, q.y - r.top) === p)) out.push({ x: x + r.left, y: y + r.top });
+            }
+          return out;
+        });
+        for (const p of ppts) await tp.touchscreen.tap(p.x, p.y);
+        await tp.waitForTimeout(250);
+        const provinces = await tp.evaluate(() => (window as any).cnf.provSel.length);
+        await tp.screenshot({ path: join(OUT, `touch-${vp.name}-provinces.png`) });
+        // the editor on this screen
+        await tp.evaluate(() => {
+          const app = (window as any).cnf;
+          app.clearProvSel();
+          app.setSelectMode('off');
+          const ids = Object.values(app.sim.state.armies).filter((a: any) => a.nation === 'ger').slice(0, 4).map((a: any) => a.id);
+          app.setForceSel(ids);
+          app.startOpDraft();
+        });
+        await tp.waitForTimeout(300);
+        await tp.screenshot({ path: join(OUT, `touch-${vp.name}-editor.png`) });
+        const overflow = await tp.evaluate(() => document.documentElement.scrollWidth > window.innerWidth + 1);
+        touch[vp.name] = { selectTool: !!hasTool, forcesTapped: pts.length, forcesSelected: forces, provincesTapped: ppts.length, provincesSelected: provinces, horizontalOverflow: overflow };
+        await tp.close();
+      }
+      report.touch = touch;
+    }
   } finally {
     report.errors = errors;
     writeFileSync(join(OUT, 'audit.json'), `${JSON.stringify(report, null, 1)}\n`);

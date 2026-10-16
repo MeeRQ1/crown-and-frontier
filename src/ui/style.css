@@ -1192,6 +1192,8 @@ dl.keys dd { margin: 0; color: var(--text-2); }
   .navcl { bottom: 112px; right: var(--s4) !important; }
   .inspector:not(.closed) ~ .navcl { display: none; }
   .navcl .nav-btns button:nth-child(n + 5) { display: none; }
+  /* the Select tool stays: on touch it is the way to select several forces or provinces */
+  .navcl .nav-btns button[data-fk='nav-select'] { display: flex; }
   .navcl .nav-btns button { width: 44px; height: 44px; }
   .minimap { display: none; }
   .modes .mode-bar button { height: 44px; }

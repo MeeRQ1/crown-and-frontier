@@ -1,0 +1,212 @@
+{
+ "phase": "after",
+ "scenario": "Europe 1936 as Germany: 13 armies (110 regiments), 3 fleets, 8 wings; at war with Poland, Romania and France beside Italy",
+ "neutrals": [
+  "aut",
+  "bel",
+  "cze",
+  "den",
+  "lit",
+  "lux",
+  "ned",
+  "swi"
+ ],
+ "filters": {
+  "all/near": {
+   "armies": {
+    "other": 32,
+    "hostile": 5,
+    "allied": 1,
+    "own": 13
+   },
+   "fleets": {
+    "other": 14,
+    "hostile": 2,
+    "own": 3
+   },
+   "wings": {
+    "own": 3,
+    "hostile": 2
+   }
+  },
+  "all/regional": {
+   "armies": {
+    "other": 51,
+    "hostile": 6,
+    "allied": 2,
+    "own": 12
+   },
+   "fleets": {
+    "other": 22,
+    "own": 2,
+    "hostile": 3,
+    "allied": 1
+   },
+   "wings": {
+    "own": 3,
+    "hostile": 2
+   }
+  },
+  "all/far": {
+   "armies": {
+    "other": 51,
+    "hostile": 6,
+    "allied": 2,
+    "own": 12
+   },
+   "fleets": {
+    "other": 22,
+    "own": 2,
+    "hostile": 3,
+    "allied": 1
+   },
+   "wings": {
+    "own": 3,
+    "hostile": 2
+   }
+  },
+  "relevant/near": {
+   "armies": {
+    "hostile": 5,
+    "allied": 1,
+    "own": 13
+   },
+   "fleets": {
+    "own": 3,
+    "hostile": 2
+   },
+   "wings": {
+    "own": 3,
+    "hostile": 2
+   }
+  },
+  "relevant/regional": {
+   "armies": {
+    "hostile": 6,
+    "allied": 2,
+    "own": 12
+   },
+   "fleets": {
+    "own": 2,
+    "hostile": 3,
+    "allied": 1
+   },
+   "wings": {
+    "own": 3,
+    "hostile": 2
+   }
+  },
+  "relevant/far": {
+   "armies": {
+    "hostile": 6,
+    "allied": 2,
+    "own": 12
+   },
+   "fleets": {
+    "own": 2,
+    "hostile": 3,
+    "allied": 1
+   },
+   "wings": {
+    "own": 3,
+    "hostile": 2
+   }
+  },
+  "mine/near": {
+   "armies": {
+    "hostile": 5,
+    "own": 13
+   },
+   "fleets": {
+    "own": 3,
+    "hostile": 2
+   },
+   "wings": {
+    "own": 3,
+    "hostile": 2
+   }
+  },
+  "mine/regional": {
+   "armies": {
+    "hostile": 6,
+    "own": 12
+   },
+   "fleets": {
+    "own": 2,
+    "hostile": 3
+   },
+   "wings": {
+    "own": 3,
+    "hostile": 2
+   }
+  },
+  "mine/far": {
+   "armies": {
+    "hostile": 6,
+    "own": 12
+   },
+   "fleets": {
+    "own": 2,
+    "hostile": 3
+   },
+   "wings": {
+    "own": 3,
+    "hostile": 2
+   }
+  }
+ },
+ "buildTen": {
+  "provinces": 10,
+  "inputs": 11,
+  "clicked": 5,
+  "railwaysQueued": 5,
+  "note": "one click on the province, one on Build railway; finding each province on the map is not counted"
+ },
+ "recruitTen": {
+  "provinces": 10,
+  "inputs": 13,
+  "regimentsQueued": 10
+ },
+ "recruitBox": {
+  "provincesSelected": 66,
+  "provincesOurs": 32,
+  "inputs": 4,
+  "regimentsQueued": 32
+ },
+ "orderAll": {
+  "armies": 13,
+  "selectedByBox": 13,
+  "members": 13,
+  "marchingOrFighting": 16,
+  "tasks": {
+   "occupy": 8,
+   "stage": 6,
+   "reserve": 2,
+   "rest": 2,
+   "cover": 2,
+   "support": 1,
+   "bombard": 2
+  },
+  "inputs": 4,
+  "note": "Shift+drag a box over our armies, New operation, Enemy land within reach, Activate; the operation then gives the routine orders every week"
+ },
+ "touch": {
+  "tablet": {
+   "selectTool": true,
+   "forcesTapped": 3,
+   "forcesSelected": 3,
+   "provincesTapped": 3,
+   "provincesSelected": 3,
+   "horizontalOverflow": false
+  },
+  "phone": {
+   "selectTool": true,
+   "forcesTapped": 3,
+   "forcesSelected": 3,
+   "provincesTapped": 3,
+   "provincesSelected": 3,
+   "horizontalOverflow": false
+  }
+ },
+ "errors": []
+}
