@@ -638,10 +638,16 @@ export class App {
     const a = this.selectedArmy ? st.armies[this.selectedArmy] : undefined;
     const f = this.selectedFleet ? st.fleets[this.selectedFleet] : undefined;
     const w = this.selectedWing ? st.wings[this.selectedWing] : undefined;
-    const key = `${a?.id}|${a?.location}|${a?.path.join(',')}|${f?.id}|${f?.zone}|${w?.id}|${w?.base}|${w?.carrier}|${st.tick}|${st.rev}`;
+    const op = this.selectedOp ? st.operations?.[this.selectedOp] : this.opDraft ? { name: 'the operation being prepared', area: this.opDraft.area, zones: this.opDraft.zones, id: this.opDraft.editing ?? '' } : undefined;
+    const key = `${a?.id}|${a?.location}|${a?.path.join(',')}|${f?.id}|${f?.zone}|${w?.id}|${w?.base}|${w?.carrier}|${op?.id}|${op?.area.length}|${op?.zones.length}|${st.tick}|${st.rev}`;
     if (this.focusMemo?.key === key) return this.focusMemo.value;
     let value: Focus | null = null;
-    if (a) {
+    if (op) {
+      // an operation: its area and its forces, and two marches around them
+      const members = op.id ? opForces(sim, op.id) : { armies: [], fleets: [], wings: [] };
+      const provinces = provincesNear(sim, [...op.area, ...members.armies.map((x) => x.location)], 2);
+      value = { label: op.name, provinces, zones: zonesNear(sim, [...op.zones, ...members.fleets.map((x) => x.zone)], 1, provinces) };
+    } else if (a) {
       const provinces = provincesNear(sim, [a.location, ...a.path], 3);
       value = { label: a.name, provinces, zones: zonesNear(sim, [], 0, provinces) };
     } else if (f) {

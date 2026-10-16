@@ -287,3 +287,31 @@ describe('the reserve', () => {
     expect(op.tasks[a.id]?.kind).not.toBe('reserve');
   });
 });
+
+describe('the limits of delegation', () => {
+  it('an operation may only move and employ its own forces: no purchases, construction, diplomacy or war', async () => {
+    const { OP_ORDERS } = await import('../src/sim/ops/operations');
+    for (const t of ['recruit', 'build', 'batchBuild', 'batchRecruit', 'buildShip', 'buildWing', 'declareWar', 'peace', 'settle', 'propose', 'research', 'focus', 'funding', 'disband', 'disbandFleet', 'disbandWing'] as const) expect(OP_ORDERS.has(t as never)).toBe(false);
+    const sim = gridGame();
+    war(sim);
+    const a = addArmy(sim, 'a', 'g10', { infantry: 6 });
+    const treasury = sim.state.nations.a.treasury;
+    create(sim, COL2, [a.id]);
+    weeks(sim, 6);
+    expect(sim.state.nations.a.treasury).toBeGreaterThanOrEqual(treasury - 1e9);
+    expect(Object.values(sim.state.provinces).some((p) => p.project?.nation === 'a' || p.recruits.some((r) => r.nation === 'a'))).toBe(false);
+    expect(Object.values(sim.state.wars)).toHaveLength(1);
+  });
+
+  it('a conquest turns to defend our own province next to its area when the enemy strikes there', () => {
+    const sim = gridGame();
+    war(sim);
+    const a = addArmy(sim, 'a', 'g10', { infantry: 8 });
+    const op = create(sim, ['g21', 'g31'], [a.id], { reserve: 0, reorganize: false });
+    // an enemy raid into g11 (ours, next to g21 in the area)
+    addArmy(sim, 'b', 'g11', { infantry: 2 });
+    weeks(sim, 1);
+    expect(op.tasks[a.id].kind).toBe('defend');
+    expect(op.tasks[a.id].target).toBe('g11');
+  });
+});

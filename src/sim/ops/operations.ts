@@ -387,9 +387,18 @@ export function takeUnderDirectCommand(sim: Sim, cmd: Command): void {
 
 // ───────────────────────────── Weekly planning ──────────────────────────────
 
+/**
+ * The only orders an operation may give: moving, reorganising and employing the
+ * forces assigned to it. Never diplomacy, war or peace, purchases, construction,
+ * research or national policy (refused here whatever the planner asks).
+ */
+export const OP_ORDERS: ReadonlySet<RealmCommand['type']> = new Set<RealmCommand['type']>([
+  'move', 'stop', 'split', 'merge', 'fleetDuty', 'moveFleet', 'stopFleet', 'shipArmies', 'airMission', 'rebaseWing', 'airDrop', 'cancelDrop',
+]);
+
 /** The operation's own command path: not a player order, so no override and no entry in the player's command log. */
 function opIssue(sim: Sim): (cmd: RealmCommand, why?: string) => CommandResult {
-  return (cmd) => applyCommand(sim, cmd, { auto: true });
+  return (cmd) => (OP_ORDERS.has(cmd.type) ? applyCommand(sim, cmd, { auto: true }) : { ok: false, reason: `An operation may not order ${cmd.type}.` });
 }
 
 /** Where the operation's reserve and resting armies gather: the province of ours nearest both the area and the armies. */
@@ -466,8 +475,15 @@ export function opTargets(sim: Sim, op: Operation, armies: Army[], margin: numbe
     return { targets, posts: posts.slice(0, 12) };
   }
   // conquer (and a landing once ashore): the area's enemy-held land; the nearer and the
-  // more valuable first, at most a working set at a time
+  // more valuable first, at most a working set at a time; and our own provinces next to
+  // the area or holding its airfields and ports, when the enemy strikes there (counter-attacks)
   const all = areaTargets(sim, nid, op.area, margin);
+  const inArea = new Set(op.area);
+  const guard = new Set<ProvinceId>();
+  for (const p of op.area) for (const nb of sim.world.prov[p].neighbors) if (!inArea.has(nb)) guard.add(nb);
+  for (const w of Object.values(st.wings)) if (w.op === op.id && !w.carrier) guard.add(w.base);
+  for (const f of Object.values(st.fleets)) if (f.op === op.id && f.home) guard.add(f.home);
+  for (const t of areaTargets(sim, nid, guard, margin)) if (t.kind === 'defend') all.push(t);
   if (all.length <= 24) return { targets: all, posts: [] };
   const near = (pid: ProvinceId) => {
     let d = 99;
