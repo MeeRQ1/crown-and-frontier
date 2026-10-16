@@ -29,6 +29,7 @@ import { forecastBattle, type Forecast } from '../combat';
 import { armyStrength, maxMorale } from '../military';
 import { atWar, isFriendly, menOf, provName, type Sim } from '../state';
 import { supplyAt, supplyDistances, supplyRange } from '../supply';
+import { findPath } from '../movement';
 import type { Army, ArmyId, CommandResult, NationId, OpTask, OpTaskKind, ProvinceId, RealmCommand, UnitType } from '../types';
 import { hostileArmiesAt, pathVia, reachFrom, sumStrength, threatAround } from '../ai/common';
 
@@ -91,6 +92,8 @@ export interface GroundContext {
   note: (text: string, tone?: 'good' | 'bad') => void;
   /** plan without issuing anything: the preview of an operation */
   dry?: boolean;
+  /** where an army with nothing to do should stand to join the war (the AI: on the way to the nearest objective) */
+  advance?: (a: Army) => ProvinceId | null;
 }
 
 export interface GroundOutcome {
@@ -210,14 +213,44 @@ export function planGround(sim: Sim, armies: Army[], targets: GroundTarget[], ct
     if (r.ok) out.orders++;
     return r.ok;
   };
+  // enemy troops on the way (not at the destination): marching through them is a battle nobody planned
+  const held = (p: ProvinceId) => hostileArmiesAt(sim, nid, p).length > 0;
+  const blockedAt = (path: readonly ProvinceId[]) => path.slice(0, -1).find(held) ?? null;
+  const routeNotes = new Map<ArmyId, string>();
   const moveTo = (a: Army, dest: ProvinceId, why?: string) => {
     if (a.location === dest) {
       if (a.path.length) order({ type: 'stop', nation: nid, army: a.id });
       return;
     }
-    if (a.path.length && a.path[a.path.length - 1] === dest) return;
-    if (reachFrom(sim, nid, a.location).dist[dest] === undefined) return;
-    order({ type: 'move', nation: nid, army: a.id, dest }, why);
+    if (a.path.length && a.path[a.path.length - 1] === dest && !blockedAt(a.path)) return;
+    const direct = findPath(sim, nid, a.location, dest);
+    if (!direct) return;
+    const bad = blockedAt(direct.path);
+    if (!bad) {
+      if (a.path.length && a.path[a.path.length - 1] === dest) return;
+      order({ type: 'move', nation: nid, army: a.id, dest }, why);
+      return;
+    }
+    // a way round the enemy troops: march to the farthest point of the detour the ordinary route follows
+    const avoid = new Set<ProvinceId>();
+    for (const p of direct.path.slice(0, -1)) if (held(p)) avoid.add(p);
+    for (const p of sim.world.prov[a.location].neighbors) if (p !== dest && held(p)) avoid.add(p);
+    const alt = findPath(sim, nid, a.location, dest, avoid);
+    if (alt && !blockedAt(alt.path)) {
+      let way: ProvinceId | null = null;
+      for (let i = Math.min(alt.path.length - 1, 6); i >= 0 && !way; i--) {
+        const leg = findPath(sim, nid, a.location, alt.path[i]);
+        if (leg && leg.path.join() === alt.path.slice(0, i + 1).join() && !leg.path.some((p, k) => k < i && held(p))) way = alt.path[i];
+      }
+      if (way) {
+        if (!(a.path.length && a.path[a.path.length - 1] === way)) order({ type: 'move', nation: nid, army: a.id, dest: way }, why);
+        routeNotes.set(a.id, `going round the enemy troops at ${provName(sim, bad)}`);
+        return;
+      }
+    }
+    // no safe way: stay put rather than blunder into them
+    if (a.path.length) order({ type: 'stop', nation: nid, army: a.id });
+    routeNotes.set(a.id, `the way to ${provName(sim, dest)} is held by enemy troops at ${provName(sim, bad)}`);
   };
   const hostileCtrl = (p: ProvinceId) => {
     const c = st.provinces[p]?.controller;
@@ -255,6 +288,29 @@ export function planGround(sim: Sim, armies: Army[], targets: GroundTarget[], ct
       continue;
     }
     fit.push(a);
+  }
+
+  // ── 1b. armies below the smallest useful size (fresh recruits, worn remnants) join a larger one ──
+  if (pol.merge) {
+    const small = fit.filter((a) => a.regiments.length < pol.minDetach && !a.keep && !(hostileCtrl(a.location) && !hostileArmiesAt(sim, nid, a.location).length));
+    for (const a of small) {
+      const r = reachFrom(sim, nid, a.location);
+      const host = fit
+        .filter((b) => b.id !== a.id && b.regiments.length >= pol.minDetach && r.dist[b.location] !== undefined && r.dist[b.location] <= 12 && b.regiments.length + a.regiments.length <= C.army.maxRegiments)
+        .sort((x, y) => r.dist[x.location] - r.dist[y.location] || (x.id < y.id ? -1 : 1))[0];
+      if (!host) continue;
+      fit.splice(fit.indexOf(a), 1);
+      delete mem.assigned[a.id];
+      if (host.location === a.location && !a.path.length && !host.path.length && !host.keep && !ctx.dry) {
+        if (order({ type: 'merge', nation: nid, armies: [host.id, a.id] })) {
+          out.merged++;
+          strength.delete(host.id);
+          continue;
+        }
+      }
+      give(a, task(sim, 'regroup', host.location, `${a.regiments.length === 1 ? 'one regiment' : `${a.regiments.length} regiments`}, too few to fight alone: joining ${host.name} at ${provName(sim, host.location)}`, prevTasks[a.id]));
+      moveTo(a, host.location);
+    }
   }
 
   // ── 2. reserve ──
@@ -326,7 +382,9 @@ export function planGround(sim: Sim, armies: Army[], targets: GroundTarget[], ct
   for (const t of ranked) {
     if (t.kind === 'hold') continue;
     const fail = mem.failures[t.pid];
-    let need = t.need;
+    // enemy troops next to the target can strike whoever takes it: a force must be able to stand
+    const exposure = t.kind === 'defend' ? 0 : threatAround(sim, nid, t.pid, 1) - sumStrength(sim, t.hostile);
+    let need = Math.max(t.need, exposure * 0.6);
     if (fail && t.kind !== 'defend') {
       const waited = st.tick - fail.tick;
       if (waited < pol.failWait) {
@@ -373,6 +431,8 @@ export function planGround(sim: Sim, armies: Army[], targets: GroundTarget[], ct
     const open = out.blocked.filter((b) => b.why === 'no army free').map((b) => targets.find((t) => t.pid === b.pid)!).filter((t) => t && t.hostile.length === 0 && t.kind !== 'defend');
     for (const t of open) {
       if (budget <= 0) break;
+      // a detachment must be able to hold what it takes against the enemy next door (no defeat in detail)
+      const nearby = threatAround(sim, nid, t.pid, 1);
       // the task force with the most to spare within reach
       let best: { g: (typeof groups)[number]; a: Army; spare: number } | null = null;
       for (const g of groups) {
@@ -381,15 +441,17 @@ export function planGround(sim: Sim, armies: Army[], targets: GroundTarget[], ct
           if (a.keep || recently(a.id) || a.regiments.length < pol.minDetach * 2 || hostileCtrl(a.location)) continue;
           const d = reachFrom(sim, nid, a.location).dist[t.pid];
           if (d === undefined || d > pol.maxCost * 0.6) continue;
-          const regsLeft = g.group.reduce((n, x) => n + x.regiments.length, 0) - Math.max(pol.minDetach, t.siegeRegs);
           const perReg = str(a) / a.regiments.length;
-          const spare = spareStr - perReg * Math.max(pol.minDetach, t.siegeRegs);
+          const want = Math.max(pol.minDetach, t.siegeRegs, Math.ceil((nearby * 0.8) / Math.max(0.01, perReg)));
+          if (want > a.regiments.length - pol.minDetach) continue;
+          const regsLeft = g.group.reduce((n, x) => n + x.regiments.length, 0) - want;
+          const spare = spareStr - perReg * want;
           if (spare <= 0 || regsLeft < g.t.siegeRegs) continue;
           if (!best || spare > best.spare) best = { g, a, spare };
         }
       }
       if (!best) continue;
-      const size = Math.max(pol.minDetach, t.siegeRegs);
+      const size = Math.max(pol.minDetach, t.siegeRegs, Math.ceil((nearby * 0.8) / Math.max(0.01, str(best.a) / best.a.regiments.length)));
       const counts = detachCounts(best.a, size);
       if (ctx.dry) {
         out.blocked = out.blocked.filter((b) => b.pid !== t.pid);
@@ -484,6 +546,10 @@ export function planGround(sim: Sim, armies: Army[], targets: GroundTarget[], ct
         const ours = ourSide.reduce((s, x) => s + (st.armies[x] ? menOf(st.armies[x]) : 0), 0);
         const theirs = theirSide.reduce((s, x) => s + (st.armies[x] ? menOf(st.armies[x]) : 0), 0);
         if (ours >= theirs * 1.2) continue;
+        // only where the reserve tips the balance: the battle with it must be one the posture would fight
+        const side = (ids: string[]) => ids.map((x) => st.armies[x]).filter((x): x is Army => !!x);
+        const joined = b.attackerNations.includes(nid) ? forecastBattle(sim, b.province, [...side(ourSide), a], side(theirSide)) : null;
+        if (joined && !pol.accept.includes(joined.verdict)) continue;
         give(a, task(sim, 'attack', b.province, `reserve committed to the battle at ${provName(sim, b.province)} (${ours.toLocaleString()} men of ours against ${theirs.toLocaleString()})`, prevTasks[a.id]));
         if (prevTasks[a.id]?.target !== b.province) ctx.note(`Reserve ${a.name} committed to the battle at ${provName(sim, b.province)}.`);
         moveTo(a, b.province);
@@ -543,6 +609,12 @@ export function planGround(sim: Sim, armies: Army[], targets: GroundTarget[], ct
       moveTo(a, safeStop);
       continue;
     }
+    const forward = ctx.advance?.(a) ?? null;
+    if (forward && forward !== a.location) {
+      give(a, task(sim, 'stage', forward, `marching to the front at ${provName(sim, forward)}`, prevTasks[a.id]));
+      moveTo(a, forward, `${a.name} marches to the front at ${provName(sim, forward)}`);
+      continue;
+    }
     const home = ctx.base && r.dist[ctx.base] !== undefined ? ctx.base : null;
     if (home) {
       give(a, task(sim, 'stage', home, targets.length ? `gathering at ${provName(sim, home)}` : `standing by at ${provName(sim, home)}: nothing to take`, prevTasks[a.id]));
@@ -576,6 +648,7 @@ export function planGround(sim: Sim, armies: Army[], targets: GroundTarget[], ct
       }
     }
   }
+  for (const [id, note] of routeNotes) if (out.tasks[id]) out.tasks[id] = { ...out.tasks[id], note: `${out.tasks[id].note}; ${note}` };
   for (const id of Object.keys(mem.assigned)) if (!st.armies[id]) delete mem.assigned[id];
   for (const [id, t] of Object.entries(mem.reorganized)) if (!st.armies[id] || st.tick - t > 12) delete mem.reorganized[id];
   return out;

@@ -6,8 +6,8 @@
 // France; Aldmere with its two strongest neighbours at war. Per seed:
 //  - attacks: land battles an AI side started; lost: the ones it lost; repeated:
 //    a lost attack on a province it had already lost an attack on in the last 8 weeks
-//  - idle: share of army-weeks a fit army at war stood still away from any front
-//    (not marching, fighting or besieging, and no enemy within two provinces)
+//  - idle: share of army-weeks a fit army of a realm at war stood still away from any
+//    front (not marching, fighting or besieging, and no enemy within two provinces)
 //  - churn: objective changes per army-month while the old objective was still unfinished
 //  - provinces taken and lost, men lost on each side, planning time per week
 
@@ -15,7 +15,7 @@ import { writeFileSync } from 'node:fs';
 import { removeTreaty } from '../src/sim/diplomacy';
 import { createGame } from '../src/sim/game';
 import { maxMorale } from '../src/sim/military';
-import { atWar, type Sim } from '../src/sim/state';
+import { atWar, enemiesOf, type Sim } from '../src/sim/state';
 import { step, type PhaseProfile } from '../src/sim/tick';
 import type { NationId, ProvinceId } from '../src/sim/types';
 import { breakTies, declareWar, joinWar } from '../src/sim/war';
@@ -120,7 +120,8 @@ function runSeed(setup: Setup, seed: number): SeedResult {
     }
     // idle fit armies away from any front
     for (const n of all) {
-      if (!st.nations[n].alive) continue;
+      // only while the realm is at war: armies at rest after a peace are not idle
+      if (!st.nations[n].alive || !enemiesOf(sim, n).length) continue;
       const mm = maxMorale(sim, n);
       for (const a of Object.values(st.armies)) {
         if (a.nation !== n || a.embarked) continue;
