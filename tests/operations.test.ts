@@ -109,6 +109,26 @@ describe('auto-conquest', () => {
     expect(sim.state.notifications.some((n) => n.kind === 'operation' && n.priority === 'urgent')).toBe(true);
   });
 
+  it('with the supply limit, land beyond our supply lines is not attacked and the decision is asked for; without it, it is', () => {
+    for (const supplyLimit of [true, false]) {
+      const sim = gridGame();
+      war(sim);
+      const a = addArmy(sim, 'a', 'g11', { infantry: 8 });
+      const op = create(sim, ['g31'], [a.id], { reserve: 0, reorganize: false, supplyLimit });
+      weeks(sim, 2);
+      if (supplyLimit) {
+        expect(op.tasks[a.id].kind).toBe('wait');
+        expect(op.tasks[a.id].note).toMatch(/beyond our supply lines/);
+        expect(op.issue?.text).toMatch(/Cannot make progress: .*beyond our supply lines/);
+        expect(sim.state.armies[a.id].location).toBe('g11');
+      } else {
+        expect(op.tasks[a.id].target).toBe('g31');
+        expect(op.issue).toBeNull();
+        expect(sim.state.armies[a.id].location).not.toBe('g11');
+      }
+    }
+  });
+
   it('a lost attack is not repeated at once: the target waits, then needs a stronger force', () => {
     const sim = gridGame();
     war(sim);
@@ -156,6 +176,36 @@ describe('splitting and regrouping', () => {
     create(sim2, COL2, [big2.id], { reorganize: false, reserve: 0 });
     weeks(sim2, 3);
     expect(ours(sim2)).toHaveLength(1);
+  });
+
+  it('reorganised forces survive a save and play on identically; a split by hand stays under our command', () => {
+    const sim = gridGame();
+    war(sim);
+    const big = addArmy(sim, 'a', 'g11', { infantry: 10, artillery: 2 });
+    const op = create(sim, COL2, [big.id], { reserve: 0 });
+    weeks(sim, 1);
+    expect(op.detached.length).toBeGreaterThan(0);
+    const back = readSave(serialize(sim)).sim;
+    expect(checkInvariants(back)).toEqual([]);
+    expect(back.state.operations[op.id].detached).toEqual(op.detached);
+    weeks(sim, 4);
+    weeks(back, 4);
+    expect(JSON.stringify(back.state)).toBe(JSON.stringify(sim.state));
+    // the player splits a member: both parts are held under direct command, nothing lost
+    const m = ours(sim).filter((x) => x.op === op.id && !x.battle && x.regiments.filter((r) => r.type === 'infantry').length >= 2)[0];
+    expect(m).toBeDefined();
+    const men = menOf(m);
+    const ids = new Set(ours(sim).map((x) => x.id));
+    const inf = m.regiments.filter((r) => r.type === 'infantry').length;
+    expect(applyCommand(sim, { type: 'split', nation: 'a', army: m.id, counts: { infantry: Math.floor(inf / 2) } }).ok).toBe(true);
+    const part = ours(sim).filter((x) => !ids.has(x.id));
+    expect(part).toHaveLength(1);
+    for (const x of [sim.state.armies[m.id], part[0]]) {
+      expect(x.op).toBe(op.id);
+      expect(x.opHold).toBe(true);
+    }
+    expect(menOf(sim.state.armies[m.id]) + menOf(part[0])).toBe(men);
+    expect(checkInvariants(sim)).toEqual([]);
   });
 
   it('idle armies standing together are merged again', () => {
