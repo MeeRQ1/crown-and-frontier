@@ -24,7 +24,7 @@
       "side0": 14370,
       "side1": 13437
      },
-     "planMsPerWeek": 50.3
+     "planMsPerWeek": 52.2
     },
     {
      "seed": 2,
@@ -40,7 +40,7 @@
       "side0": 13976,
       "side1": 16882
      },
-     "planMsPerWeek": 43.1
+     "planMsPerWeek": 48.1
     },
     {
      "seed": 3,
@@ -56,7 +56,7 @@
       "side0": 13800,
       "side1": 24140
      },
-     "planMsPerWeek": 37.4
+     "planMsPerWeek": 41.7
     },
     {
      "seed": 4,
@@ -72,7 +72,7 @@
       "side0": 17132,
       "side1": 16570
      },
-     "planMsPerWeek": 38.4
+     "planMsPerWeek": 47.3
     }
    ]
   },
@@ -93,7 +93,7 @@
       "side0": 2888,
       "side1": 8187
      },
-     "planMsPerWeek": 10.3
+     "planMsPerWeek": 10.4
     },
     {
      "seed": 2,
@@ -109,7 +109,7 @@
       "side0": 4771,
       "side1": 9392
      },
-     "planMsPerWeek": 9.5
+     "planMsPerWeek": 10.4
     },
     {
      "seed": 3,
@@ -125,7 +125,7 @@
       "side0": 4751,
       "side1": 13537
      },
-     "planMsPerWeek": 8.4
+     "planMsPerWeek": 9.6
     },
     {
      "seed": 4,
@@ -142,7 +142,7 @@
       "side0": 1690,
       "side1": 2677
      },
-     "planMsPerWeek": 8.2
+     "planMsPerWeek": 10.7
     }
    ]
   }

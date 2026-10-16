@@ -44,8 +44,8 @@
    "max": 0
   },
   "stepMs": {
-   "mean": 73.4,
-   "max": 160.3
+   "mean": 64.5,
+   "max": 141
   },
   "invariantFailures": [],
   "events": []
@@ -89,12 +89,12 @@
   "battlesLost": 7,
   "regimentsEnd": 110,
   "planMs": {
-   "mean": 7.44,
-   "max": 29.89
+   "mean": 6.56,
+   "max": 19.67
   },
   "stepMs": {
-   "mean": 65.1,
-   "max": 142.8
+   "mean": 58.9,
+   "max": 105.6
   },
   "invariantFailures": [],
   "events": [
