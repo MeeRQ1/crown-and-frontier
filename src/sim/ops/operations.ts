@@ -501,6 +501,8 @@ export function groundPolicy(op: Operation): GroundPolicy {
 /** The ground plan of an operation (dry: the preview, nothing issued). */
 export function planOpGround(sim: Sim, op: Operation, armies: Army[], dry: boolean): GroundOutcome {
   const pol = groundPolicy(op);
+  // a landing's beachhead and the land next to it lie beyond supply by nature
+  if (op.kind === 'landing' && op.area.length) pol.supplyExempt = new Set([op.area[0], ...sim.world.prov[op.area[0]].neighbors]);
   const { targets, posts } = opTargets(sim, op, armies, pol.margin);
   const base = opBase(sim, op, armies);
   const memory = dry
@@ -563,6 +565,8 @@ function finished(sim: Sim, op: Operation): string | null {
 function complete(sim: Sim, op: Operation, why: string, f: OpForces): void {
   op.status = 'complete';
   op.since = sim.state.tick;
+  // a beach taken by other means needs no crossing: the landing is over, the area is held like any other
+  if (op.landing && op.landing.stage !== 'ashore') op.landing.stage = 'ashore';
   clearIssue(op);
   opLog(sim, op, `Objective reached: ${why}. ${COMPLETION_LABELS[op.onComplete]}.`, 'good');
   notify(sim, op.nation, 'normal', 'operation', `${op.name}: objective reached (${why}). ${COMPLETION_LABELS[op.onComplete]}.`);

@@ -68,6 +68,8 @@ export interface GroundPolicy {
   maxCost: number;
   /** attack only where supply reaches; unsupplied armies fall back */
   supplyLimit: boolean;
+  /** provinces the supply limit does not apply to (a landing's beachhead) */
+  supplyExempt?: ReadonlySet<ProvinceId>;
   /** an army facing this many times its strength nearby falls back */
   withdraw: number;
 }
@@ -269,7 +271,7 @@ export function planGround(sim: Sim, armies: Army[], targets: GroundTarget[], ct
     const danger = threatAround(sim, nid, a.location, 0.8);
     const besieging = hostileCtrl(a.location) && hostileArmiesAt(sim, nid, a.location).length === 0;
     const tired = a.morale < mm * pol.minReadiness || menShare < 0.5;
-    const starving = pol.supplyLimit && !besieging && supplyAt(sim, nid, a.location, 0, false).status === 'unsupplied';
+    const starving = pol.supplyLimit && !besieging && !pol.supplyExempt?.has(a.location) && supplyAt(sim, nid, a.location, 0, false).status === 'unsupplied';
     const outmatched = danger > str(a) * pol.withdraw;
     if (besieging && danger === 0) {
       fit.push(a);
@@ -393,7 +395,8 @@ export function planGround(sim: Sim, armies: Army[], targets: GroundTarget[], ct
       }
       need *= 1 + 0.3 * fail.count;
     }
-    if (pol.supplyLimit && t.kind === 'attack' && !(dist[t.pid] <= range + 1)) {
+    // beyond supply: not attacked (unless our troops already stand there, or it is the beachhead)
+    if (pol.supplyLimit && t.kind === 'attack' && !(dist[t.pid] <= range + 1) && !pol.supplyExempt?.has(t.pid) && !fit.some((a) => a.location === t.pid)) {
       out.blocked.push({ pid: t.pid, why: 'beyond our supply lines' });
       continue;
     }

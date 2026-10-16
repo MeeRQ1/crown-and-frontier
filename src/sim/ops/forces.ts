@@ -24,10 +24,11 @@ import { inRangeOf, missionProblem, rebaseProblem, wingRange, airfieldRoom } fro
 import { airDropProblem, airDropRisk, transportsAt } from '../airborne';
 import { C, SHIPS, WINGS } from '../config';
 import { armyStrength, maxMorale } from '../military';
+import { forecastBattle } from '../combat';
 import { fleetCapacity, fleetDutyProblem, moveFleetProblem, pathToCoast, portsOf, returnPort, routeThreats, shipArmiesProblem, zonePath } from '../naval';
 import { atWar, isFriendly, menOf, provName, type Sim } from '../state';
 import type { AirMission, AirWing, Army, ArmyId, CommandResult, Fleet, FleetDuty, Operation, OpTask, OpTaskKind, ProvinceId, RealmCommand, WingId, ZoneId } from '../types';
-import { hostileArmiesAt, reachFrom, sumStrength } from '../ai/common';
+import { hostileArmiesAt, reachFrom, sumStrength, threatAround } from '../ai/common';
 import type { GroundOutcome } from './ground';
 import { siegeRegiments } from './ground';
 import { clearIssue, opLog, raiseIssue, type OpForces } from './operations';
@@ -465,9 +466,29 @@ function landing(sim: Sim, op: Operation, f: OpForces, plan: ForcesPlan, give: G
   // a threatened crossing without escorts waits (and says so)
   const route = pathToCoast(sim, carrier.zone, beach) ?? [];
   const threats = routeThreats(sim, carrier, route).filter((t) => t.surface > 0 || t.subs > 0);
-  if (threats.length && !escorts.length) {
+  // a transport fleet with warships of its own escorts itself
+  const selfEscort = warships(carrier);
+  if (threats.length && !escorts.length && !selfEscort) {
     raiseIssue(sim, op, 'landing', `Enemy ships in ${threats.map((t) => sim.world.zones[t.zone].name).join(', ')} lie on the route to ${provName(sim, beach)}: assign escorts, or wait.`);
     return;
+  }
+  // enemy armies next to the beach would fall on a beachhead before it can be reinforced
+  const ours = armies.reduce((s2, a) => s2 + armyStrength(sim, a), 0);
+  const nearby = threatAround(sim, nid, beach, 1) - sumStrength(sim, hostileArmiesAt(sim, nid, beach));
+  const limit = op.posture === 'aggressive' ? 1.5 : op.posture === 'balanced' ? 1 : 0.6;
+  if (nearby > ours * limit) {
+    raiseIssue(sim, op, 'landing', `Enemy armies next to ${provName(sim, beach)} (strength ${nearby.toFixed(1)} against our ${ours.toFixed(1)}) would overrun the beachhead: add forces, choose another beach, or wait.`);
+    return;
+  }
+  // the beach's defenders: sail only into a fight the posture would take (the landing week favours them)
+  const defenders = hostileArmiesAt(sim, nid, beach);
+  if (defenders.length) {
+    const f = forecastBattle(sim, beach, armies, defenders);
+    const ok = op.posture === 'aggressive' ? f.verdict !== 'Likely defeat' : f.verdict === 'Likely victory';
+    if (!ok) {
+      raiseIssue(sim, op, 'landing', `${provName(sim, beach)} is held by ${f.defMen.toLocaleString()} men: the landing forecast is ${f.verdict.toLowerCase()} for our ${f.attMen.toLocaleString()}. Add forces, choose another beach, or wait for the defenders to leave.`);
+      return;
+    }
   }
   const why = shipArmiesProblem(sim, nid, armies.map((a) => a.id), carrier.id, beach);
   if (why) {
@@ -479,7 +500,7 @@ function landing(sim: Sim, op: Operation, f: OpForces, plan: ForcesPlan, give: G
     give(carrier.id, task(sim, prev[carrier.id], 'transport', beach, `carrying the landing force to ${provName(sim, beach)}`));
     L.stage = 'sail';
     clearIssue(op, 'landing');
-    opLog(sim, op, `${armies.length} arm${armies.length === 1 ? 'y' : 'ies'} (${regs} regiments) embarked at ${provName(sim, port)} for ${provName(sim, beach)}${escorts.length ? `, escorted by ${escorts[0].name}` : ''}.`, 'good');
+    opLog(sim, op, `${armies.length} arm${armies.length === 1 ? 'y' : 'ies'} (${regs} regiments) embarked at ${provName(sim, port)} for ${provName(sim, beach)}${escorts.length ? `, escorted by ${escorts[0].name}` : selfEscort ? `, escorted by ${carrier.name}'s own warships` : ''}.`, 'good');
     for (const a of armies) give(a.id, task(sim, prev[a.id], 'transport', beach, `at sea, bound for ${provName(sim, beach)}`));
   }
 }

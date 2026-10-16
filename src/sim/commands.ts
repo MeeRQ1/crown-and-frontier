@@ -303,6 +303,9 @@ export interface ApplyOptions {
   auto?: boolean;
 }
 
+/** Orders operations have given in this process (for measurements; not part of the state). */
+export const commandStats = { auto: 0 };
+
 export function applyCommand(sim: Sim, cmd: Command, opts: ApplyOptions = {}): CommandResult {
   const problem = checkCommand(sim, cmd);
   if (problem) return { ok: false, reason: problem };
@@ -310,6 +313,7 @@ export function applyCommand(sim: Sim, cmd: Command, opts: ApplyOptions = {}): C
   // a player's order to a member of an operation takes it under direct command first
   if (player && !opts.auto && cmd.type !== 'continueCampaign') takeUnderDirectCommand(sim, cmd);
   const r = execute(sim, cmd, !!opts.auto);
+  if (opts.auto && r.ok) commandStats.auto++;
   // derived values shown to the player (air cover, sea control…) are recomputed after
   // each player order; replays apply the same commands, so they see the same thing
   if (player && r.ok) nextMemoEpoch();

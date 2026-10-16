@@ -234,3 +234,22 @@ describe('airborne troops under a mandate', () => {
     expect(C.air.dropAA * 3).toBeGreaterThan(0.05);
   });
 });
+
+describe('a landing overtaken by events', () => {
+  it('a beach taken by other means ends the landing: no crossing, no warning, the area is held', () => {
+    const sim = seaGame({ playerNation: 'a' });
+    prep(sim);
+    declareWar(sim, 'a', 'b', { type: 'conquest', provinces: ['i1'] });
+    const army = addArmy(sim, 'a', 'a1', { infantry: 4 });
+    const lift = fleet(sim, 'a', 'zw', ['transport', 'transport'], 'a1');
+    fresh(sim);
+    const o = op(sim, 'landing', ['i1'], [army.id, lift.id], { reserve: 0 });
+    sim.state.provinces.i1.controller = 'a';
+    fresh(sim);
+    weeks(sim, 2);
+    expect(o.status).toBe('complete');
+    expect(o.landing!.stage).toBe('ashore');
+    expect(o.issue).toBeNull();
+    expect(sim.state.armies[army.id].embarked ?? null).toBeNull();
+  });
+});
