@@ -54,7 +54,7 @@ export async function loadSave(page: Page, origin: string, file: string, player:
 
 
 /** A screen point inside a province (not on a counter), after centring the camera on it (centring is not an input). */
-async function provincePoint(page: Page, pid: string): Promise<{ x: number; y: number } | null> {
+export async function provincePoint(page: Page, pid: string): Promise<{ x: number; y: number } | null> {
   await page.evaluate((id) => {
     const app = (window as any).cnf;
     const c0 = app.renderer.provinceCenter(id);

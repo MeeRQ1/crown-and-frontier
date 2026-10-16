@@ -1,0 +1,41 @@
+{
+ "ctrlClick": {
+  "provinces": 10,
+  "selected": 10,
+  "batchCard": 1,
+  "noCommand": true
+ },
+ "ctrlDrag": {
+  "selected": 55,
+  "noCommand": true
+ },
+ "shiftDragAndClick": {
+  "markers": 12,
+  "boxed": 20,
+  "afterShiftClick": 19,
+  "noCommand": true
+ },
+ "selectTool": {
+  "forcesByDrag": 20,
+  "mode": "provinces",
+  "provincesByClick": 2,
+  "noCommand": true
+ },
+ "pausedOperation": {
+  "opCreated": true,
+  "status": "paused",
+  "edited": true,
+  "batchCardOverOpCard": 1,
+  "commandsFromDoubleClick": 1,
+  "projectsQueued": 3,
+  "escReturnsToOpCard": true
+ },
+ "manualOrder": {
+  "lastCommand": "move",
+  "heading": true,
+  "underDirectCommand": true,
+  "stillMember": true,
+  "resumedStatus": "active"
+ },
+ "errors": []
+}

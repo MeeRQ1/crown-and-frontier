@@ -187,7 +187,7 @@ describe('a landing', () => {
 });
 
 describe('airborne troops under a mandate', () => {
-  function airborneSetup(settings: Partial<OperationSettings>, aa = 0) {
+  function airborneSetup(settings: Partial<OperationSettings>, aa = 0, lift = true) {
     const sim = lineGame({ playerNation: 'a' });
     prep(sim);
     declareWar(sim, 'a', 'b', { type: 'conquest', provinces: ['b3'] });
@@ -200,9 +200,34 @@ describe('airborne troops under a mandate', () => {
     // a transport of ours NOT in the operation: never used by it
     const spare = wing(sim, 'a', 'a2', 'transport');
     fresh(sim);
-    const o = op(sim, 'conquer', ['b3', 'b1'], [para.id, ground.id, t1.id, t2.id], { reserve: 0, ...settings });
+    const o = op(sim, 'conquer', ['b3', 'b1'], [para.id, ground.id, ...(lift ? [t1.id, t2.id] : [])], { reserve: 0, ...settings });
     return { sim, o, para, ground, t1, t2, spare };
   }
+
+  it('without transports of its own no drop is made, the reason is shown, and our other transports are never taken', () => {
+    const { sim, o, para, t1, t2, spare } = airborneSetup({ airborne: 'repeat', airborneRisk: 0.3 }, 0, false);
+    weeks(sim, 2);
+    expect(o.stats.drops).toBe(0);
+    expect(sim.state.nations.a.stats.airborneDrops ?? 0).toBe(0);
+    expect(sim.state.armies[para.id].location).toBe('a2');
+    expect(o.tasks[para.id].note).toMatch(/no transport wings/);
+    for (const w of [t1, t2, spare]) expect(sim.state.wings[w.id].op ?? null).toBeNull();
+  });
+
+  it('an order of ours to the paratroopers takes them out of the plan at once; resumed, the mandate is carried out', () => {
+    const { sim, o, para } = airborneSetup({ airborne: 'repeat', airborneRisk: 0.3 });
+    const r = applyCommand(sim, { type: 'stop', nation: 'a', army: para.id });
+    expect(r.ok).toBe(true);
+    expect(sim.state.armies[para.id].opHold).toBe(true);
+    weeks(sim, 1);
+    expect(o.stats.drops).toBe(0);
+    expect(sim.state.armies[para.id].location).toBe('a2');
+    applyCommand(sim, { type: 'resumeUnits', nation: 'a', units: [para.id] });
+    expect(sim.state.armies[para.id].opHold).toBe(false);
+    weeks(sim, 1);
+    expect(o.stats.drops).toBe(1);
+    expect(['b3', 'b1']).toContain(sim.state.armies[para.id].location);
+  });
 
   it('without the mandate no drop is made: paratroopers stay ground troops', () => {
     const { sim, para } = airborneSetup({ airborne: 'off' });

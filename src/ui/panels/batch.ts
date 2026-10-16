@@ -154,6 +154,8 @@ export function provinceBatchCard(app: App): HTMLElement[] {
   return out;
 
   function submit(key: string, cmd: Parameters<App['do']>[0]) {
+    // a second click before the card is drawn again (a double click) sends nothing
+    if (ui.last?.key === key) return;
     const r = app.do(cmd, true);
     if (!r.ok) return;
     ui.last = { key, message: r.message ?? 'Done.', details: r.details ?? [] };

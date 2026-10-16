@@ -46,14 +46,17 @@ export function renderInspector(app: App): void {
     return;
   }
   rebuild(el, () => {
+    // in the order Esc clears them: an open operation editor, then several forces,
+    // then provinces, then an operation's card (which stays above a force selection
+    // for its "Add the selected forces", and comes back when the provinces are cleared)
     const card = app.opDraft
       ? opEditor(app)
-      : app.selectedOp
-        ? opCard(app, app.selectedOp)
-        : multi
-          ? selectionCard(app)
-          : app.provSel.length
-            ? provinceBatchCard(app)
+      : app.provSel.length && !multi
+        ? provinceBatchCard(app)
+        : app.selectedOp
+          ? opCard(app, app.selectedOp)
+          : multi
+            ? selectionCard(app)
             : fleet
               ? fleetCard(app, fleet)
               : wing

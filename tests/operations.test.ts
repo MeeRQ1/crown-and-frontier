@@ -303,6 +303,33 @@ describe('the limits of delegation', () => {
     expect(Object.values(sim.state.wars)).toHaveLength(1);
   });
 
+  it('with an operation paused or edited, province batches and manual orders work as before', () => {
+    const sim = gridGame();
+    war(sim);
+    const n = sim.state.nations.a;
+    n.treasury = 100000;
+    n.materiel = 100000;
+    n.manpower = 1_000_000;
+    const a = addArmy(sim, 'a', 'g10', { infantry: 4 });
+    const free = addArmy(sim, 'a', 'g00', { infantry: 2 });
+    const op = create(sim, COL2, [a.id], { reserve: 0, reorganize: false });
+    expect(applyCommand(sim, { type: 'opState', nation: 'a', op: op.id, state: 'paused' }).ok).toBe(true);
+    expect(applyCommand(sim, { type: 'editOp', nation: 'a', op: op.id, settings: { posture: 'cautious' } }).ok).toBe(true);
+    const built = applyCommand(sim, { type: 'batchBuild', nation: 'a', project: 'infra', provinces: ['g01', 'g02'] });
+    expect(built.ok && built.message).toMatch(/2 of 2 queued/);
+    const raised = applyCommand(sim, { type: 'batchRecruit', nation: 'a', unit: 'infantry', alloc: [{ province: 'g03', count: 2 }] });
+    expect(raised.ok && raised.message).toMatch(/2 of 2 regiments in training/);
+    // a march for an army outside the operation, and one for a member (taken under direct command)
+    expect(applyCommand(sim, { type: 'move', nation: 'a', army: free.id, dest: 'g02' }).ok).toBe(true);
+    expect(applyCommand(sim, { type: 'move', nation: 'a', army: a.id, dest: 'g11' }).ok).toBe(true);
+    expect(sim.state.armies[a.id].opHold).toBe(true);
+    expect(sim.state.armies[free.id].op ?? null).toBeNull();
+    weeks(sim, 6);
+    expect(sim.state.armies[free.id].location).toBe('g02');
+    expect(sim.state.armies[a.id].location).toBe('g11');
+    expect(checkInvariants(sim)).toEqual([]);
+  });
+
   it('a conquest turns to defend our own province next to its area when the enemy strikes there', () => {
     const sim = gridGame();
     war(sim);
