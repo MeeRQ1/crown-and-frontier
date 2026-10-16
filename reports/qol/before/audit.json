@@ -1,0 +1,161 @@
+{
+ "phase": "before",
+ "scenario": "Europe 1936 as Germany: 13 armies (110 regiments), 3 fleets, 8 wings; at war with Poland, Romania and France beside Italy",
+ "neutrals": [
+  "aut",
+  "bel",
+  "cze",
+  "den",
+  "lit",
+  "lux",
+  "ned",
+  "swi"
+ ],
+ "filters": {
+  "all/near": {
+   "armies": {
+    "other": 32,
+    "hostile": 5,
+    "allied": 1,
+    "own": 13
+   },
+   "fleets": {
+    "other": 14,
+    "hostile": 2,
+    "own": 3
+   },
+   "wings": {
+    "own": 3,
+    "hostile": 2
+   }
+  },
+  "all/regional": {
+   "armies": {
+    "other": 51,
+    "hostile": 6,
+    "allied": 2,
+    "own": 12
+   },
+   "fleets": {
+    "own": 3,
+    "hostile": 3
+   },
+   "wings": {
+    "own": 3
+   }
+  },
+  "all/far": {
+   "armies": {
+    "other": 51,
+    "hostile": 6,
+    "allied": 2,
+    "own": 12
+   },
+   "fleets": {
+    "own": 3,
+    "hostile": 3
+   },
+   "wings": {
+    "own": 3
+   }
+  },
+  "relevant/near": {
+   "armies": {
+    "hostile": 5,
+    "allied": 1,
+    "own": 13
+   },
+   "fleets": {
+    "other": 14,
+    "hostile": 2,
+    "own": 3
+   },
+   "wings": {
+    "own": 3,
+    "hostile": 2
+   }
+  },
+  "relevant/regional": {
+   "armies": {
+    "hostile": 6,
+    "own": 12
+   },
+   "fleets": {
+    "own": 3,
+    "hostile": 3
+   },
+   "wings": {
+    "own": 3
+   }
+  },
+  "relevant/far": {
+   "armies": {
+    "hostile": 6,
+    "own": 12
+   },
+   "fleets": {
+    "own": 3,
+    "hostile": 3
+   },
+   "wings": {
+    "own": 3
+   }
+  },
+  "mine/near": {
+   "armies": {
+    "own": 13
+   },
+   "fleets": {
+    "own": 3,
+    "hostile": 2
+   },
+   "wings": {
+    "own": 3,
+    "hostile": 2
+   }
+  },
+  "mine/regional": {
+   "armies": {
+    "own": 12
+   },
+   "fleets": {
+    "own": 3,
+    "hostile": 3
+   },
+   "wings": {
+    "own": 3
+   }
+  },
+  "mine/far": {
+   "armies": {
+    "own": 12
+   },
+   "fleets": {
+    "own": 3,
+    "hostile": 3
+   },
+   "wings": {
+    "own": 3
+   }
+  }
+ },
+ "buildTen": {
+  "provinces": 10,
+  "inputs": 15,
+  "clicked": 5,
+  "railwaysQueued": 5,
+  "note": "one click on the province, one on Build railway; finding each province on the map is not counted"
+ },
+ "recruitTen": {
+  "provinces": 10,
+  "inputs": 20,
+  "regimentsQueued": 10
+ },
+ "orderAll": {
+  "armies": 13,
+  "ordered": 11,
+  "inputs": 26,
+  "note": "each army: click its counter, right-click the target (and pick the march if a menu opens); repeated for every new province and every week the situation changes"
+ },
+ "errors": []
+}
