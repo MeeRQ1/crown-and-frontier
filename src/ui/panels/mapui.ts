@@ -183,9 +183,20 @@ export function renderNavCluster(app: App): void {
       btn('target', 'Centre on selection', 'C', () => app.centreSelection(), app.selectedArmy || app.selectedProvince ? null : 'nothing selected'),
       btn('army', 'Next army', 'N', () => app.cycleArmy(), app.player && Object.values(sim.state.armies).some((a) => a.nation === app.player) ? null : 'no armies'),
       btn('battle', 'Next battle', 'K', () => app.nextBattle(), battles.length ? null : 'no battles involving you', battles.length),
+      selectToggle(app),
     );
     setChildren(el, app.minimapEl, col);
   });
+}
+
+/** The Select tool (touch-friendly): forces → provinces → off; taps add or remove, a drag draws a box. */
+function selectToggle(app: App): HTMLElement {
+  const m = app.selectMode;
+  const label = m === 'off' ? 'Select several' : m === 'forces' ? 'Selecting forces' : 'Selecting provinces';
+  const b = h('button', { class: m === 'off' ? '' : 'active', type: 'button', 'aria-label': label, 'aria-pressed': m === 'off' ? 'false' : 'true', 'data-fk': 'nav-select' }, icon(m === 'provinces' ? 'build' : 'check'), m === 'off' ? null : h('span', { class: 'badge' }, String(m === 'forces' ? app.forceSel.length : app.provSel.length)));
+  b.addEventListener('click', () => app.setSelectMode(m === 'off' ? 'forces' : m === 'forces' ? 'provinces' : 'off'));
+  tip(b, `${label} (X): ${m === 'off' ? 'tap forces to select several, drag a box; press again for provinces' : m === 'forces' ? 'press again to select provinces instead' : 'press again to finish'}`);
+  return b;
 }
 
 /** Minimap: political overview with the current view outlined; click to jump. */

@@ -431,6 +431,16 @@ table.mini td.bad { color: var(--bad); }
 .segmented.group-seg { display: flex; }
 .segmented.group-seg button { flex: 1; padding: 0; min-width: 0; }
 .segmented button.active { background: var(--cf-brass); color: var(--cf-ink); }
+/* many options (a batch's projects, an operation's objective): wrap instead of overflowing the panel */
+.segmented.wrap { display: flex; flex-wrap: wrap; }
+.ins-body .field .segmented { display: flex; flex-wrap: wrap; max-width: 100%; }
+.ins-body .field .segmented button { flex: 1 1 auto; }
+/* an operation's task groups and the selection list */
+.op-group + .op-group { margin-top: 6px; }
+.linklike { background: none; border: 0; padding: 0; color: inherit; font: inherit; text-decoration: underline; text-decoration-color: var(--line); cursor: pointer; text-align: left; }
+.linklike:hover { text-decoration-color: currentColor; }
+.army-row .ar-n input[type='checkbox'] { margin: 0 6px 0 0; vertical-align: middle; }
+.nav-btns button.active { background: var(--cf-brass); color: var(--cf-ink); }
 
 /* ── Form controls ───────────────────────────────────────────────────────── */
 select, input[type='number'], input[type='text'], input[type='search'] {

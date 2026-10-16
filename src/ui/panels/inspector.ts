@@ -21,6 +21,8 @@ import { orderStatus, readiness } from '../../sim/readiness';
 import { action, bar, button, h, rebuild, row, setChildren } from '../dom';
 import { fmt, men, people, plural, signed, weeks } from '../format';
 import { VIEW_LABELS } from '../map/visibility';
+import { opCard, opEditor, selectionCard, unitOpSection } from './operations';
+import { provinceBatchCard } from './batch';
 import { icon, type IconName } from '../icons';
 import { section, shield, tip } from './common';
 import { confirmDialog } from './dialogs';
@@ -35,7 +37,8 @@ export function renderInspector(app: App): void {
   const fleet = app.selectedFleet ? sim.state.fleets[app.selectedFleet] : undefined;
   const wing = app.selectedWing ? sim.state.wings[app.selectedWing] : undefined;
   const zone = app.selectedZone && sim.world.zones[app.selectedZone] ? app.selectedZone : null;
-  const open = !!army || !!app.selectedProvince || !!fleet || !!wing || !!zone;
+  const multi = app.forceSel.length >= 2;
+  const open = !!army || !!app.selectedProvince || !!fleet || !!wing || !!zone || !!app.opDraft || !!app.selectedOp || multi || app.provSel.length > 0;
   el.classList.toggle('closed', !open);
   el.setAttribute('aria-hidden', open ? 'false' : 'true');
   if (!open) {
@@ -43,7 +46,23 @@ export function renderInspector(app: App): void {
     return;
   }
   rebuild(el, () => {
-    const card = fleet ? fleetCard(app, fleet) : wing ? wingCard(app, wing) : zone ? zoneCard(app, zone) : army ? armyCard(app, army) : provinceCard(app, app.selectedProvince!);
+    const card = app.opDraft
+      ? opEditor(app)
+      : app.selectedOp
+        ? opCard(app, app.selectedOp)
+        : multi
+          ? selectionCard(app)
+          : app.provSel.length
+            ? provinceBatchCard(app)
+            : fleet
+              ? fleetCard(app, fleet)
+              : wing
+                ? wingCard(app, wing)
+                : zone
+                  ? zoneCard(app, zone)
+                  : army
+                    ? armyCard(app, army)
+                    : provinceCard(app, app.selectedProvince!);
     setChildren(el, ...card);
   });
 }
@@ -392,6 +411,7 @@ function armyCard(app: App, a: Army): HTMLElement[] {
   }
 
   const body = h('div', { class: 'ins-body scroll', 'data-sk': 'ins' });
+  { const ops = mine ? unitOpSection(app, a.id) : null; if (ops) body.appendChild(ops); }
   const byType = (t: UnitType) => a.regiments.filter((r) => r.type === t);
   const mm = maxMorale(sim, a.nation);
   body.appendChild(

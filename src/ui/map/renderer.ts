@@ -66,6 +66,16 @@ export interface RenderState {
   tradeRoutes?: Array<{ from: ProvinceId; to: ProvinceId; sea: boolean }> | null;
   /** which forces are shown (ui/map/visibility.ts); without one, the presentation mode alone decides */
   units?: UnitFilter;
+  /** forces selected together (drawn as selected) */
+  selectedSet?: Set<string> | null;
+  /** provinces selected together (batch actions) */
+  provSel?: ProvinceId[] | null;
+  /** the area of the operation being prepared or shown */
+  opArea?: { provinces: ProvinceId[]; zones: string[]; draft: boolean } | null;
+  /** the routes the operation being prepared would order (preview) */
+  opRoutes?: Array<{ army: string; path: ProvinceId[] }> | null;
+  /** a selection box being drawn (screen coordinates) */
+  box?: { x0: number; y0: number; x1: number; y1: number } | null;
 }
 
 export interface Marker {
@@ -400,6 +410,46 @@ export class MapRenderer {
       }
       ctx.restore();
     }
+    // the operation's area: hatched in brick (being prepared: brass), its sea zones washed
+    if (rs.opArea && (rs.opArea.provinces.length || rs.opArea.zones.length)) {
+      ctx.save();
+      const col = rs.opArea.draft ? BRASS_INK : DANGER;
+      for (const z of rs.opArea.zones) {
+        const path = this.geo.zonePath(z);
+        if (!path) continue;
+        ctx.save();
+        ctx.clip(this.geo.seaClip(), 'evenodd');
+        ctx.globalAlpha = 0.22;
+        ctx.fillStyle = col;
+        ctx.fill(path);
+        ctx.restore();
+      }
+      ctx.fillStyle = rs.opArea.draft ? 'rgba(194, 171, 114, 0.22)' : 'rgba(156, 58, 44, 0.12)';
+      ctx.strokeStyle = col;
+      ctx.lineWidth = 2 * px;
+      ctx.setLineDash([5 * px, 3 * px]);
+      for (const id of rs.opArea.provinces) {
+        const p = this.geo.provs.get(id);
+        if (!p) continue;
+        ctx.fill(p.path);
+        ctx.stroke(p.path);
+      }
+      ctx.restore();
+    }
+    // provinces selected for a batch
+    if (rs.provSel?.length) {
+      ctx.save();
+      ctx.fillStyle = 'rgba(194, 171, 114, 0.32)';
+      ctx.strokeStyle = BRASS_INK;
+      ctx.lineWidth = 2.4 * px;
+      for (const id of rs.provSel) {
+        const p = this.geo.provs.get(id);
+        if (!p) continue;
+        ctx.fill(p.path);
+        ctx.stroke(p.path);
+      }
+      ctx.restore();
+    }
     if (rs.mode === 'military' && mctx.fronts?.size) {
       ctx.save();
       ctx.strokeStyle = DANGER;
@@ -457,6 +507,11 @@ export class MapRenderer {
     const sel = rs.selectedArmy ? sim.state.armies[rs.selectedArmy] : undefined;
     if (sel?.path.length) this.drawRoute(pos.get(sel.id)!, sel.path, LINE.armyOrder.stroke, px, false, 1);
     if (sel && rs.previewPath?.length) this.drawRoute(pos.get(sel.id)!, rs.previewPath, rs.previewBad ? MUTED : LINE.armyOrder.stroke, px, true, 1);
+    // the operation being prepared: the routes it would order first
+    for (const r of rs.opRoutes ?? []) {
+      const a = sim.state.armies[r.army];
+      if (a && r.path.length) this.drawRoute(pos.get(a.id) ?? this.armyPos(sim, a), r.path, BRASS_INK, px, true, 0.9);
+    }
 
     // screen-space layers, all through one collision registry
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
@@ -488,6 +543,20 @@ export class MapRenderer {
     this.drawSites(sim, rs, tier, visible);
     this.drawZoneNames(rs, tier);
     this.drawLabels(sim, rs, tier, visible);
+    // the selection box being drawn
+    if (rs.box) {
+      const b = rs.box;
+      ctx.save();
+      ctx.fillStyle = 'rgba(194, 171, 114, 0.16)';
+      ctx.strokeStyle = BRASS_INK;
+      ctx.lineWidth = 1.5;
+      ctx.setLineDash([5, 3]);
+      const x = Math.min(b.x0, b.x1);
+      const y = Math.min(b.y0, b.y1);
+      ctx.fillRect(x, y, Math.abs(b.x1 - b.x0), Math.abs(b.y1 - b.y0));
+      ctx.strokeRect(x + 0.5, y + 0.5, Math.abs(b.x1 - b.x0), Math.abs(b.y1 - b.y0));
+      ctx.restore();
+    }
     // a battle's pulse animates only while one is on screen
     return animating || this.pending || (!rs.reducedMotion && this.battleMarkers.length > 0);
   }
@@ -1624,7 +1693,7 @@ export class MapRenderer {
           bars: [hp, fit],
           status: f.cargo.length ? 'moving' : null,
           relation: this.relation(sim, f.nation, me),
-          selected: f.id === rs.selectedFleet,
+          selected: f.id === rs.selectedFleet || !!rs.selectedSet?.has(f.id),
         });
         this.fleetMarkers.push({ fleet: f.id, x, y, w, h });
         this.placed.add({ x, y, w, h });
@@ -1647,7 +1716,7 @@ export class MapRenderer {
       const key = fleet ? `f${fleet}` : `p${w.base}`;
       const cur = at.get(key) ?? { nation: w.nation, wings: [], sel: false, base: fleet ? null : w.base, fleet };
       cur.wings.push(w.id);
-      if (w.id === rs.selectedWing) cur.sel = true;
+      if (w.id === rs.selectedWing || rs.selectedSet?.has(w.id)) cur.sel = true;
       at.set(key, cur);
     }
     const kind = 'pill';
@@ -2078,7 +2147,7 @@ export class MapRenderer {
       if (tier === 'far') {
         const a = list[0];
         const regs = list.reduce((n, x) => n + x.regiments.length, 0);
-        this.farMarker(sim, a, s.x, s.y - 8, regs, list.some((x) => x.id === rs.selectedArmy), me);
+        this.farMarker(sim, a, s.x, s.y - 8, regs, list.some((x) => x.id === rs.selectedArmy || !!rs.selectedSet?.has(x.id)), me);
         continue;
       }
       const kind = this.counterKind(tier);
@@ -2104,7 +2173,7 @@ export class MapRenderer {
           bars: [a.morale / Math.max(0.01, mm), mine ? a.supply : 1],
           status,
           relation: this.relation(sim, a.nation, me),
-          selected: a.id === rs.selectedArmy,
+          selected: a.id === rs.selectedArmy || !!rs.selectedSet?.has(a.id),
           group: mine ? a.group : null,
           dim: a.retreating,
         });

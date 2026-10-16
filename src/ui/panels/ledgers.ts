@@ -11,6 +11,7 @@ import { envoyCost, menServing, reserveCap } from '../../sim/economy';
 import { checkCommand } from '../../sim/commands';
 import { armyCap, blocOf, evaluateBloc, evaluateLoan, foundBlocProblem, guaranteeProblem, guaranteesBy, guaranteeSlots, guarantorsOf, influenceGain, influenceOver, inviteProblem, joinProblem, loanProblem, sphereMembers, sphereOf } from '../../sim/influence';
 import { maxMorale, nationStrength, unitUnlocked } from '../../sim/military';
+import { operationsSection, selectBox } from './operations';
 import { aliveNations, alliesOf, armiesOf, atWar, dateOf, hasTreaty, menOf, nationName, ownedProvinces, provName, sideOf, truceUntil, warsOf, type Sim } from '../../sim/state';
 import { armySupplyInfo } from '../../sim/supply';
 import type { Army, Demand, DemandKind, NationId, PeaceTerms, StrategicResource, TreatyType, War } from '../../sim/types';
@@ -119,10 +120,11 @@ function armyRow(app: App, a: Army): HTMLElement {
   const status = os.state === 'moving' ? `To ${provName(sim, a.path[a.path.length - 1])} · ${os.eta} wk` : os.text;
   const weak = readiness(sim, a).filter((n) => n.tone === 'bad');
   const stalled = os.state === 'pinned' || os.state === 'blocked';
+  const opName = a.op ? sim.state.operations[a.op]?.name : null;
   const el = h(
     'button',
-    { class: `army-row ${app.selectedArmy === a.id ? 'selected' : ''}`, type: 'button', 'data-fk': `army-${a.id}` },
-    h('span', { class: 'ar-n' }, a.group ? h('span', { class: 'grp' }, String(a.group)) : null, a.name),
+    { class: `army-row ${app.selectedArmy === a.id || app.forceSel.includes(a.id) ? 'selected' : ''}`, type: 'button', 'data-fk': `army-${a.id}` },
+    h('span', { class: 'ar-n' }, selectBox(app, a.id), a.group ? h('span', { class: 'grp' }, String(a.group)) : null, a.name, opName ? h('span', { class: `tag small ${a.opHold ? 'warn' : ''}`, title: a.opHold ? `${opName}: under your direct command` : `Delegated to ${opName}` }, a.opHold ? 'own' : 'op') : null),
     h('span', { class: 'ar-loc' }, provName(sim, a.location)),
     h('span', { class: 'ar-mix', title: UNIT_TYPES.map((t) => `${UNITS[t].abbr} ${UNITS[t].plural}`).join(' · ') }, UNIT_TYPES.filter((t) => c(t)).map((t) => `${c(t)}${UNITS[t].abbr}`).join(' ') || '—'),
     h('span', { class: 'ar-men' }, men(menOf(a))),
@@ -162,6 +164,19 @@ function militaryLedger(app: App): HTMLElement {
       cell('Orders', stalled ? `${stalled} stalled` : 'None stalled', stalled ? 'bad' : ''),
     ),
   ];
+
+  // operations: what is delegated, and what needs a decision
+  kids.push(operationsSection(app));
+  if (armies.length)
+    kids.push(
+      h(
+        'div',
+        { class: 'row wrap', style: 'gap:6px;margin:4px 0 8px' },
+        button('Select all armies', () => app.setForceSel(armies.map((a) => a.id)), { cls: 'small quiet', fk: 'sel-all-armies' }),
+        button('Select idle armies', () => app.setForceSel(armies.filter((a) => !a.path.length && !a.battle && !a.op && orderStatus(sim, a).state !== 'moving').map((a) => a.id)), { cls: 'small quiet', fk: 'sel-idle', title: 'Armies of ours under direct command that stand still and are not fighting' }),
+        app.forceSel.length ? button(`New operation with ${app.forceSel.length} selected`, () => app.startOpDraft(), { cls: 'small primary', icon: 'target', fk: 'sel-new-op' }) : null,
+      ),
+    );
 
   // fronts: every war enemy, with what stands near the shared border
   const wars = warsOf(sim, pid);

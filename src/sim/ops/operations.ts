@@ -222,7 +222,14 @@ export function createOperation(sim: Sim, nid: NationId, kind: OperationKind, ar
 }
 
 function defaultName(sim: Sim, kind: OperationKind, area: ProvinceId[], zones: ZoneId[], n: number): string {
-  const where = kind === 'sea' ? sim.world.zones[zones[0]]?.name : area.length ? provName(sim, area[0]) : '';
+  // one province: its name; an area: the realms that hold most of it
+  const holders = new Map<string, number>();
+  for (const p of area) {
+    const c = sim.state.provinces[p]?.controller;
+    if (c) holders.set(c, (holders.get(c) ?? 0) + 1);
+  }
+  const top = [...holders].sort((a, b) => b[1] - a[1] || (a[0] < b[0] ? -1 : 1)).slice(0, 2).map(([nid]) => sim.world.nationDefs[nid]?.short ?? nid);
+  const where = kind === 'sea' ? sim.world.zones[zones[0]]?.name : area.length === 1 || kind === 'advance' || kind === 'landing' ? provName(sim, area[0]) : top.join(' and ');
   const word: Record<OperationKind, string> = { conquer: 'Conquest', advance: 'Advance', hold: 'Defence', sea: 'Sea control', landing: 'Landing' };
   return `${word[kind]} of ${where || `area ${n}`}`.slice(0, 40);
 }

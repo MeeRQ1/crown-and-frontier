@@ -42,6 +42,7 @@ import type { App } from '../app';
 import { action, button, h, row } from '../dom';
 import { fmt, plural, weeks } from '../format';
 import { VIEW_LABELS } from '../map/visibility';
+import { unitOpSection } from './operations';
 import { icon } from '../icons';
 import { section, shield } from './common';
 import { confirmDialog } from './dialogs';
@@ -142,6 +143,7 @@ export function fleetCard(app: App, f: Fleet): HTMLElement[] {
   }
 
   const body = h('div', { class: 'ins-body scroll', 'data-sk': 'ins' });
+  { const ops = f.nation === app.player ? unitOpSection(app, f.id) : null; if (ops) body.appendChild(ops); }
   const cap = fleetCapacity(f);
   body.appendChild(
     h(
@@ -483,6 +485,7 @@ export function wingCard(app: App, w: AirWing): HTMLElement[] {
     out.push(h('div', { class: 'ins-primary' }, prim, h('div', { class: 'small muted', style: 'flex-basis:100%' }, 'Right-click (long-press) a place on the map for the missions that fit it, or to move to an airfield or carrier there (ringed). E opens them at the pointer.')));
   }
   const body = h('div', { class: 'ins-body scroll', 'data-sk': 'ins' });
+  { const ops = w.nation === app.player ? unitOpSection(app, w.id) : null; if (ops) body.appendChild(ops); }
   const rng = wingRange(sim, w);
   body.appendChild(
     h(
