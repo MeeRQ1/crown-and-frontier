@@ -698,6 +698,12 @@ export function planOperation(sim: Sim, op: Operation): void {
 
 /** Every active operation of every player realm (priority first): the weekly operations phase. */
 export function weeklyOperations(sim: Sim): void {
+  const steps = weeklyOperationsSteps(sim);
+  while (!steps.next().done);
+}
+
+/** The operations phase one operation at a time (a slice each in the browser, see weekSlices); the result is weeklyOperations'. */
+export function* weeklyOperationsSteps(sim: Sim): Generator<void, void, void> {
   const st = sim.state;
   if (!st.operations) return;
   const realms = [...new Set(Object.values(st.operations).map((o) => o.nation))].sort();
@@ -710,6 +716,7 @@ export function weeklyOperations(sim: Sim): void {
     for (const op of opsOf(sim, nid)) {
       if (!st.operations[op.id]) continue;
       planOperation(sim, op);
+      yield;
     }
   }
 }

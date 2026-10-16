@@ -42,7 +42,7 @@ import { monthlyResearch } from './progression';
 import { monthlyFocus } from './focus';
 import { nextMemoEpoch, restoreMemo, setMemoAside } from './index';
 import { weeklySieges } from './siege';
-import { weeklyOperations } from './ops/operations';
+import { weeklyOperationsSteps } from './ops/operations';
 import { monthlyDiplomacy } from './diplomacy';
 import { monthlyInfluenceSteps } from './influence';
 import { WEEKS_PER_MONTH, type Sim } from './state';
@@ -127,7 +127,7 @@ export function* weekSlices(sim: Sim, opts: StepOptions = {}): Generator<void, v
   }
   // the player's operations plan their routine orders (after the AI, before the standing orders),
   // through the command path; they run in replays too, so they are not in the player's log
-  if (sim.state.operations && Object.keys(sim.state.operations).length) yield* phase('operations', () => weeklyOperations(sim));
+  if (sim.state.operations && Object.keys(sim.state.operations).length) yield* phaseSteps('operations', weeklyOperationsSteps(sim));
   yield* phase('orders', () => weeklyOrders(sim));
   yield* phase('naval', () => weeklyNaval(sim));
   // contact is made on arrival: battles are known before the air phase plans support for them
