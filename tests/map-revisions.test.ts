@@ -8,6 +8,11 @@ import { ensureLegacyMap, legacyGeometry, needsLegacyMap, prepareSaveMap, RETAIN
 import { createGame } from '../src/sim/game';
 import { buildCapacity, buildSlots, devLimit, landHeld, landOf, projectCost } from '../src/sim/construction';
 import { TERRAIN } from '../src/sim/config';
+import { CostHeap } from '../src/sim/heap';
+import { stepLength } from '../src/sim/index';
+import { moveCost } from '../src/sim/movement';
+import { opDistance } from '../src/sim/reach';
+import { supplyDistances, supplyRange } from '../src/sim/supply';
 import { checkInvariants } from '../src/sim/invariants';
 import { readSave, serialize } from '../src/sim/save';
 import { bump, type Sim } from '../src/sim/state';
@@ -119,6 +124,54 @@ describe('campaigns begun before the maps were redrawn', () => {
     expect(reach.world.provIds.every((p) => landOf(reach, p) === 1)).toBe(true);
     const rp = reach.world.provIds[0];
     expect(devLimit(reach, rp)).toBe(TERRAIN[reach.world.prov[rp].terrain].devCap);
+  });
+
+  it('the same ground takes as long to cross and is reached as far: a step counts the ground it covers', async () => {
+    await ensureLegacyMap('europe', 1);
+    const now = createGame({ scenario: 'europe', seed: 1, playerNation: null });
+    const before = createGame({ scenario: 'europe-r1', seed: 1, playerNation: null });
+    // the cheapest movement points from a province to every other, whoever may pass
+    const points = (sim: Sim, from: string) => {
+      const d: Record<string, number> = { [from]: 0 };
+      const open = new CostHeap();
+      open.push(0, from);
+      while (open.size) {
+        const c = open.peekCost();
+        const p = open.pop();
+        if (c > d[p]) continue;
+        for (const q of sim.world.prov[p].neighbors) {
+          const n = c + moveCost(sim, p, q);
+          if (n < (d[q] ?? Infinity)) open.push((d[q] = n), q);
+        }
+      }
+      return d;
+    };
+    // between capitals up to six provinces apart on revision 1
+    const caps = before.world.nationIds.map((n) => before.state.nations[n].capital!).filter((c) => c && now.world.prov[c]);
+    const sum = { hops: [0, 0], points: [0, 0], air: [0, 0] };
+    for (const a of caps) {
+      const [p0, p1] = [points(before, a), points(now, a)];
+      for (const b of caps) {
+        if (b <= a || (before.world.hop(a, b) ?? 99) > 6) continue;
+        sum.hops[0] += before.world.hop(a, b)!;
+        sum.hops[1] += now.world.hop(a, b)!;
+        sum.points[0] += p0[b];
+        sum.points[1] += p1[b];
+        sum.air[0] += opDistance(before, { prov: a }, { prov: b });
+        sum.air[1] += opDistance(now, { prov: a }, { prov: b });
+      }
+    }
+    const ratio = (x: number[]) => x[1] / x[0];
+    // a fifth more provinces on the way, as long a march and as far a flight
+    expect(ratio(sum.hops)).toBeGreaterThan(1.15);
+    expect(ratio(sum.points)).toBeLessThan(1.08);
+    expect(ratio(sum.air)).toBeLessThan(1.08);
+    // supply reaches the same land
+    const supplied = (sim: Sim, nid: string) => sim.world.provIds.filter((p) => supplyDistances(sim, nid)[p] <= supplyRange(sim, nid)).reduce((l, p) => l + landOf(sim, p), 0);
+    for (const nid of ['fra', 'ger']) expect(supplied(now, nid) / supplied(before, nid), nid).toBeGreaterThan(0.95);
+    // a map never redrawn counts every step as one, as it always did
+    const reach = createGame({ scenario: 'reach', seed: 1, playerNation: null });
+    for (const p of reach.world.provIds) for (const q of reach.world.prov[p].neighbors) expect(stepLength(reach.world, p, q)).toBe(1);
   });
 
   it('more places to build on the same land, with exactly the builders the land had; the realm is told where they come from', async () => {

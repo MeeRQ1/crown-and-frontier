@@ -3,7 +3,8 @@
 // Each week a moving army gains `speed` movement points (its slowest regiment:
 // infantry 1.0, cavalry 1.5, artillery 0.8, armour 1.2; x technology/policy). Entering a province costs the
 // destination terrain's move value (plains 2 … mountains 5), -12% per railway
-// level (average of both ends), +2 for a sea strait. An army stays located in
+// level (average of both ends), times the ground the step covers on a redrawn map
+// (stepLength: smaller provinces, shorter steps), +2 for a sea strait. An army stays located in
 // its origin until it arrives, so contact happens on arrival. Armies are
 // processed in id order; an army cannot leave a province that holds a hostile
 // army (it is pinned), so hostile armies crossing on one edge always meet.
@@ -11,7 +12,7 @@
 
 import { TERRAIN, UNITS } from './config';
 import { CostHeap } from './heap';
-import { armiesIn, touchArmies } from './index';
+import { armiesIn, stepLength, touchArmies } from './index';
 import { nationMods } from './modifiers';
 import { interdiction } from './air';
 import { straitBlocked } from './naval';
@@ -41,7 +42,7 @@ export const STRAIT_COST = 2;
 export function moveCost(sim: Sim, from: ProvinceId, to: ProvinceId, nid?: NationId): number {
   const t = TERRAIN[sim.world.prov[to].terrain].move;
   const infra = (sim.state.provinces[from].infra + sim.state.provinces[to].infra) / 2;
-  let c = t * (1 - 0.12 * infra);
+  let c = t * (1 - 0.12 * infra) * stepLength(sim.world, from, to);
   if (sim.world.straitEnds.has(from) && sim.world.straitSet.has(edgeKey(from, to))) c += Math.max(0, STRAIT_COST + (nid ? nationMods(sim, nid).straitCost : 0));
   return c;
 }
@@ -108,17 +109,20 @@ export function findPath(sim: Sim, nid: NationId, from: ProvinceId, to: Province
   return { path, cost: dist[to] };
 }
 
-/** Estimated weeks to walk a path from the army's current position. */
+/** Weeks to walk a path from the army's current position, by the weekly rule (weeklyMovement) with nothing in the way. */
 export function etaWeeks(sim: Sim, a: Army, path: ProvinceId[], progress = 0): number {
   const speed = armySpeed(sim, a);
   let from = a.location;
   let weeks = 0;
-  let carry = progress;
+  let p = progress;
   for (const step of path) {
     const cost = moveCost(sim, from, step, a.nation);
-    const need = Math.max(0, cost - carry);
-    weeks += Math.max(1, Math.ceil(need / speed));
-    carry = 0;
+    // a step a week at most, once the points gained cover its cost; what is left (up to 1) carries on
+    do {
+      p += speed;
+      weeks++;
+    } while (p < cost);
+    p = Math.min(p - cost, 1);
     from = step;
   }
   return weeks;

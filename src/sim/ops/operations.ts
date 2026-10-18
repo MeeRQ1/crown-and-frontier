@@ -389,13 +389,18 @@ export function releaseUnits(sim: Sim, ids: string[], why = 'detached'): void {
 
 /**
  * Auto-conquer's forces: every army, fleet and air wing of ours that is in no other
- * operation and not reserved for direct command joins (forces at sea with troops
- * aboard, and airborne troops, only once they are free). Told once in the log.
+ * operation (or only in an Auto-conquer whose wars are over) and not reserved for
+ * direct command joins (forces at sea with troops aboard, and airborne troops, only
+ * once they are free). Told once in the log.
  */
 export function autoAssign(sim: Sim, op: Operation): void {
   const st = sim.state;
   const nid = op.nation;
-  const free = (u: { nation: NationId; op?: string | null; reserved?: boolean }) => u.nation === nid && !u.op && !u.reserved;
+  const over = (id: string) => {
+    const o = st.operations[id];
+    return !o || (o.id !== op.id && o.kind === 'war' && o.status === 'complete');
+  };
+  const free = (u: { nation: NationId; op?: string | null; reserved?: boolean }) => u.nation === nid && (!u.op || over(u.op)) && !u.reserved;
   const ids: string[] = [];
   for (const a of Object.values(st.armies)) if (free(a) && !a.embarked && !a.drop) ids.push(a.id);
   for (const f of Object.values(st.fleets)) if (free(f) && !f.cargo.length) ids.push(f.id);
@@ -983,7 +988,8 @@ export function planOperation(sim: Sim, op: Operation): void {
   }
   countCaptures(sim, op);
   if (op.status === 'paused') return;
-  if (op.kind === 'war' && op.autoAssign) {
+  // a mandate whose wars are over takes no new forces (they are left for the next one)
+  if (op.kind === 'war' && op.autoAssign && op.status !== 'complete') {
     const before = f.armies.length + f.fleets.length + f.wings.length;
     autoAssign(sim, op);
     const now = opForces(sim, op.id);

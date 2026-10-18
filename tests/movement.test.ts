@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { applyCommand, checkCommand } from '../src/sim/commands';
 import { signTreaty } from '../src/sim/diplomacy';
-import { findPath, moveCost } from '../src/sim/movement';
+import { etaWeeks, findPath, moveCost } from '../src/sim/movement';
 import { step } from '../src/sim/tick';
 import { declareWar, endWar } from '../src/sim/war';
 import { getWorld } from '../src/sim/world';
@@ -54,6 +54,25 @@ describe('movement', () => {
     step(sim, { noAI: true });
     expect(a.location).toBe('a2');
     expect(a.path).toEqual([]);
+  });
+
+  it('the arrival shown is the week the army arrives, also when roads leave points over from one step to the next', () => {
+    const sim = lineGame();
+    declareWar(sim, 'a', 'b', { type: 'conquest', provinces: ['b3'] });
+    // roads level 2 take 24% off every step (1.52 points on plains, 2.28 in hills and forest): what
+    // is left over after a step carries on, so the four steps take fewer weeks than 2 + 3 + 3 + 2
+    for (const p of ['a1', 'a2', 'a3', 'b3', 'b1']) sim.state.provinces[p].infra = 2;
+    const a = addArmy(sim, 'a', 'a1', { infantry: 1 });
+    expect(applyCommand(sim, { type: 'move', nation: 'a', army: a.id, dest: 'b1' }).ok).toBe(true);
+    expect(a.path).toEqual(['a2', 'a3', 'b3', 'b1']);
+    const shown = etaWeeks(sim, a, a.path, a.progress);
+    let weeks = 0;
+    while (a.location !== 'b1' && weeks < 20) {
+      step(sim, { noAI: true });
+      weeks++;
+    }
+    expect(weeks).toBeLessThan(10);
+    expect(shown).toBe(weeks);
   });
 
   it('an army halts when peace closes its route', () => {

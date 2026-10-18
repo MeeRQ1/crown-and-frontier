@@ -3,12 +3,15 @@
 //
 // Through the real controls: New campaign, map, realm, length, Begin; the clock at the
 // fastest speed; Simple Auto-conquer from the Military ledger whenever we are at war
-// and it is not running; Export to file and Import file half-way (the campaign goes on
-// from the imported copy, in the fifth year or half-way, whichever comes first); the end screen. The player's other decisions go through the
-// same command call the interface uses (cnf.do), as a plain player would make them:
+// and it is not running (a new war on us stops the clock at once, as the game's war
+// pause would); Export to file and Import file half-way (the campaign goes on from the
+// imported copy, in the fifth year or half-way, whichever comes first); the end screen.
+// The player's other decisions go through the same command call the interface uses
+// (cnf.do), as a plain player would make them:
 //   - every half year at peace from the second year, war on the weakest neighbour our
-//     army outnumbers by half (a conquest of up to two border provinces), at most one
-//     war every three years
+//     army outnumbers by half together with the allies and guarantors the declaration
+//     screen says may join it (a conquest of up to two border provinces), at most one
+//     war every three years, and Auto-conquer at once
 //   - a production order for four infantry at the capital once a year, when affordable
 //   - peace offers and settlements accepted unless they take our land (and then too
 //     once an enemy holds half of it); alliances and trade accepted; everything else declined
@@ -74,6 +77,7 @@ async function main(): Promise<void> {
   let orders = 0;
   let answered = 0;
   let imported = false;
+  let lastYear = -1;
   const frames: number[] = [];
   for (let guard = 0; guard < 400; guard++) {
     // the player's half-yearly look at the realm
@@ -88,7 +92,10 @@ async function main(): Promise<void> {
       return { tick: st.tick, over: !!st.result, alive: n.alive, treasury: n.treasury, enemies: [...new Set(enemies)], auto };
     });
     if (s.over || !s.alive) break;
-    if (s.tick % 52 < 26) {
+    // the yearly look (once a year, also when a war stopped the clock early)
+    const yearly = Math.floor(s.tick / 52) !== lastYear;
+    lastYear = Math.floor(s.tick / 52);
+    if (yearly) {
       const me = await page.evaluate(() => {
         const a = (window as Cnf).cnf;
         const st = a.sim.state;
@@ -97,19 +104,29 @@ async function main(): Promise<void> {
       log.push(`year ${Math.round(s.tick / 52)}: ${me.provinces} provinces, ${me.regiments} regiments, ${me.treasury} crowns`);
     }
     // at war and no mandate running: Auto-conquer from the Military ledger
-    if (s.enemies.length && !s.auto) {
+    const autoConquer = async () => {
+      const w = await page.evaluate(() => {
+        const a = (window as Cnf).cnf;
+        const st = a.sim.state;
+        const me = a.player;
+        const enemies = Object.values(st.wars as Record<string, { attackers: string[]; defenders: string[] }>).flatMap((x) => (x.attackers.includes(me) ? x.defenders : x.defenders.includes(me) ? x.attackers : []));
+        const auto = Object.values(st.operations ?? {}).some((o: any) => o.nation === me && o.kind === 'war' && o.status !== 'complete');
+        return { tick: st.tick, enemies: [...new Set(enemies)], auto };
+      });
+      if (!w.enemies.length || w.auto) return;
       await page.keyboard.press('KeyM');
       const act = page.locator('[data-fk="ac-activate"]');
       if (await act.count()) {
         await act.first().click();
         autoPresses++;
-        log.push(`wk ${s.tick}: Auto-conquer against ${s.enemies.join(', ')}`);
+        log.push(`wk ${w.tick}: Auto-conquer against ${w.enemies.join(', ')}`);
       }
       await page.keyboard.press('Escape');
-    }
+    };
+    await autoConquer();
     // decisions a plain player makes
     const d = await page.evaluate(
-      ({ warsSoFar }) => {
+      ({ warsSoFar, yearly }) => {
         const a = (window as Cnf).cnf;
         const sim = a.sim;
         const st = sim.state;
@@ -139,10 +156,19 @@ async function main(): Promise<void> {
             const o = st.provinces[q].owner as string | null;
             if (o && o !== me) near.set(o, [...(near.get(o) ?? []), q]);
           }
-          // a neighbour whose army ours outnumbers by half, weakest first
+          // a neighbour whose army ours outnumbers by half, with the allies and guarantors the
+          // declaration screen says may join it, weakest first
           const regs = (nid: string) => Object.values(st.armies).filter((x: any) => x.nation === nid).reduce((t: number, x: any) => t + x.regiments.length, 0);
+          const partners = (nid: string, type: string) => (st.treaties as Array<{ type: string; a: string; b: string }>).filter((t) => t.type === type && (t.a === nid || t.b === nid)).map((t) => (t.a === nid ? t.b : t.a));
+          const bound = (nid: string) => partners(me, 'alliance').includes(nid) || partners(me, 'nap').includes(nid);
+          const side = (t: string) => {
+            const helpers = new Set([...partners(t, 'alliance'), ...(st.guarantees as Array<{ by: string; of: string }>).filter((g) => g.of === t).map((g) => g.by)]);
+            let n = regs(t);
+            for (const h of helpers) if (h !== me && !bound(h)) n += regs(h);
+            return n;
+          };
           const ours = regs(me);
-          const weak = [...near.keys()].filter((t) => regs(t) * 1.5 <= ours).sort((x, y) => regs(x) - regs(y) || (x < y ? -1 : 1));
+          const weak = [...near.keys()].filter((t) => side(t) * 1.5 <= ours).sort((x, y) => side(x) - side(y) || (x < y ? -1 : 1));
           for (const t of weak) {
             const goal = { type: 'conquest', provinces: [...new Set(near.get(t))].slice(0, 2) };
             const res = a.do({ type: 'declareWar', nation: me, target: t, goal }, true);
@@ -154,18 +180,20 @@ async function main(): Promise<void> {
             }
           }
         }
-        if (st.tick % 52 < 26 && st.nations[me].treasury > 150 && st.nations[me].capital) {
+        if (yearly && st.nations[me].treasury > 150 && st.nations[me].capital) {
           const res = a.do({ type: 'orderProduction', nation: me, kind: 'regiment', unit: 'infantry', places: [st.nations[me].capital], count: 4, mode: 'total' }, true);
           if (res.ok) order++;
         }
         return { out, war, order, ans };
       },
-      { warsSoFar: wars },
+      { warsSoFar: wars, yearly },
     );
     wars += d.war;
     orders += d.order;
     answered += d.ans;
     log.push(...d.out);
+    // a war just declared: the mandate at once, as a player would
+    if (d.war) await autoConquer();
     // half-way: export to a file and carry on from the imported copy
     if (!imported && s.tick >= Math.min((YEARS * 52) / 2, 4 * 52)) {
       const path = await exportSave(page, 'campaign-half.json');
@@ -182,10 +210,15 @@ async function main(): Promise<void> {
     const run = await page.evaluate(async (target) => {
       const a = (window as Cnf).cnf;
       const out: number[] = [];
+      const st = a.sim.state;
+      const me = a.player;
+      // a new war on us stops the clock, as the game's war pause would, so the player can answer it
+      const foes = () => Object.values(st.wars as Record<string, { attackers: string[]; defenders: string[] }>).filter((x) => x.attackers.includes(me) || x.defenders.includes(me)).length;
+      const wars0 = foes();
       a.setSpeed(4);
       let last = performance.now();
       const until = last + 60000;
-      while (a.sim.state.tick < target && !a.sim.state.result && performance.now() < until) {
+      while (a.sim.state.tick < target && !a.sim.state.result && performance.now() < until && foes() <= wars0) {
         await new Promise((res) => requestAnimationFrame(res));
         const now = performance.now();
         out.push(now - last);
@@ -194,7 +227,7 @@ async function main(): Promise<void> {
       }
       a.setSpeed(0);
       return out;
-    }, s.tick + 26);
+    }, Math.floor(s.tick / 26) * 26 + 26);
     frames.push(...run);
   }
   const end = await page.evaluate(() => {

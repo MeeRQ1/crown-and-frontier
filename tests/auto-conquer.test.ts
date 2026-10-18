@@ -157,6 +157,29 @@ describe('Simple Auto-conquer', () => {
     expect(Object.keys(sim.state.wars)).toHaveLength(0);
   });
 
+  it('a finished mandate takes no new forces, and the next war\'s mandate takes the forces of the finished one', () => {
+    const sim = gridGame();
+    const war = declareWar(sim, 'a', 'b', { type: 'conquest', provinces: ['g20'] });
+    const veteran = addArmy(sim, 'a', 'g10', { infantry: 6 });
+    const first = auto(sim, ['b']);
+    weeks(sim, 2);
+    endWar(sim, war.id, 'white');
+    weeks(sim, 1);
+    expect(first.status).toBe('complete');
+    // raised after the peace: it stays under direct command
+    const recruit = addArmy(sim, 'a', 'g01', { infantry: 3 });
+    weeks(sim, 2);
+    expect(sim.state.armies[recruit.id].op ?? null).toBeNull();
+    expect(sim.state.armies[veteran.id].op).toBe(first.id);
+    // a new war: one order again, and every army serves in it
+    declareWar(sim, 'a', 'c', { type: 'conquest', provinces: ['g50'] });
+    const next = auto(sim, ['c']);
+    expect(opForces(sim, next.id).armies.map((a) => a.id).sort()).toEqual([veteran.id, recruit.id].sort());
+    expect(opForces(sim, first.id).armies).toHaveLength(0);
+    weeks(sim, 2);
+    expect(checkInvariants(sim)).toEqual([]);
+  });
+
   it('concentrating on one enemy changes what it goes for first', () => {
     const pick = (focus: string | null) => {
       const sim = gridGame();
