@@ -1042,6 +1042,10 @@ export interface Operation extends OperationSettings {
   enemies?: NationId[];
   /** Auto-conquer (format 9): the enemies' provinces when it began (for its progress) */
   startLand?: number;
+  /** a landing Auto-conquer organised (format 9): the mandate its forces return to when it is done */
+  parent?: string | null;
+  /** Auto-conquer (format 9): no new landing before this tick (one failed) */
+  landingWait?: number;
 }
 
 export interface GameState {

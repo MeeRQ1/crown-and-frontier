@@ -23,7 +23,9 @@ import { applyCommand } from '../commands';
 import { armyStrength } from '../military';
 import { armiesOf, atWar, enemiesOf, isFriendly, menOf, nationName, notify, provName, type Sim } from '../state';
 import type { AirWing, Army, Command, CommandResult, Fleet, NationId, Operation, OperationKind, OperationSettings, OpPosture, OpStrategy, ProvinceId, RealmCommand, ZoneId } from '../types';
-import { reachFrom } from '../ai/common';
+import { projectedThreat, reachFrom } from '../ai/common';
+import { fleetCapacity, pathToCoast, portsOf } from '../naval';
+import { SHIPS } from '../config';
 import { areaTargets, planGround, recordFailures, restingPlace, type GroundOutcome, type GroundPolicy, type GroundTarget } from './ground';
 import { planForces } from './forces';
 
@@ -673,6 +675,89 @@ function refreshWar(sim: Sim, op: Operation): string | null {
   return null;
 }
 
+/** Regiments a landing Auto-conquer organises carries at the least. */
+const AUTO_LANDING_MIN = 4;
+
+/**
+ * Auto-conquer's sea crossings: when the enemies' land left to take lies overseas
+ * (none of our armies can reach it by land, or almost all that can is taken) and the
+ * mandate has transports, it organises a landing under the ordinary landing rules:
+ * the least defended beach with a sea route from a port of ours, the transports with
+ * the warships to escort them, and the armies nearest the port that fit aboard.
+ * One at a time; the forces return to the mandate when it is done.
+ */
+function autoLanding(sim: Sim, war: Operation, f: OpForces): void {
+  const st = sim.state;
+  const nid = war.nation;
+  if (Object.values(st.operations).some((o) => o.parent === war.id)) return;
+  if (war.landingWait && st.tick < war.landingWait) return;
+  const armies = f.armies.filter((a) => !a.opHold && !a.battle && !a.embarked && !a.retreating && a.regiments.some((r) => r.type !== 'airborne'));
+  if (!armies.length) return;
+  const enemyHeld = war.area.filter((p) => {
+    const c = st.provinces[p].controller;
+    return c && atWar(sim, nid, c);
+  });
+  const reach = armies.map((a) => reachFrom(sim, nid, a.location));
+  const byLand = enemyHeld.filter((p) => reach.some((r) => r.dist[p] !== undefined));
+  const overseas = enemyHeld.filter((p) => !byLand.includes(p) && (sim.world.provZones[p] ?? []).length);
+  if (!overseas.length || byLand.length > 2) return;
+  const lift = f.fleets.filter((x) => !x.opHold && !x.cargo.length && fleetCapacity(x) >= AUTO_LANDING_MIN).sort((a, b) => fleetCapacity(b) - fleetCapacity(a) || (a.id < b.id ? -1 : 1));
+  if (!lift.length) {
+    raiseIssue(sim, war, 'auto-landing', `${provName(sim, overseas[0])}${overseas.length > 1 ? ` and ${overseas.length - 1} more` : ''} lie overseas: Auto-conquer needs a fleet with transports (2 regiments each, at least ${AUTO_LANDING_MIN / 2}) to land there. Build or assign transports.`);
+    return;
+  }
+  clearIssue(war, 'auto-landing');
+  const carrier = lift[0];
+  // the beach: overseas enemy coast with a sea route from one of our ports, the weakest held first, then the nearest
+  const ports = portsOf(sim, nid).filter((p) => st.provinces[p].controller === nid);
+  let best: { beach: ProvinceId; port: ProvinceId; score: number } | null = null;
+  for (const b of overseas) {
+    const held = projectedThreat(sim, nid, b, 0.7);
+    for (const port of ports) {
+      const route = (sim.world.provZones[port] ?? []).map((z) => pathToCoast(sim, z, b)).filter((x): x is string[] => !!x).sort((x, y) => x.length - y.length)[0];
+      if (!route) continue;
+      const score = held * 3 + route.length;
+      if (!best || score < best.score || (score === best.score && b < best.beach)) best = { beach: b, port, score };
+    }
+  }
+  if (!best) {
+    raiseIssue(sim, war, 'auto-landing', `No port of ours has a sea route to the enemy land overseas (${provName(sim, overseas[0])}).`);
+    return;
+  }
+  // the landing force: armies nearest the port that fit aboard, the strongest first
+  const cap = fleetCapacity(carrier);
+  const r = reachFrom(sim, nid, best.port);
+  const cands = armies
+    .filter((a) => r.dist[a.location] !== undefined || a.location === best!.port)
+    .sort((x, y) => (r.dist[x.location] ?? 0) - (r.dist[y.location] ?? 0) || y.regiments.length - x.regiments.length || (x.id < y.id ? -1 : 1));
+  const force: Army[] = [];
+  let regs = 0;
+  for (const a of cands) if (regs + a.regiments.length <= cap) (force.push(a), (regs += a.regiments.length));
+  if (regs < AUTO_LANDING_MIN) return;
+  const escorts = f.fleets.filter((x) => x.id !== carrier.id && !x.opHold && !x.cargo.length && x.ships.some((s) => SHIPS[s.type].gun > 0)).slice(0, 1);
+  const area = [best.beach, ...overseas.filter((p) => p !== best!.beach && (sim.world.hop(p, best!.beach) ?? 9) <= 3)].slice(0, 12);
+  const sub = createOperation(sim, nid, 'landing', area, [], { posture: war.posture, reserve: 0, airborne: 'off', onComplete: 'hold', rebase: war.rebase }, [carrier.id, ...escorts.map((x) => x.id), ...force.map((a) => a.id)], `Landing at ${provName(sim, best.beach)}`.slice(0, 40), true);
+  sub.parent = war.id;
+  opLog(sim, war, `The enemy land left lies overseas: a landing at ${provName(sim, best.beach)} is organised with ${force.map((a) => a.name).join(', ')} (${regs} regiments), ${carrier.name}${escorts.length ? ` and ${escorts[0].name}` : ''}.`);
+}
+
+/** Landings Auto-conquer organised: done, their forces return; stuck for six weeks, called off (and none for eight weeks). */
+function reclaimLandings(sim: Sim, war: Operation): void {
+  const st = sim.state;
+  for (const sub of Object.values(st.operations).filter((o) => o.parent === war.id)) {
+    const stuck = sub.issue && st.tick - sub.issue.since >= 6 && sub.landing?.stage !== 'ashore';
+    if (sub.status !== 'complete' && !stuck) continue;
+    const g = opForces(sim, sub.id);
+    const ids = [...g.armies, ...g.fleets, ...g.wings].filter((u) => !u.opHold).map((u) => u.id);
+    if (stuck) {
+      war.landingWait = st.tick + 8;
+      opLog(sim, war, `${sub.name} called off: ${sub.issue!.text}`, 'bad');
+    } else opLog(sim, war, `${sub.name} done: its forces return to the mandate.`, 'good');
+    cancelOperation(sim, sub);
+    assignUnits(sim, war, ids);
+  }
+}
+
 export function groundPolicy(op: Operation): GroundPolicy {
   const p = POLICY[op.posture];
   const live = op.detached.length;
@@ -859,6 +944,11 @@ export function planOperation(sim: Sim, op: Operation): void {
     autoAssign(sim, op);
     const now = opForces(sim, op.id);
     if (now.armies.length + now.fleets.length + now.wings.length !== before) Object.assign(f, now);
+  }
+  if (op.kind === 'war' && op.status === 'active') {
+    reclaimLandings(sim, op);
+    autoLanding(sim, op, f);
+    Object.assign(f, opForces(sim, op.id));
   }
   resumeIdle(sim, op, f);
   const fresh = recordFailures(sim, op.nation, { assigned: op.assigned, failures: op.failures, reorganized: op.reorganized }, Math.max(op.since, st.tick - 2), new Set(op.area));

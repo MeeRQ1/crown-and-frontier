@@ -160,6 +160,15 @@ export function warStatus(app: App, op: Operation): HTMLElement[] {
       row('Airborne drops', op.airborne === 'off' ? 'not allowed' : op.airborne === 'once' ? 'one drop allowed' : 'allowed'),
     ),
   );
+  // landings it organised (their own operations, under the ordinary landing rules)
+  const subs = Object.values(st.operations).filter((o) => o.parent === op.id);
+  if (subs.length)
+    out.push(
+      section(
+        'Landings it organised',
+        ...subs.map((s) => h('div', { class: 'kv' }, h('span', { class: 'k' }, h('button', { class: 'linklike', type: 'button', 'data-fk': `ac-sub-${s.id}`, onclick: () => app.selectOp(s.id) }, s.name)), h('span', { class: 'v small' }, s.landing?.stage === 'ashore' ? 'ashore, taking the area' : s.landing?.stage === 'sail' ? 'at sea' : 'gathering at the port'))),
+      ),
+    );
   // what stands in the way (the planner's own reasons, grouped)
   const waits = Object.entries(op.tasks)
     .filter(([id, t]) => unitRef(sim, id) && ['wait', 'stage', 'recover'].includes(t.kind))

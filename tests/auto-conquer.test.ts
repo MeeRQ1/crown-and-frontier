@@ -159,3 +159,49 @@ describe('Simple Auto-conquer', () => {
     expect(JSON.stringify(back.state)).toBe(JSON.stringify(sim.state));
   });
 });
+
+describe('Auto-conquer across the sea', () => {
+  it('enemy land overseas: a landing is organised under the ordinary rules, and its forces come back when it is done', async () => {
+    const { createGame } = await import('../src/sim/game');
+    const { createFleet, newShip, touchFleets } = await import('../src/sim/naval');
+    const sim = createGame({ scenario: 'test-longsea', seed: 3, playerNation: 'a' });
+    sim.state.armies = {};
+    sim.state.fleets = {};
+    for (const n of Object.values(sim.state.nations)) {
+      n.treasury = 5000;
+      n.materiel = 3000;
+    }
+    declareWar(sim, 'a', 'b', { type: 'conquest', provinces: ['q5'] });
+    const army = addArmy(sim, 'a', 'p0', { infantry: 6 });
+    const lift = createFleet(sim, 'a', 'z0', ['transport', 'transport', 'transport', 'cruiser'].map((t) => newShip(sim, t as never)), 'p0');
+    touchFleets(sim);
+    const op = auto(sim, ['b']);
+    weeks(sim, 1);
+    const sub = Object.values(sim.state.operations).find((o) => o.parent === op.id);
+    expect(sub?.kind).toBe('landing');
+    expect(sub?.area[0]).toBe('q5');
+    expect(sim.state.armies[army.id].op).toBe(sub!.id);
+    expect(sim.state.fleets[lift.id].op).toBe(sub!.id);
+    expect(op.log.some((l) => /lies overseas: a landing at Q5 is organised/.test(l.text))).toBe(true);
+    for (let w = 0; w < 30 && sim.state.provinces.q5.controller !== 'a'; w++) weeks(sim, 1);
+    expect(sim.state.provinces.q5.controller).toBe('a');
+    weeks(sim, 2);
+    // done: the landing is gone and its forces serve the mandate again
+    expect(Object.values(sim.state.operations).some((o) => o.parent === op.id)).toBe(false);
+    expect(sim.state.armies[army.id]?.op).toBe(op.id);
+    expect(checkInvariants(sim)).toEqual([]);
+  });
+
+  it('no transports: the mandate says what is missing instead of pretending', async () => {
+    const { createGame } = await import('../src/sim/game');
+    const sim = createGame({ scenario: 'test-longsea', seed: 3, playerNation: 'a' });
+    sim.state.armies = {};
+    sim.state.fleets = {};
+    declareWar(sim, 'a', 'b', { type: 'conquest', provinces: ['q5'] });
+    addArmy(sim, 'a', 'p0', { infantry: 6 });
+    const op = auto(sim, ['b']);
+    weeks(sim, 1);
+    expect(Object.values(sim.state.operations).some((o) => o.parent === op.id)).toBe(false);
+    expect(op.issue?.text).toMatch(/Q5 lie overseas: Auto-conquer needs a fleet with transports/);
+  });
+});
