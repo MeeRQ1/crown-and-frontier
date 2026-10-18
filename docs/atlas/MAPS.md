@@ -21,14 +21,170 @@ scenario file records them.
 | The Kharan Steppe | original (generated) | 263 | 11 | 23 | 37 | 19 | 0 | 41 |
 | Aldmere | original | 298 | 14 | 34 | 42 | 30 | 15 | 65 |
 | The Middle Sea | original (generated) | 548 | 16 | 42 | 74 | 38 | 0 | 42 |
-| **Europe, 1914** | historical (Natural Earth) | **686** | **23** | 0 | 232 | 78 | 12 | 91 |
+| **Europe, 1914** | historical (Natural Earth) | **959** (686 before revision 2) | **23** | 0 | 232 | 97 (78) | 13 (12) | 102 (91) |
 | **Hesperia, 1890** | original (authored) | **754** | **22** | 35 | 93 | 53 | 5 | 184 |
-| **The World, 1914** | historical (Natural Earth) | **1,225** | **57** | 0 | 388 | 165 | 32 | 84 |
-| **Europe, 1936** | historical (Natural Earth) | **689** | **32** | 0 | 249 | 78 | 11 | 98 |
-| **The World, 1936** | historical (Natural Earth) | **1,231** | **69** | 0 | 397 | 167 | 33 | 83 |
+| **The World, 1914** | historical (Natural Earth) | **1,594** (1,225) | **57** | 0 | 473 (388) | 185 (165) | 33 (32) | 94 (84) |
+| **Europe, 1936** | historical (Natural Earth) | **967** (689) | **32** | 0 | 249 | 98 (78) | 13 (11) | 107 (98) |
+| **The World, 1936** | historical (Natural Earth) | **1,600** (1,231) | **69** | 0 | 481 (397) | 186 (167) | 34 (33) | 91 (83) |
+
+The four historical maps were redrawn with more provinces in format 9 (map revision 2);
+the figures in brackets are revision 1's. See [Revision 2](#revision-2-denser-historical-maps-format-9).
 
 The World is 2.2 times the size of the previous largest campaign (the Middle Sea, 548
 provinces) and has 3.6 times as many realms.
+
+## Revision 2: denser historical maps (format 9)
+
+The four historical campaigns (Europe and the World, 1914 and 1936) were redrawn with
+more provinces in the playability update (save format 9, map revision 2). Their realms,
+starting borders, capitals, treaties and claims are those of revision 1; what changed is
+how finely the land is divided, and where the towns are.
+
+### What was changed, and why these targets
+
+| | Revision 1 | Revision 2 |
+|---|---|---|
+| Europe, province size before a region's sparseness | 12,500 km² | 8,800 km² |
+| Europe, towns kept as provinces of their own | up to 120 of 150,000+, 90 km apart | up to 170 of 120,000+, 75 km apart |
+| The World, province size | 90,000 km² | 72,000 km², and Europe and the Mediterranean (34–66° N, 12° W–42° E) a further 0.75 |
+| The World, towns kept as provinces | up to 260 of 150,000+, 260 km apart | up to 340 of 150,000+, 220 km apart |
+
+The targets were about 40% more provinces on Europe and 30% on the World, with the
+World's extra detail mostly where its wars are fought. They were set against two limits:
+the World's week was already the heaviest in the game (120–170 ms on average before the
+redraw, against a budget of 166 ms at the fastest speed), and the World 1936 had to stay
+under the importer's limit, raised from 1,500 to 2,000 provinces. The measured cost is
+under [Performance after the redraw](#performance-after-the-redraw).
+
+| Map | Provinces | Sea zones | Straits | River borders | Regions | Borders | Points | Files |
+|---|---|---|---|---|---|---|---|---|
+| Europe, 1914 | 686 → **959** | 78 → 97 | 12 → 13 | 91 → 102 | 232 | 15,131 → 16,028 | 131,106 → 143,968 | 1.69 → 1.92 MB |
+| Europe, 1936 | 689 → **967** | 78 → 98 | 11 → 13 | 98 → 107 | 249 | 15,152 → 16,109 | 130,892 → 144,532 | 1.69 → 1.94 MB |
+| The World, 1914 | 1,225 → **1,594** | 165 → 185 | 32 → 33 | 84 → 94 | 388 → 473 | 31,244 → 32,518 | 232,962 → 247,550 | 3.34 → 3.65 MB |
+| The World, 1936 | 1,231 → **1,600** | 167 → 186 | 33 → 34 | 83 → 91 | 397 → 481 | 31,383 → 32,678 | 233,236 → 248,246 | 3.37 → 3.68 MB |
+
+Purposeful, not arbitrary, provinces:
+- **Towns.** More of the towns of the day are provinces of their own, so a front line
+  runs between named places, and a siege is of a city. Every capital is the same as in
+  revision 1.
+- **Coasts and ports.** Coastal provinces rise from 253 to 312 on Europe and 545 to 637 on
+  the World; provinces with a port at the start from 96 to 116 on Europe and 91 to 96 on
+  the World. Landings and blockades have more and smaller beaches to choose from.
+- **Chokepoints.** Every strait of revision 1 is kept, now between the redrawn provinces
+  on either side (the Dover Strait, the North Channel, Messina, the Bosporus, the Danish
+  belts, Gibraltar, Hormuz and the rest); Europe gains the Irbe Strait between Saaremaa
+  and Courland.
+- **Small states stay playable.** No realm loses provinces; the smallest (Montenegro,
+  Albania, Belgium, Luxembourg) gain one or two, and keep their two builders.
+
+### No wealth was duplicated
+
+A redraw that splits a province must not split its wealth into two copies. The generator
+(`tools/realmap.ts`, `conserve`) reads revision 1 and gives every realm exactly what it had:
+
+| Map | Development | Population (thousands) | Forts | Factories | Deposits | Regiments at the start |
+|---|---|---|---|---|---|---|
+| Europe, 1914 | 1,952 = 1,952 | 23,425 → 23,429 | 140 = 140 | 81 = 81 | 296 = 296 | 612 → 610 |
+| Europe, 1936 | 1,993 = 1,993 | 23,708 → 23,706 | 159 = 159 | 96 = 96 | 296 = 296 | 637 → 636 |
+| The World, 1914 | 2,447 = 2,447 | 28,694 → 28,730 | 169 = 169 | 117 = 117 | 529 = 529 | 761 → 762 |
+| The World, 1936 | 2,643 = 2,643 | 31,184 → 31,143 | 214 = 214 | 146 = 146 | 529 = 529 | 834 → 835 |
+
+- Development and population are spread over a realm's new provinces in proportion to
+  what the generator gave each (development by largest remainder, at least 1 a province;
+  population within rounding).
+- Forts and deposits are each placed on the new province nearest to where they stood, so
+  the same fortresses guard the same ground and the same land holds the same mines and
+  wells. Factories follow the starting rule, topped up to the realm's revision-1 count.
+- Starting armies are sized from development and population as on every map; they come
+  within two regiments of revision 1. Starting income is within 0.4%.
+- Each map's report (`reports/maps/*-map.md`, *Wealth kept from the previous revision*)
+  lists every realm before and after.
+
+**Per-province bonuses, not applied twice.** Splitting land also made it cheaper to grow,
+and gave it more builders. The cost of a step of development rises with the province's
+development, so the same land in smaller provinces developed for less; each province's
+first factory levels are the cheapest; and a realm had a builder for every ten provinces,
+however small. Measured with the same rules on both revisions (below), the AI's
+development grew about half as fast again on revision 2, and it built a fifth more
+factories.
+
+Revision 2 therefore records, for every province, how much land it holds in provinces of
+revision 1 (`land`: its realm's old province count over its new one; most are about 0.7).
+Development and factories are priced on that land: a step of development costs what it
+would on a province 1/land times as developed; a factory level costs what the same slice
+of industry cost on the undivided land, (2*n* + 1)/(2 × land) + ½ times the base for the
+*n*-th level (so a province holding 0.7 of the old land pays 21% more for its first
+factory than a whole one did, and the same in total for the same industry on the same
+land); and the terrain's development limit (beyond which a step costs 2.5 times more)
+comes at land times the development. Builders are counted on land held, one for every ten
+provinces' worth. Every realm starts with exactly the builders it had, and land taken in
+war brings the builders it is worth. Administration is reckoned the same way: a frontier's
+load and a realm's capacity to absorb it are on land, so conquering the same ground
+overextends a realm as much as before. So are the AI's rules of thumb that counted
+provinces (how many airfields to want, how small an industrial base to keep without coal,
+how many forts). The province card shows a province's land and its limit; the Industry
+ledger, the land a realm holds. Maps without `land` (all the others) are reckoned as
+before.
+
+### Room to build
+
+More provinces mean more places to build; the national limit follows the land held, so
+nothing is capped by an unchanged national total and nothing is doubled by drawing it finer.
+
+| Map | Builders (all realms) | Factory levels free | Port levels free (coasts) | Airfield levels free | Development below the limits |
+|---|---|---|---|---|---|
+| Europe, 1914 | 107 = 107 | 1,408 → 1,623 | 650 → 810 (253 → 312) | 1,372 → 1,918 | 3,558 → 4,162 |
+| Europe, 1936 | 118 = 118 | 1,415 → 1,636 | 647 → 819 (252 → 315) | 1,378 → 1,934 | 3,529 → 4,020 |
+| The World, 1914 | 216 = 216 | 1,998 → 2,155 | 1,508 → 1,780 (545 → 637) | 2,450 → 3,188 | 7,485 → 8,305 |
+| The World, 1936 | 237 = 237 | 2,092 → 2,264 | 1,501 → 1,763 (553 → 643) | 2,462 → 3,200 | 7,400 → 8,005 |
+
+- **Builders** (construction slots) are 2 for every realm and 1 more for every 10
+  provinces' worth of land held: France holds 85 provinces' worth in 121 provinces and has
+  the 10 builders it had. Every realm starts with exactly the builders it had on revision 1
+  (`tests/map-revisions.test.ts` checks all four maps).
+- **Places** to put them grow: factory levels by 8–16%, port levels by 17–27%, airfield
+  levels by 30–40%, and development at the normal price by 8–17%. A realm chooses among
+  more sites with the same builders and treasury.
+- **Shipyards** are slipways on ports (one per port level, up to 3 a province); more coast
+  and more port towns mean more ships can be laid down at once (126 port levels at the
+  start of Europe 1914 against 109). Production orders spread their units over every place
+  with room.
+- **Regiments** can be raised in any province held, integrated and in order; production
+  orders raise at most 10 a week in one province, and there are more provinces.
+- What limits building is money, iron and builders. The Industry ledger now lists the
+  realm's room to build, the land it holds and where its builders come from; the province
+  card shows each province's land and limits.
+
+### Old campaigns
+
+A save records its map's id, revision and checksum. Revision 1 of each map is kept with
+the game (`src/data/maps/legacy/*-r1.*.json`, byte-identical to `main` at 9be7367) and
+loaded only when a save made on it is opened:
+- the campaign continues on revision 1, registered as its own scenario (`europe-r1`), with
+  a notice that says so; nothing is moved to the new provinces and no progress is reset;
+- saved again, it records `europe-r1` and opens on revision 1 from then on;
+- new campaigns always start on revision 2; revision 1 is not offered;
+- without the retained revision (a build that dropped it), the save is refused with the
+  reason, never attached to the new provinces.
+
+`tests/map-revisions.test.ts` loads a real save made by the `main` build (format 8,
+Europe 1914, 26 weeks in), checks that every province, realm, army and treasury is as
+saved, and that it plays on identically whether saved and reloaded half-way or not.
+
+The editor and the importer validate against the same limits (`MAP_LIMITS`): 2,000
+provinces now, so an exported copy of the World 1936 can be edited and imported again.
+A province's `land` is part of the format (0.05–20, default 1); merging two provinces in
+the editor adds their land.
+
+### Abstractions
+
+- Provinces divide present-day first-level divisions and towns, as before; they are not
+  the historical districts of 1914 or 1936.
+- A province's development is a share of its realm's revision-1 development, not a
+  separate estimate; forts and deposits are placed by nearest location.
+- Ports are the generator's, by coast and town size; revision 2 has more port levels
+  (126 against 109 on Europe) because it has more coastal towns. Ports bring slipways
+  and basing, not income.
 
 ## Targets, set after profiling
 
@@ -385,9 +541,11 @@ the same conversion to a simulation scenario and to renderer geometry.
 - **Saves** record the map's id, revision and checksum. A save is never read under a
   different map. If its map has gone from the library, the copy embedded in the save is
   validated and used instead: a browser check removes the map, then loads the save.
-- **Limits** (`MAP_LIMITS`): 1,500 provinces, 64 realms, 600 regions, 60,000 borders,
-  600,000 points, 400 sea zones and 8 MB per file. The World uses 1,225 provinces, 57 realms,
-  388 regions, about 31,000 borders and 3.0 MB.
+- **Limits** (`MAP_LIMITS`): 2,000 provinces (1,500 before format 9), 96 realms, 600
+  regions, 60,000 borders, 600,000 points, 400 sea zones and 8 MB per file. The World 1936
+  uses 1,600 provinces, 69 realms, 481 regions, about 32,700 borders, 248,000 points and
+  3.7 MB. The editor and the importer check the same limits, so a copy of a redrawn World
+  can be edited, exported and imported again.
 - **Maps load lazily.** The built-in maps' geometry is fetched only when a campaign on that
   map starts, so the World's 3.0 MB does not slow the menu.
 

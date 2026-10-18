@@ -7,7 +7,7 @@
 // weeks are run twice: a whole week per frame, as the loop did before weeks were
 // sliced, and in slices at the fastest speed.
 //
-//   npm run build && npx tsx tools/bench-web.ts [--maps reach,aldmere,file.json] [--years 10] [--stress earth:1:280] [--out reports/perf/web.md]
+//   npm run build && npx tsx tools/bench-web.ts [--maps reach,aldmere,file.json] [--years 10] [--stress earth:1:280 or earth-r1:1:280] [--out reports/perf/web.md]
 //
 // Numbers from headless software rendering are not real-device numbers; they
 // are comparable between revisions on the same machine.
@@ -185,6 +185,33 @@ for (const m of maps) {
   log('');
   log(`Map modes while panning at medium zoom (draw ms, avg / p95): ${Object.entries(modes).map(([k, v]) => `${k} ${stats(v).avg} / ${stats(v).p95}`).join('; ')}.`);
 
+  // hit-testing: what is under the pointer, over a grid of screen points at far and medium zoom
+  const hits = await page.evaluate(async () => {
+    const a = window.cnf;
+    const r = a.renderer;
+    const cam = r.camera;
+    const out: Record<string, { provinceUs: number; unitsUs: number; found: number; points: number }> = {};
+    for (const [tier, px] of [['far', 30], ['medium', 90]] as const) {
+      const ids = a.sim.world.provIds;
+      const c = r.provinceCenter(ids[Math.floor(ids.length / 2)]);
+      cam.centerOn(c.x, c.y, cam.zoomForProvincePx(px), false);
+      a.mapDirty = true;
+      await new Promise((res) => requestAnimationFrame(res));
+      const pts: Array<[number, number]> = [];
+      for (let y = 8; y < 768; y += 16) for (let x = 8; x < 1366; x += 16) pts.push([x, y]);
+      let found = 0;
+      let t = performance.now();
+      for (let k = 0; k < 3; k++) for (const [x, y] of pts) if (r.provinceAt(x, y)) found++;
+      const provinceUs = ((performance.now() - t) * 1000) / (3 * pts.length);
+      t = performance.now();
+      for (let k = 0; k < 3; k++) for (const [x, y] of pts) r.armyAt(x, y) ?? r.fleetAt(x, y) ?? r.wingAt(x, y);
+      const unitsUs = ((performance.now() - t) * 1000) / (3 * pts.length);
+      out[tier] = { provinceUs: Math.round(provinceUs * 100) / 100, unitsUs: Math.round(unitsUs * 100) / 100, found: Math.round(found / 3), points: pts.length };
+    }
+    return out;
+  });
+  log(`Hit-testing per pointer position (µs; province / armies, fleets and wings): ${Object.entries(hits).map(([k, v]) => `${k} ${v.provinceUs} / ${v.unitsUs} (${v.found} of ${v.points} points on land)`).join('; ')}.`);
+
   // ledgers
   const ledgers = await page.evaluate(async () => {
     const a = window.cnf;
@@ -269,8 +296,13 @@ for (const m of maps) {
   log('');
   await page.close();
 }
-if (stress) {
-  const [scn, seedS, weekS] = stress.split(':');
+// several stress states, comma-separated: earth:1:280,earth-r1:1:280
+for (const spec of stress ? stress.split(',') : []) {
+  const [scn, seedS, weekS] = spec.split(':');
+  // an earlier revision of a built-in map (`earth-r1`): the page loads it from the save, as a player's would
+  const { ensureLegacyMap, parseLegacyId } = await import('../src/maps/legacy');
+  const legacy = parseLegacyId(scn);
+  if (legacy) await ensureLegacyMap(legacy[0], legacy[1]);
   const { createGame } = await import('../src/sim/game');
   const { step } = await import('../src/sim/tick');
   const { serialize } = await import('../src/sim/save');

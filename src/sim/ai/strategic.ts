@@ -10,7 +10,7 @@ import { TECH_LIST } from '../data/techs';
 import { activeProjects, buildProblem, buildSlots, projectCost } from '../construction';
 import { addMemory, claimsOn, coalitionAgainst, envoySlots, evaluateTreaty, fabricateProblem, memoriesOf, opinion, sharedThreat, treatyProblem } from '../diplomacy';
 import { envoyCost, factoryCount, grossIncome, materielCap, poolCap, reserveCap, resourcePlan, totalDev, tradeValue } from '../economy';
-import { memoWeek } from '../index';
+import { landHeld, memoWeek } from '../index';
 import { overextension } from '../integration';
 import { nationPotential, nationStrength } from '../military';
 import { nationMods } from '../modifiers';
@@ -263,12 +263,14 @@ function planConstruction(sim: Sim, nid: NationId): void {
     let forts = 0;
     for (const pid of ownedProvinces(sim, nid)) forts += st.provinces[pid].fort;
     const owned = ownedProvinces(sim, nid);
+    // rules of thumb by the land held, not the province count (a map drawn more finely has more, smaller provinces)
+    const land = landHeld(sim, nid);
     // the navy needs a port; aircraft need airfields (counting those being built)
     const building = (k: ProjectKind) => activeProjects(sim, nid).filter((q) => st.provinces[q].project?.kind === k).length;
     const ports = owned.filter((q) => st.provinces[q].port > 0).length + building('port');
     const coastShare = owned.filter((q) => sim.world.provZones[q]).length / Math.max(1, owned.length);
     const fields = owned.filter((q) => st.provinces[q].airfield > 0).length + building('airfield');
-    const wantFields = n.research.done.includes('aviation') ? Math.min(3, 1 + Math.floor(owned.length / 14)) : 0;
+    const wantFields = n.research.done.includes('aviation') ? Math.min(3, 1 + Math.floor(land / 14)) : 0;
     // anti-aircraft batteries where enemy aircraft fly over us, or could: factories, airfields, the capital
     const airDefence = n.research.done.includes('air_defence');
     let enemyStrike = 0;
@@ -309,7 +311,7 @@ function planConstruction(sim: Sim, nid: NationId): void {
           // a realm without coal still keeps a small industrial base
           const coalMargin = plan.produced.coal + 0.5 * n.lastMonth.resources.coal.imported - plan.need.coal - pendingFactories * C.industry.coalPerFactory;
           const fuelled = !n.shortages.includes('coal') && coalMargin >= C.industry.coalPerFactory * 1.2;
-          const smallBase = factoriesNow + pendingFactories < 2 + Math.floor(owned.length / 6);
+          const smallBase = factoriesNow + pendingFactories < 2 + Math.floor(land / 6);
           if (!fuelled && !smallBase) continue;
           const coal = fuelled ? 1 : C.industry.unpowered;
           // a realm with no industry at all makes no materiel: its first factory comes first
@@ -327,7 +329,7 @@ function planConstruction(sim: Sim, nid: NationId): void {
         }
         if (kind === 'charter') v = pr.integration < 60 ? (((60 - pr.integration) / 60) * (pr.dev + 2) * 0.6 / cost) * 100 * (n.ai.goal.victory === 'territorial' ? 1.3 : 1) : 0;
         if (kind === 'fort') {
-          if (!hostileBorder || forts >= 1 + (owned.length * p.fortLove) / 4 + (n.treasury > grossIncome(n.lastMonth) * 12 ? 2 : 0)) continue;
+          if (!hostileBorder || forts >= 1 + (land * p.fortLove) / 4 + (n.treasury > grossIncome(n.lastMonth) * 12 ? 2 : 0)) continue;
           const choke = def.neighbors.length <= 3 ? 1.5 : 1;
           const capital = n.capital === pid ? 1.5 : 1;
           v = ((p.fortLove * (pr.dev + 2) * choke * capital) / 5 / cost) * 100;

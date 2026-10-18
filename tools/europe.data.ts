@@ -1349,7 +1349,12 @@ export const CLAIMS_1914: NonNullable<RealMapDef['claims']> = [
 export function europeDef(): RealMapDef {
   return {
     id: 'europe',
-    revision: 1,
+    // 2 (format 9): denser provinces (8,800 km² instead of 12,500) and more cities as fixed provinces
+    revision: 2,
+    // every realm keeps revision 1's development, population, forts, factories and deposits over its new
+    // provinces; each province records the land it holds, on which development and factories
+    // are priced and builders counted
+    conserve: 'src/data/maps/legacy/europe-r1.scenario.json',
     startYear: 1914,
     campaignYears: { options: [20, 30, 40], default: 30 },
     nations: NATIONS,
@@ -1360,7 +1365,7 @@ export function europeDef(): RealMapDef {
     box: BOX,
     inCrop,
     km: 0.72,
-    provKm2: 12500,
+    provKm2: 8800,
     minIslandKm2: 1300,
     minLakeKm2: 900,
     regionalKm2: 60000,
@@ -1378,14 +1383,14 @@ export function europeDef(): RealMapDef {
     straitMaxKm: 140,
     treaties: TREATIES_1914,
     claims: CLAIMS_1914,
-    cities: { max: 120, minPop: 150000, spacingKm: 90 },
+    cities: { max: 170, minPop: 120000, spacingKm: 75 },
     depositHints: DEPOSIT_HINTS,
     climate: 'temperate',
     meta: {
       name: 'Europe, 1914',
       description:
         'Europe at the start of 1914, from Ireland to the Volga and from the North Cape to the Nile delta: the great powers, the Balkan kingdoms newly redrawn by the wars of 1912–13, and the Ottoman Empire on the straits. The alliances of 1914 are in force (the Triple Alliance, the Franco-Russian Alliance; the ententes as non-aggression pacts), and the claims of the time stand: Alsace-Lorraine, the Trentino and Trieste, Bosnia, Transylvania, Macedonia. Historical borders, approximated from present-day divisions; Egypt and Cyprus are held by Britain.',
-      blurb: 'A large historical campaign: about 700 provinces and 23 realms on the eve of the Great War.',
+      blurb: 'A large historical campaign: nearly a thousand provinces and 23 realms on the eve of the Great War.',
       size: 'large',
       difficulty: 'hard',
       style: 'Great-power alliances on crowded fronts',

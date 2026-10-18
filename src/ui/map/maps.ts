@@ -5,6 +5,8 @@
 import { BUILTIN_MAPS, builtinGeometry, builtinScenario, type BuiltinMapId } from '../../maps/builtin';
 import { drawnFromPackage } from '../../maps/convert';
 import type { MapPackage } from '../../maps/format';
+import { legacyGeometry } from '../../maps/legacy';
+import { mapScenarioPart } from '../../sim/world';
 import type { MapGeometry } from './geometry';
 
 type Loader = () => Promise<MapGeometry>;
@@ -29,7 +31,10 @@ export function registerPackageGeometry(pkg: MapPackage): void {
 export function loadGeometry(id: string): Promise<MapGeometry> {
   let p = loaded.get(id);
   if (!p) {
-    const l = LOADERS[id];
+    // an earlier revision of a built-in map, registered when a save made on it was opened
+    const kept = legacyGeometry(id);
+    const part = mapScenarioPart(id);
+    const l = LOADERS[id] ?? (kept && part ? async () => drawnFromPackage({ id, straits: part.straits, seaZones: part.seaZones, geometry: await kept() }) : undefined);
     if (!l) return Promise.reject(new Error(`No map geometry for scenario "${id}".`));
     p = l();
     loaded.set(id, p);

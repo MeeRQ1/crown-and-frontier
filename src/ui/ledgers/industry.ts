@@ -9,7 +9,7 @@
 // acceptance, cost and effect on our stock are shown before it is sent.
 
 import { C, RESOURCE_INFO } from '../../sim/config';
-import { activeProjects, buildSlots } from '../../sim/construction';
+import { activeProjects, buildCapacity } from '../../sim/construction';
 import { effectiveFactories, factoryCount, materielCap, provinceDeposit, resourcePlan, shortageEffect } from '../../sim/economy';
 import { checkCommand } from '../../sim/commands';
 import {
@@ -393,6 +393,7 @@ function industrySection(app: App, pid: NationId): HTMLElement {
     .filter((x): x is { p: string; d: NonNullable<ReturnType<typeof provinceDeposit>> } => !!x.d)
     .sort((a, b) => b.d.amount - a.d.amount || (a.p < b.p ? -1 : 1));
   const coalShort = n.shortages.includes('coal');
+  const cap = buildCapacity(sim, pid);
   return h(
     'section',
     { class: 'section industry' },
@@ -408,8 +409,14 @@ function industrySection(app: App, pid: NationId): HTMLElement {
         h('tr', null, h('td', null, 'Coal for factories'), h('td', { class: 'r' }, `${fmt(plan.factoryCoal, 1)} a month`)),
         h('tr', null, h('td', null, 'Materiel'), h('td', { class: 'r' }, `${fmt(n.materiel)} / ${fmt(mcap)} (+${fmt(l.materielIn, 1)} last month)`)),
         l.income['Manufactured goods'] ? h('tr', null, h('td', null, 'Surplus sold as goods'), h('td', { class: 'r' }, `${fmt(l.income['Manufactured goods'], 1)} crowns`)) : null,
-        h('tr', null, h('td', null, 'Builders'), h('td', { class: 'r' }, `${activeProjects(sim, pid).length} of ${buildSlots(sim, pid)} busy`)),
+        h('tr', null, h('td', null, 'Builders'), h('td', { class: 'r', title: `${cap.base} for every realm, 1 for every ${cap.per} provinces' worth of land held (${cap.land === cap.provinces ? cap.provinces : `${fmt(cap.land, 1)}, in ${cap.provinces} smaller provinces`})${cap.fromModifiers ? `, ${signed(cap.fromModifiers)} from research, focus and government` : ''}` }, `${activeProjects(sim, pid).length} of ${cap.slots} busy`)),
       ),
+    ),
+    h(
+      'p',
+      { class: 'small muted', 'data-sk': 'build-room' },
+      `Room to build: ${plural(cap.factoryRoom, 'factory level')}, ${plural(cap.portRoom, 'port level')} on ${plural(cap.coasts, 'coast')}, ${plural(cap.airfieldRoom, 'airfield level')} and ${plural(cap.devRoom, 'level')} of development below the terrain's limits, across ${plural(cap.provinces, 'province')}. ` +
+        `Builders: ${cap.base}, +${cap.fromProvinces} for the land held (1 per ${cap.per} provinces' worth${cap.land === cap.provinces ? '' : `; these ${cap.provinces} provinces hold ${fmt(cap.land, 1)} provinces' worth, as the map was redrawn more finely`})${cap.fromModifiers ? `, ${signed(cap.fromModifiers)} from research, focus and government` : ''}. What limits building is money, iron and builders, not places.`,
     ),
     h('p', { class: 'small muted' }, `Each factory makes ${C.industry.materielPerIC} materiel a month at full coal and integration (without coal, ${Math.round(C.industry.unpowered * 100)}%); workshops add a little everywhere. Materiel equips new regiments and replaces losses; a full stockpile's output is sold as manufactured goods. Build factories from a province card.`),
     h(

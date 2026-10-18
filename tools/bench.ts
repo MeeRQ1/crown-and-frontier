@@ -4,6 +4,7 @@
 // AI-only campaign.
 //
 //   npx tsx tools/bench.ts --scenario aldmere --seeds 1-2 --years 30 [--json out.json] [--label "before"]
+//   (an earlier revision of a built-in map by its own id, e.g. --scenario europe-r1)
 //
 // Run with nothing else busy on the machine; the report records the machine,
 // Node version and settings so numbers can be compared between revisions.
@@ -40,6 +41,12 @@ if (mapFile) {
   mapScenario = pkg.id;
 }
 const scenario = mapScenario ?? get('scenario', 'aldmere')!;
+// an earlier revision of a built-in map (`europe-r1`), to compare revisions under the same rules
+{
+  const { ensureLegacyMap, parseLegacyId } = await import('../src/maps/legacy');
+  const legacy = parseLegacyId(scenario);
+  if (legacy) await ensureLegacyMap(legacy[0], legacy[1]);
+}
 const [s0, s1] = get('seeds', '1-2')!.split('-').map(Number);
 const years = Number(get('years', '30'));
 const label = get('label', '')!;

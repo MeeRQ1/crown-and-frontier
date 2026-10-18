@@ -94,6 +94,13 @@ export interface ProvinceDef {
   factories?: number;
   /** port level at the start (coastal provinces only; format 3) */
   port?: number;
+  /**
+   * How much land the province holds, in provinces of the map's previous revision (a map
+   * redrawn with smaller provinces, format 9: its realm's old province count over its new
+   * one). Development and factories are priced, the terrain's limit reached and builders
+   * counted on it, so dividing land never makes it cheaper to grow (default 1).
+   */
+  land?: number;
 }
 
 /** A sea zone: the node fleets move between (map format 3). */

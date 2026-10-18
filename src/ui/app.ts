@@ -23,6 +23,7 @@ import { weeks } from './format';
 import { icon } from './icons';
 import type { MapGeometry } from './map/geometry';
 import { loadGeometry, registerPackageGeometry } from './map/maps';
+import { needsLegacyMap, prepareSaveMap } from '../maps/legacy';
 import { parseMapPackage, type MapCheck } from '../maps/validate';
 import { isBuiltinMap, registerMapScenario } from '../sim/world';
 import { MODES, type MapMode } from './map/modes';
@@ -1854,6 +1855,14 @@ export class App {
   }
 
   loadText(text: string): boolean {
+    // a campaign begun on an earlier revision of a built-in map: load that revision first
+    if (needsLegacyMap(text)) {
+      void prepareSaveMap(text).then(
+        () => this.loadText(text),
+        (e: Error) => (this.sim ? dialog(this, 'Cannot load this save', [h('p', null, `The map this campaign was made on could not be loaded: ${e.message}`)]) : this.showLoadError(e.message)),
+      );
+      return true;
+    }
     try {
       const { sim, notices, mapPackage } = readSave(text);
       if (mapPackage) registerPackageGeometry(mapPackage);

@@ -15,11 +15,14 @@
 // Airfield:    40 * (level+1) crowns + 3 iron, 12 weeks, max 2; needs Aviation (2 air wings per level)
 
 import { C, TERRAIN } from './config';
-import { ownedBy } from './index';
+import { landHeld, landOf, ownedBy } from './index';
 import { nationMods } from './modifiers';
 import { RAIL_STEP } from './supply';
 import { bump, notify, provName, type Sim } from './state';
 import type { NationId, ProjectKind, ProvinceId } from './types';
+
+// a province's land and a realm's (maps redrawn more finely; defined beside ownedBy)
+export { landHeld, landOf };
 
 export const PROJECT_LABELS: Record<ProjectKind, string> = {
   dev: 'Develop',
@@ -47,8 +50,50 @@ export function factoryMax(sim: Sim, pid: ProvinceId): number {
   return Math.min(C.construction.factoryMax, 1 + Math.floor(sim.state.provinces[pid].dev / 2));
 }
 
+/** One builder beyond the base for every `slotsPerProvinces` provinces' worth of land: the same land, the same builders, however finely it is drawn. */
 export function buildSlots(sim: Sim, nid: NationId): number {
-  return C.construction.slotsBase + Math.floor(ownedBy(sim, nid).length / C.construction.slotsPerProvinces) + nationMods(sim, nid).buildSlots;
+  return C.construction.slotsBase + Math.floor(landHeld(sim, nid) / C.construction.slotsPerProvinces + 1e-9) + nationMods(sim, nid).buildSlots;
+}
+
+/** A realm's room to build: its builders and where they come from, and the levels its provinces can still take. */
+export interface BuildCapacity {
+  slots: number;
+  base: number;
+  /** provinces' worth of land held per builder beyond the base */
+  per: number;
+  /** the land held, in provinces of the map's previous revision (= provinces on a map never redrawn) */
+  land: number;
+  fromProvinces: number;
+  fromModifiers: number;
+  provinces: number;
+  factoryRoom: number;
+  portRoom: number;
+  coasts: number;
+  airfieldRoom: number;
+  devRoom: number;
+}
+
+export function buildCapacity(sim: Sim, nid: NationId): BuildCapacity {
+  const own = ownedBy(sim, nid);
+  const st = sim.state;
+  const coastal = own.filter((p) => sim.world.provZones[p]);
+  const land = landHeld(sim, nid);
+  const fromProvinces = Math.floor(land / C.construction.slotsPerProvinces + 1e-9);
+  const fromModifiers = nationMods(sim, nid).buildSlots;
+  return {
+    slots: C.construction.slotsBase + fromProvinces + fromModifiers,
+    base: C.construction.slotsBase,
+    per: C.construction.slotsPerProvinces,
+    land,
+    fromProvinces,
+    fromModifiers,
+    provinces: own.length,
+    factoryRoom: own.reduce((a, p) => a + Math.max(0, factoryMax(sim, p) - st.provinces[p].factories), 0),
+    portRoom: coastal.reduce((a, p) => a + Math.max(0, C.construction.portMax - st.provinces[p].port), 0),
+    coasts: coastal.length,
+    airfieldRoom: own.reduce((a, p) => a + Math.max(0, C.construction.airfieldMax - st.provinces[p].airfield), 0),
+    devRoom: own.reduce((a, p) => a + Math.max(0, devLimit(sim, p) - st.provinces[p].dev), 0),
+  };
 }
 
 export function activeProjects(sim: Sim, nid: NationId): ProvinceId[] {
@@ -60,14 +105,18 @@ export function projectCost(sim: Sim, nid: NationId, pid: ProvinceId, kind: Proj
   const m = nationMods(sim, nid);
   const terr = TERRAIN[sim.world.prov[pid].terrain];
   switch (kind) {
-    case 'dev':
+    case 'dev': {
+      // on a map redrawn with smaller provinces, priced for the land as a whole: a province
+      // holding 0.7 of the old land develops as one 1/0.7 times as developed
+      const d = p.dev / landOf(sim, pid);
       return {
-        crowns: Math.round(C.construction.devBase * p.dev * (1 + p.dev / 5) * terr.devCost * Math.max(0.3, 1 + m.devCost) * (p.dev >= terr.devCap ? C.construction.devOvercapMul : 1)),
+        crowns: Math.round(C.construction.devBase * d * (1 + d / 5) * terr.devCost * Math.max(0.3, 1 + m.devCost) * (p.dev >= devLimit(sim, pid) ? C.construction.devOvercapMul : 1)),
         supplies: 0,
         iron: 0,
         manpower: 0,
         weeks: C.construction.devWeeks,
       };
+    }
     case 'infra':
       return {
         crowns: Math.round(C.construction.infraBase * (p.infra + 1) * (1 + p.infra / 2) * Math.max(0.3, 1 + m.infraCost)),
@@ -86,7 +135,9 @@ export function projectCost(sim: Sim, nid: NationId, pid: ProvinceId, kind: Proj
       };
     case 'factory':
       return {
-        crowns: Math.round(C.construction.factoryBase * (p.factories + 1) * Math.max(0.3, 1 + m.factoryCost)),
+        // the next level priced for the land as a whole: what the same slice of industry cost on the
+        // land before it was divided, ((2n + 1) / 2land + 1/2) × base; (n + 1) × base when land is 1
+        crowns: Math.round(C.construction.factoryBase * ((2 * p.factories + 1) / (2 * landOf(sim, pid)) + 0.5) * Math.max(0.3, 1 + m.factoryCost)),
         supplies: 0,
         iron: C.construction.factoryIron,
         manpower: 0,
@@ -114,6 +165,16 @@ export function projectCost(sim: Sim, nid: NationId, pid: ProvinceId, kind: Proj
 /** Soft cap from terrain; development beyond it costs 2.5x. */
 export function devCap(sim: Sim, pid: ProvinceId): number {
   return TERRAIN[sim.world.prov[pid].terrain].devCap;
+}
+
+/**
+ * The development beyond which a step costs `devOvercapMul` times more: the terrain's
+ * limit, for the land the province holds (one holding 0.7 of the old land reaches it at
+ * 0.7 of the development).
+ */
+export function devLimit(sim: Sim, pid: ProvinceId): number {
+  const land = landOf(sim, pid);
+  return land === 1 ? devCap(sim, pid) : Math.ceil(devCap(sim, pid) * land - 1e-9);
 }
 
 /** Absolute maximum development. */

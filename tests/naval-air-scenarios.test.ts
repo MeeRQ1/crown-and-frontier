@@ -549,12 +549,13 @@ describe('a prepared war across the sea: Albania on the World, 1914', () => {
     const sim = createGame({ scenario: 'earth', seed: 1, playerNation: null });
     expect(borders(sim, 'alb', 'ott')).toBe(false);
     const goal = goalOptions(sim, 'alb', 'ott').find((g) => g.type === 'conquest')!;
-    expect(goal.provinces).toEqual(['aydn', 'karesi']);
+    expect(goal.provinces).toEqual(['karesi', 'luleburgaz']);
     expect(declareWarProblem(sim, 'alb', 'ott', goal)).toBeNull();
     const r = warReach(sim, 'alb', 'ott');
     note('albania', { goal: goal.provinces, notes: r.notes, warnings: r.warnings });
     expect(r.overland).toBe(false);
     expect(r.seaZones).toBe(1);
+    expect(r.seaTo).toBe('karesi');
     expect(r.liftRegiments).toBe(2);
     expect(r.usable).toBe(true);
     expect(r.warnings.join(' ')).toMatch(/carry only 2 regiments/);
@@ -578,7 +579,7 @@ describe('a prepared war across the sea: Albania on the World, 1914', () => {
     const goal = goalOptions(sim, 'alb', 'ott').find((g) => g.type === 'conquest')!;
     expect(applyCommand(sim, { type: 'declareWar', nation: 'alb', target: 'ott', goal }).ok).toBe(true);
     expect(warReach(sim, 'alb', 'ott').liftRegiments).toBe(6);
-    expect(applyCommand(sim, { type: 'shipArmies', nation: 'alb', armies: [army.id], fleet: home.id, dest: 'aydn' }).ok).toBe(true);
+    expect(applyCommand(sim, { type: 'shipArmies', nation: 'alb', armies: [army.id], fleet: home.id, dest: 'karesi' }).ok).toBe(true);
     // at sea: in no province, out of every land phase
     expect(st.armies[army.id].embarked).toBe(home.id);
     const declaredAt = st.tick;
@@ -586,13 +587,13 @@ describe('a prepared war across the sea: Albania on the World, 1914', () => {
     const landed = st.armies[army.id];
     note('albania', { liftAfterTwoTransports: warReach(sim, 'alb', 'ott').liftRegiments, regimentsShipped: landed.regiments.length, weeksToLand: st.tick - declaredAt });
     expect(landed.embarked).toBeFalsy();
-    expect(landed.location).toBe('aydn');
+    expect(landed.location).toBe('karesi');
     // the fleet stays offshore; once the beach is taken it is a supply source by sea
-    for (let i = 0; i < 8 && st.provinces.aydn.controller !== 'alb'; i++) week(sim);
-    note('albania', { weeksToTakeAydin: st.tick - declaredAt, suppliedBySea: supplyConnected(sim, 'alb', 'aydn') });
-    expect(st.provinces.aydn.controller).toBe('alb');
-    expect(isBeachhead(sim, 'aydn')).toBe(true);
-    expect(supplyConnected(sim, 'alb', 'aydn')).toBe(true);
+    for (let i = 0; i < 8 && st.provinces.karesi.controller !== 'alb'; i++) week(sim);
+    note('albania', { weeksToTakeKaresi: st.tick - declaredAt, suppliedBySea: supplyConnected(sim, 'alb', 'karesi') });
+    expect(st.provinces.karesi.controller).toBe('alb');
+    expect(isBeachhead(sim, 'karesi')).toBe(true);
+    expect(supplyConnected(sim, 'alb', 'karesi')).toBe(true);
     expect(checkInvariants(sim)).toEqual([]);
   });
 });

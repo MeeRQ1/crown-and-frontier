@@ -7,6 +7,7 @@
 //   npx tsx tools/progression.ts [--scenario europe-1936] [--player ger] [--mode proxy|passive] [--years 8] [--seeds 1,2] [--difficulty normal] [--out file.json]
 
 import { writeFileSync } from 'node:fs';
+import { ensureLegacyMap, parseLegacyId } from '../src/maps/legacy';
 import { createGame } from '../src/sim/game';
 import { checkInvariants } from '../src/sim/invariants';
 import { menOf, type Sim } from '../src/sim/state';
@@ -25,10 +26,15 @@ const YEARS = Number(get('years', '8'));
 const SEEDS = get('seeds', '1,2').split(',').map(Number);
 const DIFF = get('difficulty', 'normal') as Difficulty;
 const OUT = get('out', '');
+// an earlier revision of a built-in map (`europe-r1`), for comparing revisions under the same rules
+const legacy = parseLegacyId(SCEN);
+if (legacy) await ensureLegacyMap(legacy[0], legacy[1]);
 
 interface Row {
   nid: NationId;
   provinces: number;
+  /** development held (comparable between revisions of a map; province counts are not) */
+  dev: number;
   conquered: number;
   income: number;
   factories: number;
@@ -47,6 +53,7 @@ function snapshot(sim: Sim, nid: NationId, core: Set<string>): Row {
   return {
     nid,
     provinces: own.length,
+    dev: own.reduce((s, p) => s + st.provinces[p].dev, 0),
     conquered: own.filter((p) => !core.has(`${nid}|${p}`)).length,
     income: Math.round(Object.values(n.lastMonth?.income ?? {}).reduce((a, b) => a + b, 0)),
     factories: own.reduce((s, p) => s + (st.provinces[p].factories ?? 0), 0),
@@ -80,7 +87,9 @@ function main(): void {
         const rows = majors.filter((n) => st.nations[n]).map((n) => snapshot(sim, n, core));
         const totalProv = sim.world.provIds.length;
         const top = [...rows].sort((a, b) => b.provinces - a.provinces);
-        samples.push({ week: w, year: +(w / 52).toFixed(1), rows, top3Share: +(top.slice(0, 3).reduce((s, r) => s + r.provinces, 0) / totalProv).toFixed(3) });
+        const totalDev = sim.world.provIds.reduce((s, p) => s + st.provinces[p].dev, 0);
+        const byDev = [...rows].sort((a, b) => b.dev - a.dev);
+        samples.push({ week: w, year: +(w / 52).toFixed(1), rows, top3Share: +(top.slice(0, 3).reduce((s, r) => s + r.provinces, 0) / totalProv).toFixed(3), totalDev, top3DevShare: +(byDev.slice(0, 3).reduce((s, r) => s + r.dev, 0) / totalDev).toFixed(3) });
       }
       for (const war of Object.values(st.wars)) {
         if (seenWars.has(war.id)) continue;

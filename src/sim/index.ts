@@ -97,6 +97,18 @@ export function ownedBy(sim: Sim, nid: NationId): readonly ProvinceId[] {
   return provIndex(sim).owned.get(nid) ?? NO_PROVS;
 }
 
+/** How much land a province holds, in provinces of its map's previous revision (1 on maps never redrawn; ProvinceDef.land). */
+export function landOf(sim: Sim, pid: ProvinceId): number {
+  return sim.world.prov[pid].land ?? 1;
+}
+
+/** The land a realm holds, in those provinces (to a tenth, so a redrawn realm counts exactly what it held). */
+export function landHeld(sim: Sim, nid: NationId): number {
+  let v = 0;
+  for (const p of ownedBy(sim, nid)) v += landOf(sim, p);
+  return Math.round(v * 10) / 10;
+}
+
 /** Provinces controlled by a realm, in world order (shared array: do not modify). */
 export function controlledBy(sim: Sim, nid: NationId): readonly ProvinceId[] {
   return provIndex(sim).controlled.get(nid) ?? NO_PROVS;

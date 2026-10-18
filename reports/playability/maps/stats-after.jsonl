@@ -1,0 +1,4 @@
+{"id":"europe","provinces":959,"owned":959,"realms":23,"seaZones":97,"dev":1952,"pop":23429,"factories":81,"ports":126,"forts":140,"deposits":296,"regiments":610,"income":2391,"reserve":16231657,"researchCostMul":0.82}
+{"id":"europe-1936","provinces":967,"owned":967,"realms":32,"seaZones":98,"dev":1993,"pop":23706,"factories":96,"ports":126,"forts":159,"deposits":296,"regiments":636,"income":2532,"reserve":18956438,"researchCostMul":0.43}
+{"id":"earth","provinces":1594,"owned":1594,"realms":57,"seaZones":185,"dev":2447,"pop":28730,"factories":117,"ports":131,"forts":169,"deposits":529,"regiments":762,"income":3033,"reserve":17784175,"researchCostMul":0.57}
+{"id":"earth-1936","provinces":1600,"owned":1600,"realms":69,"seaZones":186,"dev":2643,"pop":31143,"factories":146,"ports":166,"forts":214,"deposits":529,"regiments":835,"income":3384,"reserve":22348844,"researchCostMul":0.33}

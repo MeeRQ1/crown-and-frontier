@@ -7,7 +7,7 @@ import { airBalance, airControl } from '../../sim/air';
 import { C, RESOURCE_INFO, TERRAIN, UNITS, UNIT_TYPES } from '../../sim/config';
 import { checkCommand } from '../../sim/commands';
 import { averageFigures, battleReasons, forecastBattle } from '../../sim/combat';
-import { activeProjects, buildProblem, buildSlots, devCap, devMax, factoryMax, PROJECT_LABELS, projectCost, type ProjectCost } from '../../sim/construction';
+import { activeProjects, buildProblem, buildSlots, devLimit, devMax, factoryMax, landOf, PROJECT_LABELS, projectCost, type ProjectCost } from '../../sim/construction';
 import { fabricateCost, fabricateMonths, fabricateProblem } from '../../sim/diplomacy';
 import { integrationFactor, provinceCrowns, provinceDeposit, provinceSupplies } from '../../sim/economy';
 import { integrationRate, unrestTarget } from '../../sim/integration';
@@ -155,7 +155,13 @@ function provinceCard(app: App, pid: ProvinceId): HTMLElement[] {
       h(
         'div',
         { class: 'stat-grid', style: 'margin-top:10px' },
-        tile('Development', `${p.dev}`, `limit ${devCap(sim, pid)} · max ${devMax(sim, pid)}`, 'Development raises crowns, food, research and the factories a province can hold. Beyond the terrain limit it costs 2.5× more.'),
+        tile(
+          'Development',
+          `${p.dev}`,
+          `limit ${devLimit(sim, pid)} · max ${devMax(sim, pid)}`,
+          'Development raises crowns, food, research and the factories a province can hold. Beyond the terrain limit it costs 2.5× more.' +
+            (landOf(sim, pid) === 1 ? '' : ` This map was redrawn more finely: the province holds ${fmt(landOf(sim, pid), 2)} of an earlier province's land, so development and factories are priced, and the limit and builders reckoned, on that land.`),
+        ),
         tile('Crowns / mo', fmt(provinceCrowns(sim, pid), 1), `food ${fmt(provinceSupplies(sim, pid), 1)}`, 'What this province yields its owner each month, after integration, unrest and occupation.'),
         tile('Integration', `${Math.floor(p.integration)}`, `${signed(ir.rate, 1)}/mo`, 'Frontier integration (0–100): output, recruitment, development and supply all depend on it.'),
         tile('Unrest', `${Math.round(p.unrest)}`, `→ ${Math.round(unrestTarget(sim, pid).target)}`, 'Unrest drifts toward its target. At 60+ in raw frontier the province may revolt.'),

@@ -14,19 +14,20 @@
 // A realm beyond capacity is overextended: slower integration and more unrest.
 
 import { C } from './config';
-import { armiesIn, ownedBy } from './index';
+import { armiesIn, landHeld, landOf, ownedBy } from './index';
 import { nationMods } from './modifiers';
 import { chance } from './rng';
 import { clamp, months, notify, provName, type Sim } from './state';
 import type { NationId, ProvinceId } from './types';
 
+// both on land held (ProvinceDef.land): a map drawn more finely neither eases nor adds to the burden of the same frontier
 export function adminCapacity(sim: Sim, nid: NationId): number {
-  return C.integration.capacityBase + C.integration.capacityPerProvince * ownedBy(sim, nid).length + nationMods(sim, nid).adminCapacity;
+  return C.integration.capacityBase + C.integration.capacityPerProvince * landHeld(sim, nid) + nationMods(sim, nid).adminCapacity;
 }
 
 export function frontierLoad(sim: Sim, nid: NationId): number {
   let l = 0;
-  for (const pid of ownedBy(sim, nid)) l += 1 - sim.state.provinces[pid].integration / 100;
+  for (const pid of ownedBy(sim, nid)) l += (1 - sim.state.provinces[pid].integration / 100) * landOf(sim, pid);
   return l;
 }
 

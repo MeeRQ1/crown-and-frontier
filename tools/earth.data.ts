@@ -578,6 +578,8 @@ const sparseOf = (land: string, lat: number, lon: number): number => {
   else if (z === 'polar') s = Math.max(s * 2.5, 3);
   else if (z === 'boreal' && s < 1.5) s *= 1.6;
   else if (z === 'river') s = Math.min(s, 0.5);
+  // Europe and the Mediterranean, where most campaigns are fought, a third denser again
+  if (lat >= 34 && lat <= 66 && lon >= -12 && lon <= 42) s *= 0.75;
   return Math.min(s, 9);
 };
 
@@ -756,7 +758,12 @@ const TREATIES_WORLD: NonNullable<RealMapDef['treaties']> = [
 export function earthDef(): RealMapDef {
   return {
     id: 'earth',
-    revision: 1,
+    // 2 (format 9): denser provinces, most of all in Europe and around the Mediterranean
+    revision: 2,
+    // every realm keeps revision 1's development, population, forts, factories and deposits over its new
+    // provinces; each province records the land it holds, on which development and factories
+    // are priced and builders counted
+    conserve: 'src/data/maps/legacy/earth-r1.scenario.json',
     startYear: 1914,
     campaignYears: { options: [20, 30, 40], default: 30 },
     nations: NATIONS,
@@ -796,7 +803,7 @@ export function earthDef(): RealMapDef {
     straitMaxKm: 160,
     treaties: TREATIES_WORLD,
     claims: CLAIMS_1914.map((c) => ({ ...c, km: 260 })),
-    cities: { max: 260, minPop: 150000, spacingKm: 260 },
+    cities: { max: 340, minPop: 150000, spacingKm: 220 },
     depositHints: DEPOSIT_HINTS,
     climate: 'temperate',
     wrapOcean: true,
@@ -804,7 +811,7 @@ export function earthDef(): RealMapDef {
       name: 'The World, 1914',
       description:
         'The whole world at the start of 1914, from the Arctic to Cape Horn: the European great powers and their empires, the United States and Japan, China two years into its republic, and the independent kingdoms of Asia and Africa. The alliances of 1914 are in force, with the Anglo-Japanese Alliance and the dominions beside Britain, and the claims of the time stand. Historical borders, approximated from present-day divisions; colonies and protectorates are held by the powers that governed them, and realms too small for a province on this scale are drawn with a neighbour.',
-      blurb: 'A huge historical campaign: over a thousand provinces and 57 realms on the eve of the Great War.',
+      blurb: 'A huge historical campaign: about 1,600 provinces and 57 realms on the eve of the Great War.',
       size: 'huge',
       difficulty: 'hard',
       style: 'Empires across oceans; every front at once',
@@ -818,4 +825,5 @@ export function earthDef(): RealMapDef {
   };
 }
 
-export const PROV_KM2 = 90000;
+// 72,000 km² from revision 2 (format 9; 90,000 before)
+export const PROV_KM2 = 72000;

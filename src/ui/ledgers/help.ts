@@ -100,6 +100,8 @@ function articles(): Article[] {
         `Each realm keeps a reserve of ${pct(C.resources.keepShare)} of its stockpile cap before it sells; stock above the cap is lost.`,
         'Running short of a resource has a named effect: factories without coal run at 30%, armour without oil fights at reduced strength, guns without nitrates lack shells in war.',
         'Industry & Trade shows each good’s stock, reserved amounts, output, need and actual flows, and marks the bottleneck.',
+        `Builders: ${C.construction.slotsBase} for every realm and 1 more for every ${C.construction.slotsPerProvinces} provinces’ worth of land held (on the redrawn historical maps, provinces are smaller and count for less: the same land, the same builders), plus research, focus and government. Industry & Trade lists the room left to build: factory levels (up to ${C.construction.factoryMax} a province, by its development), port levels on the coasts, airfields and development below each terrain’s limit. Money, iron and builders limit building, not places.`,
+        'On the redrawn historical maps (Europe and the World, 1914 and 1936) provinces are smaller than before, and each records how much of the old land it holds (most about 0.7). A step of development and a factory level are priced for that land as a whole, and the terrain’s development limit comes as much sooner, so splitting land never makes it cheaper to grow. The province card shows the land and the limit that apply.',
       ],
       links: [['industry', 'Open Industry & Trade']],
     },
@@ -355,6 +357,7 @@ function articles(): Article[] {
       points: [
         'They do not sync across devices or sites, and private browsing or managed-device policies can erase them. Use Menu → Export to keep a copy, and Import to restore it.',
         'A save made on another map, or by an older version, is checked before loading: an older save is upgraded and told what changed; one that cannot be read is refused with the reason, never loaded under the wrong map.',
+        'Europe and the World (1914 and 1936) were redrawn with more provinces. A campaign begun before that continues on the map it was begun on, which is kept with the game; new campaigns use the new maps.',
         'Imports are data only: nothing in a save or a map file is ever run.',
       ],
     },
