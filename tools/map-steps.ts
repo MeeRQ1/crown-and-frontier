@@ -102,7 +102,7 @@ for (const id of maps) {
   const avg = (x: number[]) => [(x[0] / n).toFixed(2), (x[1] / n).toFixed(2)];
   const pct = (x: number[]) => `${x[1] >= x[0] ? '+' : ''}${Math.round((x[1] / x[0] - 1) * 100)}%`;
   const [h, w, s] = [avg(sum.hops), avg(sum.weeks), avg(sum.air)];
-  const name = now.world.scenario.name;
+  const name = now.world.scenario.name.replace(/(, \d{4})\1$/, '$1');
   lines.push(`| ${name} | ${n} | ${h[0]} → ${h[1]} (${pct(sum.hops)}) | ${w[0]} → ${w[1]} (${pct(sum.weeks)}) | ${s[0]} → ${s[1]} (${pct(sum.air)}) | ${ratios[Math.floor(ratios.length / 2)].toFixed(2)} |`);
   console.log(lines.at(-1));
 }

@@ -1,0 +1,8 @@
+{
+ "buildRoom": "Room to build: 204 factory levels, 108 port levels on 41 coasts, 242 airfield levels and 551 levels of development below the terrain's limits, across 121 provinces. Builders: 2, +8 for the land held (1 per 10 provinces' worth; these 121 provinces hold 85 provinces' worth, as the map was redrawn more finely). What limits building is money, iron and builders, not places.",
+ "oldSaveNotice": "This save was convertedThis save was made before Auto-conquer, production orders and the government (save format 8) and was converted to format 9. Every realm has the form of government of the scenario's date, a head of government and a small staff of commanders, none of them assigned; your forces, operations and shipyards are as they were: nothing has been ordered for you.This campaign was made on revision 1 of Europe, 1914, which has since been redrawn with more provinces. It continues on revision 1, kept with the game for campaigns begun on it; new campaigns use revision 2.Close",
+ "homeland": [
+  "Defending our land: enemy strength 24 in or near it against our 8. The armies hold Fenhold, take back our provinces where they can win, and press no offensive until the balance turns."
+ ],
+ "errors": []
+}

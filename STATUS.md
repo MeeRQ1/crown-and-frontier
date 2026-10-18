@@ -1,12 +1,79 @@
 # Status
 
-Last updated at the **Quality of Life and Operational Command update** (save format 8, map
-format 3). It follows the Military Control, Combined Warfare, National Scale and Adaptive AI
-update, the Naval, Air and Combined Warfare update, the performance update and the 1936 maps,
-and before them the Atlas & Strategy Refinement update and Stages A–F of the strategic depth
-expansion. This update is a draft pull request that has not been merged or published. The
-sections after this one are kept for their evidence; where a later change altered a fact, it is
-corrected in place.
+Last updated at the **Playability, Balance and Control Parity update** (save format 9, map
+revision 2 of Europe and the World). It follows the Quality of Life and Operational Command
+update, the Military Control, Combined Warfare, National Scale and Adaptive AI update, the
+Naval, Air and Combined Warfare update, the performance update and the 1936 maps, and before
+them the Atlas & Strategy Refinement update and Stages A–F of the strategic depth expansion.
+This update is a draft pull request that has not been merged or published. The sections after
+this one are kept for their evidence; where a later change altered a fact, it is corrected in
+place.
+
+## Playability, Balance and Control Parity update
+
+The brief asked for:
+- a diagnosis of the warfare complaints, the 40k concentration among them;
+- bulk production of ships, wings and regiments;
+- the same controls for land, sea and air;
+- a simple Auto-conquer;
+- AI progression and difficulty that make sense;
+- feedback, pacing and recovery;
+- a military overview;
+- ideologies, formable nations, leaders, commanders and a paid cabinet, with one modifier
+  accounting path;
+- denser 1914 and 1936 maps;
+- voluntary offensive coalitions;
+- verification of the complete experience.
+
+| Requirement | Status | What was built | Evidence |
+|---|---|---|---|
+| Diagnosis, 40k case | ✅ | Measured on `main`: fair rules, a planner that lost the battles it fought (wrong supply in forecasts, detachments into the enemy's march, the main body spent on empty land, the reserve idle, aircraft out of range) | [reports/playability/diagnosis.md](reports/playability/diagnosis.md) |
+| Combat fairness, delegation | ✅ | One planner for the player and the AI: supply-aware forecasts and placement, waves the target can feed, routes round enemy marches, commitment to an objective that still stands, detachments sized against loose field armies, rebasing aircraft | [results §1](reports/playability/results.md), [planner-seeds.md](reports/playability/planner-seeds.md) |
+| Bulk production | ✅ | Production orders for ships, wings and regiments over several places, previewed, paid as each unit starts, waiting for slipways, airfields and money; one notice per order | `tests/production.test.ts` (11); browser audit: 10 wings 13 → 6 inputs, 10 ships 12 → 6 with none to reorder |
+| Control parity | ✅ | One order for every selected army, fleet or wing, and every member that could not take it with the reason | browser audit: four fleets' patrol 12 → 3 inputs, six wings' move 18 → 3 |
+| Simple Auto-conquer | ✅ | One order against current enemies: every free force joins, our land defended first, landings overseas, ends at peace and hands its forces to the next war's mandate | `tests/auto-conquer.test.ts` (12); browser audit; the complete campaign |
+| AI progression, difficulty | 🟡 | Armies stood down after a war (dips, not a lower ceiling); each difficulty says what it changes; Normal recommended. AI armies still grow two- to threefold over six years on their budget, under the player's rules, within a tenth of `main`'s totals | [results §4](reports/playability/results.md) |
+| Feedback and pacing | ✅ | Battles say what decided them from the figures each side fought with; forecasts show who fights at once; marches through enemy troops warned; fewer toasts; two more pause choices | `tests/battle-reasons.test.ts` |
+| Military overview | ✅ | Land, sea and air by state at the top of the Military ledger; each count selects; one *Needs attention* list with the answering order | screenshot `reports/playability/after/military-overview.png` |
+| Government and leaders | ✅ | Five forms of government, heads of government, commanders, a trade minister within set limits, five formable nations (Austria-Hungary and four more), one modifier accounting path | `tests/government.test.ts` (12) |
+| Denser maps | ✅ | Europe 686/689 → 959/967 provinces, the World 1,225/1,231 → 1,594/1,600; the same wealth; land-weighted prices, builders, administration, steps; retained revision 1 for old campaigns | [docs/atlas/MAPS.md](docs/atlas/MAPS.md), `tests/map-revisions.test.ts` (8) |
+| Offensive coalitions | ✅ | Leagues of allies who explicitly agree to join each other's deliberate wars | `tests/leagues.test.ts` (7) |
+| Complete experience | ✅ | A 25-year campaign in the browser from the menu to the end screen, saved and loaded half-way and at the end | [results §6](reports/playability/results.md) |
+
+### Evidence
+
+| Kind | Result |
+|---|---|
+| Tests | 433 passing in 40 files (`npm test`); `npm run verify:web` 97 of 97 in headless Chromium (the site root, the project subpath, the unpacked release ZIP and an iframe). Its performance probe on Aldmere (map draw under 16 ms on average) is at this machine's noise: the branch measured 19.7 ms and then 16.0 ms, and `main`'s own build 18.7 ms in the same session, failing it |
+| 40k case, `main` → branch (revision 1, seeds 1–3) | Delegated, Poland alone: 10.0 → 12.0 of 31 provinces, German losses 20.6k → 7.8k, battles 16–8 → 16–2. With its allies: 5% → 24% of Poland, losses 35.5k → 10.2k. Auto-conquer (new): 34% alone (6.4k lost, battles 8–1), 17% with allies |
+| 100-regiment demonstration, delegated | `main` 12 provinces, 11.8k / 6.2k men lost, battles 1–7; branch 9 (revision 1, 5.6k / 2.1k, 1–3) and 18 (revision 2, 10.0k / 17.3k, 13–1); 29 inputs instead of 183–261 by hand |
+| Complete campaign | The Reach as Fenward, from the menu to the end screen through the real controls, 17.8 years until Aurel's economic victory. Saved and loaded half-way; the final save exported, loaded and checked, with no invariant failures and no page errors; frame p95 29 ms |
+| Performance | Simulation, ms a week, revision 1 → revision 2: Europe 1914 42.8 → 48.8, Europe 1936 59.5 → 83.9, the World 1914 134.6 → 156.7, the World 1936 162.6 → 193.5 (`main`: 43.0, 54.8, 149.8, 196.7). Frame p95 under 55 ms at the fastest speed on every map, in a world war too |
+| External players | **None.** No one but me has played this update. |
+
+### Known gaps
+
+- **Untested browsers and hardware.** Headless Chromium with software rendering only.
+- **AI armies still grow.** Every realm recruits to its budget, under the player's rules, and
+  stands down after a war; armies still double or triple over six years. Production orders let
+  the player keep pace without the old one-regiment-at-a-time work.
+- **Coalition wars on the denser maps are slow.** With Poland's allies in the war, on revision 2
+  the delegated conquest took 7% of Poland in 40 weeks on seeds 1–3, losing battles 3–11
+  (14% over six seeds, 11–15), and Auto-conquer took 10% (7–7). On revision 1 they took 24%
+  and 17%.
+- **More provinces, more sieges.** An army still takes at most one step a week and an
+  undefended province still takes two weeks to occupy, so a realm drawn in more provinces takes
+  longer to overrun; marches, supply and aircraft reach as far as before.
+- **A realm's `land` is its average.** Where a realm was divided unevenly, its smaller
+  provinces are a little wider than their land says (marching on the World 1936 is still about
+  a tenth slower than on revision 1).
+- **Sea zones count one step each.** They were redrawn less (78 → 97 on Europe) and are not
+  weighted.
+- **The complete campaign's player is a script.** Fenward's outcome measures the script, not
+  the game: it survived to the end, holding one of its seven provinces.
+- **The World 1914 on its denser map is the slowest case.** It simulates 27 weeks in the
+  first 6 seconds of the fastest speed, against 35 on `main`'s map; in a world war, 2.5 weeks
+  a second against 3.0 (headless Chromium, software rendering).
 
 ## Quality of Life and Operational Command update
 
@@ -185,8 +252,8 @@ batches, human-style play, screenshots and documentation, in one unmerged pull r
 | Diplomacy | ✅ | Economic dependence as a stated reason; trade ties in the briefing; Europe and the World start with the alliances, ententes and claims of 1914; diplomatic leadership counts trade only where goods move | unit tests (treaties at the start, influence); AI batches before and after the influence change |
 | Research and focus | ✅ | Plans with dependency connectors and an inspector; research cost on the generated maps calibrated to the hand-made maps' pace (40 months per technology at the start); national focus names of 1914 for the great powers | browser checks; a pace test on every map; AI batches (72–77% of the tree by the end of the 1914 maps) |
 | AI | 🟡 | The same contract commands as the player; armies without an objective sent to the war; guarantees only of a realm no stronger; diagnostics for idle armies, pointless wars and idle treasuries | 102 AI campaigns ([reports/ai/](reports/ai/)). Gap: invasions stay within eight sea zones of a port; on the new maps every campaign ends on score with the largest starting realm ahead |
-| Huge Earth, larger than the Middle Sea | ✅ | *The World, 1914*: 1,225 provinces, 57 realms, 388 regions, 165 sea zones (the Middle Sea has 548 provinces) | [docs/atlas/MAPS.md](docs/atlas/MAPS.md), `reports/maps/earth-map.md` |
-| Large Europe | ✅ | *Europe, 1914*: 686 provinces, 23 realms | `reports/maps/europe-map.md` |
+| Huge Earth, larger than the Middle Sea | ✅ | *The World, 1914*: 1,594 provinces (1,225 before map revision 2), 57 realms, 473 regions, 185 sea zones (the Middle Sea has 548 provinces) | [docs/atlas/MAPS.md](docs/atlas/MAPS.md), `reports/maps/earth-map.md` |
+| Large Europe | ✅ | *Europe, 1914*: 959 provinces (686 before map revision 2), 23 realms | `reports/maps/europe-map.md` |
 | Large original world | ✅ | *Hesperia, 1890*: 754 provinces, 22 realms, three unclaimed frontiers, authored geography | `reports/maps/hesperia-map.md` |
 | Framing, licensed geography, attribution, identities | ✅ | Natural Earth (public domain), pinned by SHA-256; borders of 1914 approximated and said to be; names and colours of the period, simplified arms; Hesperia wholly invented | MAPS.md, THIRD_PARTY_NOTICES.md, the credit in the library, setup and menu |
 | Map making: editor round trip, validation, documented format | ✅ | One package format for every map (now with optional treaties at the start); validator with codes and places; editor export → import → setup → play → save → reload, even with the map gone from the library | browser check *Map round trip*; MAPS.md (format, pipeline, authoring) |

@@ -173,7 +173,8 @@ function provinceCard(app: App, pid: ProvinceId): HTMLElement[] {
   body.appendChild(
     section(
       'Ground',
-      row('Terrain', `${terr.label}: march cost ${terr.move}, defenders +${Math.round(terr.defense * 100)}%, frontage ${terr.frontage}`),
+      // on a redrawn map a smaller province is a shorter step: its march cost counts the ground (stepLength)
+      row('Terrain', `${terr.label}: march cost ${landOf(sim, pid) === 1 ? terr.move : `${fmt(terr.move * Math.sqrt(landOf(sim, pid)), 1)} (a smaller province, a shorter step)`}, defenders +${Math.round(terr.defense * 100)}%, frontage ${terr.frontage}`),
       row('Railway · fort', `${p.infra}/${C.construction.infraMax} · ${p.fort}/${C.construction.fortMax}`),
       (() => {
         const res = sim.world.prov[pid].resource;

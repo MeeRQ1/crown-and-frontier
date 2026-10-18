@@ -105,8 +105,9 @@ and gave it more builders. The cost of a step of development rises with the prov
 development, so the same land in smaller provinces developed for less; each province's
 first factory levels are the cheapest; and a realm had a builder for every ten provinces,
 however small. Measured with the same rules on both revisions (below), the AI's
-development grew about half as fast again on revision 2, and it built a fifth more
-factories.
+development grew about half as fast again on revision 2; priced for land, the money went
+into factories instead (a fifth more on Europe 1914) until factories and builders were
+reckoned on land too.
 
 Revision 2 therefore records, for every province, how much land it holds in provinces of
 revision 1 (`land`: its realm's old province count over its new one; most are about 0.7).
@@ -155,6 +156,51 @@ nothing is capped by an unchanged national total and nothing is doubled by drawi
   realm's room to build, the land it holds and where its builders come from; the province
   card shows each province's land and limits.
 
+### Steps count the ground they cover
+
+Smaller provinces make shorter steps: between neighbouring provinces the centres are 17%
+closer on Europe (a median of 160 map units against 193). Counted in provinces, a march,
+a supply line, an aircraft's range and the distance from the capital would all have
+shrunk. A step between two provinces now counts the ground it covers, in steps of
+revision 1: the mean of the two provinces' widths, the square root of their `land`
+(`stepLength`). It applies to:
+- **movement points** (a step costs the terrain's points times its length);
+- **supply** (each step into a province costs its width);
+- **operational range**, a weighted search kept to a tenth of a step: aircraft,
+  transport aircraft, ferrying and carriers. A step to or from a sea zone still counts
+  one;
+- **integration**: the distance from the capital that slows it.
+
+Maps never redrawn count every step as one, exactly as before.
+
+Between capitals up to six provinces apart on revision 1, the same code on both revisions
+(`npx tsx tools/map-steps.ts`). The "counted in provinces" columns are its output on f36f6be,
+the commit before this change (`reports/playability/maps/steps-unweighted.md`); the ground
+columns, on this branch (`steps.md`):
+
+| Map | Provinces on the way, r1 → r2 | Infantry march, r1 | r2 counted in provinces | r2 counted in ground | Aircraft steps, r1 | r2 in provinces | r2 in ground |
+|---|---|---|---|---|---|---|---|
+| Europe, 1914 | 4.13 → 5.02 | 9.5 weeks | 11.6 (+22%) | 9.9 (+4%) | 3.89 | 4.76 (+22%) | 4.05 (+4%) |
+| Europe, 1936 | 4.38 → 5.35 | 10.0 | 12.0 (+20%) | 10.4 (+3%) | 4.06 | 4.94 (+22%) | 4.24 (+4%) |
+| The World, 1914 | 3.77 → 4.48 | 8.8 | 10.6 (+21%) | 9.3 (+5%) | 3.29 | 3.74 (+15%) | 3.39 (+3%) |
+| The World, 1936 | 4.05 → 5.19 | 9.0 | 11.3 (+28%) | 9.9 (+10%) | 3.59 | 4.14 (+18%) | 3.75 (+4%) |
+
+The march is an infantry army at one point a week with no modifiers, by the weekly rule, on
+the cheapest route whoever may pass. Supply reaches 95–98% of the land it reached (the
+median realm at the start).
+
+The remainder comes from `land` being a realm's average: where a realm was divided
+unevenly (most of the new detail is in Europe and the Mediterranean), its smaller
+provinces are a little wider than their land says. Supply reaches the same land as
+before, within 5% (`tests/map-revisions.test.ts`). An army still takes at most one
+step a week, and an undefended province still falls in two weeks: a realm drawn in
+more provinces takes more sieges to occupy, which is why the 40k scenario's conquest
+([`reports/playability/results.md`](../../reports/playability/results.md)) is counted as a
+share of Poland's land.
+
+The arrival time a march shows now follows the weekly rule exactly, carrying the points
+left after each step. On every map, it had shown 10 weeks for a 7-week march on roads.
+
 ### Old campaigns
 
 A save records its map's id, revision and checksum. Revision 1 of each map is kept with
@@ -175,6 +221,56 @@ The editor and the importer validate against the same limits (`MAP_LIMITS`): 2,0
 provinces now, so an exported copy of the World 1936 can be edited and imported again.
 A province's `land` is part of the format (0.05–20, default 1); merging two provinces in
 the editor adds their land.
+
+### Measured: AI growth on both revisions
+
+`tools/progression.ts`, eight years, seeds 1 and 2, the AI playing every realm (Germany
+included), the same code on both revisions (`reports/playability/maps/progression-*.json`;
+`… --scenario europe-r1 --player ger --mode proxy --years 8 --seeds 1,2`).
+
+| Map | Development growth, revision 1 | Revision 2 | Great powers' income at year 8 (r1 → r2) | Their factories (r1 → r2) | Top three realms' share of development (r1 → r2) | Wars begun (r1 → r2) |
+|---|---|---|---|---|---|---|
+| Europe, 1914 | +43% / +42% | +47% / +42% | 4947 / 4761 → 5304 / 5188 | 595 / 623 → 659 / 645 | 0.48 / 0.49 → 0.47 / 0.46 | 13 / 19 → 16 / 17 |
+| Europe, 1936 | +47% / +46% | +53% / +51% | 4150 / 4559 → 4376 / 4440 | 350 / 352 → 347 / 354 | 0.38 / 0.38 → 0.36 / 0.38 | 19 / 25 → 23 / 17 |
+| The World, 1914 | +76% / +73% | +84% / +82% | 6451 / 6272 → 6671 / 6313 | 641 / 689 → 568 / 568 | 0.36 / 0.35 → 0.35 / 0.35 | 31 / 31 → 29 / 28 |
+
+Before development, factories and builders were reckoned on land
+(`progression-*-unscaled.json`, measured with the code of that time), revision 2 grew
++70%/+66% on Europe 1914, +77%/+79% on Europe 1936 and +108%/+107% on the World.
+
+Development now grows within one to nine points of revision 1 over eight years. The World
+grows most (+84%/+82% against +76%/+73%), while its realms build a tenth fewer factories.
+Income at year 8 is within 2–7%, and wars are about as many. No realm runs away: the three
+largest hold the same share of development as on revision 1, a little less on Europe.
+
+### Performance after the redraw
+
+Measured on one 4-core machine with the same code on both revisions; the full tables are in
+[`reports/playability/results.md`](../../reports/playability/results.md#9-performance).
+
+| | `main` | Revision 1 | Revision 2 |
+|---|---|---|---|
+| Simulation, ms a week (three seeds, three years, AI only): Europe 1914 / Europe 1936 | 43.0 / 54.8 | 42.8 / 59.5 | 48.8 / 83.9 |
+| The World 1914 / the World 1936 | 149.8 / 196.7 | 134.6 / 162.6 | 156.7 / 193.5 |
+| Browser, the fastest speed for 6 s at the start (target 36 weeks): Europe 1914 / Europe 1936 / the World 1914 | — / — / 35 | 33 / 36 / 32 | 36 / 35 / 27 |
+| A world war (week 280), weeks a second in slices at the fastest speed: the World 1914 / 1936 | 3.0 / 1.4 | 3.1 / 2.1 | 2.5 / 2.0 |
+| Frame p95 at the fastest speed and in those wars | 32–46 ms | 32–40 ms | 32–52 ms |
+
+- Revision 2 costs 14–19% more a week than revision 1 on three maps, and 41% more on Europe
+  1936.
+- The cost is planning over more provinces and objectives. In a profile of Europe 1936, no
+  function takes more than 4% on its own.
+- Weeks are planned in slices across frames, so a dear week slows the clock, not the screen:
+  frames stay under 55 ms at the 95th percentile on every map, in a world war too.
+- Finding the province and the forces under the pointer takes 0.25–1.1 µs.
+- Drawing the same view at the same zoom costs the same on Europe and up to a quarter more on
+  the World at medium zoom.
+- The World 1914 on revision 2 is the slowest case: 27 weeks in the first 6 seconds of the
+  fastest speed, against 35 on `main` (headless Chromium, software rendering).
+- Made after profiling the redrawn maps:
+  - administration is worked out once a month per realm;
+  - blockades are counted from the realm's own coasts;
+  - the trade estimate is skipped where it cannot change an envoy's choice.
 
 ### Abstractions
 
