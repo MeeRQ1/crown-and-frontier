@@ -354,6 +354,26 @@ export interface RecruitOrder {
   order?: string;
 }
 
+// ───────────────────────────── Offensive leagues (format 9) ──────────────────
+
+/**
+ * A voluntary offensive league: allies who agreed to join each other's deliberate wars.
+ * Distinct from an alliance (defensive) and from the coalitions that form against an
+ * aggressor. Every member must be allied with every other and on good terms; a member
+ * who no longer is stays in the league but is suspended (not bound) until it is again.
+ */
+export interface League {
+  id: string;
+  name: string;
+  founder: NationId;
+  members: NationId[];
+  /** members not bound for now, and why */
+  suspended: Partial<Record<NationId, string>>;
+  formed: number;
+  /** the wars a member declared and who honoured the league (bounded) */
+  record: Array<{ tick: number; war: WarId; by: NationId; target: NationId; joined: NationId[]; refused: Array<{ nid: NationId; why: string }> }>;
+}
+
 // ───────────────────────────── Government (format 9) ─────────────────────────
 
 export type IdeologyId = 'monarchy' | 'democracy' | 'authoritarian' | 'fascism' | 'communism';
@@ -673,7 +693,7 @@ export interface PeaceTerms {
   mode: 'demand' | 'concede' | 'white';
 }
 
-export type ProposalKind = 'nap' | 'trade' | 'alliance' | 'peace' | 'callToArms' | 'settlement' | 'loan' | 'blocInvite' | 'blocJoin' | 'contract';
+export type ProposalKind = 'nap' | 'trade' | 'alliance' | 'peace' | 'callToArms' | 'settlement' | 'loan' | 'blocInvite' | 'blocJoin' | 'contract' | 'league';
 
 /**
  * One demand of a peace settlement: what a realm on the losing side gives to a
@@ -765,6 +785,8 @@ export interface Proposal {
   amount?: number;
   /** a trade bloc's id */
   bloc?: string;
+  /** an offensive league (format 9): its id, or 'new' to found one */
+  league?: string;
   /** a trade contract's terms */
   contract?: ContractTerms;
   /** why the proposer offers a treaty, in its own words */
@@ -998,6 +1020,8 @@ export interface NationState {
   formed?: { id: FormableId; tick: number };
   /** the paid cabinet (format 9) */
   cabinet?: Cabinet;
+  /** when it last left an offensive league (format 9): it may join another two years later */
+  leagueLeft?: number;
   eventCooldowns: Record<EventId, number>;
   nextEventTick: number;
   pendingEvents: PendingEvent[];
@@ -1223,6 +1247,8 @@ export interface GameState {
   envoys: Envoy[];
   fabrications: ClaimFabrication[];
   coalitions: Coalition[];
+  /** voluntary offensive leagues (format 9) */
+  leagues?: League[];
   /** influence[a][b] = a's influence over b (0..100) */
   influence: Record<NationId, Record<NationId, number>>;
   guarantees: Guarantee[];
@@ -1236,7 +1262,7 @@ export interface GameState {
   proposals: Proposal[];
   reports: BattleReport[];
   notifications: Notification[];
-  counters: { army: number; battle: number; war: number; treaty: number; note: number; proposal: number; event: number; regiment: number; coalition: number; fleet: number; ship: number; wing: number; loan: number; bloc: number; contract: number; op?: number; production?: number; commander?: number };
+  counters: { army: number; battle: number; war: number; treaty: number; note: number; proposal: number; event: number; regiment: number; coalition: number; fleet: number; ship: number; wing: number; loan: number; bloc: number; contract: number; op?: number; production?: number; commander?: number; league?: number };
   result: GameResult | null;
   continueAfterResult: boolean;
   diagnostics: AIDiagnostic[];
@@ -1289,6 +1315,8 @@ export type Command =
   | { type: 'assignCommander'; nation: NationId; commander: string; to: string | null }
   | { type: 'recruitCommander'; nation: NationId; trait: CommanderTrait }
   | { type: 'formNation'; nation: NationId; formable: FormableId }
+  | { type: 'proposeLeague'; nation: NationId; to: NationId }
+  | { type: 'leaveLeague'; nation: NationId }
   | { type: 'cabinet'; nation: NationId; action: 'hire' | 'dismiss' | 'pause' | 'resume' | 'settings'; candidate?: number; settings?: Partial<TradeMinisterSettings> }
   /** armies, fleets and wings (by id) join the operation (leaving any other) */
   | { type: 'assignOp'; nation: NationId; op: string; units: string[] }

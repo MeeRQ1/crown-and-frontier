@@ -267,6 +267,17 @@ export function checkInvariants(sim: Sim): string[] {
     const t = n.cabinet?.trade;
     if (t && (t.competence < 1 || t.competence > 3 || t.log.length > 30 || t.managed.length > 6)) out.push(`${nid}: trade minister out of bounds`);
   }
+  // offensive leagues (format 9): 2–4 known members each, a realm in one league at most
+  const inLeague = new Map<string, string>();
+  for (const l of st.leagues ?? []) {
+    if (l.members.length > 4 || new Set(l.members).size !== l.members.length) out.push(`${l.id}: members ${l.members.join(',')}`);
+    if (l.record.length > 20) out.push(`${l.id}: record not bounded`);
+    for (const m of l.members) {
+      if (!st.nations[m]) out.push(`${l.id}: unknown member ${m}`);
+      if (inLeague.has(m)) out.push(`${m} in two leagues (${inLeague.get(m)}, ${l.id})`);
+      inLeague.set(m, l.id);
+    }
+  }
   // production orders (format 9): bounded, at known places, never more started than ordered
   for (const [nid, n] of Object.entries(st.nations)) {
     const list = n.production ?? [];

@@ -14,6 +14,7 @@ import { maxMorale, nationStrength, unitUnlocked } from '../../sim/military';
 import { operationsSection, selectBox } from './operations';
 import { autoConquerSection, startAutoConquer, warOps } from './autoconquer';
 import { productionSection } from './production';
+import { evaluateLeague, leagueOf, leaguePreview, leagueTerms, proposeLeagueProblem } from '../../sim/leagues';
 import { forcesOverview } from './overview';
 import { aliveNations, alliesOf, armiesOf, atWar, dateOf, hasTreaty, menOf, nationName, ownedProvinces, provName, sideOf, truceUntil, warsOf, type Sim } from '../../sim/state';
 import { armySupplyInfo } from '../../sim/supply';
@@ -439,8 +440,40 @@ function diplomacyLedger(app: App): HTMLElement {
     ),
     coal ? h('div', { class: 'callout bad', style: 'margin-bottom:10px' }, icon('alert'), `Coalition against us: ${coal.members.map((m) => nationName(sim, m)).join(', ')}. Attack any member and all join; they may attack together.`) : null,
     patron ? h('div', { class: 'callout', style: 'margin-bottom:10px' }, icon('relations'), `We are in the sphere of ${nationName(sim, patron)}: they defend us if we are attacked, and we will not ally or join a coalition against them.`) : null,
+    leagueBlock(app),
     standingBlock(app, bloc),
     h('div', { class: 'diplo-split' }, list, target ? nationDetail(app, target) : h('div')),
+  );
+}
+
+/** Our offensive league: members (bound or suspended, and why), what it binds us to, and the wars it answered. */
+/** Who of our league would join a war on `o`, and who could not and why (before the declaration). */
+function leagueLine(sim: Sim, me: NationId, o: NationId): string {
+  const pv = leaguePreview(sim, me, o);
+  const names = (l: string[]) => l.map((x) => nationName(sim, x)).join(', ');
+  const parts = [
+    pv.joining.length ? `Our league: ${names(pv.joining)} will join us at once.` : '',
+    pv.cannot.length ? `${pv.cannot.map((c) => `${nationName(sim, c.nid)} cannot (${c.why})`).join('; ')}.` : '',
+    pv.suspended.length ? `${names(pv.suspended.map((x) => x.nid))} ${pv.suspended.length === 1 ? 'is' : 'are'} suspended and not bound.` : '',
+  ];
+  return parts.filter(Boolean).join(' ');
+}
+
+function leagueBlock(app: App): HTMLElement | null {
+  const sim = app.sim!;
+  const me = app.player!;
+  const l = leagueOf(sim, me);
+  if (!l) return null;
+  return h(
+    'div',
+    { class: 'card', style: 'margin-bottom:10px', 'data-sk': 'league' },
+    h('h4', null, `${l.name} (offensive league)`),
+    h('p', { class: 'small' }, l.members.map((m) => `${nationName(sim, m)}${l.suspended[m] ? ` (suspended: ${l.suspended[m]})` : ''}`).join(' · ')),
+    h('p', { class: 'small muted' }, 'When a bound member deliberately declares a war of claim or conquest, every other bound member joins it on the attacking side — unless an alliance or pact with the target’s side, a truce or a war with an attacker forbids it. It never brings a member into a war already under way. A member whose alliance with another ends, or whose opinion of one falls below 0, is suspended until both hold again.'),
+    l.record.length
+      ? h('ul', { class: 'notes small' }, l.record.slice(-5).reverse().map((r) => h('li', null, `${dateOf(sim, r.tick).short}: ${nationName(sim, r.by)} against ${nationName(sim, r.target)} — ${r.joined.length ? `joined: ${r.joined.map((x) => nationName(sim, x)).join(', ')}` : 'no one joined'}${r.refused.length ? `; could not: ${r.refused.map((x) => `${nationName(sim, x.nid)} (${x.why})`).join(', ')}` : ''}`)))
+      : null,
+    action('Leave the league', 'Future wars of its members no longer bind us; the wars we joined go on; the members think less of us; another league only after two years.', () => confirmDialog(app, `Leave the ${l.name}?`, 'The wars we joined go on. The members will resent it, and we may join or found another league only after two years.', () => app.do({ type: 'leaveLeague' })), null, 'danger'),
   );
 }
 
@@ -616,6 +649,22 @@ function nationDetail(app: App, o: NationId): HTMLElement {
     );
   };
   const envoyHere = st.envoys.find((e) => e.from === me && e.to === o);
+  // an offensive league: offered to allies only
+  const leagueOffer = hasTreaty(sim, 'alliance', me, o)
+    ? (() => {
+        const prob = proposeLeagueProblem(sim, me, o);
+        const ev = evaluateLeague(sim, o, me);
+        const mine = leagueOf(sim, me);
+        const label = mine ? `Invite into the ${mine.name}` : 'Propose an offensive league';
+        const likely = ev.accept ? h('span', { class: 'good' }, `Likely to accept (${signed(ev.score, 0)})`) : h('span', { class: 'bad' }, `Likely to refuse (${signed(ev.score, 0)})`);
+        return h(
+          'div',
+          { class: 'treaty', 'data-sk': 'league-offer' },
+          action(label, h('span', null, likely), () => confirmDialog(app, `${label}?`, [h('p', null, leagueTerms(sim, me, o))], () => app.do({ type: 'proposeLeague', to: o }), 'Propose', false), prob),
+          prob ? null : h('details', null, h('summary', { class: 'small muted' }, 'Why?'), reasonsList(ev.reasons)),
+        );
+      })()
+    : null;
   const goals = goalOptions(sim, me, o);
   const reach = atWar(sim, me, o) ? null : warReach(sim, me, o);
   const warBlock = atWar(sim, me, o)
@@ -640,6 +689,7 @@ function nationDetail(app: App, o: NationId): HTMLElement {
               held.length ? `${names(held)} ${held.length === 1 ? 'is' : 'are'} bound to us by a treaty and cannot.` : '',
               guarantors.length ? `${names(guarantors)} ${guarantors.length === 1 ? 'guarantees' : 'guarantee'} their independence and will be called to arms.` : '',
               coal?.members.includes(o) ? 'They are in a coalition against you: all members will join them!' : '',
+              g.type === 'coalition' ? '' : leagueLine(sim, me, o),
               ties.war,
             ].join(' ');
             const label = `${g.type === 'claim' ? 'Press claims' : g.type === 'coalition' ? 'Coalition war' : 'War of conquest'}: ${g.provinces.map((p) => provName(sim, p)).join(', ')}`;
@@ -691,6 +741,7 @@ function nationDetail(app: App, o: NationId): HTMLElement {
       treaty('trade'),
       treaty('nap'),
       treaty('alliance'),
+      leagueOffer,
     ),
     ties.section,
     influenceSection(app, o),

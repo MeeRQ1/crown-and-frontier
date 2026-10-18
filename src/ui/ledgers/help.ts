@@ -213,6 +213,20 @@ function articles(): Article[] {
       links: [['military', 'Open Military']],
     },
     {
+      id: 'leagues',
+      title: 'Offensive leagues',
+      icon: 'alliance',
+      group: 'Diplomacy',
+      lead: 'An alliance is defensive. An offensive league is the further, explicit commitment between allies to join each other’s deliberate wars.',
+      points: [
+        'Propose one from an ally’s page in Diplomacy (or invite an ally into ours). Every member must be allied with every other and think well of each (opinion 25 or more); at most four members, one league per realm. The ally weighs it — common rivals, its commitments, its means, its outlook — and may decline; a declined proposal waits a year.',
+        'When a bound member declares a war of claim or conquest, every other bound member joins it at once on the attacking side — unless an alliance or pact with the target’s side, a truce or a war with an attacker forbids it; then it says why, and nothing else happens. The declaration screen lists who will join and who cannot before you declare.',
+        'Joining a league never brings a realm into a war already under way. A member whose alliance with another member ends, or whose opinion of one falls below 0, is suspended (not bound) until both hold again; a league with fewer than two bound members dissolves.',
+        'Leaving is possible at any time: future wars no longer bind you, the wars you joined go on, the members think less of you, and another league must wait two years. The joins are never new declarations, so they cannot set off another league or a chain of wars.',
+      ],
+      links: [['diplomacy', 'Open Diplomacy']],
+    },
+    {
       id: 'government',
       title: 'Government, commanders and cabinet',
       icon: 'charter',

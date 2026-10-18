@@ -11,6 +11,7 @@ import { createProductionOrder, orderProductionProblem, orderTotals, setProducti
 import { formNation, formProblem, ideologyProblem, replaceLeader, replaceLeaderProblem, setIdeology } from './government';
 import { assignCommander, assignCommanderProblem, COMMANDER_TRAITS, recruitCommander, recruitCommanderProblem } from './commanders';
 import { cabinetAction, cabinetProblem } from './cabinet';
+import { admitToLeague, honourLeague, leagueOf, leaveLeague, proposeLeague, proposeLeagueProblem } from './leagues';
 import { assignUnits, cancelOperation, createOperation, createOpProblem, editOperation, editOpProblem, opSummaryLine, releaseUnits, reserveUnits, resumeUnits, setOpStatus, takeUnderDirectCommand, unitRef } from './ops/operations';
 import {
   cancelTreaty,
@@ -304,6 +305,10 @@ export function checkCommand(sim: Sim, cmd: Command): string | null {
       return recruitCommanderProblem(sim, cmd.nation, cmd.trait);
     case 'formNation':
       return formProblem(sim, cmd.nation, cmd.formable);
+    case 'proposeLeague':
+      return proposeLeagueProblem(sim, cmd.nation, cmd.to);
+    case 'leaveLeague':
+      return leagueOf(sim, cmd.nation) ? null : 'We belong to no league.';
     case 'cabinet':
       return cabinetProblem(sim, cmd.nation, cmd.action, cmd.candidate, cmd.settings);
     case 'productionState': {
@@ -535,7 +540,11 @@ function execute(sim: Sim, cmd: Command, auto = false): CommandResult {
       return { ok: true, message: 'Our clerks begin forging a claim (12 months).' };
     case 'declareWar': {
       const w = declareWar(sim, cmd.nation, cmd.target, cmd.goal);
-      return { ok: true, message: `${w.name} begins.` };
+      // a deliberate declaration: the declarer's offensive league honours it (once; the
+      // joins are not declarations and trigger nothing further)
+      honourLeague(sim, w, cmd.nation);
+      const joined = w.attackers.filter((a) => a !== cmd.nation);
+      return { ok: true, message: `${w.name} begins.${joined.length ? ` ${joined.map((a) => nationName(sim, a)).join(', ')} join${joined.length === 1 ? 's' : ''} us.` : ''}` };
     }
     case 'peace': {
       const other = st.nations[cmd.with];
@@ -675,6 +684,13 @@ function execute(sim: Sim, cmd: Command, auto = false): CommandResult {
         notify(sim, p.from, 'normal', 'contract', `${nationName(sim, cmd.nation)} accepted our contract.`);
         return { ok: true, message: 'Contract signed.' };
       }
+      if (p.kind === 'league') {
+        const prob = proposeLeagueProblem(sim, p.from, cmd.nation);
+        // the proposal itself is the one awaiting an answer: that is not a reason to refuse it
+        if (prob && !/awaiting an answer|less than a year ago/.test(prob)) return { ok: false, reason: `The proposal is no longer valid: ${prob}` };
+        const l = admitToLeague(sim, p.from, cmd.nation);
+        return { ok: true, message: `We are bound by the ${l.name}.` };
+      }
       if (p.kind === 'peace') {
         const prob = peaceProblem(sim, p.from, p.war!, cmd.nation, p.terms!);
         if (prob) return { ok: false, reason: `The offer is no longer valid: ${prob}` };
@@ -755,6 +771,12 @@ function execute(sim: Sim, cmd: Command, auto = false): CommandResult {
     }
     case 'formNation':
       return { ok: true, message: formNation(sim, cmd.nation, cmd.formable) };
+    case 'proposeLeague': {
+      const r = proposeLeague(sim, cmd.nation, cmd.to);
+      return r.ok ? { ok: true, message: r.message } : { ok: false, reason: r.message };
+    }
+    case 'leaveLeague':
+      return { ok: true, message: leaveLeague(sim, cmd.nation) };
     case 'cabinet':
       return { ok: true, message: cabinetAction(sim, cmd.nation, cmd.action, cmd.candidate, cmd.settings) };
     case 'keepFormation': {

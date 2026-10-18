@@ -41,6 +41,7 @@ import { weeklyProduction } from './production';
 import { monthlyLeaders } from './government';
 import { weeklyCommanders } from './commanders';
 import { monthlyCabinet } from './cabinet';
+import { monthlyLeagues } from './leagues';
 import { weeklyMovement, weeklyOrders } from './movement';
 import { monthlyResearch } from './progression';
 import { monthlyFocus } from './focus';
@@ -175,6 +176,7 @@ export function* weekSlices(sim: Sim, opts: StepOptions = {}): Generator<void, v
       'm.diplomacy',
       (function* () {
         monthlyDiplomacy(sim);
+        monthlyLeagues(sim);
         yield* monthlyInfluenceSteps(sim);
       })(),
     );

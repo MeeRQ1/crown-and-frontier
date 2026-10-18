@@ -169,13 +169,32 @@ export function forceMods(sim: Sim, nid: NationId, unitId: string): Mods {
 
 /** AI: every commander leads; a general for each of the largest armies, an admiral for the largest fleets, an air marshal for the wings. */
 export function aiCommanders(sim: Sim, nid: NationId): void {
-  const st = sim.state;
-  const n = st.nations[nid];
+  const n = sim.state.nations[nid];
   if (!n.commanders) startingCommanders(sim, nid);
   // recruit to the limit when the treasury is comfortable (the same price as for anyone)
   for (const trait of ['offensive', 'gunnery', 'interceptor'] as CommanderTrait[]) {
     if (n.treasury > 400 && !recruitCommanderProblem(sim, nid, trait)) recruitCommander(sim, nid, trait);
   }
+  leadLargest(sim, nid);
+}
+
+/**
+ * Every realm's starting staff (a new campaign, or one converted to format 9), each
+ * commander at the head of the largest force of its branch — for the player as for
+ * the AI, so no realm starts with its generals idle; the player may reassign them.
+ */
+export function initCommanders(sim: Sim): void {
+  for (const nid of aliveNations(sim)) {
+    if (sim.state.nations[nid].commanders) continue;
+    startingCommanders(sim, nid);
+    leadLargest(sim, nid);
+  }
+}
+
+/** Unassigned commanders take the largest forces of their branch that no one leads. */
+function leadLargest(sim: Sim, nid: NationId): void {
+  const st = sim.state;
+  const n = st.nations[nid];
   const led = new Set((n.commanders ?? []).map((c) => c.assigned).filter((x): x is string => !!x));
   for (const c of n.commanders ?? []) {
     if (c.assigned) continue;
@@ -191,11 +210,6 @@ export function aiCommanders(sim: Sim, nid: NationId): void {
       led.add(pick.id);
     }
   }
-}
-
-/** Every realm's starting staff (a new campaign, or one converted to format 9). */
-export function initCommanders(sim: Sim): void {
-  for (const nid of aliveNations(sim)) startingCommanders(sim, nid);
 }
 
 export function commanderLine(sim: Sim, c: Commander): string {

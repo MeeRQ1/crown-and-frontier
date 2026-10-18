@@ -4,6 +4,7 @@
 // map stays usable while you read, and "Later" folds the card into a chip.
 // True modal dialogs are kept for confirmations and messages.
 
+import { leagueTerms } from '../../sim/leagues';
 import { EVENT_MAP } from '../../sim/data/events';
 import { C } from '../../sim/config';
 import { evaluateTreaty, TREATY_LABELS } from '../../sim/diplomacy';
@@ -231,6 +232,11 @@ function proposalCard(app: App, id: string, n: number): HTMLElement | null {
       if (drop.length >= demands.length) extra.push(h('span', { class: 'small bad' }, 'Keep at least one demand, or decline.'));
     }
     declineLabel = 'Refuse and fight on';
+  } else if (p.kind === 'league') {
+    title = p.league === 'new' ? `${from} proposes an offensive league` : `${from} invites us into its offensive league`;
+    body.push(h('p', null, leagueTerms(sim, p.from, app.player!)));
+    body.push(h('p', { class: 'small faint' }, 'An alliance alone stays defensive: this is the further commitment to join their deliberate wars, and theirs to join ours. Declining costs nothing but their goodwill.'));
+    acceptLabel = 'Join the league';
   } else if (p.kind === 'loan') {
     const amount = p.amount ?? 0;
     title = `${from} offers a loan`;
