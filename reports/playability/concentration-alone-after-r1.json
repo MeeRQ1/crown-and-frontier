@@ -1,0 +1,5557 @@
+{
+ "weeks": 40,
+ "seeds": [
+  1,
+  2,
+  3
+ ],
+ "runs": [
+  {
+   "workflow": "auto",
+   "seed": 1,
+   "inputs": 3,
+   "autoOrders": 314,
+   "taken": 9,
+   "polLand": 31,
+   "gerLandLost": 0,
+   "bigStack": {
+    "battles": 0,
+    "won": 0
+   },
+   "gerMenLost": 13138,
+   "polMenLost": 36270,
+   "stackMenEnd": 8000,
+   "stackDestroyedWeek": null,
+   "battles": {
+    "total": 15,
+    "gerWon": 14,
+    "gerLost": 1,
+    "gerAttacks": 9,
+    "gerAttacksOutnumbered": 2,
+    "stackBattles": 5,
+    "stackWon": 4
+   },
+   "stackCommit": [
+    {
+     "week": 6,
+     "province": "inowrocaw",
+     "gerRegs": 12,
+     "gerEngaged": 12,
+     "polRegs": 29,
+     "joinsLater": 0,
+     "winner": "defender"
+    },
+    {
+     "week": 13,
+     "province": "eastpoznan",
+     "gerRegs": 40,
+     "gerEngaged": 24,
+     "polRegs": 14,
+     "joinsLater": 0,
+     "winner": "attacker"
+    },
+    {
+     "week": 17,
+     "province": "inowrocaw",
+     "gerRegs": 17,
+     "gerEngaged": 17,
+     "polRegs": 14,
+     "joinsLater": 0,
+     "winner": "attacker"
+    },
+    {
+     "week": 19,
+     "province": "northwarsaw",
+     "gerRegs": 7,
+     "gerEngaged": 7,
+     "polRegs": 14,
+     "joinsLater": 0,
+     "winner": "attacker"
+    },
+    {
+     "week": 22,
+     "province": "biaystok",
+     "gerRegs": 5,
+     "gerEngaged": 5,
+     "polRegs": 14,
+     "joinsLater": 0,
+     "winner": "attacker"
+    }
+   ],
+   "idleArmyWeeks": 0,
+   "armyWeeks": 424,
+   "issues": [],
+   "traces": [
+    {
+     "id": "b3",
+     "week": 6,
+     "province": "inowrocaw",
+     "terrain": "plains",
+     "frontage": 16,
+     "fort": 0,
+     "river": false,
+     "defEntrenchWeeks": 0,
+     "stack": true,
+     "big": false,
+     "gerSide": "att",
+     "att": {
+      "nations": [
+       "ger"
+      ],
+      "armies": 2,
+      "regs": 12,
+      "men": 12000,
+      "line": 10,
+      "support": 2,
+      "engaged": 12,
+      "supply": "supplied",
+      "morale": 1
+     },
+     "def": {
+      "nations": [
+       "pol"
+      ],
+      "armies": 1,
+      "regs": 29,
+      "men": 29000,
+      "line": 18,
+      "support": 11,
+      "engaged": 24,
+      "supply": "supplied",
+      "morale": 1
+     },
+     "joins": [],
+     "support": {
+      "att": 0,
+      "def": 0
+     },
+     "forecast": "Likely defeat",
+     "winner": "defender",
+     "rounds": 1,
+     "attLoss": 4128,
+     "defLoss": 1600
+    },
+    {
+     "id": "b4",
+     "week": 13,
+     "province": "eastpoznan",
+     "terrain": "plains",
+     "frontage": 16,
+     "fort": 0,
+     "river": false,
+     "defEntrenchWeeks": 2,
+     "stack": true,
+     "big": false,
+     "gerSide": "att",
+     "att": {
+      "nations": [
+       "ger"
+      ],
+      "armies": 1,
+      "regs": 40,
+      "men": 40000,
+      "line": 29,
+      "support": 11,
+      "engaged": 24,
+      "supply": "strained",
+      "morale": 1
+     },
+     "def": {
+      "nations": [
+       "pol"
+      ],
+      "armies": 1,
+      "regs": 14,
+      "men": 14000,
+      "line": 3,
+      "support": 11,
+      "engaged": 11,
+      "supply": "supplied",
+      "morale": 1
+     },
+     "joins": [],
+     "support": {
+      "att": 0.4,
+      "def": 0
+     },
+     "forecast": "Likely victory",
+     "winner": "attacker",
+     "rounds": 3,
+     "attLoss": 2799,
+     "defLoss": 6161
+    },
+    {
+     "id": "b5",
+     "week": 13,
+     "province": "grunberg",
+     "terrain": "plains",
+     "frontage": 16,
+     "fort": 0,
+     "river": false,
+     "defEntrenchWeeks": 0,
+     "stack": false,
+     "big": false,
+     "gerSide": "def",
+     "att": {
+      "nations": [
+       "pol"
+      ],
+      "armies": 1,
+      "regs": 15,
+      "men": 15000,
+      "line": 15,
+      "support": 0,
+      "engaged": 15,
+      "supply": "supplied",
+      "morale": 1
+     },
+     "def": {
+      "nations": [
+       "ger"
+      ],
+      "armies": 1,
+      "regs": 24,
+      "men": 24000,
+      "line": 21,
+      "support": 3,
+      "engaged": 19,
+      "supply": "supplied",
+      "morale": 1
+     },
+     "joins": [],
+     "support": {
+      "att": 0,
+      "def": 0
+     },
+     "forecast": "Likely defeat",
+     "winner": "defender",
+     "rounds": 2,
+     "attLoss": 5400,
+     "defLoss": 1534
+    },
+    {
+     "id": "b6",
+     "week": 16,
+     "province": "poznan",
+     "terrain": "plains",
+     "frontage": 16,
+     "fort": 1,
+     "river": false,
+     "defEntrenchWeeks": 0,
+     "stack": false,
+     "big": false,
+     "gerSide": "att",
+     "att": {
+      "nations": [
+       "ger"
+      ],
+      "armies": 2,
+      "regs": 24,
+      "men": 24000,
+      "line": 21,
+      "support": 3,
+      "engaged": 19,
+      "supply": "supplied",
+      "morale": 0.97
+     },
+     "def": {
+      "nations": [
+       "pol"
+      ],
+      "armies": 1,
+      "regs": 15,
+      "men": 9600,
+      "line": 15,
+      "support": 0,
+      "engaged": 15,
+      "supply": "supplied",
+      "morale": 0
+     },
+     "joins": [],
+     "support": {
+      "att": 0,
+      "def": 0
+     },
+     "forecast": "Likely victory",
+     "winner": "attacker",
+     "rounds": 1,
+     "attLoss": 579,
+     "defLoss": 1455
+    },
+    {
+     "id": "b7",
+     "week": 17,
+     "province": "inowrocaw",
+     "terrain": "plains",
+     "frontage": 16,
+     "fort": 0,
+     "river": false,
+     "defEntrenchWeeks": 0,
+     "stack": true,
+     "big": false,
+     "gerSide": "att",
+     "att": {
+      "nations": [
+       "ger"
+      ],
+      "armies": 4,
+      "regs": 17,
+      "men": 16901,
+      "line": 15,
+      "support": 2,
+      "engaged": 17,
+      "supply": "strained",
+      "morale": 0.96
+     },
+     "def": {
+      "nations": [
+       "pol"
+      ],
+      "armies": 1,
+      "regs": 14,
+      "men": 7839,
+      "line": 3,
+      "support": 11,
+      "engaged": 11,
+      "supply": "supplied",
+      "morale": 0
+     },
+     "joins": [],
+     "support": {
+      "att": 0,
+      "def": 0
+     },
+     "forecast": "Likely victory",
+     "winner": "attacker",
+     "rounds": 1,
+     "attLoss": 332,
+     "defLoss": 1533
+    },
+    {
+     "id": "b8",
+     "week": 17,
+     "province": "kielce",
+     "terrain": "plains",
+     "frontage": 16,
+     "fort": 0,
+     "river": false,
+     "defEntrenchWeeks": 0,
+     "stack": false,
+     "big": false,
+     "gerSide": "def",
+     "att": {
+      "nations": [
+       "pol"
+      ],
+      "armies": 2,
+      "regs": 10,
+      "men": 10000,
+      "line": 9,
+      "support": 1,
+      "engaged": 10,
+      "supply": "supplied",
+      "morale": 1
+     },
+     "def": {
+      "nations": [
+       "ger"
+      ],
+      "armies": 1,
+      "regs": 40,
+      "men": 37201,
+      "line": 29,
+      "support": 11,
+      "engaged": 24,
+      "supply": "strained",
+      "morale": 0.73
+     },
+     "joins": [],
+     "support": {
+      "att": 0,
+      "def": 0
+     },
+     "forecast": "Likely defeat",
+     "winner": "defender",
+     "rounds": 1,
+     "attLoss": 3923,
+     "defLoss": 883
+    },
+    {
+     "id": "b9",
+     "week": 18,
+     "province": "breslau",
+     "terrain": "plains",
+     "frontage": 16,
+     "fort": 0,
+     "river": false,
+     "defEntrenchWeeks": 0,
+     "stack": false,
+     "big": false,
+     "gerSide": "def",
+     "att": {
+      "nations": [
+       "pol"
+      ],
+      "armies": 1,
+      "regs": 15,
+      "men": 8145,
+      "line": 15,
+      "support": 0,
+      "engaged": 15,
+      "supply": "supplied",
+      "morale": 0
+     },
+     "def": {
+      "nations": [
+       "ger"
+      ],
+      "armies": 1,
+      "regs": 8,
+      "men": 8000,
+      "line": 8,
+      "support": 0,
+      "engaged": 8,
+      "supply": "supplied",
+      "morale": 1
+     },
+     "joins": [],
+     "support": {
+      "att": 0,
+      "def": 0
+     },
+     "forecast": "Likely defeat",
+     "winner": "defender",
+     "rounds": 1,
+     "attLoss": 1800,
+     "defLoss": 352
+    },
+    {
+     "id": "b10",
+     "week": 19,
+     "province": "northwarsaw",
+     "terrain": "plains",
+     "frontage": 16,
+     "fort": 0,
+     "river": false,
+     "defEntrenchWeeks": 0,
+     "stack": true,
+     "big": false,
+     "gerSide": "att",
+     "att": {
+      "nations": [
+       "ger"
+      ],
+      "armies": 3,
+      "regs": 7,
+      "men": 7000,
+      "line": 7,
+      "support": 0,
+      "engaged": 7,
+      "supply": "supplied",
+      "morale": 1
+     },
+     "def": {
+      "nations": [
+       "pol"
+      ],
+      "armies": 1,
+      "regs": 14,
+      "men": 6306,
+      "line": 3,
+      "support": 11,
+      "engaged": 11,
+      "supply": "supplied",
+      "morale": 0
+     },
+     "joins": [],
+     "support": {
+      "att": 0,
+      "def": 0
+     },
+     "forecast": "Likely victory",
+     "winner": "attacker",
+     "rounds": 1,
+     "attLoss": 301,
+     "defLoss": 475
+    },
+    {
+     "id": "b11",
+     "week": 19,
+     "province": "oppeln",
+     "terrain": "plains",
+     "frontage": 16,
+     "fort": 0,
+     "river": false,
+     "defEntrenchWeeks": 0,
+     "stack": false,
+     "big": false,
+     "gerSide": "def",
+     "att": {
+      "nations": [
+       "pol"
+      ],
+      "armies": 1,
+      "regs": 7,
+      "men": 7000,
+      "line": 7,
+      "support": 0,
+      "engaged": 7,
+      "supply": "supplied",
+      "morale": 1
+     },
+     "def": {
+      "nations": [
+       "ger"
+      ],
+      "armies": 1,
+      "regs": 40,
+      "men": 36318,
+      "line": 29,
+      "support": 11,
+      "engaged": 24,
+      "supply": "strained",
+      "morale": 0.74
+     },
+     "joins": [],
+     "support": {
+      "att": 0,
+      "def": 0
+     },
+     "forecast": "Likely defeat",
+     "winner": "defender",
+     "rounds": 1,
+     "attLoss": 4368,
+     "defLoss": 535
+    },
+    {
+     "id": "b12",
+     "week": 21,
+     "province": "katowice",
+     "terrain": "plains",
+     "frontage": 16,
+     "fort": 1,
+     "river": true,
+     "defEntrenchWeeks": 0,
+     "stack": false,
+     "big": false,
+     "gerSide": "att",
+     "att": {
+      "nations": [
+       "ger"
+      ],
+      "armies": 1,
+      "regs": 10,
+      "men": 10000,
+      "line": 10,
+      "support": 0,
+      "engaged": 10,
+      "supply": "supplied",
+      "morale": 1
+     },
+     "def": {
+      "nations": [
+       "pol"
+      ],
+      "armies": 2,
+      "regs": 9,
+      "men": 4632,
+      "line": 9,
+      "support": 0,
+      "engaged": 9,
+      "supply": "supplied",
+      "morale": 0.39
+     },
+     "joins": [],
+     "support": {
+      "att": 0,
+      "def": 0
+     },
+     "forecast": "Likely victory",
+     "winner": "attacker",
+     "rounds": 1,
+     "attLoss": 400,
+     "defLoss": 690
+    },
+    {
+     "id": "b13",
+     "week": 21,
+     "province": "warsaw",
+     "terrain": "plains",
+     "frontage": 16,
+     "fort": 2,
+     "river": false,
+     "defEntrenchWeeks": 0,
+     "stack": false,
+     "big": false,
+     "gerSide": "att",
+     "att": {
+      "nations": [
+       "ger"
+      ],
+      "armies": 1,
+      "regs": 10,
+      "men": 10000,
+      "line": 8,
+      "support": 2,
+      "engaged": 10,
+      "supply": "supplied",
+      "morale": 1
+     },
+     "def": {
+      "nations": [
+       "pol"
+      ],
+      "armies": 1,
+      "regs": 1,
+      "men": 1000,
+      "line": 1,
+      "support": 0,
+      "engaged": 1,
+      "supply": "supplied",
+      "morale": 0.5
+     },
+     "joins": [],
+     "support": {
+      "att": 0,
+      "def": 0
+     },
+     "forecast": "Likely victory",
+     "winner": "attacker",
+     "rounds": 1,
+     "attLoss": 216,
+     "defLoss": 601
+    },
+    {
+     "id": "b14",
+     "week": 22,
+     "province": "biaystok",
+     "terrain": "forest",
+     "frontage": 10,
+     "fort": 0,
+     "river": false,
+     "defEntrenchWeeks": 0,
+     "stack": true,
+     "big": false,
+     "gerSide": "att",
+     "att": {
+      "nations": [
+       "ger"
+      ],
+      "armies": 1,
+      "regs": 5,
+      "men": 5000,
+      "line": 5,
+      "support": 0,
+      "engaged": 5,
+      "supply": "supplied",
+      "morale": 1
+     },
+     "def": {
+      "nations": [
+       "pol"
+      ],
+      "armies": 1,
+      "regs": 14,
+      "men": 5831,
+      "line": 3,
+      "support": 11,
+      "engaged": 8,
+      "supply": "supplied",
+      "morale": 0
+     },
+     "joins": [],
+     "support": {
+      "att": 0,
+      "def": 0
+     },
+     "forecast": "Likely victory",
+     "winner": "attacker",
+     "rounds": 1,
+     "attLoss": 120,
+     "defLoss": 298
+    },
+    {
+     "id": "b15",
+     "week": 23,
+     "province": "eastodzandkielce",
+     "terrain": "plains",
+     "frontage": 16,
+     "fort": 0,
+     "river": true,
+     "defEntrenchWeeks": 1,
+     "stack": false,
+     "big": false,
+     "gerSide": "def",
+     "att": {
+      "nations": [
+       "pol"
+      ],
+      "armies": 2,
+      "regs": 9,
+      "men": 3942,
+      "line": 9,
+      "support": 0,
+      "engaged": 9,
+      "supply": "supplied",
+      "morale": 0.25
+     },
+     "def": {
+      "nations": [
+       "ger"
+      ],
+      "armies": 1,
+      "regs": 21,
+      "men": 21000,
+      "line": 18,
+      "support": 3,
+      "engaged": 19,
+      "supply": "supplied",
+      "morale": 1
+     },
+     "joins": [],
+     "support": {
+      "att": 0,
+      "def": 0
+     },
+     "forecast": "Likely defeat",
+     "winner": "defender",
+     "rounds": 1,
+     "attLoss": 2070,
+     "defLoss": 105
+    },
+    {
+     "id": "b18",
+     "week": 25,
+     "province": "southwarsaw",
+     "terrain": "plains",
+     "frontage": 16,
+     "fort": 0,
+     "river": false,
+     "defEntrenchWeeks": 0,
+     "stack": false,
+     "big": false,
+     "gerSide": "att",
+     "att": {
+      "nations": [
+       "ger"
+      ],
+      "armies": 1,
+      "regs": 21,
+      "men": 21000,
+      "line": 18,
+      "support": 3,
+      "engaged": 19,
+      "supply": "supplied",
+      "morale": 1
+     },
+     "def": {
+      "nations": [
+       "pol"
+      ],
+      "armies": 1,
+      "regs": 1,
+      "men": 1000,
+      "line": 0,
+      "support": 1,
+      "engaged": 1,
+      "supply": "supplied",
+      "morale": 0.5
+     },
+     "joins": [],
+     "support": {
+      "att": 0,
+      "def": 0
+     },
+     "forecast": "Likely victory",
+     "winner": "attacker",
+     "rounds": 1,
+     "attLoss": 70,
+     "defLoss": 1000
+    },
+    {
+     "id": "b20",
+     "week": 37,
+     "province": "elbing",
+     "terrain": "plains",
+     "frontage": 16,
+     "fort": 0,
+     "river": false,
+     "defEntrenchWeeks": 0,
+     "stack": false,
+     "big": false,
+     "gerSide": "def",
+     "att": {
+      "nations": [
+       "pol"
+      ],
+      "armies": 2,
+      "regs": 12,
+      "men": 12000,
+      "line": 12,
+      "support": 0,
+      "engaged": 12,
+      "supply": "strained",
+      "morale": 1
+     },
+     "def": {
+      "nations": [
+       "ger"
+      ],
+      "armies": 1,
+      "regs": 38,
+      "men": 38000,
+      "line": 27,
+      "support": 11,
+      "engaged": 24,
+      "supply": "supplied",
+      "morale": 1
+     },
+     "joins": [],
+     "support": {
+      "att": 0,
+      "def": 0
+     },
+     "forecast": "Likely defeat",
+     "winner": "defender",
+     "rounds": 1,
+     "attLoss": 4896,
+     "defLoss": 784
+    }
+   ],
+   "invariantFailures": []
+  },
+  {
+   "workflow": "delegated",
+   "seed": 1,
+   "inputs": 4,
+   "autoOrders": 238,
+   "taken": 8,
+   "polLand": 31,
+   "gerLandLost": 1,
+   "bigStack": {
+    "battles": 0,
+    "won": 0
+   },
+   "gerMenLost": 14602,
+   "polMenLost": 16800,
+   "stackMenEnd": 8000,
+   "stackDestroyedWeek": null,
+   "battles": {
+    "total": 10,
+    "gerWon": 9,
+    "gerLost": 1,
+    "gerAttacks": 8,
+    "gerAttacksOutnumbered": 1,
+    "stackBattles": 2,
+    "stackWon": 1
+   },
+   "stackCommit": [
+    {
+     "week": 6,
+     "province": "inowrocaw",
+     "gerRegs": 12,
+     "gerEngaged": 12,
+     "polRegs": 29,
+     "joinsLater": 0,
+     "winner": "defender"
+    },
+    {
+     "week": 23,
+     "province": "northwarsaw",
+     "gerRegs": 40,
+     "gerEngaged": 24,
+     "polRegs": 14,
+     "joinsLater": 0,
+     "winner": "attacker"
+    }
+   ],
+   "idleArmyWeeks": 26,
+   "armyWeeks": 418,
+   "issues": [],
+   "traces": [
+    {
+     "id": "b1",
+     "week": 6,
+     "province": "inowrocaw",
+     "terrain": "plains",
+     "frontage": 16,
+     "fort": 0,
+     "river": false,
+     "defEntrenchWeeks": 0,
+     "stack": true,
+     "big": false,
+     "gerSide": "att",
+     "att": {
+      "nations": [
+       "ger"
+      ],
+      "armies": 2,
+      "regs": 12,
+      "men": 12000,
+      "line": 10,
+      "support": 2,
+      "engaged": 12,
+      "supply": "supplied",
+      "morale": 1
+     },
+     "def": {
+      "nations": [
+       "pol"
+      ],
+      "armies": 1,
+      "regs": 29,
+      "men": 29000,
+      "line": 18,
+      "support": 11,
+      "engaged": 24,
+      "supply": "supplied",
+      "morale": 1
+     },
+     "joins": [],
+     "support": {
+      "att": 0.4,
+      "def": 0
+     },
+     "forecast": "Likely defeat",
+     "winner": "defender",
+     "rounds": 2,
+     "attLoss": 6548,
+     "defLoss": 2459
+    },
+    {
+     "id": "b2",
+     "week": 14,
+     "province": "warsaw",
+     "terrain": "plains",
+     "frontage": 16,
+     "fort": 2,
+     "river": false,
+     "defEntrenchWeeks": 0,
+     "stack": false,
+     "big": false,
+     "gerSide": "att",
+     "att": {
+      "nations": [
+       "ger"
+      ],
+      "armies": 1,
+      "regs": 24,
+      "men": 24000,
+      "line": 21,
+      "support": 3,
+      "engaged": 19,
+      "supply": "supplied",
+      "morale": 1
+     },
+     "def": {
+      "nations": [
+       "pol"
+      ],
+      "armies": 1,
+      "regs": 1,
+      "men": 1000,
+      "line": 1,
+      "support": 0,
+      "engaged": 1,
+      "supply": "supplied",
+      "morale": 0.5
+     },
+     "joins": [],
+     "support": {
+      "att": 0,
+      "def": 0
+     },
+     "forecast": "Likely victory",
+     "winner": "attacker",
+     "rounds": 1,
+     "attLoss": 89,
+     "defLoss": 799
+    },
+    {
+     "id": "b3",
+     "week": 15,
+     "province": "warsaw",
+     "terrain": "plains",
+     "frontage": 16,
+     "fort": 2,
+     "river": false,
+     "defEntrenchWeeks": 0,
+     "stack": false,
+     "big": false,
+     "gerSide": "att",
+     "att": {
+      "nations": [
+       "ger"
+      ],
+      "armies": 1,
+      "regs": 24,
+      "men": 23911,
+      "line": 21,
+      "support": 3,
+      "engaged": 19,
+      "supply": "supplied",
+      "morale": 0.99
+     },
+     "def": {
+      "nations": [
+       "pol"
+      ],
+      "armies": 1,
+      "regs": 1,
+      "men": 1000,
+      "line": 0,
+      "support": 1,
+      "engaged": 1,
+      "supply": "supplied",
+      "morale": 0.5
+     },
+     "joins": [],
+     "support": {
+      "att": 0,
+      "def": 0
+     },
+     "forecast": "Likely victory",
+     "winner": "attacker",
+     "rounds": 1,
+     "attLoss": 70,
+     "defLoss": 1000
+    },
+    {
+     "id": "b4",
+     "week": 16,
+     "province": "oppeln",
+     "terrain": "plains",
+     "frontage": 16,
+     "fort": 0,
+     "river": false,
+     "defEntrenchWeeks": 0,
+     "stack": false,
+     "big": false,
+     "gerSide": "def",
+     "att": {
+      "nations": [
+       "pol"
+      ],
+      "armies": 1,
+      "regs": 3,
+      "men": 3000,
+      "line": 3,
+      "support": 0,
+      "engaged": 3,
+      "supply": "supplied",
+      "morale": 1
+     },
+     "def": {
+      "nations": [
+       "ger"
+      ],
+      "armies": 1,
+      "regs": 40,
+      "men": 39440,
+      "line": 29,
+      "support": 11,
+      "engaged": 24,
+      "supply": "strained",
+      "morale": 1
+     },
+     "joins": [],
+     "support": {
+      "att": 0,
+      "def": 0
+     },
+     "forecast": "Likely defeat",
+     "winner": "defender",
+     "rounds": 1,
+     "attLoss": 3000,
+     "defLoss": 240
+    },
+    {
+     "id": "b5",
+     "week": 18,
+     "province": "warsaw",
+     "terrain": "plains",
+     "frontage": 16,
+     "fort": 2,
+     "river": false,
+     "defEntrenchWeeks": 0,
+     "stack": false,
+     "big": false,
+     "gerSide": "att",
+     "att": {
+      "nations": [
+       "ger"
+      ],
+      "armies": 1,
+      "regs": 24,
+      "men": 23505,
+      "line": 21,
+      "support": 3,
+      "engaged": 19,
+      "supply": "unsupplied",
+      "morale": 0.97
+     },
+     "def": {
+      "nations": [
+       "pol"
+      ],
+      "armies": 1,
+      "regs": 1,
+      "men": 1000,
+      "line": 0,
+      "support": 1,
+      "engaged": 1,
+      "supply": "supplied",
+      "morale": 0.5
+     },
+     "joins": [],
+     "support": {
+      "att": 0,
+      "def": 0
+     },
+     "forecast": "Likely victory",
+     "winner": "attacker",
+     "rounds": 1,
+     "attLoss": 86,
+     "defLoss": 844
+    },
+    {
+     "id": "b6",
+     "week": 21,
+     "province": "warsaw",
+     "terrain": "plains",
+     "frontage": 16,
+     "fort": 2,
+     "river": false,
+     "defEntrenchWeeks": 0,
+     "stack": false,
+     "big": false,
+     "gerSide": "att",
+     "att": {
+      "nations": [
+       "ger"
+      ],
+      "armies": 1,
+      "regs": 24,
+      "men": 22456,
+      "line": 21,
+      "support": 3,
+      "engaged": 19,
+      "supply": "unsupplied",
+      "morale": 0.83
+     },
+     "def": {
+      "nations": [
+       "pol"
+      ],
+      "armies": 1,
+      "regs": 1,
+      "men": 1000,
+      "line": 1,
+      "support": 0,
+      "engaged": 1,
+      "supply": "supplied",
+      "morale": 0.5
+     },
+     "joins": [],
+     "support": {
+      "att": 0,
+      "def": 0
+     },
+     "forecast": "Likely victory",
+     "winner": "attacker",
+     "rounds": 1,
+     "attLoss": 245,
+     "defLoss": 826
+    },
+    {
+     "id": "b8",
+     "week": 23,
+     "province": "northwarsaw",
+     "terrain": "plains",
+     "frontage": 16,
+     "fort": 0,
+     "river": true,
+     "defEntrenchWeeks": 2,
+     "stack": true,
+     "big": false,
+     "gerSide": "att",
+     "att": {
+      "nations": [
+       "ger"
+      ],
+      "armies": 1,
+      "regs": 40,
+      "men": 38096,
+      "line": 29,
+      "support": 11,
+      "engaged": 24,
+      "supply": "unsupplied",
+      "morale": 0.94
+     },
+     "def": {
+      "nations": [
+       "pol"
+      ],
+      "armies": 1,
+      "regs": 14,
+      "men": 14000,
+      "line": 3,
+      "support": 11,
+      "engaged": 11,
+      "supply": "supplied",
+      "morale": 1
+     },
+     "joins": [],
+     "support": {
+      "att": 0.4,
+      "def": 0
+     },
+     "forecast": "Likely victory",
+     "winner": "attacker",
+     "rounds": 3,
+     "attLoss": 2693,
+     "defLoss": 4751
+    },
+    {
+     "id": "b12",
+     "week": 38,
+     "province": "eastodzandkielce",
+     "terrain": "plains",
+     "frontage": 16,
+     "fort": 0,
+     "river": false,
+     "defEntrenchWeeks": 0,
+     "stack": false,
+     "big": false,
+     "gerSide": "att",
+     "att": {
+      "nations": [
+       "ger"
+      ],
+      "armies": 1,
+      "regs": 7,
+      "men": 7000,
+      "line": 7,
+      "support": 0,
+      "engaged": 7,
+      "supply": "supplied",
+      "morale": 1
+     },
+     "def": {
+      "nations": [
+       "pol"
+      ],
+      "armies": 1,
+      "regs": 1,
+      "men": 1000,
+      "line": 0,
+      "support": 1,
+      "engaged": 1,
+      "supply": "supplied",
+      "morale": 0.6
+     },
+     "joins": [],
+     "support": {
+      "att": 0,
+      "def": 0
+     },
+     "forecast": "Likely victory",
+     "winner": "attacker",
+     "rounds": 1,
+     "attLoss": 70,
+     "defLoss": 448
+    },
+    {
+     "id": "b13",
+     "week": 38,
+     "province": "oppeln",
+     "terrain": "plains",
+     "frontage": 16,
+     "fort": 0,
+     "river": false,
+     "defEntrenchWeeks": 0,
+     "stack": false,
+     "big": false,
+     "gerSide": "def",
+     "att": {
+      "nations": [
+       "pol"
+      ],
+      "armies": 1,
+      "regs": 3,
+      "men": 3000,
+      "line": 2,
+      "support": 1,
+      "engaged": 3,
+      "supply": "supplied",
+      "morale": 1
+     },
+     "def": {
+      "nations": [
+       "ger"
+      ],
+      "armies": 1,
+      "regs": 10,
+      "men": 10000,
+      "line": 8,
+      "support": 2,
+      "engaged": 10,
+      "supply": "supplied",
+      "morale": 1
+     },
+     "joins": [],
+     "support": {
+      "att": 0,
+      "def": 0
+     },
+     "forecast": "Likely defeat",
+     "winner": "defender",
+     "rounds": 1,
+     "attLoss": 1619,
+     "defLoss": 270
+    },
+    {
+     "id": "b16",
+     "week": 40,
+     "province": "eastpoznan",
+     "terrain": "plains",
+     "frontage": 16,
+     "fort": 0,
+     "river": false,
+     "defEntrenchWeeks": 0,
+     "stack": false,
+     "big": false,
+     "gerSide": "att",
+     "att": {
+      "nations": [
+       "ger"
+      ],
+      "armies": 1,
+      "regs": 10,
+      "men": 10000,
+      "line": 8,
+      "support": 2,
+      "engaged": 10,
+      "supply": "supplied",
+      "morale": 1
+     },
+     "def": {
+      "nations": [
+       "pol"
+      ],
+      "armies": 1,
+      "regs": 3,
+      "men": 1381,
+      "line": 2,
+      "support": 1,
+      "engaged": 3,
+      "supply": "supplied",
+      "morale": 0
+     },
+     "joins": [],
+     "support": {
+      "att": 0,
+      "def": 0
+     },
+     "forecast": "Likely victory",
+     "winner": "attacker",
+     "rounds": 1,
+     "attLoss": 100,
+     "defLoss": 1054
+    }
+   ],
+   "invariantFailures": []
+  },
+  {
+   "workflow": "greedy",
+   "seed": 1,
+   "inputs": 44,
+   "autoOrders": 0,
+   "taken": 7,
+   "polLand": 31,
+   "gerLandLost": 0,
+   "bigStack": {
+    "battles": 0,
+    "won": 0
+   },
+   "gerMenLost": 52282,
+   "polMenLost": 17598,
+   "stackMenEnd": 3000,
+   "stackDestroyedWeek": null,
+   "battles": {
+    "total": 10,
+    "gerWon": 7,
+    "gerLost": 3,
+    "gerAttacks": 9,
+    "gerAttacksOutnumbered": 2,
+    "stackBattles": 3,
+    "stackWon": 1
+   },
+   "stackCommit": [
+    {
+     "week": 6,
+     "province": "inowrocaw",
+     "gerRegs": 76,
+     "gerEngaged": 24,
+     "polRegs": 29,
+     "joinsLater": 14,
+     "winner": "attacker"
+    },
+    {
+     "week": 14,
+     "province": "northwarsaw",
+     "gerRegs": 2,
+     "gerEngaged": 2,
+     "polRegs": 31,
+     "joinsLater": 0,
+     "winner": "defender"
+    },
+    {
+     "week": 21,
+     "province": "odz",
+     "gerRegs": 12,
+     "gerEngaged": 12,
+     "polRegs": 38,
+     "joinsLater": 0,
+     "winner": "defender"
+    }
+   ],
+   "idleArmyWeeks": 107,
+   "armyWeeks": 206,
+   "issues": [],
+   "traces": [
+    {
+     "id": "b1",
+     "week": 6,
+     "province": "inowrocaw",
+     "terrain": "plains",
+     "frontage": 16,
+     "fort": 0,
+     "river": false,
+     "defEntrenchWeeks": 0,
+     "stack": true,
+     "big": false,
+     "gerSide": "att",
+     "att": {
+      "nations": [
+       "ger"
+      ],
+      "armies": 3,
+      "regs": 76,
+      "men": 73872,
+      "line": 60,
+      "support": 16,
+      "engaged": 24,
+      "supply": "unsupplied",
+      "morale": 0.94
+     },
+     "def": {
+      "nations": [
+       "pol"
+      ],
+      "armies": 1,
+      "regs": 29,
+      "men": 29000,
+      "line": 18,
+      "support": 11,
+      "engaged": 24,
+      "supply": "supplied",
+      "morale": 1
+     },
+     "joins": [
+      {
+       "week": 8,
+       "side": "att",
+       "regs": 12
+      },
+      {
+       "week": 11,
+       "side": "att",
+       "regs": 2
+      }
+     ],
+     "support": {
+      "att": 0,
+      "def": 0
+     },
+     "forecast": "Uncertain",
+     "winner": "attacker",
+     "rounds": 6,
+     "attLoss": 14810,
+     "defLoss": 8329
+    },
+    {
+     "id": "b2",
+     "week": 8,
+     "province": "warsaw",
+     "terrain": "plains",
+     "frontage": 16,
+     "fort": 2,
+     "river": true,
+     "defEntrenchWeeks": 0,
+     "stack": false,
+     "big": false,
+     "gerSide": "att",
+     "att": {
+      "nations": [
+       "ger"
+      ],
+      "armies": 1,
+      "regs": 12,
+      "men": 12000,
+      "line": 10,
+      "support": 2,
+      "engaged": 12,
+      "supply": "supplied",
+      "morale": 1
+     },
+     "def": {
+      "nations": [
+       "pol"
+      ],
+      "armies": 2,
+      "regs": 3,
+      "men": 3000,
+      "line": 3,
+      "support": 0,
+      "engaged": 3,
+      "supply": "supplied",
+      "morale": 0.53
+     },
+     "joins": [],
+     "support": {
+      "att": 0,
+      "def": 0
+     },
+     "forecast": "Likely victory",
+     "winner": "attacker",
+     "rounds": 1,
+     "attLoss": 242,
+     "defLoss": 642
+    },
+    {
+     "id": "b3",
+     "week": 9,
+     "province": "warsaw",
+     "terrain": "plains",
+     "frontage": 16,
+     "fort": 2,
+     "river": false,
+     "defEntrenchWeeks": 0,
+     "stack": false,
+     "big": false,
+     "gerSide": "att",
+     "att": {
+      "nations": [
+       "ger"
+      ],
+      "armies": 1,
+      "regs": 12,
+      "men": 11758,
+      "line": 10,
+      "support": 2,
+      "engaged": 12,
+      "supply": "supplied",
+      "morale": 0.95
+     },
+     "def": {
+      "nations": [
+       "pol"
+      ],
+      "armies": 1,
+      "regs": 1,
+      "men": 1000,
+      "line": 1,
+      "support": 0,
+      "engaged": 1,
+      "supply": "supplied",
+      "morale": 0.5
+     },
+     "joins": [],
+     "support": {
+      "att": 0,
+      "def": 0
+     },
+     "forecast": "Likely victory",
+     "winner": "attacker",
+     "rounds": 1,
+     "attLoss": 76,
+     "defLoss": 699
+    },
+    {
+     "id": "b4",
+     "week": 11,
+     "province": "warsaw",
+     "terrain": "plains",
+     "frontage": 16,
+     "fort": 2,
+     "river": false,
+     "defEntrenchWeeks": 0,
+     "stack": false,
+     "big": false,
+     "gerSide": "att",
+     "att": {
+      "nations": [
+       "ger"
+      ],
+      "armies": 1,
+      "regs": 12,
+      "men": 11682,
+      "line": 10,
+      "support": 2,
+      "engaged": 12,
+      "supply": "supplied",
+      "morale": 0.98
+     },
+     "def": {
+      "nations": [
+       "pol"
+      ],
+      "armies": 1,
+      "regs": 1,
+      "men": 1000,
+      "line": 0,
+      "support": 1,
+      "engaged": 1,
+      "supply": "supplied",
+      "morale": 0.5
+     },
+     "joins": [],
+     "support": {
+      "att": 0,
+      "def": 0
+     },
+     "forecast": "Likely victory",
+     "winner": "attacker",
+     "rounds": 1,
+     "attLoss": 66,
+     "defLoss": 697
+    },
+    {
+     "id": "b5",
+     "week": 13,
+     "province": "warsaw",
+     "terrain": "plains",
+     "frontage": 16,
+     "fort": 2,
+     "river": false,
+     "defEntrenchWeeks": 0,
+     "stack": false,
+     "big": false,
+     "gerSide": "att",
+     "att": {
+      "nations": [
+       "ger"
+      ],
+      "armies": 1,
+      "regs": 12,
+      "men": 11616,
+      "line": 10,
+      "support": 2,
+      "engaged": 12,
+      "supply": "supplied",
+      "morale": 1
+     },
+     "def": {
+      "nations": [
+       "pol"
+      ],
+      "armies": 1,
+      "regs": 1,
+      "men": 1000,
+      "line": 0,
+      "support": 1,
+      "engaged": 1,
+      "supply": "supplied",
+      "morale": 0.5
+     },
+     "joins": [],
+     "support": {
+      "att": 0,
+      "def": 0
+     },
+     "forecast": "Likely victory",
+     "winner": "attacker",
+     "rounds": 1,
+     "attLoss": 66,
+     "defLoss": 747
+    },
+    {
+     "id": "b6",
+     "week": 14,
+     "province": "northwarsaw",
+     "terrain": "plains",
+     "frontage": 16,
+     "fort": 0,
+     "river": true,
+     "defEntrenchWeeks": 0,
+     "stack": true,
+     "big": false,
+     "gerSide": "att",
+     "att": {
+      "nations": [
+       "ger"
+      ],
+      "armies": 1,
+      "regs": 2,
+      "men": 1698,
+      "line": 2,
+      "support": 0,
+      "engaged": 2,
+      "supply": "unsupplied",
+      "morale": 0.61
+     },
+     "def": {
+      "nations": [
+       "pol"
+      ],
+      "armies": 2,
+      "regs": 31,
+      "men": 27021,
+      "line": 20,
+      "support": 11,
+      "engaged": 24,
+      "supply": "supplied",
+      "morale": 0.22
+     },
+     "joins": [],
+     "support": {
+      "att": 0,
+      "def": 0
+     },
+     "forecast": "Likely defeat",
+     "winner": "defender",
+     "rounds": 1,
+     "attLoss": 1698,
+     "defLoss": 144
+    },
+    {
+     "id": "b7",
+     "week": 18,
+     "province": "northwarsaw",
+     "terrain": "plains",
+     "frontage": 16,
+     "fort": 0,
+     "river": false,
+     "defEntrenchWeeks": 0,
+     "stack": false,
+     "big": false,
+     "gerSide": "att",
+     "att": {
+      "nations": [
+       "ger"
+      ],
+      "armies": 1,
+      "regs": 12,
+      "men": 11550,
+      "line": 10,
+      "support": 2,
+      "engaged": 12,
+      "supply": "strained",
+      "morale": 1
+     },
+     "def": {
+      "nations": [
+       "pol"
+      ],
+      "armies": 1,
+      "regs": 1,
+      "men": 903,
+      "line": 0,
+      "support": 1,
+      "engaged": 1,
+      "supply": "supplied",
+      "morale": 0.41
+     },
+     "joins": [],
+     "support": {
+      "att": 0,
+      "def": 0
+     },
+     "forecast": "Likely victory",
+     "winner": "attacker",
+     "rounds": 1,
+     "attLoss": 66,
+     "defLoss": 903
+    },
+    {
+     "id": "b8",
+     "week": 21,
+     "province": "odz",
+     "terrain": "plains",
+     "frontage": 16,
+     "fort": 0,
+     "river": true,
+     "defEntrenchWeeks": 1,
+     "stack": true,
+     "big": false,
+     "gerSide": "att",
+     "att": {
+      "nations": [
+       "ger"
+      ],
+      "armies": 1,
+      "regs": 12,
+      "men": 12000,
+      "line": 10,
+      "support": 2,
+      "engaged": 12,
+      "supply": "supplied",
+      "morale": 1
+     },
+     "def": {
+      "nations": [
+       "pol"
+      ],
+      "armies": 5,
+      "regs": 38,
+      "men": 38000,
+      "line": 25,
+      "support": 13,
+      "engaged": 24,
+      "supply": "supplied",
+      "morale": 0.89
+     },
+     "joins": [],
+     "support": {
+      "att": 0,
+      "def": 0
+     },
+     "forecast": "Likely defeat",
+     "winner": "defender",
+     "rounds": 2,
+     "attLoss": 5910,
+     "defLoss": 880
+    },
+    {
+     "id": "b12",
+     "week": 30,
+     "province": "odz",
+     "terrain": "plains",
+     "frontage": 16,
+     "fort": 0,
+     "river": false,
+     "defEntrenchWeeks": 0,
+     "stack": false,
+     "big": false,
+     "gerSide": "att",
+     "att": {
+      "nations": [
+       "ger"
+      ],
+      "armies": 1,
+      "regs": 12,
+      "men": 12000,
+      "line": 10,
+      "support": 2,
+      "engaged": 12,
+      "supply": "supplied",
+      "morale": 0.64
+     },
+     "def": {
+      "nations": [
+       "pol"
+      ],
+      "armies": 1,
+      "regs": 6,
+      "men": 6000,
+      "line": 6,
+      "support": 0,
+      "engaged": 6,
+      "supply": "supplied",
+      "morale": 1
+     },
+     "joins": [],
+     "support": {
+      "att": 0,
+      "def": 0
+     },
+     "forecast": "Likely victory",
+     "winner": "attacker",
+     "rounds": 2,
+     "attLoss": 1124,
+     "defLoss": 1902
+    },
+    {
+     "id": "b14",
+     "week": 34,
+     "province": "odz",
+     "terrain": "plains",
+     "frontage": 16,
+     "fort": 0,
+     "river": false,
+     "defEntrenchWeeks": 3,
+     "stack": false,
+     "big": false,
+     "gerSide": "def",
+     "att": {
+      "nations": [
+       "pol"
+      ],
+      "armies": 2,
+      "regs": 15,
+      "men": 15000,
+      "line": 12,
+      "support": 3,
+      "engaged": 15,
+      "supply": "strained",
+      "morale": 1
+     },
+     "def": {
+      "nations": [
+       "ger"
+      ],
+      "armies": 1,
+      "regs": 12,
+      "men": 12000,
+      "line": 10,
+      "support": 2,
+      "engaged": 12,
+      "supply": "supplied",
+      "morale": 0.6
+     },
+     "joins": [],
+     "support": {
+      "att": 0,
+      "def": 0
+     },
+     "forecast": "Likely victory",
+     "winner": "attacker",
+     "rounds": 2,
+     "attLoss": 2655,
+     "defLoss": 1432
+    }
+   ],
+   "invariantFailures": []
+  },
+  {
+   "workflow": "massed",
+   "seed": 1,
+   "inputs": 24,
+   "autoOrders": 0,
+   "taken": 0,
+   "polLand": 31,
+   "gerLandLost": 11,
+   "bigStack": {
+    "battles": 0,
+    "won": 0
+   },
+   "gerMenLost": 45698,
+   "polMenLost": 7076,
+   "stackMenEnd": 23000,
+   "stackDestroyedWeek": null,
+   "battles": {
+    "total": 2,
+    "gerWon": 1,
+    "gerLost": 1,
+    "gerAttacks": 1,
+    "gerAttacksOutnumbered": 0,
+    "stackBattles": 1,
+    "stackWon": 0
+   },
+   "stackCommit": [
+    {
+     "week": 9,
+     "province": "inowrocaw",
+     "gerRegs": 100,
+     "gerEngaged": 24,
+     "polRegs": 29,
+     "joinsLater": 2,
+     "winner": "defender"
+    }
+   ],
+   "idleArmyWeeks": 68,
+   "armyWeeks": 165,
+   "issues": [],
+   "traces": [
+    {
+     "id": "b1",
+     "week": 9,
+     "province": "inowrocaw",
+     "terrain": "plains",
+     "frontage": 16,
+     "fort": 0,
+     "river": true,
+     "defEntrenchWeeks": 0,
+     "stack": true,
+     "big": false,
+     "gerSide": "att",
+     "att": {
+      "nations": [
+       "ger"
+      ],
+      "armies": 3,
+      "regs": 100,
+      "men": 95472,
+      "line": 80,
+      "support": 20,
+      "engaged": 24,
+      "supply": "unsupplied",
+      "morale": 0.91
+     },
+     "def": {
+      "nations": [
+       "pol"
+      ],
+      "armies": 2,
+      "regs": 29,
+      "men": 29000,
+      "line": 18,
+      "support": 11,
+      "engaged": 24,
+      "supply": "supplied",
+      "morale": 1
+     },
+     "joins": [
+      {
+       "week": 11,
+       "side": "att",
+       "regs": 2
+      }
+     ],
+     "support": {
+      "att": 0,
+      "def": 0
+     },
+     "forecast": "Likely victory",
+     "winner": "defender",
+     "rounds": 6,
+     "attLoss": 15014,
+     "defLoss": 5259
+    },
+    {
+     "id": "b2",
+     "week": 16,
+     "province": "elbing",
+     "terrain": "plains",
+     "frontage": 16,
+     "fort": 0,
+     "river": false,
+     "defEntrenchWeeks": 0,
+     "stack": false,
+     "big": false,
+     "gerSide": "def",
+     "att": {
+      "nations": [
+       "pol"
+      ],
+      "armies": 1,
+      "regs": 3,
+      "men": 3000,
+      "line": 2,
+      "support": 1,
+      "engaged": 3,
+      "supply": "supplied",
+      "morale": 0.91
+     },
+     "def": {
+      "nations": [
+       "ger"
+      ],
+      "armies": 4,
+      "regs": 102,
+      "men": 80180,
+      "line": 82,
+      "support": 20,
+      "engaged": 24,
+      "supply": "unsupplied",
+      "morale": 0.14
+     },
+     "joins": [],
+     "support": {
+      "att": 0,
+      "def": 0
+     },
+     "forecast": "Likely defeat",
+     "winner": "defender",
+     "rounds": 1,
+     "attLoss": 1817,
+     "defLoss": 160
+    }
+   ],
+   "invariantFailures": []
+  },
+  {
+   "workflow": "auto",
+   "seed": 2,
+   "inputs": 3,
+   "autoOrders": 262,
+   "taken": 9,
+   "polLand": 31,
+   "gerLandLost": 0,
+   "bigStack": {
+    "battles": 0,
+    "won": 0
+   },
+   "gerMenLost": 7894,
+   "polMenLost": 5620,
+   "stackMenEnd": 5000,
+   "stackDestroyedWeek": null,
+   "battles": {
+    "total": 5,
+    "gerWon": 5,
+    "gerLost": 0,
+    "gerAttacks": 4,
+    "gerAttacksOutnumbered": 1,
+    "stackBattles": 0,
+    "stackWon": 0
+   },
+   "stackCommit": [],
+   "idleArmyWeeks": 2,
+   "armyWeeks": 403,
+   "issues": [],
+   "traces": [
+    {
+     "id": "b4",
+     "week": 22,
+     "province": "warsaw",
+     "terrain": "plains",
+     "frontage": 16,
+     "fort": 2,
+     "river": false,
+     "defEntrenchWeeks": 0,
+     "stack": false,
+     "big": false,
+     "gerSide": "att",
+     "att": {
+      "nations": [
+       "ger"
+      ],
+      "armies": 1,
+      "regs": 18,
+      "men": 18000,
+      "line": 18,
+      "support": 0,
+      "engaged": 16,
+      "supply": "supplied",
+      "morale": 1
+     },
+     "def": {
+      "nations": [
+       "pol"
+      ],
+      "armies": 1,
+      "regs": 4,
+      "men": 4000,
+      "line": 3,
+      "support": 1,
+      "engaged": 4,
+      "supply": "supplied",
+      "morale": 0.6
+     },
+     "joins": [],
+     "support": {
+      "att": 0,
+      "def": 0
+     },
+     "forecast": "Likely victory",
+     "winner": "attacker",
+     "rounds": 1,
+     "attLoss": 480,
+     "defLoss": 728
+    },
+    {
+     "id": "b6",
+     "week": 23,
+     "province": "breslau",
+     "terrain": "plains",
+     "frontage": 16,
+     "fort": 0,
+     "river": false,
+     "defEntrenchWeeks": 0,
+     "stack": false,
+     "big": false,
+     "gerSide": "att",
+     "att": {
+      "nations": [
+       "ger"
+      ],
+      "armies": 1,
+      "regs": 20,
+      "men": 20000,
+      "line": 20,
+      "support": 0,
+      "engaged": 16,
+      "supply": "strained",
+      "morale": 1
+     },
+     "def": {
+      "nations": [
+       "pol"
+      ],
+      "armies": 1,
+      "regs": 11,
+      "men": 11000,
+      "line": 11,
+      "support": 0,
+      "engaged": 11,
+      "supply": "supplied",
+      "morale": 1
+     },
+     "joins": [],
+     "support": {
+      "att": 0,
+      "def": 0.4
+     },
+     "forecast": "Likely victory",
+     "winner": "attacker",
+     "rounds": 3,
+     "attLoss": 3592,
+     "defLoss": 3696
+    },
+    {
+     "id": "b9",
+     "week": 25,
+     "province": "biaystok",
+     "terrain": "forest",
+     "frontage": 10,
+     "fort": 0,
+     "river": false,
+     "defEntrenchWeeks": 0,
+     "stack": false,
+     "big": false,
+     "gerSide": "def",
+     "att": {
+      "nations": [
+       "pol"
+      ],
+      "armies": 1,
+      "regs": 4,
+      "men": 3272,
+      "line": 3,
+      "support": 1,
+      "engaged": 4,
+      "supply": "supplied",
+      "morale": 0.17
+     },
+     "def": {
+      "nations": [
+       "ger"
+      ],
+      "armies": 1,
+      "regs": 6,
+      "men": 6000,
+      "line": 1,
+      "support": 5,
+      "engaged": 6,
+      "supply": "supplied",
+      "morale": 1
+     },
+     "joins": [],
+     "support": {
+      "att": 0,
+      "def": 0
+     },
+     "forecast": "Likely defeat",
+     "winner": "defender",
+     "rounds": 1,
+     "attLoss": 503,
+     "defLoss": 202
+    },
+    {
+     "id": "b11",
+     "week": 27,
+     "province": "poznan",
+     "terrain": "plains",
+     "frontage": 16,
+     "fort": 1,
+     "river": false,
+     "defEntrenchWeeks": 0,
+     "stack": false,
+     "big": false,
+     "gerSide": "att",
+     "att": {
+      "nations": [
+       "ger"
+      ],
+      "armies": 1,
+      "regs": 8,
+      "men": 8000,
+      "line": 8,
+      "support": 0,
+      "engaged": 8,
+      "supply": "strained",
+      "morale": 1
+     },
+     "def": {
+      "nations": [
+       "pol"
+      ],
+      "armies": 1,
+      "regs": 11,
+      "men": 7304,
+      "line": 11,
+      "support": 0,
+      "engaged": 11,
+      "supply": "supplied",
+      "morale": 0.13
+     },
+     "joins": [],
+     "support": {
+      "att": 0,
+      "def": 0
+     },
+     "forecast": "Likely victory",
+     "winner": "attacker",
+     "rounds": 1,
+     "attLoss": 544,
+     "defLoss": 297
+    },
+    {
+     "id": "b14",
+     "week": 31,
+     "province": "koslin",
+     "terrain": "plains",
+     "frontage": 16,
+     "fort": 0,
+     "river": false,
+     "defEntrenchWeeks": 2,
+     "stack": false,
+     "big": false,
+     "gerSide": "att",
+     "att": {
+      "nations": [
+       "ger"
+      ],
+      "armies": 1,
+      "regs": 8,
+      "men": 7456,
+      "line": 8,
+      "support": 0,
+      "engaged": 8,
+      "supply": "supplied",
+      "morale": 0.98
+     },
+     "def": {
+      "nations": [
+       "pol"
+      ],
+      "armies": 1,
+      "regs": 11,
+      "men": 8657,
+      "line": 11,
+      "support": 0,
+      "engaged": 11,
+      "supply": "supplied",
+      "morale": 0.14
+     },
+     "joins": [],
+     "support": {
+      "att": 0,
+      "def": 0
+     },
+     "forecast": "Likely victory",
+     "winner": "attacker",
+     "rounds": 1,
+     "attLoss": 640,
+     "defLoss": 396
+    }
+   ],
+   "invariantFailures": []
+  },
+  {
+   "workflow": "delegated",
+   "seed": 2,
+   "inputs": 4,
+   "autoOrders": 186,
+   "taken": 4,
+   "polLand": 31,
+   "gerLandLost": 0,
+   "bigStack": {
+    "battles": 0,
+    "won": 0
+   },
+   "gerMenLost": 11922,
+   "polMenLost": 4374,
+   "stackMenEnd": 0,
+   "stackDestroyedWeek": 25,
+   "battles": {
+    "total": 3,
+    "gerWon": 2,
+    "gerLost": 1,
+    "gerAttacks": 2,
+    "gerAttacksOutnumbered": 1,
+    "stackBattles": 1,
+    "stackWon": 0
+   },
+   "stackCommit": [
+    {
+     "week": 17,
+     "province": "inowrocaw",
+     "gerRegs": 3,
+     "gerEngaged": 3,
+     "polRegs": 31,
+     "joinsLater": 0,
+     "winner": "defender"
+    }
+   ],
+   "idleArmyWeeks": 10,
+   "armyWeeks": 377,
+   "issues": [],
+   "traces": [
+    {
+     "id": "b1",
+     "week": 17,
+     "province": "inowrocaw",
+     "terrain": "plains",
+     "frontage": 16,
+     "fort": 0,
+     "river": true,
+     "defEntrenchWeeks": 0,
+     "stack": true,
+     "big": false,
+     "gerSide": "att",
+     "att": {
+      "nations": [
+       "ger"
+      ],
+      "armies": 1,
+      "regs": 3,
+      "men": 3000,
+      "line": 1,
+      "support": 2,
+      "engaged": 3,
+      "supply": "supplied",
+      "morale": 1
+     },
+     "def": {
+      "nations": [
+       "pol"
+      ],
+      "armies": 3,
+      "regs": 31,
+      "men": 31000,
+      "line": 17,
+      "support": 14,
+      "engaged": 24,
+      "supply": "supplied",
+      "morale": 0.98
+     },
+     "joins": [],
+     "support": {
+      "att": 0,
+      "def": 0
+     },
+     "forecast": "Likely defeat",
+     "winner": "defender",
+     "rounds": 1,
+     "attLoss": 2440,
+     "defLoss": 240
+    },
+    {
+     "id": "b2",
+     "week": 22,
+     "province": "oppeln",
+     "terrain": "plains",
+     "frontage": 16,
+     "fort": 0,
+     "river": false,
+     "defEntrenchWeeks": 0,
+     "stack": false,
+     "big": false,
+     "gerSide": "def",
+     "att": {
+      "nations": [
+       "pol"
+      ],
+      "armies": 1,
+      "regs": 3,
+      "men": 3000,
+      "line": 3,
+      "support": 0,
+      "engaged": 3,
+      "supply": "supplied",
+      "morale": 1
+     },
+     "def": {
+      "nations": [
+       "ger"
+      ],
+      "armies": 1,
+      "regs": 28,
+      "men": 27216,
+      "line": 28,
+      "support": 0,
+      "engaged": 16,
+      "supply": "unsupplied",
+      "morale": 0.94
+     },
+     "joins": [],
+     "support": {
+      "att": 0,
+      "def": 0
+     },
+     "forecast": "Likely defeat",
+     "winner": "defender",
+     "rounds": 1,
+     "attLoss": 1542,
+     "defLoss": 272
+    },
+    {
+     "id": "b6",
+     "week": 32,
+     "province": "katowice",
+     "terrain": "plains",
+     "frontage": 16,
+     "fort": 1,
+     "river": true,
+     "defEntrenchWeeks": 3,
+     "stack": false,
+     "big": false,
+     "gerSide": "att",
+     "att": {
+      "nations": [
+       "ger"
+      ],
+      "armies": 1,
+      "regs": 21,
+      "men": 21000,
+      "line": 12,
+      "support": 9,
+      "engaged": 20,
+      "supply": "supplied",
+      "morale": 1
+     },
+     "def": {
+      "nations": [
+       "pol"
+      ],
+      "armies": 3,
+      "regs": 9,
+      "men": 9000,
+      "line": 9,
+      "support": 0,
+      "engaged": 9,
+      "supply": "supplied",
+      "morale": 1
+     },
+     "joins": [],
+     "support": {
+      "att": 0,
+      "def": 0
+     },
+     "forecast": "Likely victory",
+     "winner": "attacker",
+     "rounds": 2,
+     "attLoss": 1929,
+     "defLoss": 2592
+    }
+   ],
+   "invariantFailures": []
+  },
+  {
+   "workflow": "greedy",
+   "seed": 2,
+   "inputs": 72,
+   "autoOrders": 0,
+   "taken": 5,
+   "polLand": 31,
+   "gerLandLost": 2,
+   "bigStack": {
+    "battles": 0,
+    "won": 0
+   },
+   "gerMenLost": 51118,
+   "polMenLost": 10257,
+   "stackMenEnd": 4000,
+   "stackDestroyedWeek": null,
+   "battles": {
+    "total": 7,
+    "gerWon": 2,
+    "gerLost": 5,
+    "gerAttacks": 6,
+    "gerAttacksOutnumbered": 3,
+    "stackBattles": 4,
+    "stackWon": 0
+   },
+   "stackCommit": [
+    {
+     "week": 6,
+     "province": "odz",
+     "gerRegs": 12,
+     "gerEngaged": 12,
+     "polRegs": 26,
+     "joinsLater": 0,
+     "winner": "defender"
+    },
+    {
+     "week": 31,
+     "province": "odz",
+     "gerRegs": 12,
+     "gerEngaged": 12,
+     "polRegs": 9,
+     "joinsLater": 0,
+     "winner": "attacker"
+    },
+    {
+     "week": 37,
+     "province": "odz",
+     "gerRegs": 76,
+     "gerEngaged": 24,
+     "polRegs": 18,
+     "joinsLater": 0,
+     "winner": "defender"
+    },
+    {
+     "week": 40,
+     "province": "odz",
+     "gerRegs": 12,
+     "gerEngaged": 12,
+     "polRegs": 21,
+     "joinsLater": 0,
+     "winner": "defender"
+    }
+   ],
+   "idleArmyWeeks": 1,
+   "armyWeeks": 200,
+   "issues": [],
+   "traces": [
+    {
+     "id": "b1",
+     "week": 6,
+     "province": "odz",
+     "terrain": "plains",
+     "frontage": 16,
+     "fort": 0,
+     "river": false,
+     "defEntrenchWeeks": 0,
+     "stack": true,
+     "big": false,
+     "gerSide": "att",
+     "att": {
+      "nations": [
+       "ger"
+      ],
+      "armies": 1,
+      "regs": 12,
+      "men": 12000,
+      "line": 10,
+      "support": 2,
+      "engaged": 12,
+      "supply": "supplied",
+      "morale": 1
+     },
+     "def": {
+      "nations": [
+       "pol"
+      ],
+      "armies": 1,
+      "regs": 26,
+      "men": 26000,
+      "line": 15,
+      "support": 11,
+      "engaged": 23,
+      "supply": "supplied",
+      "morale": 1
+     },
+     "joins": [],
+     "support": {
+      "att": 0,
+      "def": 0
+     },
+     "forecast": "Likely defeat",
+     "winner": "defender",
+     "rounds": 1,
+     "attLoss": 3898,
+     "defLoss": 1026
+    },
+    {
+     "id": "b2",
+     "week": 16,
+     "province": "warsaw",
+     "terrain": "plains",
+     "frontage": 16,
+     "fort": 2,
+     "river": false,
+     "defEntrenchWeeks": 0,
+     "stack": false,
+     "big": false,
+     "gerSide": "att",
+     "att": {
+      "nations": [
+       "ger"
+      ],
+      "armies": 4,
+      "regs": 88,
+      "men": 74860,
+      "line": 70,
+      "support": 18,
+      "engaged": 24,
+      "supply": "unsupplied",
+      "morale": 0.67
+     },
+     "def": {
+      "nations": [
+       "pol"
+      ],
+      "armies": 1,
+      "regs": 1,
+      "men": 1000,
+      "line": 0,
+      "support": 1,
+      "engaged": 1,
+      "supply": "supplied",
+      "morale": 0.5
+     },
+     "joins": [],
+     "support": {
+      "att": 0,
+      "def": 0
+     },
+     "forecast": "Likely victory",
+     "winner": "attacker",
+     "rounds": 1,
+     "attLoss": 114,
+     "defLoss": 816
+    },
+    {
+     "id": "b3",
+     "week": 21,
+     "province": "odz",
+     "terrain": "plains",
+     "frontage": 16,
+     "fort": 0,
+     "river": true,
+     "defEntrenchWeeks": 0,
+     "stack": false,
+     "big": false,
+     "gerSide": "att",
+     "att": {
+      "nations": [
+       "ger"
+      ],
+      "armies": 2,
+      "regs": 24,
+      "men": 21570,
+      "line": 20,
+      "support": 4,
+      "engaged": 20,
+      "supply": "strained",
+      "morale": 0.74
+     },
+     "def": {
+      "nations": [
+       "pol"
+      ],
+      "armies": 2,
+      "regs": 10,
+      "men": 10000,
+      "line": 10,
+      "support": 0,
+      "engaged": 10,
+      "supply": "supplied",
+      "morale": 1
+     },
+     "joins": [
+      {
+       "week": 22,
+       "side": "att",
+       "regs": 76
+      },
+      {
+       "week": 22,
+       "side": "att",
+       "regs": 67
+      },
+      {
+       "week": 22,
+       "side": "att",
+       "regs": 27
+      }
+     ],
+     "support": {
+      "att": 0,
+      "def": 0
+     },
+     "forecast": "Likely victory",
+     "winner": "attacker",
+     "rounds": 3,
+     "attLoss": 2878,
+     "defLoss": 3870
+    },
+    {
+     "id": "b8",
+     "week": 31,
+     "province": "odz",
+     "terrain": "plains",
+     "frontage": 16,
+     "fort": 0,
+     "river": false,
+     "defEntrenchWeeks": 8,
+     "stack": true,
+     "big": false,
+     "gerSide": "def",
+     "att": {
+      "nations": [
+       "pol"
+      ],
+      "armies": 2,
+      "regs": 9,
+      "men": 9000,
+      "line": 5,
+      "support": 4,
+      "engaged": 9,
+      "supply": "supplied",
+      "morale": 1
+     },
+     "def": {
+      "nations": [
+       "ger"
+      ],
+      "armies": 1,
+      "regs": 12,
+      "men": 8914,
+      "line": 10,
+      "support": 2,
+      "engaged": 12,
+      "supply": "strained",
+      "morale": 0.61
+     },
+     "joins": [],
+     "support": {
+      "att": 0.07,
+      "def": 0
+     },
+     "forecast": "Likely victory",
+     "winner": "attacker",
+     "rounds": 2,
+     "attLoss": 1673,
+     "defLoss": 1642
+    },
+    {
+     "id": "b10",
+     "week": 35,
+     "province": "odz",
+     "terrain": "plains",
+     "frontage": 16,
+     "fort": 0,
+     "river": false,
+     "defEntrenchWeeks": 0,
+     "stack": false,
+     "big": false,
+     "gerSide": "att",
+     "att": {
+      "nations": [
+       "ger"
+      ],
+      "armies": 1,
+      "regs": 12,
+      "men": 8618,
+      "line": 10,
+      "support": 2,
+      "engaged": 12,
+      "supply": "strained",
+      "morale": 0.56
+     },
+     "def": {
+      "nations": [
+       "pol"
+      ],
+      "armies": 6,
+      "regs": 22,
+      "men": 22000,
+      "line": 18,
+      "support": 4,
+      "engaged": 20,
+      "supply": "supplied",
+      "morale": 1
+     },
+     "joins": [],
+     "support": {
+      "att": 0,
+      "def": 0
+     },
+     "forecast": "Likely defeat",
+     "winner": "defender",
+     "rounds": 1,
+     "attLoss": 3034,
+     "defLoss": 556
+    },
+    {
+     "id": "b11",
+     "week": 37,
+     "province": "odz",
+     "terrain": "plains",
+     "frontage": 16,
+     "fort": 0,
+     "river": false,
+     "defEntrenchWeeks": 0,
+     "stack": true,
+     "big": false,
+     "gerSide": "att",
+     "att": {
+      "nations": [
+       "ger"
+      ],
+      "armies": 3,
+      "regs": 76,
+      "men": 51432,
+      "line": 60,
+      "support": 16,
+      "engaged": 24,
+      "supply": "unsupplied",
+      "morale": 0.46
+     },
+     "def": {
+      "nations": [
+       "pol"
+      ],
+      "armies": 5,
+      "regs": 18,
+      "men": 18000,
+      "line": 12,
+      "support": 6,
+      "engaged": 18,
+      "supply": "supplied",
+      "morale": 0.96
+     },
+     "joins": [],
+     "support": {
+      "att": 0,
+      "def": 0.4
+     },
+     "forecast": "Likely defeat",
+     "winner": "defender",
+     "rounds": 2,
+     "attLoss": 5528,
+     "defLoss": 1566
+    },
+    {
+     "id": "b14",
+     "week": 40,
+     "province": "odz",
+     "terrain": "plains",
+     "frontage": 16,
+     "fort": 0,
+     "river": true,
+     "defEntrenchWeeks": 1,
+     "stack": true,
+     "big": false,
+     "gerSide": "att",
+     "att": {
+      "nations": [
+       "ger"
+      ],
+      "armies": 1,
+      "regs": 12,
+      "men": 12000,
+      "line": 10,
+      "support": 2,
+      "engaged": 12,
+      "supply": "supplied",
+      "morale": 0.7
+     },
+     "def": {
+      "nations": [
+       "pol"
+      ],
+      "armies": 6,
+      "regs": 21,
+      "men": 21000,
+      "line": 11,
+      "support": 10,
+      "engaged": 19,
+      "supply": "supplied",
+      "morale": 0.91
+     },
+     "joins": [],
+     "support": {
+      "att": 0,
+      "def": 0
+     },
+     "forecast": "Likely defeat",
+     "winner": "defender",
+     "rounds": 1,
+     "attLoss": 3934,
+     "defLoss": 750
+    }
+   ],
+   "invariantFailures": []
+  },
+  {
+   "workflow": "massed",
+   "seed": 2,
+   "inputs": 28,
+   "autoOrders": 0,
+   "taken": 0,
+   "polLand": 31,
+   "gerLandLost": 16,
+   "bigStack": {
+    "battles": 0,
+    "won": 0
+   },
+   "gerMenLost": 46378,
+   "polMenLost": 3067,
+   "stackMenEnd": 17000,
+   "stackDestroyedWeek": null,
+   "battles": {
+    "total": 1,
+    "gerWon": 0,
+    "gerLost": 1,
+    "gerAttacks": 1,
+    "gerAttacksOutnumbered": 0,
+    "stackBattles": 1,
+    "stackWon": 0
+   },
+   "stackCommit": [
+    {
+     "week": 15,
+     "province": "kielce",
+     "gerRegs": 100,
+     "gerEngaged": 24,
+     "polRegs": 23,
+     "joinsLater": 0,
+     "winner": "defender"
+    }
+   ],
+   "idleArmyWeeks": 36,
+   "armyWeeks": 132,
+   "issues": [],
+   "traces": [
+    {
+     "id": "b1",
+     "week": 15,
+     "province": "kielce",
+     "terrain": "plains",
+     "frontage": 16,
+     "fort": 0,
+     "river": false,
+     "defEntrenchWeeks": 2,
+     "stack": true,
+     "big": false,
+     "gerSide": "att",
+     "att": {
+      "nations": [
+       "ger"
+      ],
+      "armies": 3,
+      "regs": 100,
+      "men": 86821,
+      "line": 80,
+      "support": 20,
+      "engaged": 24,
+      "supply": "unsupplied",
+      "morale": 0.71
+     },
+     "def": {
+      "nations": [
+       "pol"
+      ],
+      "armies": 1,
+      "regs": 23,
+      "men": 23000,
+      "line": 12,
+      "support": 11,
+      "engaged": 20,
+      "supply": "supplied",
+      "morale": 1
+     },
+     "joins": [],
+     "support": {
+      "att": 0,
+      "def": 0.4
+     },
+     "forecast": "Likely defeat",
+     "winner": "defender",
+     "rounds": 4,
+     "attLoss": 12630,
+     "defLoss": 3067
+    }
+   ],
+   "invariantFailures": []
+  },
+  {
+   "workflow": "auto",
+   "seed": 3,
+   "inputs": 3,
+   "autoOrders": 270,
+   "taken": 8,
+   "polLand": 31,
+   "gerLandLost": 1,
+   "bigStack": {
+    "battles": 0,
+    "won": 0
+   },
+   "gerMenLost": 15083,
+   "polMenLost": 18465,
+   "stackMenEnd": 11284,
+   "stackDestroyedWeek": null,
+   "battles": {
+    "total": 12,
+    "gerWon": 9,
+    "gerLost": 1,
+    "gerAttacks": 11,
+    "gerAttacksOutnumbered": 1,
+    "stackBattles": 2,
+    "stackWon": 0
+   },
+   "stackCommit": [
+    {
+     "week": 11,
+     "province": "inowrocaw",
+     "gerRegs": 7,
+     "gerEngaged": 7,
+     "polRegs": 23,
+     "joinsLater": 0,
+     "winner": "defender"
+    },
+    {
+     "week": 37,
+     "province": "southlublin",
+     "gerRegs": 22,
+     "gerEngaged": 18,
+     "polRegs": 14,
+     "joinsLater": 0
+    }
+   ],
+   "idleArmyWeeks": 1,
+   "armyWeeks": 383,
+   "issues": [],
+   "traces": [
+    {
+     "id": "b4",
+     "week": 11,
+     "province": "inowrocaw",
+     "terrain": "plains",
+     "frontage": 16,
+     "fort": 0,
+     "river": false,
+     "defEntrenchWeeks": 0,
+     "stack": true,
+     "big": false,
+     "gerSide": "att",
+     "att": {
+      "nations": [
+       "ger"
+      ],
+      "armies": 1,
+      "regs": 7,
+      "men": 7000,
+      "line": 7,
+      "support": 0,
+      "engaged": 7,
+      "supply": "supplied",
+      "morale": 1
+     },
+     "def": {
+      "nations": [
+       "pol"
+      ],
+      "armies": 1,
+      "regs": 23,
+      "men": 23000,
+      "line": 12,
+      "support": 11,
+      "engaged": 20,
+      "supply": "supplied",
+      "morale": 1
+     },
+     "joins": [],
+     "support": {
+      "att": 0,
+      "def": 0
+     },
+     "forecast": "Likely defeat",
+     "winner": "defender",
+     "rounds": 1,
+     "attLoss": 2779,
+     "defLoss": 564
+    },
+    {
+     "id": "b5",
+     "week": 15,
+     "province": "warsaw",
+     "terrain": "plains",
+     "frontage": 16,
+     "fort": 2,
+     "river": false,
+     "defEntrenchWeeks": 0,
+     "stack": false,
+     "big": false,
+     "gerSide": "att",
+     "att": {
+      "nations": [
+       "ger"
+      ],
+      "armies": 1,
+      "regs": 31,
+      "men": 31000,
+      "line": 29,
+      "support": 2,
+      "engaged": 18,
+      "supply": "supplied",
+      "morale": 1
+     },
+     "def": {
+      "nations": [
+       "pol"
+      ],
+      "armies": 1,
+      "regs": 1,
+      "men": 1000,
+      "line": 0,
+      "support": 1,
+      "engaged": 1,
+      "supply": "supplied",
+      "morale": 0.6
+     },
+     "joins": [],
+     "support": {
+      "att": 0,
+      "def": 0
+     },
+     "forecast": "Likely victory",
+     "winner": "attacker",
+     "rounds": 1,
+     "attLoss": 68,
+     "defLoss": 1000
+    },
+    {
+     "id": "b6",
+     "week": 16,
+     "province": "warsaw",
+     "terrain": "plains",
+     "frontage": 16,
+     "fort": 2,
+     "river": false,
+     "defEntrenchWeeks": 0,
+     "stack": false,
+     "big": false,
+     "gerSide": "att",
+     "att": {
+      "nations": [
+       "ger"
+      ],
+      "armies": 1,
+      "regs": 31,
+      "men": 30932,
+      "line": 29,
+      "support": 2,
+      "engaged": 18,
+      "supply": "supplied",
+      "morale": 0.99
+     },
+     "def": {
+      "nations": [
+       "pol"
+      ],
+      "armies": 1,
+      "regs": 1,
+      "men": 1000,
+      "line": 0,
+      "support": 1,
+      "engaged": 1,
+      "supply": "supplied",
+      "morale": 0.5
+     },
+     "joins": [],
+     "support": {
+      "att": 0,
+      "def": 0
+     },
+     "forecast": "Likely victory",
+     "winner": "attacker",
+     "rounds": 1,
+     "attLoss": 68,
+     "defLoss": 1000
+    },
+    {
+     "id": "b7",
+     "week": 19,
+     "province": "warsaw",
+     "terrain": "plains",
+     "frontage": 16,
+     "fort": 2,
+     "river": false,
+     "defEntrenchWeeks": 0,
+     "stack": false,
+     "big": false,
+     "gerSide": "att",
+     "att": {
+      "nations": [
+       "ger"
+      ],
+      "armies": 1,
+      "regs": 31,
+      "men": 30864,
+      "line": 29,
+      "support": 2,
+      "engaged": 18,
+      "supply": "supplied",
+      "morale": 1
+     },
+     "def": {
+      "nations": [
+       "pol"
+      ],
+      "armies": 1,
+      "regs": 1,
+      "men": 1000,
+      "line": 1,
+      "support": 0,
+      "engaged": 1,
+      "supply": "supplied",
+      "morale": 0.5
+     },
+     "joins": [],
+     "support": {
+      "att": 0,
+      "def": 0
+     },
+     "forecast": "Likely victory",
+     "winner": "attacker",
+     "rounds": 1,
+     "attLoss": 220,
+     "defLoss": 899
+    },
+    {
+     "id": "b9",
+     "week": 23,
+     "province": "odz",
+     "terrain": "plains",
+     "frontage": 16,
+     "fort": 0,
+     "river": false,
+     "defEntrenchWeeks": 0,
+     "stack": false,
+     "big": false,
+     "gerSide": "att",
+     "att": {
+      "nations": [
+       "ger"
+      ],
+      "armies": 1,
+      "regs": 25,
+      "men": 25000,
+      "line": 23,
+      "support": 2,
+      "engaged": 18,
+      "supply": "supplied",
+      "morale": 1
+     },
+     "def": {
+      "nations": [
+       "pol"
+      ],
+      "armies": 1,
+      "regs": 3,
+      "men": 3000,
+      "line": 2,
+      "support": 1,
+      "engaged": 3,
+      "supply": "supplied",
+      "morale": 1
+     },
+     "joins": [],
+     "support": {
+      "att": 0,
+      "def": 0
+     },
+     "forecast": "Likely victory",
+     "winner": "attacker",
+     "rounds": 1,
+     "attLoss": 526,
+     "defLoss": 1565
+    },
+    {
+     "id": "b10",
+     "week": 23,
+     "province": "warsaw",
+     "terrain": "plains",
+     "frontage": 16,
+     "fort": 2,
+     "river": false,
+     "defEntrenchWeeks": 0,
+     "stack": false,
+     "big": false,
+     "gerSide": "att",
+     "att": {
+      "nations": [
+       "ger"
+      ],
+      "armies": 1,
+      "regs": 14,
+      "men": 13841,
+      "line": 12,
+      "support": 2,
+      "engaged": 14,
+      "supply": "strained",
+      "morale": 1
+     },
+     "def": {
+      "nations": [
+       "pol"
+      ],
+      "armies": 1,
+      "regs": 1,
+      "men": 401,
+      "line": 1,
+      "support": 0,
+      "engaged": 1,
+      "supply": "supplied",
+      "morale": 0.2
+     },
+     "joins": [],
+     "support": {
+      "att": 0,
+      "def": 0
+     },
+     "forecast": "Likely victory",
+     "winner": "attacker",
+     "rounds": 1,
+     "attLoss": 78,
+     "defLoss": 401
+    },
+    {
+     "id": "b13",
+     "week": 26,
+     "province": "eastpoznan",
+     "terrain": "plains",
+     "frontage": 16,
+     "fort": 0,
+     "river": false,
+     "defEntrenchWeeks": 0,
+     "stack": false,
+     "big": false,
+     "gerSide": "att",
+     "att": {
+      "nations": [
+       "ger"
+      ],
+      "armies": 1,
+      "regs": 17,
+      "men": 17000,
+      "line": 17,
+      "support": 0,
+      "engaged": 16,
+      "supply": "strained",
+      "morale": 1
+     },
+     "def": {
+      "nations": [
+       "pol"
+      ],
+      "armies": 1,
+      "regs": 3,
+      "men": 1885,
+      "line": 2,
+      "support": 1,
+      "engaged": 3,
+      "supply": "supplied",
+      "morale": 0.1
+     },
+     "joins": [],
+     "support": {
+      "att": 0,
+      "def": 0
+     },
+     "forecast": "Likely victory",
+     "winner": "attacker",
+     "rounds": 1,
+     "attLoss": 256,
+     "defLoss": 1042
+    },
+    {
+     "id": "b15",
+     "week": 28,
+     "province": "kielce",
+     "terrain": "plains",
+     "frontage": 16,
+     "fort": 0,
+     "river": false,
+     "defEntrenchWeeks": 0,
+     "stack": false,
+     "big": false,
+     "gerSide": "att",
+     "att": {
+      "nations": [
+       "ger"
+      ],
+      "armies": 1,
+      "regs": 8,
+      "men": 8000,
+      "line": 8,
+      "support": 0,
+      "engaged": 8,
+      "supply": "supplied",
+      "morale": 1
+     },
+     "def": {
+      "nations": [
+       "pol"
+      ],
+      "armies": 1,
+      "regs": 3,
+      "men": 843,
+      "line": 2,
+      "support": 1,
+      "engaged": 3,
+      "supply": "supplied",
+      "morale": 0
+     },
+     "joins": [],
+     "support": {
+      "att": 0,
+      "def": 0
+     },
+     "forecast": "Likely victory",
+     "winner": "attacker",
+     "rounds": 1,
+     "attLoss": 104,
+     "defLoss": 586
+    },
+    {
+     "id": "b16",
+     "week": 31,
+     "province": "southwarsaw",
+     "terrain": "plains",
+     "frontage": 16,
+     "fort": 0,
+     "river": false,
+     "defEntrenchWeeks": 0,
+     "stack": false,
+     "big": false,
+     "gerSide": "att",
+     "att": {
+      "nations": [
+       "ger"
+      ],
+      "armies": 1,
+      "regs": 25,
+      "men": 25000,
+      "line": 23,
+      "support": 2,
+      "engaged": 18,
+      "supply": "supplied",
+      "morale": 1
+     },
+     "def": {
+      "nations": [
+       "pol"
+      ],
+      "armies": 1,
+      "regs": 7,
+      "men": 7000,
+      "line": 7,
+      "support": 0,
+      "engaged": 7,
+      "supply": "supplied",
+      "morale": 1
+     },
+     "joins": [],
+     "support": {
+      "att": 0,
+      "def": 0
+     },
+     "forecast": "Likely victory",
+     "winner": "attacker",
+     "rounds": 2,
+     "attLoss": 1170,
+     "defLoss": 3542
+    },
+    {
+     "id": "b19",
+     "week": 37,
+     "province": "southlublin",
+     "terrain": "plains",
+     "frontage": 16,
+     "fort": 0,
+     "river": true,
+     "defEntrenchWeeks": 7,
+     "stack": true,
+     "big": false,
+     "gerSide": "att",
+     "att": {
+      "nations": [
+       "ger"
+      ],
+      "armies": 1,
+      "regs": 22,
+      "men": 22000,
+      "line": 20,
+      "support": 2,
+      "engaged": 18,
+      "supply": "supplied",
+      "morale": 1
+     },
+     "def": {
+      "nations": [
+       "pol"
+      ],
+      "armies": 1,
+      "regs": 14,
+      "men": 14000,
+      "line": 3,
+      "support": 11,
+      "engaged": 11,
+      "supply": "supplied",
+      "morale": 1
+     },
+     "joins": [],
+     "support": {
+      "att": 0,
+      "def": 0
+     },
+     "forecast": "Likely victory"
+    },
+    {
+     "id": "b20",
+     "week": 38,
+     "province": "oppeln",
+     "terrain": "plains",
+     "frontage": 16,
+     "fort": 0,
+     "river": false,
+     "defEntrenchWeeks": 1,
+     "stack": false,
+     "big": false,
+     "gerSide": "att",
+     "att": {
+      "nations": [
+       "ger"
+      ],
+      "armies": 1,
+      "regs": 25,
+      "men": 25000,
+      "line": 20,
+      "support": 5,
+      "engaged": 21,
+      "supply": "strained",
+      "morale": 1
+     },
+     "def": {
+      "nations": [
+       "pol"
+      ],
+      "armies": 2,
+      "regs": 19,
+      "men": 19000,
+      "line": 16,
+      "support": 3,
+      "engaged": 19,
+      "supply": "supplied",
+      "morale": 1
+     },
+     "joins": [],
+     "support": {
+      "att": 0,
+      "def": 0
+     },
+     "forecast": "Uncertain"
+    },
+    {
+     "id": "b22",
+     "week": 39,
+     "province": "breslau",
+     "terrain": "plains",
+     "frontage": 16,
+     "fort": 0,
+     "river": false,
+     "defEntrenchWeeks": 0,
+     "stack": false,
+     "big": false,
+     "gerSide": "def",
+     "att": {
+      "nations": [
+       "pol"
+      ],
+      "armies": 1,
+      "regs": 4,
+      "men": 4000,
+      "line": 4,
+      "support": 0,
+      "engaged": 4,
+      "supply": "supplied",
+      "morale": 1
+     },
+     "def": {
+      "nations": [
+       "ger"
+      ],
+      "armies": 1,
+      "regs": 13,
+      "men": 13000,
+      "line": 13,
+      "support": 0,
+      "engaged": 13,
+      "supply": "supplied",
+      "morale": 1
+     },
+     "joins": [],
+     "support": {
+      "att": 0,
+      "def": 0
+     },
+     "forecast": "Likely defeat",
+     "winner": "defender",
+     "rounds": 1,
+     "attLoss": 1552,
+     "defLoss": 286
+    }
+   ],
+   "invariantFailures": []
+  },
+  {
+   "workflow": "delegated",
+   "seed": 3,
+   "inputs": 4,
+   "autoOrders": 248,
+   "taken": 9,
+   "polLand": 31,
+   "gerLandLost": 1,
+   "bigStack": {
+    "battles": 0,
+    "won": 0
+   },
+   "gerMenLost": 12314,
+   "polMenLost": 7985,
+   "stackMenEnd": 6000,
+   "stackDestroyedWeek": null,
+   "battles": {
+    "total": 9,
+    "gerWon": 6,
+    "gerLost": 3,
+    "gerAttacks": 8,
+    "gerAttacksOutnumbered": 3,
+    "stackBattles": 2,
+    "stackWon": 0
+   },
+   "stackCommit": [
+    {
+     "week": 8,
+     "province": "inowrocaw",
+     "gerRegs": 10,
+     "gerEngaged": 10,
+     "polRegs": 23,
+     "joinsLater": 0,
+     "winner": "defender"
+    },
+    {
+     "week": 15,
+     "province": "eastpoznan",
+     "gerRegs": 2,
+     "gerEngaged": 2,
+     "polRegs": 37,
+     "joinsLater": 0,
+     "winner": "defender"
+    }
+   ],
+   "idleArmyWeeks": 30,
+   "armyWeeks": 426,
+   "issues": [],
+   "traces": [
+    {
+     "id": "b1",
+     "week": 8,
+     "province": "inowrocaw",
+     "terrain": "plains",
+     "frontage": 16,
+     "fort": 0,
+     "river": false,
+     "defEntrenchWeeks": 0,
+     "stack": true,
+     "big": false,
+     "gerSide": "att",
+     "att": {
+      "nations": [
+       "ger"
+      ],
+      "armies": 1,
+      "regs": 10,
+      "men": 10000,
+      "line": 8,
+      "support": 2,
+      "engaged": 10,
+      "supply": "supplied",
+      "morale": 1
+     },
+     "def": {
+      "nations": [
+       "pol"
+      ],
+      "armies": 1,
+      "regs": 23,
+      "men": 23000,
+      "line": 12,
+      "support": 11,
+      "engaged": 20,
+      "supply": "supplied",
+      "morale": 1
+     },
+     "joins": [],
+     "support": {
+      "att": 0,
+      "def": 0
+     },
+     "forecast": "Likely defeat",
+     "winner": "defender",
+     "rounds": 2,
+     "attLoss": 5156,
+     "defLoss": 1288
+    },
+    {
+     "id": "b2",
+     "week": 15,
+     "province": "eastpoznan",
+     "terrain": "plains",
+     "frontage": 16,
+     "fort": 0,
+     "river": false,
+     "defEntrenchWeeks": 0,
+     "stack": true,
+     "big": false,
+     "gerSide": "att",
+     "att": {
+      "nations": [
+       "ger"
+      ],
+      "armies": 1,
+      "regs": 2,
+      "men": 2000,
+      "line": 2,
+      "support": 0,
+      "engaged": 2,
+      "supply": "supplied",
+      "morale": 1
+     },
+     "def": {
+      "nations": [
+       "pol"
+      ],
+      "armies": 2,
+      "regs": 37,
+      "men": 37000,
+      "line": 24,
+      "support": 13,
+      "engaged": 24,
+      "supply": "supplied",
+      "morale": 1
+     },
+     "joins": [],
+     "support": {
+      "att": 0,
+      "def": 0
+     },
+     "forecast": "Likely defeat",
+     "winner": "defender",
+     "rounds": 1,
+     "attLoss": 2000,
+     "defLoss": 120
+    },
+    {
+     "id": "b3",
+     "week": 17,
+     "province": "poznan",
+     "terrain": "plains",
+     "frontage": 16,
+     "fort": 1,
+     "river": false,
+     "defEntrenchWeeks": 0,
+     "stack": false,
+     "big": false,
+     "gerSide": "att",
+     "att": {
+      "nations": [
+       "ger"
+      ],
+      "armies": 1,
+      "regs": 12,
+      "men": 12000,
+      "line": 9,
+      "support": 3,
+      "engaged": 12,
+      "supply": "supplied",
+      "morale": 1
+     },
+     "def": {
+      "nations": [
+       "pol"
+      ],
+      "armies": 1,
+      "regs": 17,
+      "men": 16934,
+      "line": 15,
+      "support": 2,
+      "engaged": 17,
+      "supply": "strained",
+      "morale": 1
+     },
+     "joins": [],
+     "support": {
+      "att": 0,
+      "def": 0
+     },
+     "forecast": "Likely defeat",
+     "winner": "defender",
+     "rounds": 3,
+     "attLoss": 4422,
+     "defLoss": 1190
+    },
+    {
+     "id": "b4",
+     "week": 19,
+     "province": "odz",
+     "terrain": "plains",
+     "frontage": 16,
+     "fort": 0,
+     "river": true,
+     "defEntrenchWeeks": 2,
+     "stack": false,
+     "big": false,
+     "gerSide": "att",
+     "att": {
+      "nations": [
+       "ger"
+      ],
+      "armies": 2,
+      "regs": 23,
+      "men": 23000,
+      "line": 14,
+      "support": 9,
+      "engaged": 22,
+      "supply": "strained",
+      "morale": 1
+     },
+     "def": {
+      "nations": [
+       "pol"
+      ],
+      "armies": 3,
+      "regs": 3,
+      "men": 3000,
+      "line": 1,
+      "support": 2,
+      "engaged": 3,
+      "supply": "supplied",
+      "morale": 0.93
+     },
+     "joins": [],
+     "support": {
+      "att": 0,
+      "def": 0
+     },
+     "forecast": "Likely victory",
+     "winner": "attacker",
+     "rounds": 1,
+     "attLoss": 288,
+     "defLoss": 1759
+    },
+    {
+     "id": "b5",
+     "week": 22,
+     "province": "warsaw",
+     "terrain": "plains",
+     "frontage": 16,
+     "fort": 2,
+     "river": false,
+     "defEntrenchWeeks": 0,
+     "stack": false,
+     "big": false,
+     "gerSide": "att",
+     "att": {
+      "nations": [
+       "ger"
+      ],
+      "armies": 1,
+      "regs": 7,
+      "men": 7000,
+      "line": 7,
+      "support": 0,
+      "engaged": 7,
+      "supply": "supplied",
+      "morale": 1
+     },
+     "def": {
+      "nations": [
+       "pol"
+      ],
+      "armies": 1,
+      "regs": 1,
+      "men": 1000,
+      "line": 1,
+      "support": 0,
+      "engaged": 1,
+      "supply": "supplied",
+      "morale": 0.6
+     },
+     "joins": [],
+     "support": {
+      "att": 0,
+      "def": 0
+     },
+     "forecast": "Likely victory",
+     "winner": "attacker",
+     "rounds": 1,
+     "attLoss": 77,
+     "defLoss": 250
+    },
+    {
+     "id": "b7",
+     "week": 23,
+     "province": "oppeln",
+     "terrain": "plains",
+     "frontage": 16,
+     "fort": 0,
+     "river": false,
+     "defEntrenchWeeks": 0,
+     "stack": false,
+     "big": false,
+     "gerSide": "def",
+     "att": {
+      "nations": [
+       "pol"
+      ],
+      "armies": 1,
+      "regs": 3,
+      "men": 3000,
+      "line": 3,
+      "support": 0,
+      "engaged": 3,
+      "supply": "supplied",
+      "morale": 1
+     },
+     "def": {
+      "nations": [
+       "ger"
+      ],
+      "armies": 1,
+      "regs": 15,
+      "men": 14776,
+      "line": 13,
+      "support": 2,
+      "engaged": 15,
+      "supply": "supplied",
+      "morale": 1
+     },
+     "joins": [],
+     "support": {
+      "att": 0,
+      "def": 0
+     },
+     "forecast": "Likely defeat",
+     "winner": "defender",
+     "rounds": 1,
+     "attLoss": 2379,
+     "defLoss": 211
+    },
+    {
+     "id": "b8",
+     "week": 25,
+     "province": "eastpoznan",
+     "terrain": "plains",
+     "frontage": 16,
+     "fort": 0,
+     "river": false,
+     "defEntrenchWeeks": 0,
+     "stack": false,
+     "big": false,
+     "gerSide": "att",
+     "att": {
+      "nations": [
+       "ger"
+      ],
+      "armies": 2,
+      "regs": 23,
+      "men": 22936,
+      "line": 14,
+      "support": 9,
+      "engaged": 22,
+      "supply": "supplied",
+      "morale": 1
+     },
+     "def": {
+      "nations": [
+       "pol"
+      ],
+      "armies": 1,
+      "regs": 3,
+      "men": 621,
+      "line": 3,
+      "support": 0,
+      "engaged": 3,
+      "supply": "supplied",
+      "morale": 0
+     },
+     "joins": [],
+     "support": {
+      "att": 0,
+      "def": 0
+     },
+     "forecast": "Likely victory",
+     "winner": "attacker",
+     "rounds": 1,
+     "attLoss": 36,
+     "defLoss": 621
+    },
+    {
+     "id": "b9",
+     "week": 25,
+     "province": "warsaw",
+     "terrain": "plains",
+     "frontage": 16,
+     "fort": 2,
+     "river": false,
+     "defEntrenchWeeks": 0,
+     "stack": false,
+     "big": false,
+     "gerSide": "att",
+     "att": {
+      "nations": [
+       "ger"
+      ],
+      "armies": 1,
+      "regs": 7,
+      "men": 6923,
+      "line": 7,
+      "support": 0,
+      "engaged": 7,
+      "supply": "supplied",
+      "morale": 1
+     },
+     "def": {
+      "nations": [
+       "pol"
+      ],
+      "armies": 1,
+      "regs": 1,
+      "men": 1000,
+      "line": 0,
+      "support": 1,
+      "engaged": 1,
+      "supply": "supplied",
+      "morale": 0.5
+     },
+     "joins": [],
+     "support": {
+      "att": 0,
+      "def": 0
+     },
+     "forecast": "Likely victory",
+     "winner": "attacker",
+     "rounds": 1,
+     "attLoss": 70,
+     "defLoss": 261
+    },
+    {
+     "id": "b11",
+     "week": 29,
+     "province": "biaystok",
+     "terrain": "forest",
+     "frontage": 10,
+     "fort": 0,
+     "river": false,
+     "defEntrenchWeeks": 0,
+     "stack": false,
+     "big": false,
+     "gerSide": "att",
+     "att": {
+      "nations": [
+       "ger"
+      ],
+      "armies": 1,
+      "regs": 2,
+      "men": 2000,
+      "line": 2,
+      "support": 0,
+      "engaged": 2,
+      "supply": "supplied",
+      "morale": 1
+     },
+     "def": {
+      "nations": [
+       "pol"
+      ],
+      "armies": 1,
+      "regs": 1,
+      "men": 889,
+      "line": 0,
+      "support": 1,
+      "engaged": 1,
+      "supply": "supplied",
+      "morale": 0.1
+     },
+     "joins": [],
+     "support": {
+      "att": 0,
+      "def": 0
+     },
+     "forecast": "Likely victory",
+     "winner": "attacker",
+     "rounds": 1,
+     "attLoss": 54,
+     "defLoss": 117
+    }
+   ],
+   "invariantFailures": []
+  },
+  {
+   "workflow": "greedy",
+   "seed": 3,
+   "inputs": 81,
+   "autoOrders": 0,
+   "taken": 8,
+   "polLand": 31,
+   "gerLandLost": 1,
+   "bigStack": {
+    "battles": 0,
+    "won": 0
+   },
+   "gerMenLost": 53286,
+   "polMenLost": 15528,
+   "stackMenEnd": 4000,
+   "stackDestroyedWeek": null,
+   "battles": {
+    "total": 13,
+    "gerWon": 6,
+    "gerLost": 7,
+    "gerAttacks": 11,
+    "gerAttacksOutnumbered": 4,
+    "stackBattles": 5,
+    "stackWon": 1
+   },
+   "stackCommit": [
+    {
+     "week": 6,
+     "province": "inowrocaw",
+     "gerRegs": 76,
+     "gerEngaged": 24,
+     "polRegs": 26,
+     "joinsLater": 14,
+     "winner": "attacker"
+    },
+    {
+     "week": 13,
+     "province": "northwarsaw",
+     "gerRegs": 14,
+     "gerEngaged": 14,
+     "polRegs": 26,
+     "joinsLater": 0,
+     "winner": "defender"
+    },
+    {
+     "week": 22,
+     "province": "odz",
+     "gerRegs": 12,
+     "gerEngaged": 12,
+     "polRegs": 23,
+     "joinsLater": 0,
+     "winner": "defender"
+    },
+    {
+     "week": 29,
+     "province": "warsaw",
+     "gerRegs": 2,
+     "gerEngaged": 2,
+     "polRegs": 20,
+     "joinsLater": 0,
+     "winner": "defender"
+    },
+    {
+     "week": 30,
+     "province": "warsaw",
+     "gerRegs": 24,
+     "gerEngaged": 20,
+     "polRegs": 20,
+     "joinsLater": 0,
+     "winner": "defender"
+    }
+   ],
+   "idleArmyWeeks": 82,
+   "armyWeeks": 200,
+   "issues": [],
+   "traces": [
+    {
+     "id": "b1",
+     "week": 6,
+     "province": "inowrocaw",
+     "terrain": "plains",
+     "frontage": 16,
+     "fort": 0,
+     "river": false,
+     "defEntrenchWeeks": 0,
+     "stack": true,
+     "big": false,
+     "gerSide": "att",
+     "att": {
+      "nations": [
+       "ger"
+      ],
+      "armies": 3,
+      "regs": 76,
+      "men": 73872,
+      "line": 60,
+      "support": 16,
+      "engaged": 24,
+      "supply": "unsupplied",
+      "morale": 0.94
+     },
+     "def": {
+      "nations": [
+       "pol"
+      ],
+      "armies": 1,
+      "regs": 26,
+      "men": 26000,
+      "line": 15,
+      "support": 11,
+      "engaged": 23,
+      "supply": "supplied",
+      "morale": 1
+     },
+     "joins": [
+      {
+       "week": 8,
+       "side": "att",
+       "regs": 13
+      },
+      {
+       "week": 8,
+       "side": "att",
+       "regs": 1
+      }
+     ],
+     "support": {
+      "att": 0,
+      "def": 0
+     },
+     "forecast": "Uncertain",
+     "winner": "attacker",
+     "rounds": 5,
+     "attLoss": 10791,
+     "defLoss": 7258
+    },
+    {
+     "id": "b2",
+     "week": 8,
+     "province": "warsaw",
+     "terrain": "plains",
+     "frontage": 16,
+     "fort": 2,
+     "river": true,
+     "defEntrenchWeeks": 0,
+     "stack": false,
+     "big": false,
+     "gerSide": "att",
+     "att": {
+      "nations": [
+       "ger"
+      ],
+      "armies": 1,
+      "regs": 12,
+      "men": 12000,
+      "line": 10,
+      "support": 2,
+      "engaged": 12,
+      "supply": "supplied",
+      "morale": 1
+     },
+     "def": {
+      "nations": [
+       "pol"
+      ],
+      "armies": 2,
+      "regs": 3,
+      "men": 3000,
+      "line": 2,
+      "support": 1,
+      "engaged": 3,
+      "supply": "supplied",
+      "morale": 0.53
+     },
+     "joins": [],
+     "support": {
+      "att": 0,
+      "def": 0
+     },
+     "forecast": "Likely victory",
+     "winner": "attacker",
+     "rounds": 1,
+     "attLoss": 364,
+     "defLoss": 731
+    },
+    {
+     "id": "b3",
+     "week": 9,
+     "province": "warsaw",
+     "terrain": "plains",
+     "frontage": 16,
+     "fort": 2,
+     "river": false,
+     "defEntrenchWeeks": 0,
+     "stack": false,
+     "big": false,
+     "gerSide": "att",
+     "att": {
+      "nations": [
+       "ger"
+      ],
+      "armies": 1,
+      "regs": 12,
+      "men": 11636,
+      "line": 10,
+      "support": 2,
+      "engaged": 12,
+      "supply": "supplied",
+      "morale": 0.92
+     },
+     "def": {
+      "nations": [
+       "pol"
+      ],
+      "armies": 1,
+      "regs": 2,
+      "men": 2000,
+      "line": 2,
+      "support": 0,
+      "engaged": 2,
+      "supply": "supplied",
+      "morale": 0.5
+     },
+     "joins": [],
+     "support": {
+      "att": 0,
+      "def": 0
+     },
+     "forecast": "Likely victory",
+     "winner": "attacker",
+     "rounds": 1,
+     "attLoss": 166,
+     "defLoss": 742
+    },
+    {
+     "id": "b4",
+     "week": 10,
+     "province": "warsaw",
+     "terrain": "plains",
+     "frontage": 16,
+     "fort": 2,
+     "river": false,
+     "defEntrenchWeeks": 0,
+     "stack": false,
+     "big": false,
+     "gerSide": "att",
+     "att": {
+      "nations": [
+       "ger"
+      ],
+      "armies": 1,
+      "regs": 12,
+      "men": 11470,
+      "line": 10,
+      "support": 2,
+      "engaged": 12,
+      "supply": "supplied",
+      "morale": 0.89
+     },
+     "def": {
+      "nations": [
+       "pol"
+      ],
+      "armies": 1,
+      "regs": 1,
+      "men": 1000,
+      "line": 0,
+      "support": 1,
+      "engaged": 1,
+      "supply": "supplied",
+      "morale": 0.5
+     },
+     "joins": [],
+     "support": {
+      "att": 0,
+      "def": 0
+     },
+     "forecast": "Likely victory",
+     "winner": "attacker",
+     "rounds": 1,
+     "attLoss": 12,
+     "defLoss": 753
+    },
+    {
+     "id": "b5",
+     "week": 11,
+     "province": "warsaw",
+     "terrain": "plains",
+     "frontage": 16,
+     "fort": 2,
+     "river": false,
+     "defEntrenchWeeks": 0,
+     "stack": false,
+     "big": false,
+     "gerSide": "att",
+     "att": {
+      "nations": [
+       "ger"
+      ],
+      "armies": 1,
+      "regs": 12,
+      "men": 11458,
+      "line": 10,
+      "support": 2,
+      "engaged": 12,
+      "supply": "supplied",
+      "morale": 0.89
+     },
+     "def": {
+      "nations": [
+       "pol"
+      ],
+      "armies": 1,
+      "regs": 2,
+      "men": 2000,
+      "line": 1,
+      "support": 1,
+      "engaged": 2,
+      "supply": "supplied",
+      "morale": 0.5
+     },
+     "joins": [],
+     "support": {
+      "att": 0,
+      "def": 0
+     },
+     "forecast": "Likely victory",
+     "winner": "attacker",
+     "rounds": 1,
+     "attLoss": 342,
+     "defLoss": 894
+    },
+    {
+     "id": "b6",
+     "week": 13,
+     "province": "northwarsaw",
+     "terrain": "plains",
+     "frontage": 16,
+     "fort": 0,
+     "river": true,
+     "defEntrenchWeeks": 0,
+     "stack": true,
+     "big": false,
+     "gerSide": "att",
+     "att": {
+      "nations": [
+       "ger"
+      ],
+      "armies": 3,
+      "regs": 14,
+      "men": 11411,
+      "line": 12,
+      "support": 2,
+      "engaged": 14,
+      "supply": "unsupplied",
+      "morale": 0.61
+     },
+     "def": {
+      "nations": [
+       "pol"
+      ],
+      "armies": 1,
+      "regs": 26,
+      "men": 22642,
+      "line": 15,
+      "support": 11,
+      "engaged": 23,
+      "supply": "supplied",
+      "morale": 0.3
+     },
+     "joins": [],
+     "support": {
+      "att": 0,
+      "def": 0
+     },
+     "forecast": "Uncertain",
+     "winner": "defender",
+     "rounds": 1,
+     "attLoss": 2345,
+     "defLoss": 594
+    },
+    {
+     "id": "b7",
+     "week": 16,
+     "province": "katowice",
+     "terrain": "plains",
+     "frontage": 16,
+     "fort": 1,
+     "river": true,
+     "defEntrenchWeeks": 2,
+     "stack": false,
+     "big": false,
+     "gerSide": "att",
+     "att": {
+      "nations": [
+       "ger"
+      ],
+      "armies": 1,
+      "regs": 1,
+      "men": 1000,
+      "line": 1,
+      "support": 0,
+      "engaged": 1,
+      "supply": "supplied",
+      "morale": 0.93
+     },
+     "def": {
+      "nations": [
+       "pol"
+      ],
+      "armies": 5,
+      "regs": 7,
+      "men": 7000,
+      "line": 7,
+      "support": 0,
+      "engaged": 7,
+      "supply": "supplied",
+      "morale": 0.99
+     },
+     "joins": [],
+     "support": {
+      "att": 0,
+      "def": 0
+     },
+     "forecast": "Likely defeat",
+     "winner": "defender",
+     "rounds": 1,
+     "attLoss": 630,
+     "defLoss": 105
+    },
+    {
+     "id": "b8",
+     "week": 19,
+     "province": "oppeln",
+     "terrain": "plains",
+     "frontage": 16,
+     "fort": 0,
+     "river": true,
+     "defEntrenchWeeks": 1,
+     "stack": false,
+     "big": false,
+     "gerSide": "def",
+     "att": {
+      "nations": [
+       "pol"
+      ],
+      "armies": 1,
+      "regs": 3,
+      "men": 3000,
+      "line": 3,
+      "support": 0,
+      "engaged": 3,
+      "supply": "supplied",
+      "morale": 1
+     },
+     "def": {
+      "nations": [
+       "ger"
+      ],
+      "armies": 1,
+      "regs": 1,
+      "men": 520,
+      "line": 1,
+      "support": 0,
+      "engaged": 1,
+      "supply": "supplied",
+      "morale": 0.11
+     },
+     "joins": [],
+     "support": {
+      "att": 0,
+      "def": 0
+     },
+     "forecast": "Likely victory",
+     "winner": "attacker",
+     "rounds": 1,
+     "attLoss": 99,
+     "defLoss": 196
+    },
+    {
+     "id": "b9",
+     "week": 21,
+     "province": "breslau",
+     "terrain": "plains",
+     "frontage": 16,
+     "fort": 0,
+     "river": false,
+     "defEntrenchWeeks": 0,
+     "stack": false,
+     "big": false,
+     "gerSide": "def",
+     "att": {
+      "nations": [
+       "pol"
+      ],
+      "armies": 1,
+      "regs": 3,
+      "men": 2901,
+      "line": 3,
+      "support": 0,
+      "engaged": 3,
+      "supply": "supplied",
+      "morale": 0.9
+     },
+     "def": {
+      "nations": [
+       "ger"
+      ],
+      "armies": 1,
+      "regs": 1,
+      "men": 324,
+      "line": 1,
+      "support": 0,
+      "engaged": 1,
+      "supply": "supplied",
+      "morale": 0
+     },
+     "joins": [],
+     "support": {
+      "att": 0,
+      "def": 0
+     },
+     "forecast": "Likely victory",
+     "winner": "attacker",
+     "rounds": 1,
+     "attLoss": 57,
+     "defLoss": 324
+    },
+    {
+     "id": "b10",
+     "week": 22,
+     "province": "odz",
+     "terrain": "plains",
+     "frontage": 16,
+     "fort": 0,
+     "river": true,
+     "defEntrenchWeeks": 0,
+     "stack": true,
+     "big": false,
+     "gerSide": "att",
+     "att": {
+      "nations": [
+       "ger"
+      ],
+      "armies": 1,
+      "regs": 12,
+      "men": 12000,
+      "line": 10,
+      "support": 2,
+      "engaged": 12,
+      "supply": "supplied",
+      "morale": 0.84
+     },
+     "def": {
+      "nations": [
+       "pol"
+      ],
+      "armies": 2,
+      "regs": 23,
+      "men": 23000,
+      "line": 12,
+      "support": 11,
+      "engaged": 20,
+      "supply": "supplied",
+      "morale": 0.92
+     },
+     "joins": [],
+     "support": {
+      "att": 0,
+      "def": 0
+     },
+     "forecast": "Likely defeat",
+     "winner": "defender",
+     "rounds": 1,
+     "attLoss": 3092,
+     "defLoss": 660
+    },
+    {
+     "id": "b13",
+     "week": 24,
+     "province": "lublin",
+     "terrain": "plains",
+     "frontage": 16,
+     "fort": 0,
+     "river": false,
+     "defEntrenchWeeks": 3,
+     "stack": false,
+     "big": false,
+     "gerSide": "att",
+     "att": {
+      "nations": [
+       "ger"
+      ],
+      "armies": 3,
+      "regs": 14,
+      "men": 14000,
+      "line": 12,
+      "support": 2,
+      "engaged": 14,
+      "supply": "supplied",
+      "morale": 1
+     },
+     "def": {
+      "nations": [
+       "pol"
+      ],
+      "armies": 2,
+      "regs": 4,
+      "men": 4000,
+      "line": 3,
+      "support": 1,
+      "engaged": 4,
+      "supply": "supplied",
+      "morale": 1
+     },
+     "joins": [],
+     "support": {
+      "att": 0,
+      "def": 0
+     },
+     "forecast": "Likely victory",
+     "winner": "attacker",
+     "rounds": 1,
+     "attLoss": 456,
+     "defLoss": 1671
+    },
+    {
+     "id": "b15",
+     "week": 29,
+     "province": "warsaw",
+     "terrain": "plains",
+     "frontage": 16,
+     "fort": 2,
+     "river": true,
+     "defEntrenchWeeks": 4,
+     "stack": true,
+     "big": false,
+     "gerSide": "att",
+     "att": {
+      "nations": [
+       "ger"
+      ],
+      "armies": 2,
+      "regs": 2,
+      "men": 2000,
+      "line": 2,
+      "support": 0,
+      "engaged": 2,
+      "supply": "supplied",
+      "morale": 1
+     },
+     "def": {
+      "nations": [
+       "pol"
+      ],
+      "armies": 1,
+      "regs": 20,
+      "men": 20000,
+      "line": 9,
+      "support": 11,
+      "engaged": 17,
+      "supply": "supplied",
+      "morale": 1
+     },
+     "joins": [],
+     "support": {
+      "att": 0,
+      "def": 0
+     },
+     "forecast": "Likely defeat",
+     "winner": "defender",
+     "rounds": 1,
+     "attLoss": 2000,
+     "defLoss": 165
+    },
+    {
+     "id": "b16",
+     "week": 30,
+     "province": "warsaw",
+     "terrain": "plains",
+     "frontage": 16,
+     "fort": 2,
+     "river": true,
+     "defEntrenchWeeks": 5,
+     "stack": true,
+     "big": false,
+     "gerSide": "att",
+     "att": {
+      "nations": [
+       "ger"
+      ],
+      "armies": 2,
+      "regs": 24,
+      "men": 24000,
+      "line": 20,
+      "support": 4,
+      "engaged": 20,
+      "supply": "supplied",
+      "morale": 0.96
+     },
+     "def": {
+      "nations": [
+       "pol"
+      ],
+      "armies": 2,
+      "regs": 20,
+      "men": 20000,
+      "line": 9,
+      "support": 11,
+      "engaged": 17,
+      "supply": "supplied",
+      "morale": 1
+     },
+     "joins": [],
+     "support": {
+      "att": 0,
+      "def": 0
+     },
+     "forecast": "Likely defeat",
+     "winner": "defender",
+     "rounds": 3,
+     "attLoss": 6936,
+     "defLoss": 1799
+    }
+   ],
+   "invariantFailures": []
+  },
+  {
+   "workflow": "massed",
+   "seed": 3,
+   "inputs": 181,
+   "autoOrders": 0,
+   "taken": 3,
+   "polLand": 31,
+   "gerLandLost": 3,
+   "bigStack": {
+    "battles": 0,
+    "won": 0
+   },
+   "gerMenLost": 42746,
+   "polMenLost": 7543,
+   "stackMenEnd": 3000,
+   "stackDestroyedWeek": null,
+   "battles": {
+    "total": 12,
+    "gerWon": 6,
+    "gerLost": 6,
+    "gerAttacks": 9,
+    "gerAttacksOutnumbered": 3,
+    "stackBattles": 1,
+    "stackWon": 0
+   },
+   "stackCommit": [
+    {
+     "week": 15,
+     "province": "grunberg",
+     "gerRegs": 1,
+     "gerEngaged": 1,
+     "polRegs": 6,
+     "joinsLater": 0,
+     "winner": "defender"
+    }
+   ],
+   "idleArmyWeeks": 5,
+   "armyWeeks": 300,
+   "issues": [],
+   "traces": [
+    {
+     "id": "b1",
+     "week": 14,
+     "province": "poznan",
+     "terrain": "plains",
+     "frontage": 16,
+     "fort": 1,
+     "river": false,
+     "defEntrenchWeeks": 0,
+     "stack": false,
+     "big": false,
+     "gerSide": "att",
+     "att": {
+      "nations": [
+       "ger"
+      ],
+      "armies": 1,
+      "regs": 2,
+      "men": 2000,
+      "line": 2,
+      "support": 0,
+      "engaged": 2,
+      "supply": "supplied",
+      "morale": 1
+     },
+     "def": {
+      "nations": [
+       "pol"
+      ],
+      "armies": 1,
+      "regs": 17,
+      "men": 17000,
+      "line": 12,
+      "support": 5,
+      "engaged": 17,
+      "supply": "supplied",
+      "morale": 1
+     },
+     "joins": [],
+     "support": {
+      "att": 0,
+      "def": 0
+     },
+     "forecast": "Likely defeat",
+     "winner": "defender",
+     "rounds": 1,
+     "attLoss": 1618,
+     "defLoss": 360
+    },
+    {
+     "id": "b2",
+     "week": 15,
+     "province": "grunberg",
+     "terrain": "plains",
+     "frontage": 16,
+     "fort": 0,
+     "river": false,
+     "defEntrenchWeeks": 0,
+     "stack": true,
+     "big": false,
+     "gerSide": "att",
+     "att": {
+      "nations": [
+       "ger"
+      ],
+      "armies": 1,
+      "regs": 1,
+      "men": 1000,
+      "line": 1,
+      "support": 0,
+      "engaged": 1,
+      "supply": "supplied",
+      "morale": 0.82
+     },
+     "def": {
+      "nations": [
+       "pol"
+      ],
+      "armies": 2,
+      "regs": 6,
+      "men": 6000,
+      "line": 0,
+      "support": 6,
+      "engaged": 6,
+      "supply": "supplied",
+      "morale": 1
+     },
+     "joins": [],
+     "support": {
+      "att": 0,
+      "def": 0
+     },
+     "forecast": "Likely defeat",
+     "winner": "defender",
+     "rounds": 1,
+     "attLoss": 528,
+     "defLoss": 186
+    },
+    {
+     "id": "b3",
+     "week": 17,
+     "province": "cottbus",
+     "terrain": "plains",
+     "frontage": 16,
+     "fort": 0,
+     "river": false,
+     "defEntrenchWeeks": 0,
+     "stack": false,
+     "big": false,
+     "gerSide": "def",
+     "att": {
+      "nations": [
+       "pol"
+      ],
+      "armies": 1,
+      "regs": 3,
+      "men": 3000,
+      "line": 3,
+      "support": 0,
+      "engaged": 3,
+      "supply": "supplied",
+      "morale": 1
+     },
+     "def": {
+      "nations": [
+       "ger"
+      ],
+      "armies": 1,
+      "regs": 1,
+      "men": 472,
+      "line": 1,
+      "support": 0,
+      "engaged": 1,
+      "supply": "supplied",
+      "morale": 0
+     },
+     "joins": [],
+     "support": {
+      "att": 0,
+      "def": 0
+     },
+     "forecast": "Likely victory",
+     "winner": "attacker",
+     "rounds": 1,
+     "attLoss": 90,
+     "defLoss": 230
+    },
+    {
+     "id": "b4",
+     "week": 18,
+     "province": "koslin",
+     "terrain": "plains",
+     "frontage": 16,
+     "fort": 0,
+     "river": false,
+     "defEntrenchWeeks": 2,
+     "stack": false,
+     "big": false,
+     "gerSide": "def",
+     "att": {
+      "nations": [
+       "pol"
+      ],
+      "armies": 1,
+      "regs": 11,
+      "men": 11000,
+      "line": 11,
+      "support": 0,
+      "engaged": 11,
+      "supply": "supplied",
+      "morale": 1
+     },
+     "def": {
+      "nations": [
+       "ger"
+      ],
+      "armies": 1,
+      "regs": 2,
+      "men": 982,
+      "line": 2,
+      "support": 0,
+      "engaged": 2,
+      "supply": "supplied",
+      "morale": 0.21
+     },
+     "joins": [],
+     "support": {
+      "att": 0,
+      "def": 0
+     },
+     "forecast": "Likely victory",
+     "winner": "attacker",
+     "rounds": 1,
+     "attLoss": 187,
+     "defLoss": 766
+    },
+    {
+     "id": "b5",
+     "week": 18,
+     "province": "northwarsaw",
+     "terrain": "plains",
+     "frontage": 16,
+     "fort": 0,
+     "river": true,
+     "defEntrenchWeeks": 0,
+     "stack": false,
+     "big": false,
+     "gerSide": "att",
+     "att": {
+      "nations": [
+       "ger"
+      ],
+      "armies": 8,
+      "regs": 100,
+      "men": 86783,
+      "line": 80,
+      "support": 20,
+      "engaged": 24,
+      "supply": "unsupplied",
+      "morale": 0.7
+     },
+     "def": {
+      "nations": [
+       "pol"
+      ],
+      "armies": 1,
+      "regs": 3,
+      "men": 3000,
+      "line": 2,
+      "support": 1,
+      "engaged": 3,
+      "supply": "supplied",
+      "morale": 0.87
+     },
+     "joins": [],
+     "support": {
+      "att": 0,
+      "def": 0
+     },
+     "forecast": "Likely victory",
+     "winner": "attacker",
+     "rounds": 1,
+     "attLoss": 327,
+     "defLoss": 1455
+    },
+    {
+     "id": "b6",
+     "week": 20,
+     "province": "danzig",
+     "terrain": "plains",
+     "frontage": 16,
+     "fort": 0,
+     "river": false,
+     "defEntrenchWeeks": 0,
+     "stack": false,
+     "big": false,
+     "gerSide": "def",
+     "att": {
+      "nations": [
+       "pol"
+      ],
+      "armies": 1,
+      "regs": 11,
+      "men": 10813,
+      "line": 11,
+      "support": 0,
+      "engaged": 11,
+      "supply": "supplied",
+      "morale": 0.97
+     },
+     "def": {
+      "nations": [
+       "ger"
+      ],
+      "armies": 1,
+      "regs": 2,
+      "men": 216,
+      "line": 2,
+      "support": 0,
+      "engaged": 2,
+      "supply": "supplied",
+      "morale": 0
+     },
+     "joins": [],
+     "support": {
+      "att": 0,
+      "def": 0
+     },
+     "forecast": "Likely victory",
+     "winner": "attacker",
+     "rounds": 1,
+     "attLoss": 33,
+     "defLoss": 216
+    },
+    {
+     "id": "b7",
+     "week": 21,
+     "province": "warsaw",
+     "terrain": "plains",
+     "frontage": 16,
+     "fort": 2,
+     "river": false,
+     "defEntrenchWeeks": 0,
+     "stack": false,
+     "big": false,
+     "gerSide": "att",
+     "att": {
+      "nations": [
+       "ger"
+      ],
+      "armies": 8,
+      "regs": 100,
+      "men": 82884,
+      "line": 80,
+      "support": 20,
+      "engaged": 24,
+      "supply": "unsupplied",
+      "morale": 0.56
+     },
+     "def": {
+      "nations": [
+       "pol"
+      ],
+      "armies": 1,
+      "regs": 1,
+      "men": 1000,
+      "line": 1,
+      "support": 0,
+      "engaged": 1,
+      "supply": "supplied",
+      "morale": 0.5
+     },
+     "joins": [],
+     "support": {
+      "att": 0,
+      "def": 0
+     },
+     "forecast": "Likely victory",
+     "winner": "attacker",
+     "rounds": 1,
+     "attLoss": 96,
+     "defLoss": 825
+    },
+    {
+     "id": "b11",
+     "week": 25,
+     "province": "warsaw",
+     "terrain": "plains",
+     "frontage": 16,
+     "fort": 2,
+     "river": false,
+     "defEntrenchWeeks": 0,
+     "stack": false,
+     "big": false,
+     "gerSide": "att",
+     "att": {
+      "nations": [
+       "ger"
+      ],
+      "armies": 8,
+      "regs": 100,
+      "men": 78254,
+      "line": 80,
+      "support": 20,
+      "engaged": 24,
+      "supply": "unsupplied",
+      "morale": 0.55
+     },
+     "def": {
+      "nations": [
+       "pol"
+      ],
+      "armies": 1,
+      "regs": 1,
+      "men": 1000,
+      "line": 0,
+      "support": 1,
+      "engaged": 1,
+      "supply": "supplied",
+      "morale": 0.5
+     },
+     "joins": [],
+     "support": {
+      "att": 0,
+      "def": 0
+     },
+     "forecast": "Likely victory",
+     "winner": "attacker",
+     "rounds": 1,
+     "attLoss": 80,
+     "defLoss": 744
+    },
+    {
+     "id": "b12",
+     "week": 27,
+     "province": "northwarsaw",
+     "terrain": "plains",
+     "frontage": 16,
+     "fort": 0,
+     "river": false,
+     "defEntrenchWeeks": 0,
+     "stack": false,
+     "big": false,
+     "gerSide": "att",
+     "att": {
+      "nations": [
+       "ger"
+      ],
+      "armies": 5,
+      "regs": 43,
+      "men": 33795,
+      "line": 38,
+      "support": 5,
+      "engaged": 21,
+      "supply": "unsupplied",
+      "morale": 0.51
+     },
+     "def": {
+      "nations": [
+       "pol"
+      ],
+      "armies": 1,
+      "regs": 1,
+      "men": 775,
+      "line": 1,
+      "support": 0,
+      "engaged": 1,
+      "supply": "supplied",
+      "morale": 0.41
+     },
+     "joins": [],
+     "support": {
+      "att": 0,
+      "def": 0
+     },
+     "forecast": "Likely victory",
+     "winner": "attacker",
+     "rounds": 1,
+     "attLoss": 58,
+     "defLoss": 775
+    },
+    {
+     "id": "b14",
+     "week": 28,
+     "province": "eastpoznan",
+     "terrain": "plains",
+     "frontage": 16,
+     "fort": 0,
+     "river": false,
+     "defEntrenchWeeks": 3,
+     "stack": false,
+     "big": false,
+     "gerSide": "att",
+     "att": {
+      "nations": [
+       "ger"
+      ],
+      "armies": 1,
+      "regs": 1,
+      "men": 1000,
+      "line": 1,
+      "support": 0,
+      "engaged": 1,
+      "supply": "supplied",
+      "morale": 1
+     },
+     "def": {
+      "nations": [
+       "pol"
+      ],
+      "armies": 1,
+      "regs": 2,
+      "men": 2000,
+      "line": 0,
+      "support": 2,
+      "engaged": 2,
+      "supply": "supplied",
+      "morale": 1
+     },
+     "joins": [
+      {
+       "week": 30,
+       "side": "def",
+       "regs": 20
+      },
+      {
+       "week": 30,
+       "side": "def",
+       "regs": 11
+      }
+     ],
+     "support": {
+      "att": 0,
+      "def": 0
+     },
+     "forecast": "Uncertain",
+     "winner": "defender",
+     "rounds": 3,
+     "attLoss": 1000,
+     "defLoss": 398
+    },
+    {
+     "id": "b16",
+     "week": 36,
+     "province": "eastodzandkielce",
+     "terrain": "plains",
+     "frontage": 16,
+     "fort": 0,
+     "river": false,
+     "defEntrenchWeeks": 1,
+     "stack": false,
+     "big": false,
+     "gerSide": "att",
+     "att": {
+      "nations": [
+       "ger"
+      ],
+      "armies": 8,
+      "regs": 100,
+      "men": 90090,
+      "line": 80,
+      "support": 20,
+      "engaged": 24,
+      "supply": "unsupplied",
+      "morale": 0.62
+     },
+     "def": {
+      "nations": [
+       "pol"
+      ],
+      "armies": 1,
+      "regs": 3,
+      "men": 3000,
+      "line": 2,
+      "support": 1,
+      "engaged": 3,
+      "supply": "supplied",
+      "morale": 0.8
+     },
+     "joins": [],
+     "support": {
+      "att": 0,
+      "def": 0
+     },
+     "forecast": "Likely victory",
+     "winner": "attacker",
+     "rounds": 1,
+     "attLoss": 360,
+     "defLoss": 1483
+    },
+    {
+     "id": "b19",
+     "week": 39,
+     "province": "katowice",
+     "terrain": "plains",
+     "frontage": 16,
+     "fort": 1,
+     "river": true,
+     "defEntrenchWeeks": 0,
+     "stack": false,
+     "big": false,
+     "gerSide": "att",
+     "att": {
+      "nations": [
+       "ger"
+      ],
+      "armies": 7,
+      "regs": 78,
+      "men": 71242,
+      "line": 63,
+      "support": 15,
+      "engaged": 24,
+      "supply": "unsupplied",
+      "morale": 0.51
+     },
+     "def": {
+      "nations": [
+       "pol"
+      ],
+      "armies": 1,
+      "regs": 3,
+      "men": 1967,
+      "line": 2,
+      "support": 1,
+      "engaged": 3,
+      "supply": "supplied",
+      "morale": 0.1
+     },
+     "joins": [],
+     "support": {
+      "att": 0,
+      "def": 0
+     },
+     "forecast": "Likely victory",
+     "winner": "attacker",
+     "rounds": 1,
+     "attLoss": 193,
+     "defLoss": 1007
+    }
+   ],
+   "invariantFailures": []
+  }
+ ]
+}

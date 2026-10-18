@@ -32,8 +32,9 @@ function border(sim: Sim, nid: NationId, other: NationId): ProvinceId[] {
   return sim.world.provIds.filter((p) => st.provinces[p].owner === nid && sim.world.prov[p].neighbors.some((n) => st.provinces[n].owner === other)).sort();
 }
 
-export function largeForce(seed = 3): LargeForce {
-  const sim = createGame({ scenario: 'europe-1936', seed, playerNation: 'ger' });
+/** `scenario`: Europe 1936 as shipped, or a retained revision of it (`europe-1936-r1`, registered by the caller). */
+export function largeForce(seed = 3, scenario = 'europe-1936'): LargeForce {
+  const sim = createGame({ scenario, seed, playerNation: 'ger' });
   const st = sim.state;
   for (const nid of ['ger', 'pol', 'fra', 'ita']) {
     const n = st.nations[nid];

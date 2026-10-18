@@ -17,7 +17,7 @@
 // Measured: inputs, provinces taken, losses, battles, what the operations did
 // (orders, detachments, merges, drops, landings, issues), planning cost per week,
 // invariants each week. Writes reports/qol/demo.json and prints a summary.
-//   npx tsx tools/qol-demo.ts [--weeks 26] [--seed 3] [--out reports/qol/demo.json]
+//   npx tsx tools/qol-demo.ts [--weeks 26] [--seed 3] [--scenario europe-1936-r1] [--out reports/qol/demo.json]
 
 import { writeFileSync } from 'node:fs';
 import { reachFrom, threatAround } from '../src/sim/ai/common';
@@ -39,6 +39,13 @@ const get = (k: string, d: string) => {
 };
 const WEEKS = Number(get('weeks', '26'));
 const SEED = Number(get('seed', '3'));
+// Europe 1936 as shipped, or its revision 1 (`europe-1936-r1`), the map of the earlier measurement
+const SCENARIO = get('scenario', 'europe-1936');
+{
+  const { ensureLegacyMap, parseLegacyId } = await import('../src/maps/legacy');
+  const legacy = parseLegacyId(SCENARIO);
+  if (legacy) await ensureLegacyMap(legacy[0], legacy[1]);
+}
 const OUT = get('out', 'reports/qol/demo.json');
 
 interface RunResult {
@@ -73,7 +80,7 @@ function gerHeldFromEnemies(sim: Sim, start: Set<ProvinceId>): number {
 }
 
 function run(workflow: 'manual' | 'delegated'): RunResult {
-  const force = largeForce(SEED);
+  const force = largeForce(SEED, SCENARIO);
   const sim = force.sim;
   const st = sim.state;
   const start = enemyHeld(sim);

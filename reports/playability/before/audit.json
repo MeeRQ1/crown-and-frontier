@@ -3,8 +3,8 @@
  "places": {
   "airfields": 7,
   "ports": 4,
-  "fleets": 2,
-  "wings": 2
+  "fleets": 4,
+  "wings": 6
  },
  "tenWings": {
   "inputs": 13,
@@ -19,8 +19,13 @@
   "note": "ships beyond the free slipways must be ordered again later on main"
  },
  "fourFleetsPatrol": {
-  "inputs": 6,
-  "patrolling": 1
+  "inputs": 12,
+  "patrolling": 3
+ },
+ "sixWingsMove": {
+  "inputs": 18,
+  "wings": 6,
+  "moved": 6
  },
  "errors": []
 }

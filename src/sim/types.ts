@@ -1223,6 +1223,8 @@ export interface Operation extends OperationSettings {
   parent?: string | null;
   /** Auto-conquer (format 9): no new landing before this tick (one failed) */
   landingWait?: number;
+  /** Auto-conquer (format 9): the province held while enemy forces near our land outmatch ours (homeland defence) */
+  stand?: ProvinceId | null;
 }
 
 export interface GameState {

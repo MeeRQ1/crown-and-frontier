@@ -4,13 +4,14 @@
 // Through the real controls: New campaign, map, realm, length, Begin; the clock at the
 // fastest speed; Simple Auto-conquer from the Military ledger whenever we are at war
 // and it is not running; Export to file and Import file half-way (the campaign goes on
-// from the imported copy); the end screen. The player's other decisions go through the
+// from the imported copy, in the fifth year or half-way, whichever comes first); the end screen. The player's other decisions go through the
 // same command call the interface uses (cnf.do), as a plain player would make them:
-//   - every half year at peace from the second year, war on the weakest neighbour
-//     (a conquest of up to two border provinces), at most one war every three years
+//   - every half year at peace from the second year, war on the weakest neighbour our
+//     army outnumbers by half (a conquest of up to two border provinces), at most one
+//     war every three years
 //   - a production order for four infantry at the capital once a year, when affordable
-//   - peace offers from enemies accepted unless they take our land; alliances and
-//     trade accepted; everything else declined
+//   - peace offers and settlements accepted unless they take our land (and then too
+//     once an enemy holds half of it); alliances and trade accepted; everything else declined
 // The final state is exported once more and checked in Node: it loads, and every
 // invariant holds.
 //   npm run build && npx tsx tools/campaign-web.ts [--dist dist] [--years 25] [--out reports/playability/after]
@@ -87,6 +88,14 @@ async function main(): Promise<void> {
       return { tick: st.tick, over: !!st.result, alive: n.alive, treasury: n.treasury, enemies: [...new Set(enemies)], auto };
     });
     if (s.over || !s.alive) break;
+    if (s.tick % 52 < 26) {
+      const me = await page.evaluate(() => {
+        const a = (window as Cnf).cnf;
+        const st = a.sim.state;
+        return { provinces: a.sim.world.provIds.filter((p: string) => st.provinces[p].owner === a.player).length, regiments: Object.values(st.armies).filter((x: any) => x.nation === a.player).reduce((n: number, x: any) => n + x.regiments.length, 0), treasury: Math.round(st.nations[a.player].treasury) };
+      });
+      log.push(`year ${Math.round(s.tick / 52)}: ${me.provinces} provinces, ${me.regiments} regiments, ${me.treasury} crowns`);
+    }
     // at war and no mandate running: Auto-conquer from the Military ledger
     if (s.enemies.length && !s.auto) {
       await page.keyboard.press('KeyM');
@@ -109,9 +118,14 @@ async function main(): Promise<void> {
         let war = 0;
         let order = 0;
         let ans = 0;
+        // how badly the war goes: the share of our land an enemy holds
+        const mine = sim.world.provIds.filter((q: string) => st.provinces[q].owner === me);
+        const lost = mine.filter((q: string) => st.provinces[q].controller !== me).length / Math.max(1, mine.length);
         for (const p of [...st.proposals].filter((x: any) => x.to === me)) {
-          const takesOurLand = p.kind === 'peace' && (p.terms?.provinces ?? []).some((q: string) => st.provinces[q].owner === me);
-          const accept = (p.kind === 'peace' && !takesOurLand) || p.kind === 'alliance' || p.kind === 'trade';
+          const peace = p.kind === 'peace' || p.kind === 'settlement';
+          const takesOurLand = (p.terms?.provinces ?? []).some((q: string) => st.provinces[q].owner === me) || (p.demands ?? []).some((d: any) => d.from === me && d.province);
+          // peace unless it costs us land; land too once an enemy holds half of ours
+          const accept = (peace && (!takesOurLand || lost >= 0.5)) || p.kind === 'alliance' || p.kind === 'trade';
           const res = a.do({ type: 'respond', nation: me, proposal: p.id, accept }, true);
           ans++;
           out.push(`wk ${st.tick}: ${accept ? 'accepted' : 'declined'} ${p.kind} from ${p.from}${res.ok ? '' : ` (${res.reason})`}`);
@@ -125,7 +139,10 @@ async function main(): Promise<void> {
             const o = st.provinces[q].owner as string | null;
             if (o && o !== me) near.set(o, [...(near.get(o) ?? []), q]);
           }
-          const weak = [...near.keys()].sort((x, y) => sim.world.provIds.filter((p: string) => st.provinces[p].owner === x).length - sim.world.provIds.filter((p: string) => st.provinces[p].owner === y).length);
+          // a neighbour whose army ours outnumbers by half, weakest first
+          const regs = (nid: string) => Object.values(st.armies).filter((x: any) => x.nation === nid).reduce((t: number, x: any) => t + x.regiments.length, 0);
+          const ours = regs(me);
+          const weak = [...near.keys()].filter((t) => regs(t) * 1.5 <= ours).sort((x, y) => regs(x) - regs(y) || (x < y ? -1 : 1));
           for (const t of weak) {
             const goal = { type: 'conquest', provinces: [...new Set(near.get(t))].slice(0, 2) };
             const res = a.do({ type: 'declareWar', nation: me, target: t, goal }, true);
@@ -150,7 +167,7 @@ async function main(): Promise<void> {
     answered += d.ans;
     log.push(...d.out);
     // half-way: export to a file and carry on from the imported copy
-    if (!imported && s.tick >= (YEARS * 52) / 2) {
+    if (!imported && s.tick >= Math.min((YEARS * 52) / 2, 4 * 52)) {
       const path = await exportSave(page, 'campaign-half.json');
       await page.getByRole('button', { name: 'Game menu' }).click();
       const [chooser] = await Promise.all([page.waitForEvent('filechooser'), page.getByRole('button', { name: 'Import file' }).click()]);
@@ -190,7 +207,7 @@ async function main(): Promise<void> {
       result: st.result ? { winner: st.result.winner, path: st.result.path, playerOutcome: st.result.playerOutcome, reason: st.result.reason } : null,
       provinces: a.sim.world.provIds.filter((p: string) => st.provinces[p].owner === me).length,
       regiments: Object.values(st.armies).filter((x: any) => x.nation === me).reduce((n: number, x: any) => n + x.regiments.length, 0),
-      endScreen: !!document.querySelector('.screen') && document.body.innerText.includes('Your reign'),
+      endScreen: [...document.querySelectorAll('.screen h2')].map((x) => x.textContent ?? '').find((t) => /Victory|Defeat|The campaign is over|Campaign complete/.test(t)) ?? null,
     };
   });
   await page.screenshot({ path: join(OUT, 'campaign-end.png') });
@@ -199,14 +216,14 @@ async function main(): Promise<void> {
   // the final state, checked in Node
   let finalCheck: Record<string, unknown> = {};
   try {
-    await page.getByRole('button', { name: /Continue|Back to the map|Keep playing/ }).first().click({ timeout: 3000 });
-  } catch {
-    // the end screen may offer no way back to the map; the game menu is still reachable from the map only
-  }
-  try {
-    const path = await exportSave(page, 'campaign-end.json');
+    // the end screen's Export save; if no file comes, the same export through the game's handle
+    let dl = await Promise.all([page.waitForEvent('download', { timeout: 10000 }), page.getByRole('button', { name: 'Export save' }).click()]).then(([d]) => d).catch(() => null);
+    finalCheck.exportedBy = dl ? 'Export save on the end screen' : 'the game handle (the button gave no file)';
+    if (!dl) [dl] = await Promise.all([page.waitForEvent('download', { timeout: 20000 }), page.evaluate(() => (window as Cnf).cnf.exportSave())]);
+    const path = join(TMP, 'campaign-end.json');
+    await dl.saveAs(path);
     const { sim } = readSave(readFileSync(path, 'utf8'));
-    finalCheck = { loads: true, invariants: checkInvariants(sim), tick: sim.state.tick };
+    finalCheck = { ...finalCheck, loads: true, invariants: checkInvariants(sim), tick: sim.state.tick };
   } catch (e) {
     finalCheck = { exported: false, note: (e as Error).message.slice(0, 200) };
   }

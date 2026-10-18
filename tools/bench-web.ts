@@ -7,7 +7,7 @@
 // weeks are run twice: a whole week per frame, as the loop did before weeks were
 // sliced, and in slices at the fastest speed.
 //
-//   npm run build && npx tsx tools/bench-web.ts [--maps reach,aldmere,file.json] [--years 10] [--stress earth:1:280 or earth-r1:1:280] [--out reports/perf/web.md]
+//   npm run build && npx tsx tools/bench-web.ts [--maps reach,aldmere,file.json] [--years 10] [--stress earth:1:280 or earth-r1:1:280] [--at fra] [--only panning] [--out reports/perf/web.md]
 //
 // Numbers from headless software rendering are not real-device numbers; they
 // are comparable between revisions on the same machine.
@@ -35,6 +35,10 @@ const maps = get('maps', 'reach,aldmere').split(',');
 const years = Number(get('years', '10'));
 const outPath = get('out', '');
 const stress = get('stress', '');
+// --at fra: every zoom tier centred on that realm's capital at the same absolute zoom (a multiple of the
+// whole-map fit), so two revisions of a map are drawn over the same ground at the same scale
+const at = get('at', '');
+const only = get('only', '');
 const MIME: Record<string, string> = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript', '.css': 'text/css', '.json': 'application/json', '.svg': 'image/svg+xml', '.woff2': 'font/woff2', '.txt': 'text/plain' };
 
 const server = createServer((req, res) => {
@@ -101,21 +105,23 @@ for (const m of maps) {
     await new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
     return { created, ready: performance.now() - t, provinces: a.sim.world.provIds.length, realms: a.sim.world.nationIds.length };
   }, scenario);
-  log(`### ${scenario} — ${create.provinces} provinces, ${create.realms} realms`);
+  log(`### ${scenario} — ${create.provinces} provinces, ${create.realms} realms${at ? ` (zoom tiers over ${at}'s capital at fixed multiples of the whole-map zoom: 1.6, 5 and 12)` : ''}`);
   log('');
   log(`- Page load to menu: ${menuMs} ms; new campaign: simulation ${Math.round(create.created)} ms, first frame after ${Math.round(create.ready)} ms (includes loading the map geometry).`);
 
   // panning at each zoom tier, political mode
-  const tiers = await page.evaluate(async () => {
+  const tiers = await page.evaluate(async (atNation) => {
     const a = window.cnf;
     const r = a.renderer;
     const cam = r.camera;
     const out: Record<string, { draw: number[]; frame: number[] }> = {};
-    for (const [tier, px, lod] of [['far (no level of detail)', 30, false], ['far', 30, true], ['medium', 90, true], ['close', 200, true]] as const) {
+    const fit = cam.minZoom;
+    for (const [tier, px, lod, mul] of [['far (no level of detail)', 30, false, 1.6], ['far', 30, true, 1.6], ['medium', 90, true, 5], ['close', 200, true, 12]] as const) {
       r.lod = lod;
       const ids = a.sim.world.provIds;
-      const c = r.provinceCenter(ids[Math.floor(ids.length / 2)]);
-      cam.centerOn(c.x, c.y, cam.zoomForProvincePx(px), false);
+      const cap = atNation ? a.sim.state.nations[atNation]?.capital : null;
+      const c = r.provinceCenter(cap ?? ids[Math.floor(ids.length / 2)]);
+      cam.centerOn(c.x, c.y, cap ? Math.min(cam.maxZoom, fit * mul) : cam.zoomForProvincePx(px), false);
       for (let i = 0; i < 20; i++) {
         a.mapDirty = true;
         await new Promise((res) => requestAnimationFrame(res));
@@ -142,7 +148,7 @@ for (const m of maps) {
       out[tier] = { draw, frame };
     }
     return out;
-  });
+  }, at);
   log('');
   log('| Panning | draw avg | draw p95 | draw max | frame avg | frame p95 |');
   log('|---|---|---|---|---|---|');
@@ -150,6 +156,12 @@ for (const m of maps) {
     const d = stats(v.draw);
     const f = stats(v.frame);
     log(`| ${k} | ${d.avg} | ${d.p95} | ${d.max} | ${f.avg} | ${f.p95} |`);
+  }
+  // --only panning: the drawing comparison alone
+  if (only === 'panning') {
+    log('');
+    await page.close();
+    continue;
   }
 
   // every map mode at medium zoom

@@ -10,7 +10,7 @@ import { applyCommand } from '../src/sim/commands';
 import { checkInvariants } from '../src/sim/invariants';
 import { opForces } from '../src/sim/ops/operations';
 import { readSave, serialize } from '../src/sim/save';
-import type { Sim } from '../src/sim/state';
+import { bump, type Sim } from '../src/sim/state';
 import { step } from '../src/sim/tick';
 import { declareWar, endWar } from '../src/sim/war';
 import { addArmy, gridGame } from './helpers';
@@ -109,6 +109,36 @@ describe('Simple Auto-conquer', () => {
     const cLand = sim.world.provIds.filter((p) => sim.state.provinces[p].owner === 'c');
     expect(cLand.every((p) => sim.state.provinces[p].controller === 'c')).toBe(true);
     for (const t of Object.values(op.tasks)) if (t.target && sim.state.provinces[t.target]) expect(sim.state.provinces[t.target].owner).not.toBe('c');
+  });
+
+  it('outmatched near our land, it holds the capital instead of spreading into enemy land; the offensive resumes once the threat is met', () => {
+    const sim = gridGame();
+    const st = sim.state;
+    declareWar(sim, 'a', 'b', { type: 'conquest', provinces: ['g20'] });
+    const cap = st.nations.a.capital!;
+    addArmy(sim, 'a', 'g10', { infantry: 4 });
+    addArmy(sim, 'a', 'g12', { infantry: 4 });
+    // a field army three times ours, next to our land
+    const big = addArmy(sim, 'b', 'g21', { infantry: 24 });
+    const op = auto(sim, ['b']);
+    weeks(sim, 1);
+    expect(op.stand).toBe(cap);
+    expect(op.log.some((l) => /Defending our land: .*hold .*press no offensive/.test(l.text))).toBe(true);
+    // no army of ours is sent into their land, and none is split off to do it
+    const tasks = Object.values(op.tasks);
+    expect(tasks.length).toBeGreaterThan(0);
+    for (const t of tasks) expect(t.target === null || st.provinces[t.target].owner === 'a').toBe(true);
+    expect(op.detached).toEqual([]);
+    expect(tasks.some((t) => t.kind === 'hold' && t.target === cap) || Object.values(st.armies).some((a) => a.nation === 'a' && (a.location === cap || a.path.at(-1) === cap))).toBe(true);
+    // the threat goes: the mandate takes the offensive again
+    delete st.armies[big.id];
+    bump(sim);
+    weeks(sim, 1);
+    expect(op.stand).toBeNull();
+    expect(op.log.some((l) => /The threat to our land is met: the offensive resumes/.test(l.text))).toBe(true);
+    weeks(sim, 20);
+    expect(held(sim, 'a')).toBeGreaterThan(0);
+    expect(checkInvariants(sim)).toEqual([]);
   });
 
   it('peace with the enemy completes the mandate; it does not make peace or add an enemy', () => {

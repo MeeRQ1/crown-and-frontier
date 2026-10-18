@@ -783,17 +783,61 @@ export function groundPolicy(op: Operation): GroundPolicy {
   };
 }
 
+/**
+ * Homeland defence for Auto-conquer: enemy forces in our land or declared to march into it
+ * (in full) and next to it (at 0.6), against the mandate's own. A quarter stronger than
+ * ours, it holds a keep (the capital while we hold it, else the strongest province of ours
+ * still held; none when all is occupied) instead of pressing an offensive: null when our
+ * forces can meet the threat.
+ */
+export function homeStand(sim: Sim, op: Operation, armies: Army[]): { keep: ProvinceId | null; threat: number; ours: number } | null {
+  const st = sim.state;
+  const nid = op.nation;
+  const own = new Set(sim.world.provIds.filter((p) => st.provinces[p].owner === nid));
+  if (!own.size || !armies.length) return null;
+  let threat = 0;
+  for (const a of Object.values(st.armies)) {
+    if (a.retreating || a.embarked || !atWar(sim, nid, a.nation)) continue;
+    const w = own.has(a.location) || a.path.slice(0, 2).some((p) => own.has(p)) ? 1 : sim.world.prov[a.location].neighbors.some((nb) => own.has(nb)) ? 0.6 : 0;
+    if (w) threat += armyStrength(sim, a) * w;
+  }
+  const ours = armies.reduce((s, a) => s + armyStrength(sim, a), 0);
+  if (threat <= ours * 1.25) return null;
+  const held = [...own].filter((p) => isFriendly(sim, nid, st.provinces[p].controller) && !Object.values(st.armies).some((x) => x.location === p && atWar(sim, nid, x.nation)));
+  if (!held.length) return { keep: null, threat, ours };
+  const cap = st.nations[nid].capital;
+  const keep = cap && held.includes(cap) ? cap : [...held].sort((x, y) => st.provinces[y].fort * 3 + st.provinces[y].dev - (st.provinces[x].fort * 3 + st.provinces[x].dev) || (x < y ? -1 : 1))[0];
+  return { keep, threat, ours };
+}
+
 /** The ground plan of an operation (dry: the preview, nothing issued). */
 export function planOpGround(sim: Sim, op: Operation, armies: Army[], dry: boolean): GroundOutcome {
   const pol = groundPolicy(op);
   // a landing's beachhead and the land next to it lie beyond supply by nature
   if (op.kind === 'landing' && op.area.length) pol.supplyExempt = new Set([op.area[0], ...sim.world.prov[op.area[0]].neighbors]);
-  const { targets, posts } = opTargets(sim, op, armies, pol.margin);
-  const base = opBase(sim, op, armies);
+  let { targets, posts } = opTargets(sim, op, armies, pol.margin);
+  let base = opBase(sim, op, armies);
+  // Auto-conquer outmatched near our land: defend it from a keep, no offensive, no detachments
+  const stand = op.kind === 'war' ? homeStand(sim, op, armies) : null;
+  if (stand) {
+    targets = targets.filter((t) => sim.state.provinces[t.pid].owner === op.nation);
+    posts = [];
+    pol.maxDetach = 0;
+    if (stand.keep) base = stand.keep;
+  }
+  // told when it begins, when all our land is lost, and when it ends ('' : on the defensive with all our land occupied)
+  const was = op.stand === undefined ? null : op.stand;
+  const now = stand ? (stand.keep ?? '') : null;
+  const phase = (x: string | null) => (x === null ? 0 : x === '' ? 2 : 1);
+  if (!dry && op.kind === 'war' && was !== now) op.stand = now;
+  if (!dry && op.kind === 'war' && phase(was) !== phase(now)) {
+    if (stand) opLog(sim, op, `Defending our land: enemy strength ${stand.threat.toFixed(0)} in or near it against our ${stand.ours.toFixed(0)}. ${stand.keep ? `The armies hold ${provName(sim, stand.keep)}, take back our provinces where they can win` : 'All our land is occupied: the armies take it back where they can win'}, and press no offensive until the balance turns.`, 'bad');
+    else opLog(sim, op, 'The threat to our land is met: the offensive resumes.', 'good');
+  }
   const memory = dry
     ? { assigned: { ...op.assigned }, failures: { ...op.failures }, reorganized: { ...op.reorganized } }
     : { assigned: op.assigned, failures: op.failures, reorganized: op.reorganized };
-  return planGround(sim, armies, targets, { nation: op.nation, policy: pol, memory, base, posts, issue: opIssue(sim), note: (t, tone) => (dry ? undefined : opLog(sim, op, t, tone)), dry }, op.tasks);
+  return planGround(sim, armies, targets, { nation: op.nation, policy: pol, memory, base, posts, issue: opIssue(sim), note: (t, tone) => (dry ? undefined : opLog(sim, op, t, tone)), dry, stand: stand?.keep ?? null }, op.tasks);
 }
 
 /** Members given a direct order rejoin once it is carried out (when the operation is set to). */

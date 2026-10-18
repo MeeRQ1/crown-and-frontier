@@ -99,6 +99,8 @@ export interface GroundContext {
   dry?: boolean;
   /** where an army with nothing to do should stand to join the war (the AI: on the way to the nearest objective) */
   advance?: (a: Army) => ProvinceId | null;
+  /** homeland defence (Auto-conquer outmatched near our land): the province held; outmatched armies fall back into it and hold it */
+  stand?: ProvinceId | null;
 }
 
 export interface GroundOutcome {
@@ -345,6 +347,21 @@ export function planGround(sim: Sim, armies: Army[], targets: GroundTarget[], ct
     if (besieging && danger === 0) {
       fit.push(a);
       continue;
+    }
+    // on the defensive: an army that is outmatched where it stands falls back into the keep (or holds
+    // it, dug in) instead of leaving our land to the enemy; one too worn to fight still rests
+    if (outmatched && !tired && !starving && ctx.stand && isFriendly(sim, nid, st.provinces[ctx.stand].controller)) {
+      const r = reachFrom(sim, nid, a.location);
+      if (a.location === ctx.stand || r.dist[ctx.stand] !== undefined) {
+        const spot = a.location === ctx.stand ? ctx.stand : place(a, ctx.stand);
+        const why = a.location === ctx.stand
+          ? `holds ${provName(sim, ctx.stand)} against enemy strength ${danger.toFixed(1)} nearby: the defence of our land`
+          : `falls back into ${provName(sim, spot)} to hold it: enemy strength ${danger.toFixed(1)} nearby against our ${str(a).toFixed(1)}`;
+        give(a, task(sim, 'hold', spot, why, prevTasks[a.id]));
+        moveTo(a, spot);
+        mem.assigned[a.id] = { target: ctx.stand, since: mem.assigned[a.id]?.target === ctx.stand ? mem.assigned[a.id].since : st.tick, kind: 'hold' };
+        continue;
+      }
     }
     if (tired || starving || outmatched) {
       const why = outmatched
