@@ -10,7 +10,8 @@
 //  2. Reserve: a share of the strength is held back at the base, committed to
 //     battles our armies are losing, or (if allowed) to targets nothing else covers.
 //  3. Targets in priority order (defend, liberate, hold, attack by value), with
-//     commitment: an army keeps its target until it is taken, lost or hopeless.
+//     commitment: an army keeps its target until it is taken, lost or hopeless
+//     (of each kind, the targets armies already march on are planned first).
 //     A task force is the nearest fit armies until their strength meets the
 //     need (opposition × margin, plus the regiments a fort needs); short of it,
 //     an attack is not made.
@@ -21,7 +22,9 @@
 //     after that only a stronger force tries again.
 //  6. Detachments (when allowed, bounded): a task force with spare regiments
 //     sends a detachment of at least the minimum size to an undefended target
-//     nothing else covers; idle armies standing together merge again.
+//     nothing else covers, sized to stand against the enemy next door and an
+//     enemy field army loose within a few marches (or not sent); idle armies
+//     standing together merge again.
 //  7. Armies with nothing to do cover the front posts, else gather at the base.
 
 import { C } from '../config';
@@ -32,7 +35,7 @@ import { atWar, isFriendly, menOf, provName, type Sim } from '../state';
 import { provinceSupplyCapacity, supplyAt, supplyDistances, supplyRange } from '../supply';
 import { findPath } from '../movement';
 import type { Army, ArmyId, CommandResult, NationId, OpTask, OpTaskKind, ProvinceId, RealmCommand, UnitType } from '../types';
-import { enemyRouteSet, hostileArmiesAt, pathVia, projectedThreat, reachFrom, sumStrength, threatAround } from '../ai/common';
+import { enemyRouteSet, hostileArmiesAt, looseThreat, pathVia, projectedThreat, reachFrom, sumStrength, threatAround } from '../ai/common';
 
 export interface GroundTarget {
   pid: ProvinceId;
@@ -465,7 +468,10 @@ export function planGround(sim: Sim, armies: Army[], targets: GroundTarget[], ct
   }
   // distance counts a full point a march: a front advances by its nearest objectives, not by marching across itself
   const score = (t: GroundTarget) => t.value * (committed.has(t.pid) ? 1.5 : 1) - Math.min(20, near.get(t.pid) ?? 20);
-  const ranked = [...targets].sort((a, b) => RANK[a.kind] - RANK[b.kind] || score(b) - score(a) || (a.pid < b.pid ? -1 : 1));
+  // commitment: of each kind, the objectives armies already march on are planned first, so a task
+  // force keeps its objective until it is taken, lost or out of reach, and is not drawn off week by
+  // week to whichever objective scores a little better as the armies move
+  const ranked = [...targets].sort((a, b) => RANK[a.kind] - RANK[b.kind] || Number(committed.has(b.pid)) - Number(committed.has(a.pid)) || score(b) - score(a) || (a.pid < b.pid ? -1 : 1));
   const assigned = new Set<ArmyId>();
   const groups: Array<{ t: GroundTarget; group: Army[]; have: number }> = [];
   const pool = () => fit.filter((a) => !assigned.has(a.id) && !reserve.has(a.id));
@@ -530,8 +536,10 @@ export function planGround(sim: Sim, armies: Army[], targets: GroundTarget[], ct
     const open = out.blocked.filter((b) => b.why === 'no army free').map((b) => targets.find((t) => t.pid === b.pid)!).filter((t) => t && t.hostile.length === 0 && t.kind !== 'defend');
     for (const t of open) {
       if (budget <= 0) break;
-      // a detachment must be able to hold what it takes against the enemy next door (no defeat in detail)
-      const nearby = projectedThreat(sim, nid, t.pid, 1);
+      // a detachment must be able to hold what it takes against the enemy next door, and stand
+      // long enough against a field army loose within a few marches for help to come (no defeat
+      // in detail): sized for both, or not sent
+      const nearby = Math.max(projectedThreat(sim, nid, t.pid, 1), looseThreat(sim, nid, t.pid) * 0.75);
       // the task force with the most to spare within reach
       let best: { g: (typeof groups)[number]; a: Army; spare: number } | null = null;
       for (const g of groups) {

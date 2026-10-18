@@ -156,6 +156,24 @@ export function projectedThreat(sim: Sim, nid: NationId, pid: ProvinceId, adjWei
   });
 }
 
+/**
+ * The strongest enemy field army within `steps` of a province (counted in the ground the
+ * steps cover, so the same distance on a map drawn more finely): what can fall on a small
+ * force sent there before help arrives.
+ */
+export function looseThreat(sim: Sim, nid: NationId, pid: ProvinceId, steps = 3.5): number {
+  return memoize(sim, 'looseThreat', `${nid}|${pid}|${steps}`, () => {
+    const land = sim.world.prov[pid].land;
+    const width = land === undefined ? 1 : Math.sqrt(land);
+    let s = 0;
+    for (const a of hostileField(sim, nid)) {
+      const h = sim.world.hop(a.location, pid);
+      if (h !== undefined && h * width <= steps) s = Math.max(s, armyStrength(sim, a));
+    }
+    return s;
+  });
+}
+
 /** Hostile armies in the field (not retreating, not at sea) of every realm at war with `nid`, once a week. */
 function hostileField(sim: Sim, nid: NationId): Army[] {
   return memoize(sim, 'hostileField', nid, () => Object.values(sim.state.armies).filter((a) => !a.retreating && !a.embarked && atWar(sim, nid, a.nation)));
