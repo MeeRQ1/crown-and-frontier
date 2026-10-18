@@ -73,7 +73,8 @@ import { researchProblem } from './progression';
 import { cancelContract, cancelContractProblem, cleanTerms, contractProblem, offerContract, signContract } from './trade';
 import { serialize } from './save';
 import { nationName, notify, provName, type Sim } from './state';
-import type { Command, CommandResult, Proposal } from './types';
+import { hostileArmiesAt } from './ai/common';
+import type { Command, CommandResult, NationId, Proposal, ProvinceId } from './types';
 import { answerCallToArms, applyPeace, declareWar, declareWarProblem, evaluatePeace, goalOptions, peaceProblem } from './war';
 
 function atSeaProblem(sim: Sim, fleet: string): string {
@@ -312,6 +313,21 @@ export function checkCommand(sim: Sim, cmd: Command): string | null {
   }
 }
 
+/**
+ * The route of a march passes enemy troops before it arrives (the shortest legal route
+ * does not go round them): said when the order is given, so a march is never walked
+ * into an enemy army unawares.
+ */
+export function routeWarning(sim: Sim, nid: NationId, path: ProvinceId[]): string | null {
+  for (const pid of path.slice(0, -1)) {
+    const foes = hostileArmiesAt(sim, nid, pid);
+    if (!foes.length) continue;
+    const regs = foes.reduce((n, f) => n + f.regiments.length, 0);
+    return `The route passes ${provName(sim, pid)}, where ${regs} enemy regiment${regs === 1 ? ' stands' : 's stand'}: the army will fight there before it goes on. Shift+click adds a waypoint to go round.`;
+  }
+  return null;
+}
+
 export interface ApplyOptions {
   /** an operation's routine order: not a player order (no override, not in the player's command log; the operation is replayed instead) */
   auto?: boolean;
@@ -371,7 +387,7 @@ function execute(sim: Sim, cmd: Command, auto = false): CommandResult {
       const res = findPath(sim, cmd.nation, a.location, cmd.dest)!;
       if (a.path[0] !== res.path[0]) a.progress = 0;
       a.path = res.path;
-      return { ok: true };
+      return { ok: true, message: routeWarning(sim, cmd.nation, res.path) ?? undefined };
     }
     case 'stop': {
       const a = st.armies[cmd.army];

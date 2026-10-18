@@ -480,6 +480,28 @@ export interface Battle {
   river?: boolean;
   /** fire support in the latest round, by side (format 6): air wings and ships offshore */
   support?: { att: SupportLine[]; def: SupportLine[] };
+  /** the resolved figures of every round so far, summed (format 9): the report ranks what decided it from them */
+  tally?: BattleTally;
+}
+
+/** One side's resolved figures in a round (see combat.ts SideFigures). */
+export interface BattleSideFigures {
+  fire: number;
+  engaged: number;
+  held: number;
+  supply: number;
+  morale: number;
+  support: number;
+}
+
+export interface BattleFigures {
+  att: BattleSideFigures;
+  def: BattleSideFigures;
+  defence: number;
+}
+
+export interface BattleTally extends BattleFigures {
+  rounds: number;
 }
 
 /** One air wing or fleet supporting a side of a land battle, and what it added. */
@@ -509,6 +531,10 @@ export interface BattleReport {
   outcome: string;
   /** a naval battle: `province` holds the sea zone id */
   sea?: boolean;
+  /** the resolved figures averaged over the rounds (format 9) */
+  figures?: BattleFigures;
+  /** the main reasons, ranked from those figures (format 9): the balance of fire first */
+  decisive?: string[];
 }
 
 export interface WarGoal {

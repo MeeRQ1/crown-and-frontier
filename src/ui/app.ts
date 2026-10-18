@@ -792,6 +792,8 @@ export class App {
           if (this.settings.autoPauseWar) this.setSpeed(0);
         }
         if (n.kind === 'battle' && this.settings.autoPauseBattle && /^Battle of/.test(n.text)) this.setSpeed(0);
+        if (n.kind === 'battle' && this.settings.autoPauseDefeat && /^Defeat at/.test(n.text)) this.setSpeed(0);
+        if (n.kind === 'operation' && n.priority === 'urgent' && this.settings.autoPauseOperation) this.setSpeed(0);
         if (n.kind === 'peace') this.sound.play('peace');
         if (n.kind === 'event') {
           this.sound.play('event');
@@ -1489,22 +1491,14 @@ export class App {
     const a = this.sim?.state.armies[id];
     const group = a && this.ui.groupOrders && a.group ? this.groupArmies(a.group) : [];
     if (group.length > 1) {
-      this.finishWeek();
-      // every army of the group marches on its own best route
-      let ok = 0;
-      const why: string[] = [];
-      for (const g of group) {
-        const r = applyCommand(this.sim!, { type: 'move', nation: this.player!, army: g.id, dest, ...(append ? { append: true } : {}) });
-        if (r.ok) ok++;
-        else why.push(`${g.name}: ${r.reason}`);
-      }
-      this.toast(`Group ${a!.group}: ${ok} of ${group.length} armies marching to ${this.sim!.world.prov[dest].name}.${why.length ? ` ${why[0]}` : ''}`, why.length ? 'fail' : 'good');
-      this.sound.play(ok ? 'click' : 'alert');
+      // every army of the group marches on its own best route; each that cannot says why
       this.cancelMoveMode();
-      this.refresh();
+      this.groupOrder(`Group ${a!.group}: march to ${this.sim!.world.prov[dest].name}`, group.map((g) => g.id), () => ({ type: 'move', army: '', dest, ...(append ? { append: true } : {}) }), 'army');
       return;
     }
-    this.do({ type: 'move', army: id, dest, ...(append ? { append: true } : {}) }, true);
+    const r = this.do({ type: 'move', army: id, dest, ...(append ? { append: true } : {}) }, true);
+    // a route through enemy troops is said at once (the order stands)
+    if (r.ok && r.message) this.toast(r.message, 'fail');
     this.cancelMoveMode();
   }
 

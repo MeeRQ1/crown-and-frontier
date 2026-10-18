@@ -5,7 +5,7 @@
 import { airBalance, airControl } from '../../sim/air';
 import { C, RESOURCE_INFO, TERRAIN, UNITS, UNIT_TYPES } from '../../sim/config';
 import { checkCommand } from '../../sim/commands';
-import { forecastBattle } from '../../sim/combat';
+import { averageFigures, battleReasons, forecastBattle } from '../../sim/combat';
 import { activeProjects, buildProblem, buildSlots, devCap, devMax, factoryMax, PROJECT_LABELS, projectCost, type ProjectCost } from '../../sim/construction';
 import { fabricateCost, fabricateMonths, fabricateProblem } from '../../sim/diplomacy';
 import { integrationFactor, provinceCrowns, provinceDeposit, provinceSupplies } from '../../sim/economy';
@@ -15,7 +15,7 @@ import { etaWeeks, isRiver } from '../../sim/movement';
 import { siegeInfo } from '../../sim/siege';
 import { armiesAt, atWar, menOf, nationName, provName } from '../../sim/state';
 import { armySupplyInfo, provinceSupplyCapacity } from '../../sim/supply';
-import type { Army, Battle, SupportLine, ProjectKind, ProvinceId, StrategicResource, UnitType } from '../../sim/types';
+import type { Army, Battle, BattleFigures, SupportLine, ProjectKind, ProvinceId, StrategicResource, UnitType } from '../../sim/types';
 import type { App } from '../app';
 import { orderStatus, readiness } from '../../sim/readiness';
 import { action, bar, button, h, rebuild, row, setChildren } from '../dom';
@@ -530,7 +530,24 @@ export function forecastView(f: ReturnType<typeof forecastBattle>, side: 'attack
     h('div', { class: `callout ${cls}` }, icon(wins === 3 ? 'check' : wins === 0 ? 'alert' : 'info'), h('div', null, h('b', null, verdict), h('div', null, `Unlucky / even / lucky rolls: ${rolls.map((o) => (ours(o) ? 'win' : o ? 'loss' : 'undecided')).join(' / ')}`))),
     row('Strength', `ours ${men(ourMen)} · theirs ${men(theirMen)}`),
     row('Expected losses', `ours ${men(ourLoss)} · theirs ${men(theirLoss)} (~${f.rounds} weeks)`),
+    f.figures ? figuresRows(f.figures, side) : null,
     f.factors.length ? h('ul', { class: 'reasons' }, f.factors.map((x) => h('li', null, x))) : null,
+    h('p', { class: 'small faint' }, 'An estimate: the battle itself rolls the dice, and support, supply and reinforcements can change.'),
+  );
+}
+
+/** Who fights at once, supply, morale, support and the defender's bonus: the numbers the battle is fought on. */
+function figuresRows(f: BattleFigures, side: 'attacker' | 'defender'): HTMLElement {
+  const [o, t] = side === 'attacker' ? [f.att, f.def] : [f.def, f.att];
+  const p = (x: number) => `${Math.round(x * 100)}%`;
+  return h(
+    'div',
+    { 'data-sk': 'battle-figures' },
+    row('Fighting at once', `ours ${o.engaged}${o.held ? ` of ${o.engaged + o.held}` : ''} · theirs ${t.engaged}${t.held ? ` of ${t.engaged + t.held}` : ''} regiments (frontage)`),
+    row('Fire a round', `ours ${o.fire.toFixed(1)} · theirs ${t.fire.toFixed(1)}`),
+    row('Supply, morale', `ours ×${o.supply.toFixed(2)}, ×${o.morale.toFixed(2)} · theirs ×${t.supply.toFixed(2)}, ×${t.morale.toFixed(2)}`),
+    o.support || t.support ? row('Fire support', `ours +${p(o.support)} · theirs +${p(t.support)}`) : null,
+    f.defence > 0 ? row('Defender’s bonus', `${p(f.defence)} of the attacking fire absorbed (ground, river, works, entrenchment)`) : null,
   );
 }
 
@@ -562,7 +579,8 @@ function battleSection(app: App, bid: string): HTMLElement {
     last ? bar(last.defMorale, 1, 'info', 'Defender morale') : null,
     row('Round', `${b.rounds.length} of at most ${C.combat.maxRounds}`),
     supportBlock(app, b),
-    b.factors.length ? h('ul', { class: 'reasons' }, b.factors.map((x) => h('li', null, x))) : null,
+    b.tally ? h('div', { 'data-sk': 'battle-sofar' }, h('div', { class: 'eyebrow', style: 'margin-top:6px' }, 'So far'), h('ul', { class: 'reasons' }, battleReasons(averageFigures(b.tally)).map((x) => h('li', null, x)))) : null,
+    b.factors.length ? h('details', null, h('summary', { class: 'small' }, 'Every modifier (this round)'), h('ul', { class: 'reasons' }, b.factors.map((x) => h('li', null, x)))) : null,
     h('p', { class: 'small faint' }, 'A side breaks at 25% morale or after losing 90% of its men. Reinforcements arriving in the province join the battle.'),
   );
 }

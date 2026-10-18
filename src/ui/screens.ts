@@ -518,6 +518,8 @@ function settingsBody(app: App, redraw: () => void): HTMLElement {
       ...toggle('autoPauseProposal', 'For proposals and calls to arms'),
       ...toggle('autoPauseChoice', 'When research or a national focus finishes'),
       ...toggle('autoPauseBattle', 'When our armies start a battle'),
+      ...toggle('autoPauseDefeat', 'When our armies lose a battle'),
+      ...toggle('autoPauseOperation', 'When an operation or Auto-conquer needs a decision'),
     ),
     group('Saving', h('label', { for: 'set-auto' }, 'Autosave'), auto, h('div', { class: 'hint' }, 'Also when the tab is hidden or closed.')),
     h('div', { style: 'margin-top:18px' }, button('Restore defaults', () => set({ ...DEFAULT_SETTINGS }), { cls: 'quiet' })),
