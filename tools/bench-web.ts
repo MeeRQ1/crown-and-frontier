@@ -31,7 +31,7 @@ const get = (k: string, d: string) => {
   const i = args.indexOf(`--${k}`);
   return i >= 0 ? args[i + 1] : d;
 };
-const maps = get('maps', 'reach,aldmere').split(',');
+const maps = get('maps', 'reach,aldmere').split(',').filter(Boolean); // --maps '' with --stress: the stress states alone
 const years = Number(get('years', '10'));
 const outPath = get('out', '');
 const stress = get('stress', '');

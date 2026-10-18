@@ -11,7 +11,8 @@
 //     battles our armies are losing, or (if allowed) to targets nothing else covers.
 //  3. Targets in priority order (defend, liberate, hold, attack by value), with
 //     commitment: an army keeps its target until it is taken, lost or hopeless
-//     (of each kind, the targets armies already march on are planned first).
+//     (of each kind, a task force that still suffices keeps the target it marches
+//     on before the other targets of that kind take their pick of the free armies).
 //     A task force is the nearest fit armies until their strength meets the
 //     need (opposition × margin, plus the regiments a fort needs); short of it,
 //     an attack is not made.
@@ -468,15 +469,14 @@ export function planGround(sim: Sim, armies: Army[], targets: GroundTarget[], ct
   }
   // distance counts a full point a march: a front advances by its nearest objectives, not by marching across itself
   const score = (t: GroundTarget) => t.value * (committed.has(t.pid) ? 1.5 : 1) - Math.min(20, near.get(t.pid) ?? 20);
-  // commitment: of each kind, the objectives armies already march on are planned first, so a task
-  // force keeps its objective until it is taken, lost or out of reach, and is not drawn off week by
-  // week to whichever objective scores a little better as the armies move
-  const ranked = [...targets].sort((a, b) => RANK[a.kind] - RANK[b.kind] || Number(committed.has(b.pid)) - Number(committed.has(a.pid)) || score(b) - score(a) || (a.pid < b.pid ? -1 : 1));
+  const ranked = [...targets].sort((a, b) => RANK[a.kind] - RANK[b.kind] || score(b) - score(a) || (a.pid < b.pid ? -1 : 1));
   const assigned = new Set<ArmyId>();
   const groups: Array<{ t: GroundTarget; group: Army[]; have: number }> = [];
   const pool = () => fit.filter((a) => !assigned.has(a.id) && !reserve.has(a.id));
-  for (const t of ranked) {
-    if (t.kind === 'hold') continue;
+  const done = new Set<ProvinceId>();
+  /** Plans one target: `own` only with the armies already marching on it, and only if they still suffice. */
+  const planTarget = (t: GroundTarget, own: boolean): void => {
+    if (t.kind === 'hold') return void done.add(t.pid);
     const fail = mem.failures[t.pid];
     // enemy troops next to the target can strike whoever takes it: a force must be able to stand
     const exposure = t.kind === 'defend' ? 0 : projectedThreat(sim, nid, t.pid, 1) - sumStrength(sim, t.hostile);
@@ -489,19 +489,20 @@ export function planGround(sim: Sim, armies: Army[], targets: GroundTarget[], ct
           pid: t.pid,
           why: fail.held && !fail.count ? `too strong for the force we can bring now: set aside for ${wait - waited} more week${wait - waited === 1 ? '' : 's'} (other targets first)` : `an attack failed ${waited} week${waited === 1 ? '' : 's'} ago (${fail.count} so far): waiting ${wait - waited} more`,
         });
-        continue;
+        return void done.add(t.pid);
       }
       need *= 1 + 0.3 * fail.count;
     }
     // beyond supply: not attacked (unless our troops already stand there, or it is the beachhead)
     if (pol.supplyLimit && t.kind === 'attack' && !(dist[t.pid] <= range + 1) && !pol.supplyExempt?.has(t.pid) && !fit.some((a) => a.location === t.pid)) {
       out.blocked.push({ pid: t.pid, why: 'beyond our supply lines' });
-      continue;
+      return void done.add(t.pid);
     }
     // for land nobody defends, an army much larger than the need counts as farther away:
     // the main body is not spent walking into empty provinces while a field army is loose
     const oversize = (a: Army) => (t.hostile.length === 0 && t.kind !== 'defend' && str(a) > Math.max(need, 1) * 4 ? 6 : 0);
     const cands = pool()
+      .filter((a) => !own || mem.assigned[a.id]?.target === t.pid)
       .map((a) => ({ a, d: reachFrom(sim, nid, a.location).dist[t.pid] }))
       .filter((x) => x.d !== undefined && x.d <= pol.maxCost)
       .map((x) => ({ ...x, k: x.d + oversize(x.a) }))
@@ -515,19 +516,31 @@ export function planGround(sim: Sim, armies: Army[], targets: GroundTarget[], ct
       have += str(a);
       regs += a.regiments.length;
     }
+    // the force on it no longer suffices: planned again with every free army, in its rank
+    if (own && (!group.length || have < need || regs < t.siegeRegs)) return;
+    done.add(t.pid);
     if (!group.length) {
       out.blocked.push({ pid: t.pid, why: !pool().length ? 'no army free' : 'no army can reach it' });
-      continue;
+      return;
     }
     if (have < need || regs < t.siegeRegs) {
       const short = regs < t.siegeRegs ? `needs ${t.siegeRegs} regiments to invest the fort (${regs} free)` : `needs strength ${need.toFixed(1)}, ${have.toFixed(1)} free`;
       if (t.kind !== 'defend' || st.nations[nid].capital !== t.pid) {
         out.blocked.push({ pid: t.pid, why: short });
-        continue;
+        return;
       }
     }
     for (const a of group) assigned.add(a.id);
     groups.push({ t, group, have });
+  };
+  // commitment: within each kind, a task force that still suffices keeps the objective it marches
+  // on (until it is taken, lost or out of reach) before the other objectives of that kind take
+  // their pick of the free armies; it is not drawn off week by week to whichever scores a little
+  // better as the armies move, and it draws no one else ahead of them
+  for (const kind of ['defend', 'liberate', 'hold', 'attack'] as const) {
+    const ofKind = ranked.filter((t) => t.kind === kind);
+    for (const t of ofKind) if (committed.has(t.pid)) planTarget(t, true);
+    for (const t of ofKind) if (!done.has(t.pid)) planTarget(t, false);
   }
 
   // ── 6a. detachments: spare regiments to undefended targets nothing covers ──
