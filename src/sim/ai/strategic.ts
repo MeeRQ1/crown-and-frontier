@@ -10,7 +10,7 @@ import { TECH_LIST } from '../data/techs';
 import { activeProjects, buildProblem, buildSlots, projectCost } from '../construction';
 import { addMemory, claimsOn, coalitionAgainst, envoySlots, evaluateTreaty, fabricateProblem, memoriesOf, opinion, sharedThreat, treatyProblem } from '../diplomacy';
 import { envoyCost, factoryCount, grossIncome, materielCap, poolCap, reserveCap, resourcePlan, totalDev, tradeValue } from '../economy';
-import { memoWeek } from '../index';
+import { landHeld, memoWeek } from '../index';
 import { overextension } from '../integration';
 import { nationPotential, nationStrength } from '../military';
 import { nationMods } from '../modifiers';
@@ -48,6 +48,8 @@ import { buildSettlement, counterOffer, describeDemand, evaluateSettlement, sett
 import { aiRand, diffOf, issue } from './common';
 import { coastalShare, navalStrategy, planInvasion } from './navy';
 import { aiTrade } from './trade';
+import { aiGovernment } from './government';
+import { aiLeagues } from '../leagues';
 import { dependenceOn } from '../trade';
 import {
   blocOf,
@@ -261,12 +263,14 @@ function planConstruction(sim: Sim, nid: NationId): void {
     let forts = 0;
     for (const pid of ownedProvinces(sim, nid)) forts += st.provinces[pid].fort;
     const owned = ownedProvinces(sim, nid);
+    // rules of thumb by the land held, not the province count (a map drawn more finely has more, smaller provinces)
+    const land = landHeld(sim, nid);
     // the navy needs a port; aircraft need airfields (counting those being built)
     const building = (k: ProjectKind) => activeProjects(sim, nid).filter((q) => st.provinces[q].project?.kind === k).length;
     const ports = owned.filter((q) => st.provinces[q].port > 0).length + building('port');
     const coastShare = owned.filter((q) => sim.world.provZones[q]).length / Math.max(1, owned.length);
     const fields = owned.filter((q) => st.provinces[q].airfield > 0).length + building('airfield');
-    const wantFields = n.research.done.includes('aviation') ? Math.min(3, 1 + Math.floor(owned.length / 14)) : 0;
+    const wantFields = n.research.done.includes('aviation') ? Math.min(3, 1 + Math.floor(land / 14)) : 0;
     // anti-aircraft batteries where enemy aircraft fly over us, or could: factories, airfields, the capital
     const airDefence = n.research.done.includes('air_defence');
     let enemyStrike = 0;
@@ -307,7 +311,7 @@ function planConstruction(sim: Sim, nid: NationId): void {
           // a realm without coal still keeps a small industrial base
           const coalMargin = plan.produced.coal + 0.5 * n.lastMonth.resources.coal.imported - plan.need.coal - pendingFactories * C.industry.coalPerFactory;
           const fuelled = !n.shortages.includes('coal') && coalMargin >= C.industry.coalPerFactory * 1.2;
-          const smallBase = factoriesNow + pendingFactories < 2 + Math.floor(owned.length / 6);
+          const smallBase = factoriesNow + pendingFactories < 2 + Math.floor(land / 6);
           if (!fuelled && !smallBase) continue;
           const coal = fuelled ? 1 : C.industry.unpowered;
           // a realm with no industry at all makes no materiel: its first factory comes first
@@ -325,7 +329,7 @@ function planConstruction(sim: Sim, nid: NationId): void {
         }
         if (kind === 'charter') v = pr.integration < 60 ? (((60 - pr.integration) / 60) * (pr.dev + 2) * 0.6 / cost) * 100 * (n.ai.goal.victory === 'territorial' ? 1.3 : 1) : 0;
         if (kind === 'fort') {
-          if (!hostileBorder || forts >= 1 + (owned.length * p.fortLove) / 4 + (n.treasury > grossIncome(n.lastMonth) * 12 ? 2 : 0)) continue;
+          if (!hostileBorder || forts >= 1 + (land * p.fortLove) / 4 + (n.treasury > grossIncome(n.lastMonth) * 12 ? 2 : 0)) continue;
           const choke = def.neighbors.length <= 3 ? 1.5 : 1;
           const capital = n.capital === pid ? 1.5 : 1;
           v = ((p.fortLove * (pr.dev + 2) * choke * capital) / 5 / cost) * 100;
@@ -473,7 +477,6 @@ export function diplomacy(sim: Sim, nid: NationId): void {
         const op = opinion(sim, o, nid);
         let v = 0;
         if (wantsTreaty(sim, nid, o, 'alliance')) v += 3;
-        if (wantsTreaty(sim, nid, o, 'trade')) v += 1.5;
         if (n.ai.goal.victory === 'diplomatic') {
           v += 2;
           // a partner that counts toward leadership but whose opinion of us sits near the bar
@@ -483,6 +486,9 @@ export function diplomacy(sim: Sim, nid: NationId): void {
         // a smaller realm we could draw into our sphere
         if (sphereMinded && totalDev(sim, o) < myDev * 0.7 && !sphereOf(sim, o) && influenceOver(sim, nid, o) < C.influence.sphere * 1.3) v += 1.5;
         if (op >= 50 && !(sphereMinded && influenceOver(sim, nid, o) < C.influence.sphere)) v -= 3;
+        // the value of trade (an estimate over every pair of realms) only where it could make
+        // the difference between sending an envoy and not
+        if (v + 1.5 - op / 50 > 1 && wantsTreaty(sim, nid, o, 'trade')) v += 1.5;
         return { o, v: v - op / 50 };
       })
       .filter((x) => x.v > 1)
@@ -1172,6 +1178,8 @@ export function strategic(sim: Sim, nid: NationId): void {
   planInvasion(sim, nid);
   diplomacy(sim, nid);
   aiTrade(sim, nid);
+  aiGovernment(sim, nid);
+  aiLeagues(sim, nid);
   considerWar(sim, nid);
   // rivals close to victory make everyone nervous
   const rival = rivalLeader(sim, nid);

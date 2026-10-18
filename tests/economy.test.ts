@@ -1,4 +1,5 @@
 import { bump } from '../src/sim/state';
+import { nationMods } from '../src/sim/modifiers';
 import { describe, expect, it } from 'vitest';
 import { UNITS } from '../src/sim/config';
 import { applyCommand, checkCommand } from '../src/sim/commands';
@@ -15,7 +16,8 @@ describe('economy', () => {
     const before = computeLedger(sim, 'a').net;
     addArmy(sim, 'a', 'a1', { infantry: 3, cavalry: 1 });
     const after = computeLedger(sim, 'a').net;
-    expect(before - after).toBeCloseTo(3 * UNITS.infantry.upkeep + UNITS.cavalry.upkeep, 5);
+    // at the realm's upkeep modifier (its government and head of government count, format 9)
+    expect(before - after).toBeCloseTo((3 * UNITS.infantry.upkeep + UNITS.cavalry.upkeep) * (1 + nationMods(sim, 'a').upkeep), 5);
   });
 
   it('recruitment is refused with a readable reason when unaffordable', () => {

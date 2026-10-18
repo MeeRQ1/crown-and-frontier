@@ -30,7 +30,7 @@ import { researchCostFor, scaledVictory } from '../src/maps/rules';
 import { ringFromEdges, type EdgeLike } from '../src/maps/rings';
 import { decodeGrid } from '../src/maps/seazones';
 import { addSeaZones, validateMapPackage } from '../src/maps/validate';
-import { createGame } from '../src/sim/game';
+import { createGame, defaultFactories } from '../src/sim/game';
 import { RESEARCH_PACE_MONTHS, researchPace } from '../src/sim/progression';
 import type { NationDef, RegionDef, ResourceKind, Terrain } from '../src/sim/types';
 import { registerMapScenario, unregisterScenario } from '../src/sim/world';
@@ -293,6 +293,14 @@ export interface RealMapDef {
   wrapOcean?: boolean;
   /** victory thresholds measured for this map, over the scaled defaults */
   victory?: Partial<NonNullable<MapPackage['rules']['victory']>>;
+  /**
+   * The previous revision's scenario file (a redraw with more provinces): every realm
+   * keeps that revision's total development, population, forts, factories and deposits,
+   * spread over its new provinces, so splitting land never duplicates its wealth; and
+   * each province records the land it holds (ProvinceDef.land), on which development
+   * and factories are priced and builders counted.
+   */
+  conserve?: string;
 }
 
 export interface RealMapResult {
@@ -1179,9 +1187,127 @@ export function buildRealMap(D: RealMapDef, log: (l: string) => void = () => {})
   const { world, pkg, check } = built;
   if (!check.ok && process.env.REALMAP_DUMP) writeFileSync(process.env.REALMAP_DUMP, JSON.stringify(pkg));
   if (!check.ok) throw new Error(`${D.id}: the map does not validate: ${check.errors.slice(0, 6).map((e) => e.message).join(' ')}`);
+  const kept = D.conserve ? conserveRealms(pkg, D.conserve, log) : null;
   pkg.rules.researchCostMul = calibrateResearch(pkg, log);
-  const report = worldReport(D.meta.name, `npm run genreal -- --map ${D.id}`, spec, world) + extraReport(pkg, check.warnings.map((w) => w.message), D.source?.credit);
+  const report = worldReport(D.meta.name, `npm run genreal -- --map ${D.id}`, spec, world) + (kept ? `\n## Wealth kept from the previous revision\n\n${kept}\n` : '') + extraReport(pkg, check.warnings.map((w) => w.message), D.source?.credit);
   return { pkg, report, world };
+}
+
+/**
+ * A redraw keeps each realm's economy: its total development, population and forts
+ * are those of the previous revision (the file given), spread over its new provinces
+ * in proportion to what the generator gave each (development by largest remainder, at
+ * least 1 a province); forts, factories and deposits are the previous revision's, forts
+ * and deposits each on the new province nearest to where it was. Returns a summary for
+ * the report.
+ */
+function conserveRealms(pkg: MapPackage, refPath: string, log: (l: string) => void): string {
+  const ref = JSON.parse(readFileSync(refPath, 'utf8')) as { nations: Array<{ id: string; capital: string }>; provinces: Array<{ id: string; owner: string | null; dev: number; pop: number; fort?: number; factories?: number; resource?: string | null }> };
+  const refCaps = new Set(ref.nations.map((n) => n.capital));
+  const refCenters = (JSON.parse(readFileSync(refPath.replace(/\.scenario\.json$/, '.map.json'), 'utf8')) as { centers: Record<string, { cx: number; cy: number }> }).centers;
+  const caps = new Set(pkg.nations.map((n) => n.capital));
+  const lines: string[] = [];
+  let devBefore = 0;
+  let popBefore = 0;
+  let devAfter = 0;
+  let popAfter = 0;
+  const lands: number[] = [];
+  for (const n of pkg.nations) {
+    const mine = pkg.provinces.filter((p) => p.owner === n.id);
+    const old = ref.provinces.filter((p) => p.owner === n.id);
+    if (!mine.length || !old.length) continue;
+    const sum = (xs: Array<{ dev: number; pop: number; fort?: number }>, k: 'dev' | 'pop' | 'fort') => xs.reduce((a, p) => a + (p[k] ?? 0), 0);
+    devBefore += sum(mine, 'dev');
+    popBefore += sum(mine, 'pop');
+    // population: in proportion
+    const fp = sum(old, 'pop') / Math.max(1, sum(mine, 'pop'));
+    for (const p of mine) p.pop = Math.max(5, Math.round(p.pop * fp));
+    // development: largest remainder to the old total, at least 1 a province
+    const target = Math.max(sum(old, 'dev'), mine.length);
+    const fd = target / Math.max(1, sum(mine, 'dev'));
+    const raw = mine.map((p) => p.dev * fd);
+    mine.forEach((p, i) => (p.dev = Math.max(1, Math.floor(raw[i]))));
+    let left = target - sum(mine, 'dev');
+    const order = mine.map((p, i) => ({ p, r: raw[i] - Math.floor(raw[i]) })).sort((a, b) => b.r - a.r || (a.p.id < b.p.id ? -1 : 1));
+    for (let i = 0; left > 0 && order.length; i = (i + 1) % order.length) {
+      if (order[i].p.dev < 10) (order[i].p.dev++, left--);
+    }
+    const desc = [...mine].sort((a, b) => b.dev - a.dev || (a.id < b.id ? -1 : 1));
+    for (let i = 0; left < 0 && i < desc.length * 10; i++) {
+      const p = desc[i % desc.length];
+      if (p.dev > 1) (p.dev--, left++);
+    }
+    // forts: the previous revision's, each in the new province nearest to where it stood
+    // (as deposits, below), so the same fortresses guard the same ground
+    const nearest = (at: { cx: number; cy: number } | undefined, free: Set<string>) => {
+      let best: (typeof mine)[number] | null = null;
+      let bd = Infinity;
+      for (const p of mine) {
+        if (!free.has(p.id)) continue;
+        const c = pkg.geometry.centers[p.id];
+        const d = at ? Math.hypot(c.cx - at.cx, c.cy - at.cy) : 0;
+        if (d < bd) (bd = d), (best = p);
+      }
+      return best;
+    };
+    for (const p of mine) p.fort = 0;
+    const unfortified = new Set(mine.map((p) => p.id));
+    for (const o of [...old].sort((a, b) => (b.fort ?? 0) - (a.fort ?? 0) || (a.id < b.id ? -1 : 1))) {
+      if (!o.fort) continue;
+      // a mountain pass or a city keeps its id across revisions: the same province, when it is still the realm's
+      const best = (unfortified.has(o.id) ? mine.find((p) => p.id === o.id) : null) ?? nearest(refCenters[o.id], unfortified);
+      if (!best) continue;
+      best.fort = o.fort;
+      unfortified.delete(best.id);
+    }
+    // factories: the previous revision's (its explicit counts, or the starting rule on its development)
+    const oldFactories = old.reduce((a, p) => a + (p.factories ?? defaultFactories(p.dev, refCaps.has(p.id))), 0);
+    for (const p of mine) p.factories = defaultFactories(p.dev, caps.has(p.id));
+    let f = oldFactories - mine.reduce((a, p) => a + (p.factories ?? 0), 0);
+    const byDev = [...mine].sort((a, b) => Number(caps.has(b.id)) - Number(caps.has(a.id)) || b.dev - a.dev || (a.id < b.id ? -1 : 1));
+    for (let round = 0; f > 0 && round < 5; round++)
+      for (const p of byDev) {
+        if (f <= 0) break;
+        if ((p.factories ?? 0) < Math.min(5, 1 + round)) (p.factories = (p.factories ?? 0) + 1), f--;
+      }
+    for (const p of [...byDev].reverse()) {
+      while (f < 0 && (p.factories ?? 0) > 0) (p.factories = (p.factories ?? 0) - 1), f++;
+    }
+    // deposits: the previous revision's, each in the new province of the realm nearest to where it
+    // lay (the projection and scale are unchanged), so the same land holds the same mines and wells
+    for (const p of mine) p.resource = null;
+    const free = new Set(mine.map((p) => p.id));
+    let depOld = 0;
+    let depNew = 0;
+    for (const o of old) {
+      if (!o.resource) continue;
+      depOld++;
+      const best = nearest(refCenters[o.id], free);
+      if (!best) continue;
+      best.resource = o.resource as (typeof best)['resource'];
+      free.delete(best.id);
+      depNew++;
+    }
+    devAfter += sum(mine, 'dev');
+    popAfter += sum(mine, 'pop');
+    // the land each new province holds, in the old provinces: development and factories are
+    // priced, and builders counted, on it (ProvinceDef.land)
+    const land = Math.round((old.length / mine.length) * 1e4) / 1e4;
+    for (const p of mine) {
+      if (land === 1) delete p.land;
+      else p.land = land;
+    }
+    lands.push(...mine.map(() => land));
+    lines.push(`| ${n.short} | ${old.length} → ${mine.length} | ${land} | ${sum(old, 'dev')} → ${sum(mine, 'dev')} | ${sum(old, 'pop')} → ${sum(mine, 'pop')} | ${sum(old, 'fort')} → ${sum(mine, 'fort')} | ${oldFactories} → ${mine.reduce((a, p) => a + (p.factories ?? 0), 0)} | ${depOld} → ${depNew} |`);
+  }
+  const sorted = [...lands].sort((a, b) => a - b);
+  const median = sorted[Math.floor(sorted.length / 2)] ?? 1;
+  log(`conserved: development ${devBefore} → ${devAfter}, population ${popBefore} → ${popAfter} (the previous revision's totals); land a province ${sorted[0]}–${sorted.at(-1)}, median ${median}`);
+  return [
+    'Generated before this step: development ' + devBefore + ', population ' + popBefore + '; kept: development ' + devAfter + ', population ' + popAfter + '.',
+    '',
+    `Each province records the land it holds, in provinces of the previous revision (its realm's old count over its new one; ${sorted[0]}–${sorted.at(-1)}, median ${median}). Development and factories are priced, the terrain's limit reached and builders counted on it, so dividing land does not make it cheaper to grow.`,
+    '', '| Realm | Provinces | Land a province | Development | Population | Forts | Factories | Deposits |', '|---|---|---|---|---|---|---|---|', ...lines].join('\n');
 }
 
 /**

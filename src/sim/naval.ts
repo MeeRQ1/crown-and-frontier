@@ -31,6 +31,7 @@
 // our armies fight shell the enemy (combat.ts reads bombardPlan); coastal forts
 // fire back.
 
+import { commanderMod } from './commanders';
 import { airControl, mergeAir, outrangedThisWeek, portBombed, relocateAir, reportFleet, seaAir, splitAir, subsExposed, wingsAboard } from './air';
 import { C, SHIPS, SHIP_TYPES } from './config';
 import { warDead } from './economy';
@@ -39,6 +40,7 @@ import { memoGeo, memoize, ownedBy, touchArmies } from './index';
 import { armyCap } from './influence';
 import { nationMods } from './modifiers';
 import { range } from './rng';
+import { orderShip } from './production';
 import { addContribution, atWar, borders, isFriendly, nationName, notify, provName, type Sim } from './state';
 import type { Army, BattleReport, Fleet, FleetDuty, FleetDutyKind, FleetId, NationId, ProvinceId, Ship, ShipType, StrategicResource, ZoneId } from './types';
 import { edgeKey } from './world';
@@ -357,10 +359,12 @@ export function weeklyShipyards(sim: Sim): void {
       const zone = portZone(sim, pid);
       if (!zone) continue;
       const ship = newShip(sim, o.ship);
+      st.nations[o.nation].stats.shipsBuilt++;
+      // a production order's ship joins the squadron it is forming (told once, when the order is done)
+      if (orderShip(sim, o.nation, o.order, pid, zone, ship)) continue;
       const join = fleetsIn(sim, zone).find((f) => f.nation === o.nation && f.home === pid && !f.path.length && !f.cargo.length);
       if (join) join.ships.push(ship);
       else createFleet(sim, o.nation, zone, [ship], pid);
-      st.nations[o.nation].stats.shipsBuilt++;
       notify(sim, o.nation, 'low', 'navy', `A new ${SHIPS[o.ship].label.toLowerCase()} has left the yards of ${provName(sim, pid)}.`, { province: pid });
     }
   }
@@ -460,9 +464,10 @@ export function blockadeShare(sim: Sim, nid: NationId): number {
   return memoGeo(sim, 'blockadeShare', `${nid}|${fleetEpoch(sim)}`, () => {
     let all = 0;
     let cut = 0;
-    for (const pid of sim.world.provIds) {
+    // the realm's own provinces (in world order, as a scan of the map would find them)
+    for (const pid of ownedBy(sim, nid)) {
       const p = sim.state.provinces[pid];
-      if (p.owner !== nid || !sim.world.provZones[pid]) continue;
+      if (!sim.world.provZones[pid]) continue;
       all += p.dev;
       if (provinceBlockaded(sim, pid)) cut += p.dev;
     }
@@ -734,12 +739,14 @@ function sideFire(sim: Sim, fleets: Fleet[]): ShipFire {
   const out: ShipFire = { gun: 0, torpedo: 0, antiSub: 0 };
   for (const f of fleets) {
     const m = nationMods(sim, f.nation);
+    // the fleet's admiral adds to its realm's gunnery (one accounting path: see commanders.ts)
+    const gun = m.navalAttack + commanderMod(sim, f.id, 'navalAttack');
     for (const s of f.ships) {
       if (s.hp <= 0) continue;
       const r = SHIPS[s.type];
       const q = (s.hp / 100) * (fuelled(sim, f.nation, s.type) ? 1 : C.naval.unfuelled);
-      out.gun += r.gun * q * Math.max(0.2, 1 + m.navalAttack + (s.type === 'capital' ? m.capitalAttack : 0));
-      out.torpedo += r.torpedo * q * Math.max(0.2, 1 + m.navalAttack);
+      out.gun += r.gun * q * Math.max(0.2, 1 + gun + (s.type === 'capital' ? m.capitalAttack : 0));
+      out.torpedo += r.torpedo * q * Math.max(0.2, 1 + gun);
       out.antiSub += r.antiSub * q * Math.max(0.2, 1 + m.antiSub);
     }
   }
@@ -996,7 +1003,7 @@ function repairAndWear(sim: Sim): void {
       // a port under the bombs repairs at half rate
       const bombed = coast.some((pid) => sim.state.provinces[pid].port > 0 && portBombed(sim, pid));
       const harbour = f.duty?.kind === 'port' && f.duty.zone === f.zone && !f.path.length ? C.naval.harbourRepair : 1;
-      const gain = C.naval.repair * port * Math.max(0.2, 1 + nationMods(sim, f.nation).repair) * (bombed ? 0.5 : 1) * harbour;
+      const gain = C.naval.repair * port * Math.max(0.2, 1 + nationMods(sim, f.nation).repair + commanderMod(sim, f.id, 'repair')) * (bombed ? 0.5 : 1) * harbour;
       for (const s of f.ships) s.hp = Math.min(100, s.hp + gain);
       continue;
     }
@@ -1073,7 +1080,7 @@ export function bombardPower(sim: Sim, f: Fleet): number {
   let p = 0;
   const m = nationMods(sim, f.nation);
   for (const s of f.ships) p += SHIPS[s.type].bombard * (s.hp / 100) * (fuelled(sim, f.nation, s.type) ? 1 : C.naval.unfuelled);
-  return p * Math.max(0.2, 1 + m.navalAttack);
+  return p * Math.max(0.2, 1 + m.navalAttack + commanderMod(sim, f.id, 'navalAttack'));
 }
 
 /**

@@ -1,0 +1,249 @@
+{
+ "weeks": 26,
+ "seed": 3,
+ "manual": {
+  "workflow": "manual",
+  "inputs": 199,
+  "inputsByWeek": [
+   26,
+   0,
+   4,
+   4,
+   22,
+   0,
+   12,
+   6,
+   2,
+   12,
+   6,
+   16,
+   4,
+   18,
+   0,
+   16,
+   0,
+   2,
+   2,
+   2,
+   4,
+   2,
+   0,
+   2,
+   2,
+   14
+  ],
+  "taken": 26,
+  "lost": 0,
+  "gerMenLost": 32535,
+  "enemyMenLost": 26083,
+  "battlesWon": 7,
+  "battlesLost": 6,
+  "regimentsEnd": 110,
+  "planMs": {
+   "mean": 0,
+   "max": 0
+  },
+  "stepMs": {
+   "mean": 264.1,
+   "max": 559.9
+  },
+  "invariantFailures": [],
+  "events": []
+ },
+ "delegated": {
+  "workflow": "delegated",
+  "inputs": 28,
+  "inputsByWeek": [
+   0,
+   0,
+   0,
+   0,
+   0,
+   2,
+   0,
+   0,
+   0,
+   1,
+   0,
+   1,
+   0,
+   2,
+   0,
+   0,
+   0,
+   0,
+   0,
+   0,
+   0,
+   0,
+   0,
+   0,
+   0,
+   0
+  ],
+  "taken": 18,
+  "lost": 0,
+  "gerMenLost": 10035,
+  "enemyMenLost": 17335,
+  "battlesWon": 13,
+  "battlesLost": 1,
+  "regimentsEnd": 109,
+  "planMs": {
+   "mean": 22.15,
+   "max": 81.71
+  },
+  "stepMs": {
+   "mean": 184.8,
+   "max": 551.9
+  },
+  "invariantFailures": [],
+  "events": [
+   "operations created: east, west, sea, landing; beach caen",
+   "week 9: resumed 0",
+   "week 10: West paused",
+   "week 12: West resumed",
+   "week 13: save and load, 4 weeks played twice from the save: identical; operations in the save 4",
+   "week 14: East aggressive"
+  ],
+  "autoOrders": 327,
+  "ops": {
+   "East": {
+    "kind": "conquer",
+    "status": "active",
+    "armies": 12,
+    "regiments": 69,
+    "fleets": 0,
+    "wings": 5,
+    "stats": {
+     "taken": 18,
+     "lost": 3,
+     "menLost": 9509,
+     "shipsLost": 0,
+     "wingStrengthLost": 39.852729724108954,
+     "drops": 1,
+     "landings": 0
+    },
+    "detachedLive": 6,
+    "detachedLogged": 6,
+    "merges": 3,
+    "rebases": 0,
+    "issue": null,
+    "tasks": {
+     "occupy": 3,
+     "recover": 4,
+     "stage": 3,
+     "rest": 2,
+     "cover": 1,
+     "wait": 1,
+     "support": 1,
+     "attack": 1,
+     "reserve": 2
+    },
+    "lastLog": [
+     "wk 20: The attack on Lublin failed: no new attack there for 4 weeks, and then only stronger.",
+     "wk 23: Took South Wilno and Nowogródek.",
+     "wk 23: Lost East Poznań.",
+     "wk 24: Took Baranowicze.",
+     "wk 24: Lost Katowice, Kielce.",
+     "wk 25: 2 armies merged at North Warsaw to strike East Warsaw together."
+    ]
+   },
+   "West": {
+    "kind": "hold",
+    "status": "active",
+    "armies": 5,
+    "regiments": 36,
+    "fleets": 0,
+    "wings": 1,
+    "stats": {
+     "taken": 0,
+     "lost": 0,
+     "menLost": 378,
+     "shipsLost": 0,
+     "wingStrengthLost": 33.78461528301883,
+     "drops": 0,
+     "landings": 0
+    },
+    "detachedLive": 2,
+    "detachedLogged": 2,
+    "merges": 1,
+    "rebases": 0,
+    "issue": null,
+    "tasks": {
+     "recover": 4,
+     "hold": 1,
+     "rest": 1
+    },
+    "lastLog": [
+     "wk 0: Assigned: 11th Army, 12th Army, 13th Army, 14th Army, German Bomber wing 1.",
+     "wk 2: 2 idle armies at Stuttgart regrouped into 12th Army.",
+     "wk 5: 11th Army detached 4 regiments (17th Army) as the reserve.",
+     "wk 9: Paused: members keep their current orders, and take new ones only from you.",
+     "wk 11: Resumed: the planner takes up the routine orders again.",
+     "wk 11: 14th Army detached 4 regiments (22nd Army) as the reserve."
+    ]
+   },
+   "Baltic": {
+    "kind": "sea",
+    "status": "active",
+    "armies": 0,
+    "regiments": 0,
+    "fleets": 2,
+    "wings": 0,
+    "stats": {
+     "taken": 0,
+     "lost": 0,
+     "menLost": 0,
+     "shipsLost": 0,
+     "wingStrengthLost": 0,
+     "drops": 0,
+     "landings": 0
+    },
+    "detachedLive": 0,
+    "detachedLogged": 0,
+    "merges": 0,
+    "rebases": 0,
+    "issue": null,
+    "tasks": {
+     "patrol": 2
+    },
+    "lastLog": [
+     "wk 0: Keep the seas: 3 sea zones (Copenhagen Sound, Esbjerg Channel, North Sea). Active.",
+     "wk 0: Assigned: German Home Fleet, North Sea Group."
+    ]
+   },
+   "Landing": {
+    "kind": "landing",
+    "status": "active",
+    "armies": 1,
+    "regiments": 4,
+    "fleets": 1,
+    "wings": 0,
+    "stats": {
+     "taken": 0,
+     "lost": 0,
+     "menLost": 0,
+     "shipsLost": 0,
+     "wingStrengthLost": 0,
+     "drops": 0,
+     "landings": 0
+    },
+    "detachedLive": 0,
+    "detachedLogged": 0,
+    "merges": 0,
+    "rebases": 0,
+    "issue": "No transports are assigned: assign a fleet with transports (2 regiments a transport).",
+    "tasks": {
+     "embark": 1,
+     "blockade": 1
+    },
+    "lastLog": [
+     "wk 0: Landing: on Caen. Active.",
+     "wk 0: Assigned: 16th Army, Baltic Squadron.",
+     "wk 0: The landing force gathers at Emden.",
+     "wk 12: No transports are assigned: assign a fleet with transports (2 regiments a transport)."
+    ]
+   }
+  }
+ }
+}

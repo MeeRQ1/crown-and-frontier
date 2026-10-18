@@ -453,7 +453,7 @@ async function overseasWarFlow(browser: Browser, base: string): Promise<void> {
   const atWar = await page.evaluate(() => Object.values((window as any).cnf.sim.state.wars).some((w: any) => w.attackers.includes('alb') && w.defenders.includes('ott')));
   record(
     'Albania may declare war on the Ottoman Empire it does not border: Diplomacy assesses the reach by sea first, the dialog repeats it, and the war begins',
-    offered && /By sea: Aydın is 1 sea zone from our port of Durazzo/.test(detail) && /Overland: no route/.test(detail) && /Can we reach them\?/i.test(dialogText) && atWar,
+    offered && /By sea: Karesi is 1 sea zone from our port of Durazzo/.test(detail) && /Overland: no route/.test(detail) && /Can we reach them\?/i.test(dialogText) && atWar,
     `offered ${offered}; ${(detail.match(/By sea:[^\n]*/) ?? ['no sea line'])[0].slice(0, 110)}; dialog ${/Can we reach them/i.test(dialogText)}; at war ${atWar}`,
   );
   record('No errors during the overseas war session', problems.length === 0, problems.slice(0, 3).join('; '));

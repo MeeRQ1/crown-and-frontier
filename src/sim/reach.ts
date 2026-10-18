@@ -2,7 +2,9 @@
 //
 // Distances are counted in steps on one graph of provinces and sea zones: a
 // province to a neighbouring province (a strait counts), a coastal province to a
-// zone on its coast, and a zone to a neighbouring zone are each one step. Aircraft
+// zone on its coast, and a zone to a neighbouring zone are each one step (on a
+// redrawn map, a step between provinces counts the ground it covers, stepLength,
+// so a range reaches as far as before; distances are kept to a tenth). Aircraft
 // range is measured on it from an airfield (a province) or from a carrier (its
 // zone), so a wing at Durazzo reaches Bari across the Adriatic in two steps. The
 // graph is static per map: distances from a node are computed once and cached.
@@ -13,6 +15,8 @@
 // never blocks a declaration; the rules of war, movement and supply decide.
 
 import { SHIPS, WINGS } from './config';
+import { CostHeap } from './heap';
+import { stepLength } from './index';
 import { nationMods } from './modifiers';
 import { hasAccess, isFriendly, type Sim } from './state';
 import type { NationId, ProvinceId, ZoneId } from './types';
@@ -28,14 +32,29 @@ const cache = new WeakMap<World, Map<string, Map<string, number>>>();
 
 const key = (p: Place): string => (p.prov !== undefined ? `p:${p.prov}` : `z:${p.zone}`);
 
-/** Steps from a place to every place within MAX_STEPS (breadth-first; cached per map). */
+/** Steps from a place to every place within MAX_STEPS (cached per map). */
 function distancesFrom(world: World, from: Place): Map<string, number> {
   let perWorld = cache.get(world);
   if (!perWorld) cache.set(world, (perWorld = new Map()));
   const k = key(from);
   let d = perWorld.get(k);
   if (d) return d;
-  d = new Map([[k, 0]]);
+  d = redrawn(world) ? weightedFrom(world, k) : stepsFrom(world, k);
+  perWorld.set(k, d);
+  return d;
+}
+
+const redrawnMemo = new WeakMap<World, boolean>();
+/** Does any province record its land (a map redrawn more finely)? */
+function redrawn(world: World): boolean {
+  let r = redrawnMemo.get(world);
+  if (r === undefined) redrawnMemo.set(world, (r = world.provIds.some((p) => world.prov[p].land !== undefined)));
+  return r;
+}
+
+/** Every step counts one (breadth-first). */
+function stepsFrom(world: World, k: string): Map<string, number> {
+  const d = new Map([[k, 0]]);
   let frontier = [k];
   for (let step = 1; step <= MAX_STEPS && frontier.length; step++) {
     const next: string[] = [];
@@ -50,8 +69,35 @@ function distancesFrom(world: World, from: Place): Map<string, number> {
     }
     frontier = next;
   }
-  perWorld.set(k, d);
   return d;
+}
+
+/** A step between provinces counts the ground it covers (cheapest first). */
+function weightedFrom(world: World, k: string): Map<string, number> {
+  const dist = new Map<string, number>([[k, 0]]);
+  const open = new CostHeap();
+  open.push(0, k);
+  while (open.size) {
+    const c = open.peekCost();
+    const n = open.pop();
+    if (c > dist.get(n)!) continue;
+    const id = n.slice(2);
+    const relax = (m: string, len: number) => {
+      const nd = c + len;
+      if (nd > MAX_STEPS + 1e-9 || nd >= (dist.get(m) ?? Infinity)) return;
+      dist.set(m, nd);
+      open.push(nd, m);
+    };
+    if (n[0] === 'p') {
+      for (const q of world.prov[id].neighbors) relax(`p:${q}`, stepLength(world, id, q));
+      for (const z of world.provZones[id] ?? []) relax(`z:${z}`, 1);
+    } else {
+      for (const z of world.zones[id]?.neighbors ?? []) relax(`z:${z}`, 1);
+      for (const q of world.zones[id]?.coasts ?? []) relax(`p:${q}`, 1);
+    }
+  }
+  // to a tenth, so a range of 3 reaches what lies 3 steps away however the sum was rounded
+  return new Map([...dist].map(([m, v]) => [m, Math.round(v * 10) / 10]));
 }
 
 /** Steps between two places over land and sea (Infinity beyond MAX_STEPS). */

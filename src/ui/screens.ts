@@ -2,7 +2,7 @@
 // live preview of the chosen start, saves, settings, the rules, the in-game
 // menu and the end of a campaign.
 
-import { DIFFICULTY } from '../sim/ai/common';
+import { DIFFICULTY, difficultyEffects, RECOMMENDED_DIFFICULTY } from '../sim/ai/common';
 import { PERSONALITIES } from '../sim/data/personalities';
 import { TECHS } from '../sim/data/techs';
 import { computeLedger, grossIncome, reserveCap, totalDev } from '../sim/economy';
@@ -10,7 +10,8 @@ import { SCHEMA_VERSION } from '../sim/config';
 import { dateOf, nationName, ownedProvinces, treatyPartners, type Sim } from '../sim/state';
 import type { Difficulty, NationId } from '../sim/types';
 import { VICTORY_LABELS } from '../sim/victory';
-import { DEFAULT_SCENARIO, getWorld, isBuiltinMap, mapScenarioPart, scenarioIds } from '../sim/world';
+import { DEFAULT_SCENARIO, getWorld, isBuiltinMap, isMapAlias, mapScenarioPart, scenarioIds } from '../sim/world';
+import { parseLegacyId } from '../maps/legacy';
 import { builtinScenario, type BuiltinMapId } from '../maps/builtin';
 import type { App } from './app';
 import { AtlasView, startOf } from './atlas-view';
@@ -184,7 +185,7 @@ function segmented<T extends string | number>(label: string, options: Array<[T, 
 export function renderNewGame(app: App, initialMap: string = DEFAULT_SCENARIO): HTMLElement {
   // the library's version of each custom map (a loaded save may have registered an older one)
   app.maps.registerAll();
-  let map = scenarioIds().includes(initialMap) ? initialMap : DEFAULT_SCENARIO;
+  let map = scenarioIds().includes(initialMap) && !isMapAlias(initialMap) ? initialMap : DEFAULT_SCENARIO;
   const firstRealm = (id: string) => {
     const w = getWorld(id);
     return (w.scenario.nations.find((n) => n.rating === 'recommended') ?? w.scenario.nations[0]).id;
@@ -224,7 +225,7 @@ export function renderNewGame(app: App, initialMap: string = DEFAULT_SCENARIO): 
   const drawMaps = () => {
     setChildren(
       mapsEl,
-      scenarioIds().map((id) => {
+      scenarioIds().filter((id) => !isMapAlias(id)).map((id) => {
         const w = getWorld(id);
         const info = mapInfo(id);
         const c = h('canvas', { 'aria-hidden': 'true' });
@@ -339,20 +340,22 @@ export function renderNewGame(app: App, initialMap: string = DEFAULT_SCENARIO): 
       h('option', { value: '0.15', selected: aiBonus === 0.15 ? true : undefined }, '+15% AI income (disclosed)'),
     ]);
     assist.addEventListener('change', () => (aiBonus = Number(assist.value)));
-    const diffHelp = h('p', { class: 'hint small muted' }, DIFFICULTY[difficulty].label);
+    const diffHelp = h('ul', { class: 'hint small muted notes', 'data-sk': 'difficulty-effects' });
+    const drawDiff = () => setChildren(diffHelp, ...difficultyEffects(difficulty).map((t) => h('li', null, t)));
+    drawDiff();
     setChildren(
       settingsEl,
       h('div', { class: 'eyebrow' }, 'Campaign'),
-      segmented<Difficulty>('AI skill', [['easy', 'Easy'], ['normal', 'Normal'], ['hard', 'Hard']], difficulty, (v) => {
+      segmented<Difficulty>('AI skill', [['easy', 'Easy'], ['normal', RECOMMENDED_DIFFICULTY === 'normal' ? 'Normal (recommended)' : 'Normal'], ['hard', 'Hard']], difficulty, (v) => {
         difficulty = v;
-        diffHelp.textContent = DIFFICULTY[v].label;
+        drawDiff();
       }),
       diffHelp,
       segmented<number>('Length', info.lengths, years, (v) => (years = v)),
       h('div', { class: 'field' }, h('label', { for: 'setup-assist' }, 'AI economic assistance'), assist),
       h('div', { class: 'field' }, h('span', { class: 'label' }, 'Seed'), h('div', { class: 'row' }, seedIn, dice)),
       h('label', { class: 'switch', for: 'setup-tut' }, tut, h('span', null, 'Guided first steps (tutorial)')),
-      h('p', { class: 'small muted' }, 'AI skill changes how well rival realms decide, never their dice: no hidden bonuses. Income assistance, if chosen, is shown in the Help ledger.'),
+      h('p', { class: 'small muted' }, 'AI skill changes only how rival realms decide: the same rules, dice, income, production, replacement and combat apply to every realm. Income assistance, if chosen, is the only AI bonus and is shown in the Help ledger.'),
     );
   };
 
@@ -397,10 +400,12 @@ export function renderLoad(app: App): HTMLElement {
       slots.length
         ? slots.map((s) => {
             const m = s.meta;
-            const registered = !!m && scenarioIds().includes(m.scenario);
+            // a campaign continued on an earlier revision of a built-in map (`europe-r1`) loads it on opening
+            const base = m ? (parseLegacyId(m.scenario)?.[0] ?? m.scenario) : '';
+            const registered = !!m && scenarioIds().includes(base);
             // a save of a custom map carries the map itself
             const known = registered || !!m?.customMap;
-            const def = registered && m.nation ? getWorld(m.scenario).nationDefs[m.nation] : null;
+            const def = registered && m.nation ? getWorld(base).nationDefs[m.nation] : null;
             const why = !m ? 'This save cannot be read.' : !known ? `This save uses a map ("${m.scenario}") that this version does not include.` : null;
             return h(
               'div',
@@ -516,6 +521,8 @@ function settingsBody(app: App, redraw: () => void): HTMLElement {
       ...toggle('autoPauseProposal', 'For proposals and calls to arms'),
       ...toggle('autoPauseChoice', 'When research or a national focus finishes'),
       ...toggle('autoPauseBattle', 'When our armies start a battle'),
+      ...toggle('autoPauseDefeat', 'When our armies lose a battle'),
+      ...toggle('autoPauseOperation', 'When an operation or Auto-conquer needs a decision'),
     ),
     group('Saving', h('label', { for: 'set-auto' }, 'Autosave'), auto, h('div', { class: 'hint' }, 'Also when the tab is hidden or closed.')),
     h('div', { style: 'margin-top:18px' }, button('Restore defaults', () => set({ ...DEFAULT_SETTINGS }), { cls: 'quiet' })),
@@ -549,8 +556,8 @@ export function renderHowTo(app: App): HTMLElement {
           'The maps',
           h('p', null, h('b', null, 'Aldmere'), ' is the standard campaign: fourteen realms and about three hundred provinces, with mountain passes, rivers, islands and wide unclaimed frontiers. Every realm has several fronts and marches take months. ', h('b', null, 'The Reach'), ' is the quick campaign: nine realms and 99 provinces, where wars are decided in a few seasons.'),
           h('p', null, h('b', null, 'The Sundered Isles'), ' is a naval campaign among islands, ', h('b', null, 'the Kharan Steppe'), ' a war of movement across open grassland, and ', h('b', null, 'the Middle Sea'), ' a grand campaign of sixteen realms around an inland sea. ', h('b', null, 'The Baltic, 1906'), ' is northern Europe as it was: Sweden, Norway, Denmark, the German Empire and the Russian Empire, with coasts, lakes, rivers and towns from Natural Earth.'),
-          h('p', null, h('b', null, 'Hesperia, 1890'), ' is a large invented world: two continents facing each other across the Narrows, an island kingdom in the ocean and three unclaimed frontiers (754 provinces, 22 realms). ', h('b', null, 'Europe, 1914'), ' (686 provinces, 23 realms) and ', h('b', null, 'The World, 1914'), ' (1,225 provinces, 57 realms, colonial empires on every continent) start on the eve of the Great War, from Natural Earth, with the borders of 1914 approximated from present-day divisions. On the World a week of war takes longer to work out, so the fastest speed runs slower there; the map stays responsive.'),
-          h('p', null, h('b', null, 'Europe, 1936'), ' (689 provinces, 32 realms) and ', h('b', null, 'The World, 1936'), ' (1,231 provinces, 69 realms) start on 1 January 1936, on the same geography: a rearming Germany ringed by French alliances, the Soviet Union, the new states of 1918, Japan with Manchukuo, and the League mandates, with the treaties and revisionist claims of the day.'),
+          h('p', null, h('b', null, 'Hesperia, 1890'), ' is a large invented world: two continents facing each other across the Narrows, an island kingdom in the ocean and three unclaimed frontiers (754 provinces, 22 realms). ', h('b', null, 'Europe, 1914'), ' (959 provinces, 23 realms) and ', h('b', null, 'The World, 1914'), ' (1,594 provinces, 57 realms, colonial empires on every continent) start on the eve of the Great War, from Natural Earth, with the borders of 1914 approximated from present-day divisions. On the World a week of war takes longer to work out, so the fastest speed runs slower there; the map stays responsive.'),
+          h('p', null, h('b', null, 'Europe, 1936'), ' (967 provinces, 32 realms) and ', h('b', null, 'The World, 1936'), ' (1,600 provinces, 69 realms) start on 1 January 1936, on the same geography: a rearming Germany ringed by French alliances, the Soviet Union, the new states of 1918, Japan with Manchukuo, and the League mandates, with the treaties and revisionist claims of the day.'),
           h('p', null, 'The Map library (main menu) lists every map with its size and style, and holds your own maps: make one in the map editor, or import a map file.'),
         ),
         sec(

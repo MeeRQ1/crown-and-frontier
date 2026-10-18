@@ -23,11 +23,11 @@ economic prosperity or diplomatic leadership.
     time approximated from present-day divisions; Europe and the World start with the
     treaties and claims of their year:
     - *The Baltic, 1906*: Sweden, Norway, Denmark, the German Empire and the Russian Empire.
-    - *Europe, 1914*: 686 provinces and 23 realms, from Ireland to the Volga.
-    - *The World, 1914*: 1,225 provinces and 57 realms, colonial empires on every continent.
-    - *Europe, 1936*: 689 provinces and 32 realms on 1 January 1936: the successor states of
+    - *Europe, 1914*: 959 provinces and 23 realms, from Ireland to the Volga.
+    - *The World, 1914*: 1,594 provinces and 57 realms, colonial empires on every continent.
+    - *Europe, 1936*: 967 provinces and 32 realms on 1 January 1936: the successor states of
       1918, the Soviet Union, a rearming Germany ringed by French alliances.
-    - *The World, 1936*: 1,231 provinces and 69 realms: the League mandates, Manchukuo,
+    - *The World, 1936*: 1,600 provinces and 69 realms: the League mandates, Manchukuo,
       Saudi Arabia, Italy at war in Ethiopia.
 - **Map library and editor.** Keep your own maps in the browser. Generate a new map from a
   seed, size, number of realms, shape and climate, then edit it by hand. Paint realms,
@@ -64,10 +64,26 @@ economic prosperity or diplomatic leadership.
   **guarantees, influence and spheres, loans and trade blocs**; **peace settlements** with
   several parties and graded demands, shared by each winner's contribution, with
   counter-offers; 20 events; and three victory paths.
+- **Command and delegation:** **Simple Auto-conquer** (one order against the realms we are
+  at war with: every free army, fleet and air wing joins, our own land is defended first,
+  and a landing is organised when the enemy's land lies overseas); **operations** with an
+  area, a posture and priorities for finer control; **production orders** for several
+  ships, air wings or regiments at once, previewed and then laid down as slipways,
+  airfields and money allow; the same one-order-for-all pattern for selected armies, fleets
+  and air wings, with every member that could not take an order and why; a **military
+  overview** of land, sea and air with one list of what needs attention; and battles that
+  say what decided them, from the figures each side fought with.
+- **Government:** five forms of government with balanced strengths and costs, heads of
+  government with traits, commanders for armies, fleets and air arms, a paid **cabinet**
+  whose trade minister keeps contracts within limits you set, **formable nations** (such
+  as Austria-Hungary) and **offensive leagues** between allies who explicitly agree to join
+  each other's wars; every modifier lists its sources.
 - **AI rivals:** five temperaments and three difficulty levels, using exactly the same rules
   and commands as you. They judge each war by the land held both ways, the forces left and
   whether lost land can be retaken; they concede land, settle or fight on accordingly, remember
-  refused offers, and propose alliances and pacts for reasons they state.
+  refused offers, and propose alliances and pacts for reasons they state. Standing armies
+  are stood down after wars rather than kept for good; each difficulty says what it changes,
+  and Normal is recommended.
 - **Help and saving:** a 15-step tutorial that you complete by doing each thing (the capital,
   a project, industry and resources, a regiment, a march, supply and the frontier, sea and
   air, diplomacy, a national focus, how wars end, victory), rich tooltips, visible reasons for
@@ -127,9 +143,10 @@ this if you try.
   on. Saves of imported maps carry the map with them.
 - **Saving into a used slot keeps the save it replaces,** listed as "Slot N (the save it
   replaced)" on the Load screen.
-- **Older saves are converted, never discarded.** Saves from earlier releases (formats 1–7)
-  are converted to the current format (8, operations) when loaded, and the game says
-  what changed. A save that cannot be converted stays in the list with the reason and can
+- **Older saves are converted, never discarded.** Saves from earlier releases (formats 1–8)
+  are converted to the current format (9) when loaded, and the game says
+  what changed. A campaign begun on Europe or the World before they were redrawn continues on
+  the map it was begun on, which is kept with the game. A save that cannot be converted stays in the list with the reason and can
   still be exported.
 
 ## Develop
@@ -158,6 +175,9 @@ npm run bench -- --scenario aldmere --seeds 1-2 --years 30 # simulation benchmar
 npm run bench:web -- --maps reach,aldmere                   # browser benchmarks on dist/ (after npm run build)
 npm run bench:web -- --maps earth --stress earth:1:280      # adds a late-game run on the World
 npx tsx tools/shots-atlas.ts after                          # the screen inventory in screenshots (after npm run build)
+npx tsx tools/concentration.ts --setup natural --allies alone --seeds 1,2,3   # the 40k concentration case, four ways of fighting it
+npx tsx tools/campaign-web.ts --years 25                    # a complete campaign in the browser, menu to end screen (after npm run build)
+npx tsx tools/map-steps.ts                                  # march, range and supply on a redrawn map against its previous revision
 npm run rulecheck -- --compare <record.json>                # prove a refactor changed no rule
 npm run genstress -- --provinces 900                        # generated large map package for scaling tests
 ```
@@ -266,8 +286,12 @@ that the final state matches.
   Troops at sea cannot be redirected until they land. Airborne drops are flown in one week and
   cannot be supplied from the air; the AI does not plan airborne operations (it builds
   anti-aircraft batteries and weighs them).
-- **Save format:** 7.
-  - Format-1 to format-6 saves are converted on load, each with a notice.
+- **Save format:** 9.
+  - Format-1 to format-8 saves are converted on load, each with a notice.
+  - A format-8 campaign gets the form of government of its scenario's date, a head of
+    government and a small staff of commanders, none of them assigned; its forces,
+    operations and shipyards are as they were.
+  - A campaign on Europe or the World made before map revision 2 continues on revision 1.
   - A format-6 campaign keeps its treasuries, pools and forces; its population now reads in
     people, its fleets are on station with no order, and commerce follows the new rule.
   - A format-5 campaign keeps its wings' missions (fully ready, at their airfields); its
@@ -275,11 +299,14 @@ that the final state matches.
   - A format-4 campaign keeps its running trade exchanges as 12-month contracts at list price.
   - A format-3 campaign keeps each realm's national policy as the matching completed focus.
   - Format-3 saves written before Stage C load with empty navies and air arms.
-- **The World maps at the fastest speed:** in a world war (week 280) the World, 1914 gives
-  5.8 of the 6 weeks a second and the World, 1936 (69 realms) 4.6, in headless Chromium with
-  software rendering on a 4-core machine; the map and controls keep responding (frame p95
-  33 ms). One AI realm's planning can still take about 40 ms in a single slice. Measurements
-  are in `reports/perf/lag-diagnosis.md` and `docs/atlas/MAPS.md`.
+- **The World maps at the fastest speed.** Measured in headless Chromium with software
+  rendering on a 4-core machine; the map and controls keep responding (frame p95 under
+  55 ms at the fastest speed and in a world war).
+  - In a world war (week 280), the World 1914 runs 2.5 weeks a second on its denser map
+    (3.0 on `main`'s map) and the World 1936 2.0 (1.4 on `main`).
+  - At the start, the World 1914 simulates 27 weeks in 6 seconds of the fastest speed, against
+    a target of 36 (35 on `main`'s map).
+  - Measurements are in `reports/playability/results.md` and `docs/atlas/MAPS.md`.
 - **The 1936 maps start late in the research tree:** a 1936 start knows every technology
   up to 1931, so six remain to research; there are no technologies, units or rules beyond
   1936 (no Second World War mechanics).

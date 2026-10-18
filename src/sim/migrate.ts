@@ -16,6 +16,9 @@
 //   7  military control: fleet duties, airborne operations, anti-aircraft
 //      batteries, population in people; AI peace and treaty memory
 //   8  operations (delegated command); the AI's failure memory
+//   9  Simple Auto-conquer (forces kept for direct command), standing production
+//      orders for ships, air wings and regiments; forms of government, heads of
+//      government, commanders, formable nations and the cabinet
 
 import { checkMapObject } from '../maps/validate';
 import { mapChecksum, type MapPackage } from '../maps/format';
@@ -250,6 +253,19 @@ const STEPS: Record<number, Step> = {
     notices.push(
       `This save was made before operations were added (save format 7) and was converted to format 8. ` +
         `Every army, fleet and air wing is still under your direct command with the orders it had; none has joined an operation.`,
+    );
+  },
+  // 8 → 9: Auto-conquer and production orders; nothing is decided for the player
+  8: (save, notices) => {
+    const st = save.state as Record<string, any>;
+    st.counters = { ...st.counters, production: 0 };
+    for (const n of Object.values<any>(st.nations ?? {})) n.production = [];
+    st.schema = 9;
+    save.schema = 9;
+    notices.push(
+      `This save was made before Auto-conquer, production orders and the government (save format 8) and was converted to format 9. ` +
+        `Every realm has the form of government of the scenario's date, a head of government and a small staff of commanders, none of them assigned; ` +
+        `your forces, operations and shipyards are as they were: nothing has been ordered for you.`,
     );
   },
 };

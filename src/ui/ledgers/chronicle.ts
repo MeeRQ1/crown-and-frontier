@@ -10,7 +10,7 @@ import { dateOf, nationName, provName } from '../../sim/state';
 import type { BattleReport, Notification } from '../../sim/types';
 import type { App } from '../app';
 import { button, h } from '../dom';
-import { men } from '../format';
+import { men, plural } from '../format';
 import { icon, type IconName } from '../icons';
 import { downloadText } from '../storage';
 
@@ -182,7 +182,8 @@ function battles(app: App): HTMLElement {
           ),
         ),
         h('p', { class: 'small' }, r.outcome),
-        r.factors.length ? h('div', null, h('h5', null, 'What decided it'), h('ul', { class: 'notes' }, r.factors.map((x) => h('li', null, x)))) : null,
+        r.decisive?.length ? h('div', { 'data-sk': 'battle-decisive' }, h('h5', null, 'What decided it'), h('ul', { class: 'notes' }, r.decisive.map((x) => h('li', null, x))), h('p', { class: 'small faint' }, `From the resolved figures, averaged over the ${plural(r.rounds, 'round')} fought.`)) : null,
+        r.factors.length ? h('details', null, h('summary', { class: 'small' }, r.decisive?.length ? 'Every modifier (last round)' : 'What decided it'), h('ul', { class: 'notes' }, r.factors.map((x) => h('li', null, x)))) : null,
       );
     }),
   );

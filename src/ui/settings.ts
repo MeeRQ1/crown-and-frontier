@@ -14,6 +14,10 @@ export interface UISettings {
   autoPauseProposal: boolean;
   /** when our research or national focus finishes and the next must be chosen */
   autoPauseChoice: boolean;
+  /** when an operation or Auto-conquer needs a decision (format 9) */
+  autoPauseOperation: boolean;
+  /** when our armies lose a battle (format 9) */
+  autoPauseDefeat: boolean;
   autosaveMonths: number; // 0 = off
   tutorial: boolean;
   /** map presentation */
@@ -39,6 +43,8 @@ export const DEFAULT_SETTINGS: UISettings = {
   autoPauseBattle: false,
   autoPauseProposal: true,
   autoPauseChoice: true,
+  autoPauseOperation: true,
+  autoPauseDefeat: false,
   autosaveMonths: 6,
   tutorial: true,
   showLegend: true,

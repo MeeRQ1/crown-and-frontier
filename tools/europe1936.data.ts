@@ -926,7 +926,12 @@ export const CLAIMS_1936: NonNullable<RealMapDef['claims']> = [
 export function europe1936Def(): RealMapDef {
   return {
     id: 'europe-1936',
-    revision: 1,
+    // 2 (format 9): denser provinces (8,800 km² instead of 12,500) and more cities as fixed provinces
+    revision: 2,
+    // every realm keeps revision 1's development, population, forts, factories and deposits over its new
+    // provinces; each province records the land it holds, on which development and factories
+    // are priced and builders counted
+    conserve: 'src/data/maps/legacy/europe-1936-r1.scenario.json',
     startYear: 1936,
     campaignYears: { options: [10, 20, 30], default: 20 },
     nations: NATIONS,
@@ -937,7 +942,7 @@ export function europe1936Def(): RealMapDef {
     box: BOX,
     inCrop,
     km: 0.72,
-    provKm2: 12500,
+    provKm2: 8800,
     minIslandKm2: 1300,
     minLakeKm2: 900,
     regionalKm2: 60000,
@@ -955,14 +960,14 @@ export function europe1936Def(): RealMapDef {
     straitMaxKm: 140,
     treaties: TREATIES_1936,
     claims: CLAIMS_1936,
-    cities: { max: 120, minPop: 150000, spacingKm: 90 },
+    cities: { max: 170, minPop: 120000, spacingKm: 75 },
     depositHints: DEPOSIT_HINTS,
     climate: 'temperate',
     meta: {
       name: 'Europe, 1936',
       description:
         'Europe on 1 January 1936, from Ireland to the Volga and from the North Cape to the Nile delta: a rearming Germany ringed by French alliances, the Soviet Union in its second five-year plan, Italy at war in Ethiopia, and the new states of 1918 between them. The treaties of the day are in force (the French alliances, the Little Entente, the Balkan Pact, Locarno, the non-aggression pacts), and the revisionist claims stand: Danzig and the Corridor, Memel, Transylvania, Dobruja, Macedonia, Bessarabia. Borders approximated from present-day divisions; the Free City of Danzig is a Polish region.',
-      blurb: 'A large historical campaign: about 700 provinces and 32 realms on the eve of the Second World War.',
+      blurb: 'A large historical campaign: nearly a thousand provinces and 32 realms on the eve of the Second World War.',
       size: 'large',
       difficulty: 'hard',
       style: 'Revisionists against the order of 1919',

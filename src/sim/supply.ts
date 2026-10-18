@@ -5,7 +5,8 @@
 // and beachheads: a coastal province a realm holds (owned or occupied) with one of
 // its fleets stationed offshore in a zone enemy warships do not command.
 // Supply travels through friendly-controlled provinces; each step costs 1
-// (+0.5 into mountains/marsh, -0.5 with roads >= 2, minimum 0.5). An army is on a
+// (+0.5 into mountains/marsh, -0.5 with roads >= 2, minimum 0.5), times the width of
+// the province entered on a redrawn map (√land), so the range covers the same ground. An army is on a
 // supply line when its province is within range (3 + technology) — the final
 // step may enter enemy territory. The national stockpile must not be empty.
 //
@@ -70,11 +71,12 @@ export function isBeachhead(sim: Sim, pid: ProvinceId): boolean {
 export const RAIL_STEP = 2;
 
 function stepCost(sim: Sim, pid: ProvinceId): number {
-  const t = sim.world.prov[pid].terrain;
+  const def = sim.world.prov[pid];
   let c = 1;
-  if (t === 'mountains' || t === 'marsh') c += 0.5;
+  if (def.terrain === 'mountains' || def.terrain === 'marsh') c += 0.5;
   if (sim.state.provinces[pid].infra >= RAIL_STEP) c -= 0.5;
-  return Math.max(0.5, c);
+  c = Math.max(0.5, c);
+  return def.land === undefined ? c : c * Math.sqrt(def.land);
 }
 
 const sourcesMemo = new WeakMap<object, { tick: number; geo: number; fleets: number; key: string }>();

@@ -162,6 +162,36 @@ describe('splitting and regrouping', () => {
     expect(op.log.some((l) => /detached \d+ regiments/.test(l.text))).toBe(true);
   });
 
+  it('with an enemy field army loose a few marches off, a detachment is sized to stand against it, or not sent', () => {
+    const sim = gridGame();
+    war(sim);
+    const big = addArmy(sim, 'a', 'g11', { infantry: 14, artillery: 2 });
+    // ten regiments in the field one to three marches from the targets
+    const field = addArmy(sim, 'b', 'g32', { infantry: 10 });
+    const op = create(sim, COL2, [big.id], { reserve: 0 });
+    weeks(sim, 1);
+    const parts = ours(sim).filter((x) => x.id !== big.id);
+    // no two-regiment detachments to be caught one by one: each holds at least 0.6 of the field army
+    expect(parts.every((x) => x.regiments.length >= Math.ceil(0.6 * field.regiments.length)), parts.map((x) => x.regiments.length).join(',')).toBe(true);
+    expect(regs(ours(sim))).toBe(16);
+    expect(op.log.filter((l) => /detached 2 regiments/.test(l.text))).toEqual([]);
+  });
+
+  it('a task force keeps its objective while it stands, rather than turning to whichever scores better as it marches', () => {
+    const sim = gridGame();
+    war(sim);
+    const a = addArmy(sim, 'a', 'g11', { infantry: 6 });
+    const op = create(sim, ['g21', 'g22'], [a.id], { reserve: 0, reorganize: false });
+    weeks(sim, 1);
+    const first = op.tasks[a.id]?.target;
+    expect(['g21', 'g22']).toContain(first);
+    // the other objective becomes more valuable: the army marches on to the one it set out for
+    const other = first === 'g21' ? 'g22' : 'g21';
+    sim.state.provinces[other].dev += 5;
+    weeks(sim, 1);
+    expect(op.tasks[a.id]?.target).toBe(first);
+  });
+
   it('a protected formation, or an operation without leave to reorganise, is never split', () => {
     const sim = gridGame();
     war(sim);

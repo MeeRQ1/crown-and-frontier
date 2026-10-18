@@ -42,6 +42,24 @@ export function registerMapScenario(pkg: MapScenarioPart | MapPackage): void {
   if ('geometry' in pkg && !isBuiltinMap(pkg.id)) customPackages.set(mapFingerprint(pkg.id).checksum, pkg);
 }
 
+/**
+ * Registers an earlier revision of a built-in map under its own id (`europe-r1`),
+ * kept so campaigns begun on it still load: the package is unchanged (its checksum
+ * is the one those saves recorded); only the scenario id differs.
+ */
+export function registerMapAlias(alias: string, pkg: MapScenarioPart): void {
+  registerScenario(alias, () => ({ ...scenarioFromPackage(pkg), id: alias }));
+  packages.set(alias, pkg);
+  aliases.add(alias);
+}
+
+const aliases = new Set<string>();
+
+/** An earlier revision kept for old campaigns: loadable, not offered for new ones. */
+export function isMapAlias(id: string): boolean {
+  return aliases.has(id);
+}
+
 /** The map package behind a scenario, if it was registered from one. */
 export function mapScenarioPart(id: string): MapScenarioPart | undefined {
   return packages.get(id);

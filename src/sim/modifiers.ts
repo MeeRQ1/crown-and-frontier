@@ -1,8 +1,10 @@
-// National modifiers: every bonus from traits, technology, national focus and timed
-// effects is summed here. Percentage modifiers are applied as (1 + sum), flat
+// National modifiers: every bonus from traits, technology, national focus, the form
+// of government, a formed nation, the head of government and timed effects is summed
+// here (see modSources). Percentage modifiers are applied as (1 + sum), flat
 // modifiers are added. Player and AI use exactly the same aggregation.
 
 import { focusEffects } from './focus';
+import { governmentSources } from './government';
 import { TECHS } from './data/techs';
 import type { NationState, NationTraits } from './types';
 import type { Sim } from './state';
@@ -228,7 +230,7 @@ const cache = new WeakMap<object, Map<string, { key: string; mods: Mods }>>();
 
 function cacheKey(sim: Sim, nid: string): string {
   const n = sim.state.nations[nid];
-  return `${sim.state.tick}|${n.focus.done.length}|${n.research.done.length}|${n.modifiers.length}|${n.bankruptUntil > sim.state.tick ? 1 : 0}|${severeDebt(n) ? 1 : 0}`;
+  return `${sim.state.tick}|${n.focus.done.length}|${n.research.done.length}|${n.modifiers.length}|${n.bankruptUntil > sim.state.tick ? 1 : 0}|${severeDebt(n) ? 1 : 0}|${n.ideology?.id ?? ''}|${n.leader?.trait ?? ''}|${n.formed?.id ?? ''}`;
 }
 
 /** Aggregated modifiers for a nation (cached per tick and relevant state). */
@@ -246,31 +248,93 @@ export function nationMods(sim: Sim, nid: string): Mods {
   return mods;
 }
 
-export function computeMods(sim: Sim, nid: string): Mods {
+/**
+ * Where a realm's modifiers come from (format 9), in stacking order: national traits,
+ * research, national focus, the form of government, a formed nation's identity, the
+ * head of government, timed effects (events, a change of government), then the
+ * state of the treasury. Every source is additive: a percentage is applied once as
+ * (1 + sum of every source), a flat value is the sum. Caps are applied where a value
+ * is used (the defensive bonus, morale, supply). This list is the only path: the
+ * totals the rules use and the sources the interface shows are the same sum.
+ * Commanders add to the forces they lead only (see `forceSources`).
+ */
+export interface ModSource {
+  kind: 'trait' | 'research' | 'focus' | 'ideology' | 'formed' | 'leader' | 'timed' | 'treasury' | 'commander';
+  label: string;
+  effects: ModEffects;
+}
+
+export function modSources(sim: Sim, nid: string): ModSource[] {
   const n = sim.state.nations[nid];
   const def = sim.world.nationDefs[nid];
-  const m = emptyMods();
-  addMods(m, traitMods(def.traits));
-  for (const t of n.research.done) addMods(m, TECHS[t]?.effects ?? {});
-  for (const e of focusEffects(sim, nid)) addMods(m, e);
+  const out: ModSource[] = [];
+  out.push({ kind: 'trait', label: `National character (${def.short})`, effects: traitMods(def.traits) });
+  const research: ModEffects = {};
+  for (const t of n.research.done) addEffects(research, TECHS[t]?.effects ?? {});
+  out.push({ kind: 'research', label: `Research (${n.research.done.length} technologies)`, effects: research });
+  const focus: ModEffects = {};
+  for (const e of focusEffects(sim, nid)) addEffects(focus, e);
+  out.push({ kind: 'focus', label: 'National focus', effects: focus });
+  for (const g of governmentSources(sim, nid)) out.push(g);
   for (const md of n.modifiers) {
     if (md.until <= sim.state.tick) continue;
     const e = md.effects;
-    addMods(m, {
-      income: e.incomeMul ?? 0,
-      supplyProd: e.supplyProdMul ?? 0,
-      manpower: e.manpowerMul ?? 0,
-      research: e.researchMul ?? 0,
-      unrest: e.unrestAdd ?? 0,
-      integration: e.integrationMul ?? 0,
-      moraleRecovery: e.moraleRecoveryMul ?? 0,
-      upkeep: e.upkeepMul ?? 0,
-      industry: e.industryMul ?? 0,
+    out.push({
+      kind: 'timed',
+      label: md.label,
+      effects: {
+        income: e.incomeMul ?? 0,
+        supplyProd: e.supplyProdMul ?? 0,
+        manpower: e.manpowerMul ?? 0,
+        research: e.researchMul ?? 0,
+        unrest: e.unrestAdd ?? 0,
+        integration: e.integrationMul ?? 0,
+        moraleRecovery: e.moraleRecoveryMul ?? 0,
+        upkeep: e.upkeepMul ?? 0,
+        industry: e.industryMul ?? 0,
+      },
     });
   }
-  if (n.bankruptUntil > sim.state.tick) addMods(m, { income: -0.25, moraleRecovery: -0.5, unrest: 5 });
-  if (severeDebt(n)) addMods(m, { moraleRecovery: -0.5, unrest: 3 });
+  if (n.bankruptUntil > sim.state.tick) out.push({ kind: 'treasury', label: 'Bankruptcy', effects: { income: -0.25, moraleRecovery: -0.5, unrest: 5 } });
+  if (severeDebt(n)) out.push({ kind: 'treasury', label: 'Severe debt', effects: { moraleRecovery: -0.5, unrest: 3 } });
+  return out;
+}
+
+function addEffects(target: ModEffects, add: ModEffects): void {
+  for (const k in add) {
+    const key = k as keyof Mods;
+    target[key] = (target[key] ?? 0) + (add[key] ?? 0);
+  }
+}
+
+export function computeMods(sim: Sim, nid: string): Mods {
+  const m = emptyMods();
+  for (const src of modSources(sim, nid)) addMods(m, src.effects);
   return m;
+}
+
+/** Per modifier: its total and every source of it (for the interface: "where does this come from"). */
+export function modBreakdown(sources: ModSource[]): Array<{ key: keyof Mods; total: number; parts: Array<{ label: string; value: number }> }> {
+  const by = new Map<keyof Mods, Array<{ label: string; value: number }>>();
+  for (const s of sources)
+    for (const k in s.effects) {
+      const key = k as keyof Mods;
+      const v = s.effects[key] ?? 0;
+      if (Math.abs(v) < 1e-9) continue;
+      (by.get(key) ?? by.set(key, []).get(key)!).push({ label: s.label, value: v });
+    }
+  return [...by.entries()]
+    .map(([key, parts]) => ({ key, total: parts.reduce((a, p) => a + p.value, 0), parts }))
+    .filter((x) => Math.abs(x.total) > 1e-9 || x.parts.length > 1)
+    .sort((a, b) => MOD_LABELS[a.key][0].localeCompare(MOD_LABELS[b.key][0]));
+}
+
+/** One value of a modifier, formatted as its kind is shown. */
+export function formatMod(key: keyof Mods, v: number): string {
+  const [, kind] = MOD_LABELS[key];
+  const abs = Math.abs(v);
+  if (kind === 'neg') return `${v > 0 ? '−' : '+'}${Math.round(abs * 100)}%`;
+  return kind === 'pct' ? `${v >= 0 ? '+' : '−'}${Math.round(abs * 100)}%` : `${v >= 0 ? '+' : '−'}${Math.round(abs * 100) / 100}`;
 }
 
 export function describeEffects(e: ModEffects): string[] {

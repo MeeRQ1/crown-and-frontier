@@ -9,6 +9,8 @@
 // changed since (another revision), the save loads only when the provinces and
 // realms are the same, with a notice; otherwise it is refused.
 
+import { applyIdentities, initGovernment } from './government';
+import { initCommanders } from './commanders';
 import { C, RESOURCE_INFO, SCHEMA_VERSION } from './config';
 import { provincialTaxes } from './economy';
 import { convertLegacyTrade } from './trade';
@@ -133,14 +135,26 @@ export function readSave(text: string): LoadedSave {
   if (!scenarioIds().includes(st.scenarioId)) {
     throw new SaveError(`This save was played on the map "${st.scenarioId}", which this version of the game does not include, and the save does not contain it.`);
   }
-  const world = getWorld(st.scenarioId);
+  let world = getWorld(st.scenarioId);
   const required = ['provinces', 'nations', 'armies', 'battles', 'wars', 'treaties', 'rng', 'aiRng', 'settings', 'counters'] as const;
   for (const k of required) if (!(k in st)) throw new SaveError(`The save is missing required data (${k}).`);
   if (!Array.isArray(st.rng) || st.rng.length !== 4 || !Array.isArray(st.aiRng) || st.aiRng.length !== 4) throw new SaveError('The save has an invalid random-number state.');
 
   // the same map? the same content, or at least the same provinces and realms
-  const current = mapFingerprint(st.scenarioId);
-  const sameShape = sameKeys(st.provinces, world.provIds) && sameKeys(st.nations, world.nationIds);
+  let current = mapFingerprint(st.scenarioId);
+  let sameShape = sameKeys(st.provinces, world.provIds) && sameKeys(st.nations, world.nationIds);
+  // a built-in map redrawn since (new provinces): the campaign continues on the revision it
+  // was made on, kept with the game under its own id (maps/legacy.ts, registered before loading)
+  const kept = `${st.scenarioId}-r${recorded.revision}`;
+  if (recorded.checksum !== current.checksum && !sameShape && scenarioIds().includes(kept) && mapFingerprint(kept).checksum === recorded.checksum) {
+    const name = mapScenarioPart(kept)?.meta.name ?? kept;
+    notices.push(`This campaign was made on revision ${recorded.revision} of ${name}, which has since been redrawn with more provinces. It continues on revision ${recorded.revision}, kept with the game for campaigns begun on it; new campaigns use revision ${current.revision}.`);
+    st.scenarioId = kept;
+    st.map = { ...mapFingerprint(kept) };
+    world = getWorld(kept);
+    current = mapFingerprint(kept);
+    sameShape = sameKeys(st.provinces, world.provIds) && sameKeys(st.nations, world.nationIds);
+  }
   const name = mapScenarioPart(st.scenarioId)?.meta.name ?? world.scenario.name;
   if (recorded.checksum !== current.checksum) {
     // a map can change without a new revision number (between development builds): say so
@@ -188,6 +202,11 @@ export function readSave(text: string): LoadedSave {
         `. Industry & Trade shows them, with what each realm can offer.`,
     );
   }
+  // government, heads of government and commanders for a campaign saved before them;
+  // a formed nation's name and colours (format 9)
+  initGovernment(sim);
+  initCommanders(sim);
+  applyIdentities(sim);
   const problems = checkInvariants(sim);
   if (problems.length) throw new SaveError(`The save is inconsistent: ${problems.slice(0, 3).join('; ')}.`);
   // bug reports from this campaign replay from the state as loaded

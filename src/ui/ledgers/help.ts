@@ -5,6 +5,7 @@
 
 import { C, TERRAIN } from '../../sim/config';
 import { TECH_EARLY_COST, TECH_LEAD_YEARS } from '../../sim/progression';
+import { difficultyEffects } from '../../sim/ai/common';
 import { MODES } from '../map/modes';
 import type { App } from '../app';
 import { h, type Child } from '../dom';
@@ -51,7 +52,7 @@ function articles(): Article[] {
       lead: 'Click or tap to select; drag to pan; wheel or pinch to zoom. Right-click or long-press moves the selected army or fleet.',
       points: [
         h('span', null, h('kbd', null, 'Space'), ' pause · ', h('kbd', null, '1'), '–', h('kbd', null, '4'), ' speed · ', h('kbd', null, 'Esc'), ' close or deselect'),
-        h('span', null, 'Ledgers: ', h('kbd', null, 'B'), ' Realm, ', h('kbd', null, 'I'), ' Industry, ', h('kbd', null, 'M'), ' Military, ', h('kbd', null, 'T'), ' Research, ', h('kbd', null, 'P'), ' Focus, ', h('kbd', null, 'D'), ' Diplomacy, ', h('kbd', null, 'W'), ' Wars, ', h('kbd', null, 'V'), ' Victory, ', h('kbd', null, 'L'), ' Chronicle, ', h('kbd', null, 'H'), ' Help'),
+        h('span', null, 'Ledgers: ', h('kbd', null, 'B'), ' Realm, ', h('kbd', null, 'R'), ' Government, ', h('kbd', null, 'I'), ' Industry, ', h('kbd', null, 'M'), ' Military, ', h('kbd', null, 'T'), ' Research, ', h('kbd', null, 'P'), ' Focus, ', h('kbd', null, 'D'), ' Diplomacy, ', h('kbd', null, 'W'), ' Wars, ', h('kbd', null, 'V'), ' Victory, ', h('kbd', null, 'L'), ' Chronicle, ', h('kbd', null, 'H'), ' Help'),
         h('span', null, h('kbd', null, 'G'), ' set a destination · ', h('kbd', null, 'N'), ' next army (', h('kbd', null, 'Shift'), '+', h('kbd', null, 'N'), ' next group) · ', h('kbd', null, 'C'), ' centre the selection · ', h('kbd', null, 'F'), ' fit the world · ', h('kbd', null, 'Home'), ' capital · ', h('kbd', null, 'K'), ' next battle · ', h('kbd', null, 'J'), ' jump to an alert'),
         h('span', null, 'Map modes: ', h('kbd', null, 'Shift'), '+', h('kbd', null, '1'), '…', h('kbd', null, String(MODES.length)), ` (${MODES.map((m) => m.label.toLowerCase()).join(', ')}); `, h('kbd', null, 'O'), ' cycles them. Arrow keys pan; ', h('kbd', null, '+'), ' and ', h('kbd', null, '−'), ' zoom.'),
         'In the Research and Focus plans, the arrow keys move between nodes.',
@@ -99,6 +100,8 @@ function articles(): Article[] {
         `Each realm keeps a reserve of ${pct(C.resources.keepShare)} of its stockpile cap before it sells; stock above the cap is lost.`,
         'Running short of a resource has a named effect: factories without coal run at 30%, armour without oil fights at reduced strength, guns without nitrates lack shells in war.',
         'Industry & Trade shows each good’s stock, reserved amounts, output, need and actual flows, and marks the bottleneck.',
+        `Builders: ${C.construction.slotsBase} for every realm and 1 more for every ${C.construction.slotsPerProvinces} provinces’ worth of land held (on the redrawn historical maps, provinces are smaller and count for less: the same land, the same builders), plus research, focus and government. Industry & Trade lists the room left to build: factory levels (up to ${C.construction.factoryMax} a province, by its development), port levels on the coasts, airfields and development below each terrain’s limit. Money, iron and builders limit building, not places.`,
+        'On the redrawn historical maps (Europe and the World, 1914 and 1936) provinces are smaller than before, and each records how much of the old land it holds (most about 0.7). A step of development and a factory level are priced for that land as a whole, and the terrain’s development limit comes as much sooner, so splitting land never makes it cheaper to grow. The province card shows the land and the limit that apply. A step between smaller provinces is also shorter: marching, supply lines, aircraft range and the distance from the capital count the ground a step covers, so the same ground is crossed in the same time and reached as far as before (ranges may then read 2.5 of 3 steps).',
       ],
       links: [['industry', 'Open Industry & Trade']],
     },
@@ -175,12 +178,84 @@ function articles(): Article[] {
         'Select forces (Shift+click, Shift+drag a box, the Select tool, or the boxes in Military), then New operation. Choose the objective (conquer an area, advance to a province, hold an area, keep sea zones, a landing) and the area on the map, read the preview (the first orders are drawn on the map, with forecasts and what stands in the way), choose the posture and Activate.',
         'Cautious attacks only with a clear edge and a forecast of victory; balanced with 1.2× the defenders unless the forecast is defeat; aggressive with about equal strength. None attacks a realm we are not at war with, declares war, makes peace, buys forces or builds anything.',
         'Armies march, fight and besiege by the ordinary rules: no shortcut, no bonus. A failed attack bars that target for a while, then only a stronger force tries; marches go round enemy troops; tired, depleted or unsupplied armies fall back to rest; a share can be held in reserve and committed where our battles need it.',
-        'With leave to reorganise, a large army detaches task forces (whole regiments, at least two, at most six detachments) for undefended targets, and idle armies standing together merge again. Keep together on an army’s card protects it.',
-        'Fleets repair, shell the coast where our armies fight, blockade, patrol, intercept and escort; wings rest, keep the sky, support and strike; they move between airfields only with leave. Airborne drops happen only under the mandate, inside the area, within the loss limit, with the operation’s own transports.',
+        'A task force keeps its objective while it can still take it, rather than turning each week to whichever objective looks a little better. With leave to reorganise, a large army detaches task forces (whole regiments, at least two, at most six detachments) for undefended targets, each strong enough to stand against an enemy field army a few marches away, or none is sent; idle armies standing together merge again. Keep together on an army’s card protects it.',
+        'Fleets repair, shell the coast where our armies fight, blockade, patrol, intercept and escort; wings rest, keep the sky, support and strike, and move to airfields within reach of the fighting (unless you forbid moving them). Airborne drops happen only under the mandate, inside the area, within the loss limit, with the operation’s own transports.',
+        'Before a hard attack it gathers enough to win at the target with the supply that target can give that many regiments (a province feeds only so many), waits for the second wave instead of feeding armies in one by one, and does not march through a province an enemy army is about to reach.',
         'Any order you give a member takes it under your direct command at once: the operation leaves it alone until you resume it (or, if set, until your order is carried out). Pause, change, add forces, detach or cancel at any time; cancelling hands every force back with its last orders.',
         'Routine events go to the operation’s log; only a decision you have to make is a notification (Cannot make progress, attacks failing, aircraft out of range, a landing that cannot sail), with the actions that answer it.',
       ],
       links: [['military', 'Open Military']],
+    },
+    {
+      id: 'autoconquer',
+      title: 'Auto-conquer',
+      icon: 'target',
+      group: 'War',
+      lead: 'One order against realms we are already at war with: every free army, fleet and air wing takes their land and defends ours, with sensible defaults you can see and change.',
+      points: [
+        'Military → Auto-conquer, or Auto-conquer on a war in the Wars ledger. Choose the enemies (only realms at war with us) and optionally a priority (spare our men, take their ports, their industry, or one enemy first).',
+        'It defends and liberates our land against anyone at war with us first, answers counterattacks, keeps a reserve, moves aircraft within reach, and organises a landing under the ordinary rules when the enemy land left lies overseas (it says what is missing if there are no transports).',
+        'It never declares war, adds an enemy, makes peace, buys, builds or takes a force you keep: Keep for direct command on a force’s card, or take a member out, and it stays out until you hand it back.',
+        'Its card shows the opponents, the land taken, the forces, the losses and what is waiting or recovering, with pause, resume, stop, Change opponents, Take over all and the detailed settings. When the war with an enemy ends, that enemy leaves the mandate; with none left it is complete.',
+      ],
+      links: [['military', 'Open Military'], ['wars', 'Open Wars']],
+    },
+    {
+      id: 'production',
+      title: 'Production orders',
+      icon: 'factory',
+      group: 'War',
+      lead: 'Order several ships, air wings or regiments of one type at once, at one place or spread over several; what can start starts now, the rest as slipways, airfield room and money allow.',
+      points: [
+        'Military → Production orders (or Order several… on a port or airfield card): the type, how many (in total, or at each place), the places, and where they go when ready (stay, join an operation, move to an airfield, sail to a zone).',
+        'The preview shows each place’s free room, what is already there, its share and what starts at once, the cost against what we have, the upkeep, and an estimate of when all are ready. Based wings fill an airfield, so it warns when they cannot all stay there.',
+        'Each unit is paid when it starts, as an order by hand would be: nothing is reserved, so an order can never overspend. A blocked order waits and says why (money, materiel, a resource, men, a lost port) and starts again by itself; after a month waiting for anything but its turn at the slipways, it tells you once.',
+        'Ships of an order form one squadron at each port (and join up at the zone you send them to); regiments form one army in each province. Pause, resume or cancel at any time: cancelling stops what has not started (nothing was paid for it); what is on the slipways or in training continues.',
+      ],
+      links: [['military', 'Open Military']],
+    },
+    {
+      id: 'leagues',
+      title: 'Offensive leagues',
+      icon: 'alliance',
+      group: 'Diplomacy',
+      lead: 'An alliance is defensive. An offensive league is the further, explicit commitment between allies to join each other’s deliberate wars.',
+      points: [
+        'Propose one from an ally’s page in Diplomacy (or invite an ally into ours). Every member must be allied with every other and think well of each (opinion 25 or more); at most four members, one league per realm. The ally weighs it — common rivals, its commitments, its means, its outlook — and may decline; a declined proposal waits a year.',
+        'When a bound member declares a war of claim or conquest, every other bound member joins it at once on the attacking side — unless an alliance or pact with the target’s side, a truce or a war with an attacker forbids it; then it says why, and nothing else happens. The declaration screen lists who will join and who cannot before you declare.',
+        'Joining a league never brings a realm into a war already under way. A member whose alliance with another member ends, or whose opinion of one falls below 0, is suspended (not bound) until both hold again; a league with fewer than two bound members dissolves.',
+        'Leaving is possible at any time: future wars no longer bind you, the wars you joined go on, the members think less of you, and another league must wait two years. The joins are never new declarations, so they cannot set off another league or a chain of wars.',
+      ],
+      links: [['diplomacy', 'Open Diplomacy']],
+    },
+    {
+      id: 'government',
+      title: 'Government, commanders and cabinet',
+      icon: 'charter',
+      group: 'Basics',
+      lead: 'The Government ledger (R) holds the form of government, the head of government, a nation to proclaim, the commanders and the cabinet; every effect is shown before it is chosen, and the same rules bind every realm.',
+      points: [
+        'Five forms of government trade strengths for costs: a constitutional monarchy settles new land faster, a democracy trades and researches better but wearies of war, an authoritarian state keeps a cheaper and larger army, a fascist state expands by claims and alarms its neighbours, a communist state builds industry at the expense of commerce. A change costs four months of income and a year of unrest, needs peace, and then waits ten years.',
+        'The head of government has one trait with a strength and a cost; a democracy elects a new one every five years, other governments keep one longer. You may replace the head once in three years for a price.',
+        'Some realms may proclaim a nation once they own and hold its land (Austria may restore Austria-Hungary on the 1936 maps; Sweden, Norway or Denmark may form Scandinavia; and more): the ledger lists the conditions, shows the land still missing on the map, and the price. The realm keeps its forces, treaties and research; nothing is annexed by proclaiming it.',
+        'Commanders lead one army, fleet or air wing, or an operation (its members of their branch without a commander of their own). One commander per force: no benefit stacks. Their effect shows on the force’s card with the realm’s own.',
+        'A trade minister buys the goods you allow that are forecast to fall short of their targets, within your monthly budget and price limit, from your trade partners, and may sell surpluses; it never touches contracts you signed and reports what it could not do. Pause or dismiss it at any time.',
+        'National modifiers and their sources: the table at the foot of the ledger lists every modifier, its total and where each part comes from (one accounting for everything).',
+      ],
+      links: [['government', 'Open Government']],
+    },
+    {
+      id: 'skill',
+      title: 'AI skill',
+      icon: 'settings',
+      group: 'Utility',
+      lead: 'AI skill changes only how rival realms decide. Every realm has the same rules, dice, income, production, replacement and combat; the optional income assistance is the only bonus, and it is disclosed.',
+      points: [
+        h('span', null, h('b', null, 'Easy: '), difficultyEffects('easy').join(' ')),
+        h('span', null, h('b', null, 'Normal (recommended): '), difficultyEffects('normal').join(' ')),
+        h('span', null, h('b', null, 'Hard: '), difficultyEffects('hard').join(' ')),
+        'Rival armies grow as their economies allow (a share of income, three quarters of their reserve of men, their food): a realm that builds up is answered by its neighbours, who arm when a bordering realm grows much stronger than they are. Coalitions form only against a realm that has alarmed others by its conquests, whoever leads it.',
+      ],
     },
     {
       id: 'batches',
@@ -282,6 +357,7 @@ function articles(): Article[] {
       points: [
         'They do not sync across devices or sites, and private browsing or managed-device policies can erase them. Use Menu → Export to keep a copy, and Import to restore it.',
         'A save made on another map, or by an older version, is checked before loading: an older save is upgraded and told what changed; one that cannot be read is refused with the reason, never loaded under the wrong map.',
+        'Europe and the World (1914 and 1936) were redrawn with more provinces. A campaign begun before that continues on the map it was begun on, which is kept with the game; new campaigns use the new maps.',
         'Imports are data only: nothing in a save or a map file is ever run.',
       ],
     },

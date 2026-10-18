@@ -94,6 +94,13 @@ export interface ProvinceDef {
   factories?: number;
   /** port level at the start (coastal provinces only; format 3) */
   port?: number;
+  /**
+   * How much land the province holds, in provinces of the map's previous revision (a map
+   * redrawn with smaller provinces, format 9: its realm's old province count over its new
+   * one). Development and factories are priced, the terrain's limit reached and builders
+   * counted on it, so dividing land never makes it cheaper to grow (default 1).
+   */
+  land?: number;
 }
 
 /** A sea zone: the node fleets move between (map format 3). */
@@ -226,12 +233,16 @@ export interface ShipOrder {
   nation: NationId;
   ship: ShipType;
   weeksLeft: number;
+  /** the production order that laid it down (format 9) */
+  order?: string;
 }
 
 export interface WingOrder {
   nation: NationId;
   wing: WingType;
   weeksLeft: number;
+  /** the production order that raised it (format 9) */
+  order?: string;
 }
 
 export interface Ship {
@@ -267,6 +278,8 @@ export interface Fleet {
   /** the player's operation it serves, and whether a player order has taken it under direct command (format 8) */
   op?: string | null;
   opHold?: boolean;
+  /** reserved for the player's direct command (format 9): Auto-conquer never takes it */
+  reserved?: boolean;
 }
 
 /**
@@ -323,6 +336,8 @@ export interface AirWing {
   /** the player's operation it serves, and whether a player order has taken it under direct command (format 8) */
   op?: string | null;
   opHold?: boolean;
+  /** reserved for the player's direct command (format 9): Auto-conquer never takes it */
+  reserved?: boolean;
 }
 
 /** One week of a wing's operations, as the player is told it. */
@@ -342,6 +357,130 @@ export interface RecruitOrder {
   nation: NationId;
   unit: UnitType;
   weeksLeft: number;
+  /** the production order that raised it (format 9) */
+  order?: string;
+}
+
+// ───────────────────────────── Offensive leagues (format 9) ──────────────────
+
+/**
+ * A voluntary offensive league: allies who agreed to join each other's deliberate wars.
+ * Distinct from an alliance (defensive) and from the coalitions that form against an
+ * aggressor. Every member must be allied with every other and on good terms; a member
+ * who no longer is stays in the league but is suspended (not bound) until it is again.
+ */
+export interface League {
+  id: string;
+  name: string;
+  founder: NationId;
+  members: NationId[];
+  /** members not bound for now, and why */
+  suspended: Partial<Record<NationId, string>>;
+  formed: number;
+  /** the wars a member declared and who honoured the league (bounded) */
+  record: Array<{ tick: number; war: WarId; by: NationId; target: NationId; joined: NationId[]; refused: Array<{ nid: NationId; why: string }> }>;
+}
+
+// ───────────────────────────── Government (format 9) ─────────────────────────
+
+export type IdeologyId = 'monarchy' | 'democracy' | 'authoritarian' | 'fascism' | 'communism';
+export type LeaderTrait = 'reformer' | 'industrialist' | 'diplomat' | 'militarist' | 'financier' | 'administrator';
+export type CommanderTrait = 'offensive' | 'defensive' | 'organiser' | 'logistician' | 'gunnery' | 'shipwright' | 'interceptor' | 'striker';
+export type FormableId = 'austria-hungary' | 'scandinavia' | 'iberia' | 'yugoslavia' | 'baltic';
+
+export interface Leader {
+  name: string;
+  trait: LeaderTrait;
+  since: number;
+  /** names are generated, not historical */
+  generated: true;
+}
+
+export interface Commander {
+  id: string;
+  name: string;
+  branch: 'land' | 'sea' | 'air';
+  trait: CommanderTrait;
+  /** an army, fleet or wing of its branch, or an operation (its members of that branch without their own commander) */
+  assigned: string | null;
+}
+
+export interface TradeMinisterSettings {
+  /** the goods it may buy and sell */
+  resources: Tradeable[];
+  /** realms it may deal with (empty: any trade partner) */
+  partners: NationId[];
+  /** stock to keep of each good (missing: the reserve the realm keeps by default) */
+  targets: Partial<Record<Tradeable, number>>;
+  /** crowns a month its purchase contracts may cost in all */
+  budget: number;
+  /** the most it pays, as a multiple of the list price */
+  maxPrice: number;
+  /** it may sell what lies above the targets */
+  sell: boolean;
+  /** the least it sells for, as a multiple of the list price */
+  minPrice: number;
+}
+
+export interface TradeMinister {
+  name: string;
+  /** 1–3: contracts it can manage at once (2, 4, 6) and how well it bargains */
+  competence: number;
+  /** crowns a month */
+  salary: number;
+  hired: number;
+  paused: boolean;
+  settings: TradeMinisterSettings;
+  /** the contracts it signed (it manages only these; the player's own are left alone) */
+  managed: string[];
+  /** what it did or could not do, newest last (bounded) */
+  log: Array<{ tick: number; text: string }>;
+  /** goods it bought or sold recently, so it never turns round on them within six months */
+  recent: Partial<Record<Tradeable, { side: 'buy' | 'sell'; tick: number }>>;
+  /** when it last reported a goal it could not meet, per good */
+  told: Partial<Record<Tradeable, number>>;
+}
+
+export interface Cabinet {
+  trade?: TradeMinister | null;
+  /** candidates on offer (refreshed yearly), by portfolio */
+  candidates?: { trade: Array<{ name: string; competence: number; salary: number }>; tick: number };
+}
+
+/**
+ * A standing production order (format 9): several ships, air wings or regiments of one
+ * type, at one place or spread over several. Each week it lays down (and pays for, as
+ * an order by hand would) what the free slipways, airfield room, money, materiel,
+ * resources and men allow; nothing is reserved in advance. A blocked order waits and
+ * says why. Cancelling stops what is not yet started; what is on the slipways or in
+ * training stays (it is cancelled where it is, by the ordinary rules).
+ */
+export interface ProductionOrder {
+  id: string;
+  kind: 'ship' | 'wing' | 'regiment';
+  /** ShipType, WingType or UnitType */
+  unit: string;
+  /** the ports, airfields or provinces, in the order chosen */
+  places: ProvinceId[];
+  /** per place (each place gets `count`) or total (spread over them, a place at a time) */
+  mode: 'per' | 'total';
+  count: number;
+  /** units ordered in all (per place: count × places; less when a place is lost before its share starts) */
+  total: number;
+  /** started so far at each place */
+  started: Record<ProvinceId, number>;
+  /** finished so far */
+  done: number;
+  paused: boolean;
+  created: number;
+  /** why nothing (more) started last week, and since when */
+  blocked: { why: string; since: number } | null;
+  /** where finished units go: an operation of ours, and for wings an airfield to move to / for fleets a zone to sail to */
+  assign: { op: string | null; rally: string | null };
+  /** the fleet or army this order is filling at each place (later units join it there while it waits) */
+  groups: Record<ProvinceId, string>;
+  /** fleets this order formed (bounded by its count): with a zone to sail to, they join up there */
+  formed: string[];
 }
 
 export interface Regiment {
@@ -389,6 +528,8 @@ export interface Army {
   opHold?: boolean;
   /** the player keeps this formation as it is: operations never split it or merge it into another */
   keep?: boolean;
+  /** reserved for the player's direct command (format 9): Auto-conquer never takes it */
+  reserved?: boolean;
 }
 
 /** An airborne operation: the army, at an airfield, is flown to a province and dropped there. */
@@ -432,6 +573,28 @@ export interface Battle {
   river?: boolean;
   /** fire support in the latest round, by side (format 6): air wings and ships offshore */
   support?: { att: SupportLine[]; def: SupportLine[] };
+  /** the resolved figures of every round so far, summed (format 9): the report ranks what decided it from them */
+  tally?: BattleTally;
+}
+
+/** One side's resolved figures in a round (see combat.ts SideFigures). */
+export interface BattleSideFigures {
+  fire: number;
+  engaged: number;
+  held: number;
+  supply: number;
+  morale: number;
+  support: number;
+}
+
+export interface BattleFigures {
+  att: BattleSideFigures;
+  def: BattleSideFigures;
+  defence: number;
+}
+
+export interface BattleTally extends BattleFigures {
+  rounds: number;
 }
 
 /** One air wing or fleet supporting a side of a land battle, and what it added. */
@@ -461,6 +624,10 @@ export interface BattleReport {
   outcome: string;
   /** a naval battle: `province` holds the sea zone id */
   sea?: boolean;
+  /** the resolved figures averaged over the rounds (format 9) */
+  figures?: BattleFigures;
+  /** the main reasons, ranked from those figures (format 9): the balance of fire first */
+  decisive?: string[];
 }
 
 export interface WarGoal {
@@ -533,7 +700,7 @@ export interface PeaceTerms {
   mode: 'demand' | 'concede' | 'white';
 }
 
-export type ProposalKind = 'nap' | 'trade' | 'alliance' | 'peace' | 'callToArms' | 'settlement' | 'loan' | 'blocInvite' | 'blocJoin' | 'contract';
+export type ProposalKind = 'nap' | 'trade' | 'alliance' | 'peace' | 'callToArms' | 'settlement' | 'loan' | 'blocInvite' | 'blocJoin' | 'contract' | 'league';
 
 /**
  * One demand of a peace settlement: what a realm on the losing side gives to a
@@ -625,6 +792,8 @@ export interface Proposal {
   amount?: number;
   /** a trade bloc's id */
   bloc?: string;
+  /** an offensive league (format 9): its id, or 'new' to found one */
+  league?: string;
   /** a trade contract's terms */
   contract?: ContractTerms;
   /** why the proposer offers a treaty, in its own words */
@@ -724,7 +893,7 @@ export interface AIState {
   /** remembers per-front objective commitments: armyId -> objective province */
   objectives: Record<ArmyId, { target: ProvinceId; since: number; kind: string; value: number }>;
   /** provinces where an attack of ours failed (format 8): no new attack there until the wait is over, and only stronger */
-  failures?: Record<ProvinceId, { tick: number; count: number }>;
+  failures?: Record<ProvinceId, { tick: number; count: number; held?: boolean }>;
   /** armies it detached or merged recently (format 8): they wait before reorganising again */
   reorganized?: Record<ArmyId, number>;
   /** desired regiment count set by the strategic layer */
@@ -846,6 +1015,20 @@ export interface NationState {
   debtMonths: number;
   bankruptUntil: number;
   modifiers: Modifier[];
+  /** standing production orders (format 9): ships, air wings and regiments laid down as capacity and money allow */
+  production?: ProductionOrder[];
+  /** the form of government (format 9) and since when; a change has a cost and a ten-year wait */
+  ideology?: { id: IdeologyId; since: number };
+  /** the head of government (format 9): a generated name and one trait */
+  leader?: Leader;
+  /** generals, admirals and air marshals (format 9), each assigned to at most one force or operation */
+  commanders?: Commander[];
+  /** the nation this realm formed (format 9): once a campaign; the identity shown instead of the starting one */
+  formed?: { id: FormableId; tick: number };
+  /** the paid cabinet (format 9) */
+  cabinet?: Cabinet;
+  /** when it last left an offensive league (format 9): it may join another two years later */
+  leagueLeft?: number;
   eventCooldowns: Record<EventId, number>;
   nextEventTick: number;
   pendingEvents: PendingEvent[];
@@ -947,7 +1130,10 @@ export interface MapFingerprint {
  *   sea       keep sea zones: patrol and intercept, escort, strike enemy fleets
  *   landing   carry the armies to an enemy coast under escort and cover, then take the area
  */
-export type OperationKind = 'conquer' | 'advance' | 'hold' | 'sea' | 'landing';
+export type OperationKind = 'conquer' | 'advance' | 'hold' | 'sea' | 'landing' | 'war';
+
+/** What an Auto-conquer mandate favours (format 9): nothing in particular, sparing men, ports, industry, or one enemy. */
+export type OpStrategy = 'none' | 'manpower' | 'ports' | 'industry' | 'focus';
 export type OpPosture = 'cautious' | 'balanced' | 'aggressive';
 export type OpStatus = 'active' | 'paused' | 'complete';
 /** when the objective is reached: hold the area, regroup in it, return home, or stand and wait */
@@ -976,6 +1162,11 @@ export interface OperationSettings {
   /** a member given a direct order rejoins the operation once that order is carried out */
   resumeAfterOrder: boolean;
   onComplete: OpCompletion;
+  /** Auto-conquer (format 9): forces of ours that are free (in no operation, not reserved) join it as they appear */
+  autoAssign?: boolean;
+  /** Auto-conquer (format 9): what it favours, and the enemy it concentrates on when that is 'focus' */
+  strategy?: OpStrategy;
+  focus?: NationId | null;
 }
 
 export type OpTaskKind =
@@ -1012,7 +1203,7 @@ export interface Operation extends OperationSettings {
   /** area provinces held by our side at the last planning (to count what changes hands) */
   held: ProvinceId[];
   /** targets where an attack failed: no new attack until the posture's wait is over (and only stronger) */
-  failures: Record<ProvinceId, { tick: number; count: number }>;
+  failures: Record<ProvinceId, { tick: number; count: number; held?: boolean }>;
   /** armies the planner detached (ids), and when an army last split or merged: it waits before reorganising again */
   detached: string[];
   reorganized: Record<string, number>;
@@ -1024,6 +1215,16 @@ export interface Operation extends OperationSettings {
   stats: { taken: number; lost: number; menLost: number; shipsLost: number; wingStrengthLost: number; drops: number; landings: number };
   /** a landing's progress (landing operations) */
   landing?: { stage: 'gather' | 'sail' | 'ashore'; port: ProvinceId | null } | null;
+  /** Auto-conquer (format 9): the realms at war with us it is to defeat (it never adds one) */
+  enemies?: NationId[];
+  /** Auto-conquer (format 9): the enemies' provinces when it began (for its progress) */
+  startLand?: number;
+  /** a landing Auto-conquer organised (format 9): the mandate its forces return to when it is done */
+  parent?: string | null;
+  /** Auto-conquer (format 9): no new landing before this tick (one failed) */
+  landingWait?: number;
+  /** Auto-conquer (format 9): the province held while enemy forces near our land outmatch ours (homeland defence) */
+  stand?: ProvinceId | null;
 }
 
 export interface GameState {
@@ -1055,6 +1256,8 @@ export interface GameState {
   envoys: Envoy[];
   fabrications: ClaimFabrication[];
   coalitions: Coalition[];
+  /** voluntary offensive leagues (format 9) */
+  leagues?: League[];
   /** influence[a][b] = a's influence over b (0..100) */
   influence: Record<NationId, Record<NationId, number>>;
   guarantees: Guarantee[];
@@ -1068,7 +1271,7 @@ export interface GameState {
   proposals: Proposal[];
   reports: BattleReport[];
   notifications: Notification[];
-  counters: { army: number; battle: number; war: number; treaty: number; note: number; proposal: number; event: number; regiment: number; coalition: number; fleet: number; ship: number; wing: number; loan: number; bloc: number; contract: number; op?: number };
+  counters: { army: number; battle: number; war: number; treaty: number; note: number; proposal: number; event: number; regiment: number; coalition: number; fleet: number; ship: number; wing: number; loan: number; bloc: number; contract: number; op?: number; production?: number; commander?: number; league?: number };
   result: GameResult | null;
   continueAfterResult: boolean;
   diagnostics: AIDiagnostic[];
@@ -1111,8 +1314,19 @@ export type Command =
   | { type: 'disbandWing'; nation: NationId; wing: WingId }
   | { type: 'cancelBuild'; nation: NationId; province: ProvinceId }
   /** operations (format 8): create one (prepared, or active at once) with forces assigned */
-  | { type: 'createOp'; nation: NationId; kind: OperationKind; area: ProvinceId[]; zones?: ZoneId[]; settings?: Partial<OperationSettings>; units?: string[]; name?: string; activate?: boolean }
-  | { type: 'editOp'; nation: NationId; op: string; area?: ProvinceId[]; zones?: ZoneId[]; settings?: Partial<OperationSettings>; name?: string }
+  | { type: 'createOp'; nation: NationId; kind: OperationKind; area: ProvinceId[]; zones?: ZoneId[]; settings?: Partial<OperationSettings>; units?: string[]; name?: string; activate?: boolean; enemies?: NationId[] }
+  | { type: 'editOp'; nation: NationId; op: string; area?: ProvinceId[]; zones?: ZoneId[]; settings?: Partial<OperationSettings>; name?: string; enemies?: NationId[] }
+  | { type: 'reserveUnits'; nation: NationId; units: string[]; reserved: boolean }
+  | { type: 'orderProduction'; nation: NationId; kind: ProductionOrder['kind']; unit: string; places: ProvinceId[]; count: number; mode: 'per' | 'total'; assign?: { op?: string | null; rally?: string | null } }
+  | { type: 'productionState'; nation: NationId; order: string; state: 'paused' | 'active' | 'cancel' }
+  | { type: 'setIdeology'; nation: NationId; ideology: IdeologyId }
+  | { type: 'replaceLeader'; nation: NationId; trait: LeaderTrait }
+  | { type: 'assignCommander'; nation: NationId; commander: string; to: string | null }
+  | { type: 'recruitCommander'; nation: NationId; trait: CommanderTrait }
+  | { type: 'formNation'; nation: NationId; formable: FormableId }
+  | { type: 'proposeLeague'; nation: NationId; to: NationId }
+  | { type: 'leaveLeague'; nation: NationId }
+  | { type: 'cabinet'; nation: NationId; action: 'hire' | 'dismiss' | 'pause' | 'resume' | 'settings'; candidate?: number; settings?: Partial<TradeMinisterSettings> }
   /** armies, fleets and wings (by id) join the operation (leaving any other) */
   | { type: 'assignOp'; nation: NationId; op: string; units: string[] }
   /** members leave their operation and keep their last orders under direct command */

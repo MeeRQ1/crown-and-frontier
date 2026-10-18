@@ -1,0 +1,31 @@
+{
+ "phase": "before",
+ "places": {
+  "airfields": 7,
+  "ports": 4,
+  "fleets": 4,
+  "wings": 6
+ },
+ "tenWings": {
+  "inputs": 13,
+  "inTraining": 10,
+  "queued": 0
+ },
+ "tenShips": {
+  "inputs": 12,
+  "slipwaysFree": 0,
+  "onSlipways": 8,
+  "queued": 0,
+  "note": "ships beyond the free slipways must be ordered again later on main"
+ },
+ "fourFleetsPatrol": {
+  "inputs": 12,
+  "patrolling": 3
+ },
+ "sixWingsMove": {
+  "inputs": 18,
+  "wings": 6,
+  "moved": 6
+ },
+ "errors": []
+}

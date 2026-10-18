@@ -5,6 +5,7 @@
 // disbanding returns survivors to the pool (capped by the reserve), and
 // casualties leave the system permanently (and reduce population).
 
+import { commanderMod } from './commanders';
 import { interdiction } from './air';
 import { C, RESOURCE_INFO, UNITS, UNIT_TYPES } from './config';
 import { TECHS } from './data/techs';
@@ -13,6 +14,7 @@ import { touchArmies } from './index';
 import { armyCap } from './influence';
 import { noteOpLoss } from './ops/losses';
 import { nationMods, type Mods } from './modifiers';
+import { orderRegiment } from './production';
 import { armiesAt, armiesOf, atWar, bump, enemiesOf, isFriendly, notify, provName, type Sim } from './state';
 import { supplyAt, supplyStatus } from './supply';
 import type { Army, ArmyId, NationId, ProvinceId, Regiment, StrategicResource, UnitType } from './types';
@@ -210,6 +212,8 @@ export function weeklyRecruitment(sim: Sim): void {
       const nid = r.nation;
       const mm = maxMorale(sim, nid);
       const reg = newRegiment(sim, r.unit);
+      // a production order's regiment joins the army it is forming there (told once, when the order is done)
+      if (orderRegiment(sim, nid, r.order, pid, reg, mm * C.army.newRecruitMorale)) continue;
       const host = armiesAt(sim, pid).find(
         (a) => a.nation === nid && !a.battle && !a.retreating && a.path.length === 0 && a.regiments.length < C.army.maxRegiments,
       );
@@ -384,7 +388,7 @@ export function* weeklyArmyCareSteps(sim: Sim): Generator<void, void, void> {
     if (a.battle) continue;
     const status = supplyStatus(a.supply);
     if (status === 'unsupplied') {
-      const rate = C.supply.attrition * Math.max(0.1, 1 + mods.attrition);
+      const rate = C.supply.attrition * Math.max(0.1, 1 + mods.attrition + commanderMod(sim, a.id, 'attrition'));
       let lost = 0;
       for (const r of a.regiments) {
         const l = Math.round(r.men * rate);
@@ -411,7 +415,7 @@ export function* weeklyArmyCareSteps(sim: Sim): Generator<void, void, void> {
       const friendlyGround = isFriendly(sim, a.nation, st.provinces[a.location].controller);
       let rate = friendlyGround ? C.army.moraleRecovery : C.army.moraleRecoveryHostile;
       if (status === 'strained') rate *= 0.5;
-      rate *= Math.max(0, 1 + mods.moraleRecovery);
+      rate *= Math.max(0, 1 + mods.moraleRecovery + commanderMod(sim, a.id, 'moraleRecovery'));
       a.morale = Math.min(mm, a.morale + rate);
       if (status === 'supplied' && friendlyGround) reinforce(sim, a);
     }

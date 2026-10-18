@@ -8,7 +8,7 @@
 // treaty change advances. Every key also includes the week, so nothing can
 // outlive a tick.
 
-import type { Army, NationId, ProvinceId, TreatyType } from './types';
+import type { Army, NationId, ProvinceId, TreatyType, World } from './types';
 import type { Sim } from './state';
 
 // keyed by the armies object itself, so replacing it (loading, tests) starts afresh
@@ -95,6 +95,31 @@ function provIndex(sim: Sim): ProvIndex {
 /** Provinces owned by a realm, in world order (shared array: do not modify). */
 export function ownedBy(sim: Sim, nid: NationId): readonly ProvinceId[] {
   return provIndex(sim).owned.get(nid) ?? NO_PROVS;
+}
+
+/** How much land a province holds, in provinces of its map's previous revision (1 on maps never redrawn; ProvinceDef.land). */
+export function landOf(sim: Sim, pid: ProvinceId): number {
+  return sim.world.prov[pid].land ?? 1;
+}
+
+/**
+ * The ground a step between two neighbouring provinces covers, in steps of the map's
+ * previous revision: the mean of their widths (√land). Movement, supply and range are
+ * counted in it, so a map drawn more finely is crossed in the same time and reached
+ * as far as before. 1 on maps never redrawn.
+ */
+export function stepLength(world: World, a: ProvinceId, b: ProvinceId): number {
+  const la = world.prov[a].land;
+  const lb = world.prov[b].land;
+  if (la === undefined && lb === undefined) return 1;
+  return (Math.sqrt(la ?? 1) + Math.sqrt(lb ?? 1)) / 2;
+}
+
+/** The land a realm holds, in those provinces (to a tenth, so a redrawn realm counts exactly what it held). */
+export function landHeld(sim: Sim, nid: NationId): number {
+  let v = 0;
+  for (const p of ownedBy(sim, nid)) v += landOf(sim, p);
+  return Math.round(v * 10) / 10;
 }
 
 /** Provinces controlled by a realm, in world order (shared array: do not modify). */

@@ -656,6 +656,9 @@ canvas.map.dragging { cursor: grabbing; }
    (their height is measured into --modes-h) instead of covering them */
 @media (min-width: 761px) {
   .drawer:not(.closed) ~ .dock { left: calc(var(--rail-w) + var(--drawer-w) + var(--s4)); transform: none; align-items: flex-start; bottom: calc(var(--s4) + var(--modes-h, 52px) + var(--s3)); width: min(calc(580px * var(--scale)), calc(100% - var(--rail-w) - var(--drawer-w) - 32px - 52px)); }
+  /* nor over an open selection card: the decision keeps to the map between them (its buttons stay reachable) */
+  .inspector:not(.closed) ~ .dock { left: calc(var(--rail-w) + (100% - var(--rail-w) - var(--inspector-w)) / 2); width: min(calc(580px * var(--scale)), calc(100% - var(--rail-w) - var(--inspector-w) - 32px)); }
+  .drawer:not(.closed) ~ .inspector:not(.closed) ~ .dock { left: calc(var(--rail-w) + var(--drawer-w) + var(--s4)); transform: none; width: min(calc(580px * var(--scale)), calc(100% - var(--rail-w) - var(--drawer-w) - var(--inspector-w) - 2 * var(--s4))); }
 }
 
 /* inspector (selection card, right): slate head, ivory body */
@@ -1380,6 +1383,7 @@ ul.notes li.bad::before { background: var(--bad); border-radius: 0; transform: r
 .chips { display: flex; flex-wrap: wrap; gap: 4px; }
 .chip { padding: 2px 8px; font: inherit; font-size: var(--fs-xs); border: 1px solid var(--line); background: var(--cf-ivory); color: var(--text); cursor: pointer; }
 .chip:hover { border-color: var(--cf-ink); }
+.chip.on { border-color: var(--cf-brass-ink); background: var(--cf-brass); color: var(--cf-ink); }
 .chip.done { border-color: var(--good); color: var(--good); }
 .chip.current { border-color: var(--cf-brass-ink); background: #f6ecd2; }
 .chip.locked, .chip.early { border-style: dashed; color: var(--text-2); }
@@ -1487,3 +1491,8 @@ ul.notes li.warn { color: var(--warn); }
 .register.unit-table td { vertical-align: top; }
 .register.unit-table tr.locked td { color: var(--text-2); }
 .army-row .ar-st .tag { margin-left: 6px; padding: 0 4px; font-size: var(--fs-xs); }
+
+/* the Military ledger's "Needs attention" (format 9): one row a problem, its force and its answer */
+.attn-row { display: flex; align-items: center; gap: var(--s3); padding: 5px 0; border-bottom: 1px solid var(--line-soft); }
+.attn-row > svg { flex: none; color: var(--warn, var(--text-2)); }
+.attn-row .grow { min-width: 0; }

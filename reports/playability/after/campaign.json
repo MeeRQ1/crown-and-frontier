@@ -1,0 +1,90 @@
+{
+ "start": {
+  "map": "reach",
+  "player": "fen",
+  "years": 25,
+  "provinces": 7
+ },
+ "halfWay": {
+  "tick": 208,
+  "file": "reports/tmp/campaign-half.json",
+  "bytes": 213317
+ },
+ "end": {
+  "tick": 924,
+  "years": 17.8,
+  "result": {
+   "winner": "aur",
+   "path": "economic",
+   "playerOutcome": "defeat",
+   "reason": "Kingdom of Aurel achieved Economic Prosperity."
+  },
+  "provinces": 2,
+  "regiments": 10,
+  "endScreen": "Defeat"
+ },
+ "wallSeconds": 177,
+ "autoConquerPresses": 2,
+ "warsDeclared": 0,
+ "productionOrders": 8,
+ "proposalsAnswered": 23,
+ "frames": {
+  "n": 9228,
+  "p50": 16.6,
+  "p95": 29.1,
+  "max": 93.1
+ },
+ "finalCheck": {
+  "exportedBy": "Export save on the end screen",
+  "loads": true,
+  "invariants": [],
+  "tick": 924
+ },
+ "errors": [],
+ "log": [
+  "year 0: 7 provinces, 7 regiments, 151 crowns",
+  "year 1: 7 provinces, 11 regiments, 126 crowns",
+  "wk 78: accepted trade from dre",
+  "year 2: 7 provinces, 11 regiments, 304 crowns",
+  "wk 104: accepted trade from mor",
+  "wk 130: accepted trade from aur",
+  "year 3: 7 provinces, 15 regiments, 318 crowns",
+  "wk 156: accepted trade from tar",
+  "wk 182: accepted trade from ser",
+  "wk 182: declined contract from tar",
+  "year 4: 7 provinces, 19 regiments, 306 crowns",
+  "wk 208: declined contract from aur",
+  "wk 208: exported, imported, continuing",
+  "year 5: 7 provinces, 23 regiments, 201 crowns",
+  "wk 286: declined contract from aur",
+  "year 6: 7 provinces, 27 regiments, 86 crowns",
+  "wk 312: declined contract from tar",
+  "year 7: 7 provinces, 27 regiments, 113 crowns",
+  "wk 364: accepted trade from ist",
+  "wk 390: declined contract from tar",
+  "year 8: 7 provinces, 27 regiments, 85 crowns",
+  "wk 416: declined contract from aur",
+  "year 9: 7 provinces, 27 regiments, 19 crowns",
+  "wk 483: Auto-conquer against mor",
+  "wk 494: declined contract from aur",
+  "wk 502: declined contract from ist",
+  "year 10: 7 provinces, 22 regiments, -15 crowns",
+  "wk 520: declined contract from ist",
+  "wk 546: accepted settlement from mor",
+  "year 11: 5 provinces, 10 regiments, -11 crowns",
+  "wk 598: declined contract from ist",
+  "year 12: 5 provinces, 0 regiments, -13 crowns",
+  "wk 624: Auto-conquer against dre",
+  "wk 624: declined contract from aur",
+  "year 13: 2 provinces, 0 regiments, 82 crowns",
+  "wk 702: declined contract from aur",
+  "year 14: 2 provinces, 0 regiments, 146 crowns",
+  "wk 728: declined contract from tar",
+  "year 15: 2 provinces, 0 regiments, 281 crowns",
+  "wk 806: declined contract from ist",
+  "year 16: 2 provinces, 4 regiments, 302 crowns",
+  "wk 832: declined contract from aur",
+  "year 17: 2 provinces, 8 regiments, 273 crowns",
+  "wk 910: declined contract from aur"
+ ]
+}

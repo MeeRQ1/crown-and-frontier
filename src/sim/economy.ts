@@ -35,6 +35,7 @@
 //            of men ready to call up refills at 1/60 of the reserve a month and can
 //            never exceed the reserve minus the men already serving (no double counting).
 
+import { cabinetSalaries } from './cabinet';
 import { airFuel, airUpkeep, bombingLoss } from './air';
 import { C, RESOURCE_INFO, STRATEGIC, TERRAIN, UNITS } from './config';
 import { armiesOfNation, memoGeo, memoize, memoWeek, ownedBy } from './index';
@@ -585,6 +586,8 @@ export function computeLedger(sim: Sim, nid: NationId, contracts: ContractPlan =
   if (funding) expenses['Research funding'] = funding;
 
   if (purchases) expenses['Contract purchases'] = purchases;
+  const cabinet = cabinetSalaries(sim, nid);
+  if (cabinet) expenses['Cabinet salaries'] = cabinet;
   if (owed) expenses['Loan repayments'] = owed;
   if (repOut) expenses['Reparations'] = repOut;
 

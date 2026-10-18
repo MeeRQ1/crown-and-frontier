@@ -30,7 +30,8 @@
 // province without enemies (friendly ground and short supply lines preferred);
 // with no legal retreat they surrender.
 
-import { airSupportFor, airSupportForecast } from './air';
+import { commanderMod } from './commanders';
+import { airSupportFor, airSupportForecast, interdiction } from './air';
 import { noteOpLoss } from './ops/losses';
 import { C, TERRAIN, UNITS } from './config';
 import { isShort, reserveCap, warDead } from './economy';
@@ -40,7 +41,7 @@ import { nationMods, type Mods } from './modifiers';
 import { canEnter, isRiver } from './movement';
 import { range } from './rng';
 import { addContribution, atWar, bump, isFriendly, menOf, nationName, notify, provName, type Sim } from './state';
-import { supplyCombatMul, supplyDistances, supplyStatus } from './supply';
+import { supplyAt, supplyCombatMul, supplyDistances, supplyStatus } from './supply';
 import { bombardPlan, bombardPower } from './naval';
 import type { Army, Battle, BattleReport, NationId, ProvinceId, SupportLine, UnitType } from './types';
 
@@ -114,6 +115,33 @@ interface SideCalc {
   cavalryShare: number;
   reserveRegs: number;
   notes: string[];
+  figures: SideFigures;
+}
+
+/**
+ * The resolved numbers behind one side's fire in a round (format 9): what the battle
+ * report's "what decided it" is ranked from, so it explains the calculation that was
+ * actually made rather than a separate estimate.
+ */
+export interface SideFigures {
+  /** effective fire after every modifier */
+  fire: number;
+  /** regiments that fought this round (the terrain's frontage), and those held back */
+  engaged: number;
+  held: number;
+  /** what supply did to the fire (1 = supplied, 0.75 = unsupplied), weighted by fire */
+  supply: number;
+  /** what morale did to the fire (0.6 at no morale, 1 at full) */
+  morale: number;
+  /** fire support from the air and the sea, as a share added */
+  support: number;
+}
+
+export interface RoundFigures {
+  att: SideFigures;
+  def: SideFigures;
+  /** the defender's bonus: the share of the attackers' fire that terrain, river, works and entrenchment absorb */
+  defence: number;
 }
 
 const ATTACK_MOD: Partial<Record<UnitType, keyof Mods>> = {
@@ -177,11 +205,21 @@ function sideCalc(sim: Sim, pid: ProvinceId, s: SideSnap, enemyAntiCav = 0, fire
   let noShells = false;
   let landing = false;
   let dropped = false;
+  let supW = 0;
+  let supBase = 0;
+  const led = new Map<string, number>();
   for (const e of [...f, ...g]) {
     const nat = e.army.nation;
     const m = nationMods(sim, nat);
     const u = UNITS[e.reg.type];
-    let v = (e.reg.men / C.regimentSize) * u.attack * (1 + m.attack) * supplyCombatMul(e.army.supply);
+    const base = (e.reg.men / C.regimentSize) * u.attack;
+    const smul = supplyCombatMul(e.army.supply);
+    supW += base * smul;
+    supBase += base;
+    // the army's general adds to its realm's (one accounting path: see commanders.ts)
+    let lead = led.get(e.army.id);
+    if (lead === undefined) led.set(e.army.id, (lead = commanderMod(sim, e.army.id, 'attack')));
+    let v = base * (1 + m.attack + lead) * smul;
     const key = ATTACK_MOD[e.reg.type];
     if (key) v *= 1 + m[key];
     if (e.reg.type === 'cavalry') v *= (1 + terr.cav) * (1 - enemyAntiCav);
@@ -239,8 +277,10 @@ function sideCalc(sim: Sim, pid: ProvinceId, s: SideSnap, enemyAntiCav = 0, fire
   const supplyWorst = Math.min(...s.armies.map((a) => a.supply));
   if (s.armies.length && supplyStatus(supplyWorst) !== 'supplied') notes.push(`${supplyStatus(supplyWorst) === 'strained' ? 'Strained' : 'Unsupplied'} troops ${supplyStatus(supplyWorst) === 'strained' ? '−10%' : '−25%'}`);
   const mr = moraleRatio(s);
-  fire *= 0.6 + 0.4 * Math.min(1, mr);
-  return { engaged, fire, shock: fire > 0 ? shockNum / Math.max(1e-9, engaged.reduce((q, e) => q + e.fire, 0)) : 1, cavalryShare, reserveRegs, notes };
+  const moraleMul = 0.6 + 0.4 * Math.min(1, mr);
+  fire *= moraleMul;
+  const figures: SideFigures = { fire, engaged: f.length + g.length, held: reserveRegs, supply: supBase > 0 ? supW / supBase : 1, morale: moraleMul, support: fireSupport?.share ?? 0 };
+  return { engaged, fire, shock: fire > 0 ? shockNum / Math.max(1e-9, engaged.reduce((q, e) => q + e.fire, 0)) : 1, cavalryShare, reserveRegs, notes, figures };
 }
 
 /** Entrenchment of an army that has stood still `stationary` weeks (engineers dig twice as fast). */
@@ -286,7 +326,7 @@ export function defenceBonus(sim: Sim, pid: ProvinceId, def: SideSnap, river = f
     for (const r of a.regs) m += r.men;
     men += m;
     ent += entrenchBonus(sim, a.nation, a.stationary, hasEngineers(a)) * m;
-    tech += nationMods(sim, a.nation).defense * m;
+    tech += (nationMods(sim, a.nation).defense + commanderMod(sim, a.id, 'defense')) * m;
   }
   if (men > 0) {
     ent /= men;
@@ -312,6 +352,7 @@ export interface RoundResult {
   defMoraleDmg: number;
   factors: string[];
   lossesByArmy: Record<string, number>;
+  figures: RoundFigures;
 }
 
 /** Resolves one round on the snapshots in place. */
@@ -362,7 +403,47 @@ export function resolveRound(sim: Sim, pid: ProvinceId, att: SideSnap, def: Side
   realAtt += dissolve(att);
   realDef += dissolve(def);
   const factors = [...dfb.notes, ...A.notes.map((n) => `Attacker: ${n}`), ...D.notes.map((n) => `Defender: ${n}`)];
-  return { attCas: realAtt, defCas: realDef, attMoraleDmg, defMoraleDmg, factors, lossesByArmy };
+  return { attCas: realAtt, defCas: realDef, attMoraleDmg, defMoraleDmg, factors, lossesByArmy, figures: { att: A.figures, def: D.figures, defence: dfb.value } };
+}
+
+/** Adds a round's figures to a running tally (sums; `averageFigures` divides). */
+export function tallyFigures(t: RoundFigures & { rounds: number } | undefined, r: RoundFigures): RoundFigures & { rounds: number } {
+  const z = (): SideFigures => ({ fire: 0, engaged: 0, held: 0, supply: 0, morale: 0, support: 0 });
+  const out = t ?? { att: z(), def: z(), defence: 0, rounds: 0 };
+  for (const k of ['att', 'def'] as const) for (const f of Object.keys(out[k]) as Array<keyof SideFigures>) out[k][f] += r[k][f];
+  out.defence += r.defence;
+  out.rounds++;
+  return out;
+}
+
+export function averageFigures(t: RoundFigures & { rounds: number }): RoundFigures {
+  const n = Math.max(1, t.rounds);
+  const side = (s: SideFigures): SideFigures => ({ fire: s.fire / n, engaged: Math.round(s.engaged / n), held: Math.round(s.held / n), supply: s.supply / n, morale: s.morale / n, support: s.support / n });
+  return { att: side(t.att), def: side(t.def), defence: t.defence / n };
+}
+
+/**
+ * The main reasons a battle went as it did, ranked by how much each changed the
+ * damage the sides did to each other (from the resolved figures, averaged over the
+ * rounds fought): the defender's bonus, supply, morale, fire support and frontage.
+ * The first line is the balance of fire itself.
+ */
+export function battleReasons(f: RoundFigures): string[] {
+  const pct = (x: number) => `${Math.round(x * 100)}%`;
+  const one = (x: number) => (Math.round(x * 10) / 10).toString();
+  const reasons: Array<{ w: number; text: string }> = [];
+  const attDmg = f.att.fire * (1 - f.defence);
+  const head = `Fire a round: attackers ${one(f.att.fire)}${f.defence >= 0.05 ? ` (${one(attDmg)} after the defence)` : ''} against defenders ${one(f.def.fire)}`;
+  if (f.defence >= 0.05) reasons.push({ w: -Math.log(Math.max(0.05, 1 - f.defence)), text: `The defenders' ground, works and entrenchment absorbed ${pct(f.defence)} of the attacking fire` });
+  for (const [k, who] of [['att', 'Attackers'], ['def', 'Defenders']] as const) {
+    const s = f[k];
+    if (s.held > 0 && s.engaged > 0) reasons.push({ w: 0.5 * Math.log((s.engaged + s.held) / s.engaged), text: `Frontage: ${s.engaged} of ${s.engaged + s.held} ${who.toLowerCase()}' regiments could fight at once; the others only slowed the loss of morale` });
+    if (s.supply < 0.97) reasons.push({ w: -Math.log(s.supply), text: `${who} short of supply: their fire ×${s.supply.toFixed(2)}` });
+    if (s.morale < 0.92) reasons.push({ w: -Math.log(s.morale), text: `${who} worn down: morale cut their fire to ×${s.morale.toFixed(2)}` });
+    if (s.support >= 0.02) reasons.push({ w: Math.log(1 + s.support), text: `${who} had fire support from the air and the sea: +${pct(s.support)}` });
+  }
+  reasons.sort((a, b) => b.w - a.w);
+  return [head, ...reasons.slice(0, 4).map((r) => r.text)];
 }
 
 export type Outcome = 'attacker' | 'defender' | null;
@@ -392,6 +473,8 @@ export interface Forecast {
   defMen: number;
   factors: string[];
   outcomes: Outcome[];
+  /** the first round at even luck: who fights at once, supply, morale, support and the defender's bonus */
+  figures: RoundFigures | null;
 }
 
 function cloneSide(s: SideSnap): SideSnap {
@@ -406,17 +489,21 @@ export function simulateSnap(sim: Sim, pid: ProvinceId, att: SideSnap, def: Side
   let out: Outcome = null;
   let round = 0;
   let factors: string[] = [];
+  let figures: RoundFigures | null = null;
   let attLoss = 0;
   let defLoss = 0;
   while (!out && round < C.combat.maxRounds + 1) {
     round++;
     const r = resolveRound(sim, pid, a, d, rollA, rollD, river, support);
-    if (round === 1) factors = r.factors;
+    if (round === 1) {
+      factors = r.factors;
+      figures = r.figures;
+    }
     attLoss += r.attCas;
     defLoss += r.defCas;
     out = checkEnd(a, d, as, ds, round);
   }
-  return { outcome: out ?? 'defender', rounds: round, attLoss, defLoss, factors };
+  return { outcome: out ?? 'defender', rounds: round, attLoss, defLoss, factors, figures };
 }
 
 /**
@@ -429,6 +516,9 @@ export function forecastBattle(sim: Sim, pid: ProvinceId, attackers: Army[], def
   const def: SideSnap = { armies: defenders.map((x) => snapArmy(sim, x)) };
   // an attacker arriving has not dug in
   for (const a of att.armies) a.stationary = 0;
+  // and fights on the supply it will have there, with the whole attacking force in the province
+  const arrive = projectedSupply(sim, pid, attackers);
+  for (const a of att.armies) if (arrive.has(a.id)) a.supply = arrive.get(a.id)!;
   const river = attackers.length > 0 && attackers.every((a) => isRiver(sim, from ?? a.location, pid));
   // the support each side could call on this week (a forecast: commitments can change)
   const support = { att: supportForecast(sim, pid, [...new Set(attackers.map((a) => a.nation))]), def: supportForecast(sim, pid, [...new Set(defenders.map((a) => a.nation))]) };
@@ -437,6 +527,14 @@ export function forecastBattle(sim: Sim, pid: ProvinceId, attackers: Army[], def
   const hi = simulateSnap(sim, pid, att, def, C.combat.rollMax, C.combat.rollMin, river, support);
   const outcomes = [lo.outcome, mid.outcome, hi.outcome];
   const wins = outcomes.filter((o) => o === 'attacker').length;
+  const factors = [...mid.factors];
+  if (arrive.size) {
+    const worst = Math.min(...arrive.values());
+    if (supplyStatus(worst) !== 'supplied') {
+      const regs = attackers.reduce((n, a) => n + a.regiments.length, 0);
+      factors.unshift(`Attackers would be ${supplyStatus(worst)} there (${regs} regiments arriving; supply ${Math.round(worst * 100)}%)`);
+    }
+  }
   return {
     verdict: wins === 3 ? 'Likely victory' : wins === 0 ? 'Likely defeat' : 'Uncertain',
     attLoss: Math.round(mid.attLoss),
@@ -444,9 +542,29 @@ export function forecastBattle(sim: Sim, pid: ProvinceId, attackers: Army[], def
     rounds: mid.rounds,
     attMen: sideMen(att),
     defMen: sideMen(def),
-    factors: mid.factors,
+    factors,
     outcomes,
+    figures: mid.figures,
   };
+}
+
+/**
+ * The supply each arriving attacker would have at `pid` (armies already there keep
+ * theirs): the province's supply with every arriving regiment in it, less what
+ * enemy aircraft interdict. A forecast that used the supply at home would send a
+ * force into a battle it would fight hungry.
+ */
+export function projectedSupply(sim: Sim, pid: ProvinceId, attackers: Army[]): Map<string, number> {
+  const out = new Map<string, number>();
+  const byNation = new Map<NationId, Army[]>();
+  for (const a of attackers) if (a.location !== pid) (byNation.get(a.nation) ?? byNation.set(a.nation, []).get(a.nation)!).push(a);
+  if (!byNation.size) return out;
+  const arriving = attackers.filter((a) => a.location !== pid).reduce((n, a) => n + a.regiments.length, 0);
+  for (const [nid, list] of byNation) {
+    const level = Math.max(0, supplyAt(sim, nid, pid, arriving, false).level - interdiction(sim, pid, nid).supply);
+    for (const a of list) out.set(a.id, level);
+  }
+  return out;
 }
 
 // ───────────────────────────── Fire support ─────────────────────────────────
@@ -592,8 +710,10 @@ export function detectBattles(sim: Sim): void {
     if (b.attackers.length && b.attackers.every(crossed)) b.river = true;
     const atk = sim.world.nationDefs[foe.nation]?.short;
     const dfn = sim.world.nationDefs[anchor.nation]?.short;
+    // the start of a battle is news when it is fought on our own land; elsewhere the
+    // result is what matters (told when it ends), so it goes to the Chronicle only
     for (const n of new Set([...b.attackerNations, ...b.defenderNations])) {
-      notify(sim, n, 'normal', 'battle', `Battle of ${provName(sim, pid)}: ${atk} attacks ${dfn}.`, { province: pid });
+      notify(sim, n, st.provinces[pid].owner === n ? 'normal' : 'low', 'battle', `Battle of ${provName(sim, pid)}: ${atk} attacks ${dfn}.`, { province: pid });
     }
   }
 }
@@ -668,6 +788,7 @@ export function weeklyCombat(sim: Sim): void {
     const r = resolveRound(sim, b.province, att, def, rollA, rollD, !!b.river, sup);
     // the factors of the latest round: support comes and goes week by week
     b.factors = r.factors;
+    b.tally = tallyFigures(b.tally, r.figures);
     b.support = { att: sup.lines.att, def: sup.lines.def };
     // write back to armies
     for (const snap of [...att.armies, ...def.armies]) writeBack(sim, snap);
@@ -867,6 +988,10 @@ function endBattle(sim: Sim, b: Battle, winner: 'attacker' | 'defender'): void {
     factors: b.factors,
     outcome,
   };
+  if (b.tally) {
+    report.figures = averageFigures(b.tally);
+    report.decisive = battleReasons(report.figures);
+  }
   st.reports.push(report);
   if (st.reports.length > 120) st.reports.splice(0, st.reports.length - 120);
   delete st.battles[b.id];

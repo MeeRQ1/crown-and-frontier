@@ -2,11 +2,12 @@
 // what is selected, a fact grid gives the essentials, primary actions come
 // next, and details follow. Unavailable actions always say why.
 
+import { unitCommanderSection } from './commander';
 import { airBalance, airControl } from '../../sim/air';
 import { C, RESOURCE_INFO, TERRAIN, UNITS, UNIT_TYPES } from '../../sim/config';
 import { checkCommand } from '../../sim/commands';
-import { forecastBattle } from '../../sim/combat';
-import { activeProjects, buildProblem, buildSlots, devCap, devMax, factoryMax, PROJECT_LABELS, projectCost, type ProjectCost } from '../../sim/construction';
+import { averageFigures, battleReasons, forecastBattle } from '../../sim/combat';
+import { activeProjects, buildProblem, buildSlots, devLimit, devMax, factoryMax, landOf, PROJECT_LABELS, projectCost, type ProjectCost } from '../../sim/construction';
 import { fabricateCost, fabricateMonths, fabricateProblem } from '../../sim/diplomacy';
 import { integrationFactor, provinceCrowns, provinceDeposit, provinceSupplies } from '../../sim/economy';
 import { integrationRate, unrestTarget } from '../../sim/integration';
@@ -15,7 +16,7 @@ import { etaWeeks, isRiver } from '../../sim/movement';
 import { siegeInfo } from '../../sim/siege';
 import { armiesAt, atWar, menOf, nationName, provName } from '../../sim/state';
 import { armySupplyInfo, provinceSupplyCapacity } from '../../sim/supply';
-import type { Army, Battle, SupportLine, ProjectKind, ProvinceId, StrategicResource, UnitType } from '../../sim/types';
+import type { Army, Battle, BattleFigures, SupportLine, ProjectKind, ProvinceId, StrategicResource, UnitType } from '../../sim/types';
 import type { App } from '../app';
 import { orderStatus, readiness } from '../../sim/readiness';
 import { action, bar, button, h, rebuild, row, setChildren } from '../dom';
@@ -154,7 +155,13 @@ function provinceCard(app: App, pid: ProvinceId): HTMLElement[] {
       h(
         'div',
         { class: 'stat-grid', style: 'margin-top:10px' },
-        tile('Development', `${p.dev}`, `limit ${devCap(sim, pid)} · max ${devMax(sim, pid)}`, 'Development raises crowns, food, research and the factories a province can hold. Beyond the terrain limit it costs 2.5× more.'),
+        tile(
+          'Development',
+          `${p.dev}`,
+          `limit ${devLimit(sim, pid)} · max ${devMax(sim, pid)}`,
+          'Development raises crowns, food, research and the factories a province can hold. Beyond the terrain limit it costs 2.5× more.' +
+            (landOf(sim, pid) === 1 ? '' : ` This map was redrawn more finely: the province holds ${fmt(landOf(sim, pid), 2)} of an earlier province's land, so development and factories are priced, and the limit and builders reckoned, on that land.`),
+        ),
         tile('Crowns / mo', fmt(provinceCrowns(sim, pid), 1), `food ${fmt(provinceSupplies(sim, pid), 1)}`, 'What this province yields its owner each month, after integration, unrest and occupation.'),
         tile('Integration', `${Math.floor(p.integration)}`, `${signed(ir.rate, 1)}/mo`, 'Frontier integration (0–100): output, recruitment, development and supply all depend on it.'),
         tile('Unrest', `${Math.round(p.unrest)}`, `→ ${Math.round(unrestTarget(sim, pid).target)}`, 'Unrest drifts toward its target. At 60+ in raw frontier the province may revolt.'),
@@ -166,7 +173,8 @@ function provinceCard(app: App, pid: ProvinceId): HTMLElement[] {
   body.appendChild(
     section(
       'Ground',
-      row('Terrain', `${terr.label}: march cost ${terr.move}, defenders +${Math.round(terr.defense * 100)}%, frontage ${terr.frontage}`),
+      // on a redrawn map a smaller province is a shorter step: its march cost counts the ground (stepLength)
+      row('Terrain', `${terr.label}: march cost ${landOf(sim, pid) === 1 ? terr.move : `${fmt(terr.move * Math.sqrt(landOf(sim, pid)), 1)} (a smaller province, a shorter step)`}, defenders +${Math.round(terr.defense * 100)}%, frontage ${terr.frontage}`),
       row('Railway · fort', `${p.infra}/${C.construction.infraMax} · ${p.fort}/${C.construction.fortMax}`),
       (() => {
         const res = sim.world.prov[pid].resource;
@@ -415,6 +423,7 @@ function armyCard(app: App, a: Army): HTMLElement[] {
 
   const body = h('div', { class: 'ins-body scroll', 'data-sk': 'ins' });
   { const ops = mine ? unitOpSection(app, a.id) : null; if (ops) body.appendChild(ops); }
+  { const cmd = mine ? unitCommanderSection(app, a.id) : null; if (cmd) body.appendChild(cmd); }
   const byType = (t: UnitType) => a.regiments.filter((r) => r.type === t);
   const mm = maxMorale(sim, a.nation);
   body.appendChild(
@@ -530,7 +539,24 @@ export function forecastView(f: ReturnType<typeof forecastBattle>, side: 'attack
     h('div', { class: `callout ${cls}` }, icon(wins === 3 ? 'check' : wins === 0 ? 'alert' : 'info'), h('div', null, h('b', null, verdict), h('div', null, `Unlucky / even / lucky rolls: ${rolls.map((o) => (ours(o) ? 'win' : o ? 'loss' : 'undecided')).join(' / ')}`))),
     row('Strength', `ours ${men(ourMen)} · theirs ${men(theirMen)}`),
     row('Expected losses', `ours ${men(ourLoss)} · theirs ${men(theirLoss)} (~${f.rounds} weeks)`),
+    f.figures ? figuresRows(f.figures, side) : null,
     f.factors.length ? h('ul', { class: 'reasons' }, f.factors.map((x) => h('li', null, x))) : null,
+    h('p', { class: 'small faint' }, 'An estimate: the battle itself rolls the dice, and support, supply and reinforcements can change.'),
+  );
+}
+
+/** Who fights at once, supply, morale, support and the defender's bonus: the numbers the battle is fought on. */
+function figuresRows(f: BattleFigures, side: 'attacker' | 'defender'): HTMLElement {
+  const [o, t] = side === 'attacker' ? [f.att, f.def] : [f.def, f.att];
+  const p = (x: number) => `${Math.round(x * 100)}%`;
+  return h(
+    'div',
+    { 'data-sk': 'battle-figures' },
+    row('Fighting at once', `ours ${o.engaged}${o.held ? ` of ${o.engaged + o.held}` : ''} · theirs ${t.engaged}${t.held ? ` of ${t.engaged + t.held}` : ''} regiments (frontage)`),
+    row('Fire a round', `ours ${o.fire.toFixed(1)} · theirs ${t.fire.toFixed(1)}`),
+    row('Supply, morale', `ours ×${o.supply.toFixed(2)}, ×${o.morale.toFixed(2)} · theirs ×${t.supply.toFixed(2)}, ×${t.morale.toFixed(2)}`),
+    o.support || t.support ? row('Fire support', `ours +${p(o.support)} · theirs +${p(t.support)}`) : null,
+    f.defence > 0 ? row('Defender’s bonus', `${p(f.defence)} of the attacking fire absorbed (ground, river, works, entrenchment)`) : null,
   );
 }
 
@@ -562,7 +588,8 @@ function battleSection(app: App, bid: string): HTMLElement {
     last ? bar(last.defMorale, 1, 'info', 'Defender morale') : null,
     row('Round', `${b.rounds.length} of at most ${C.combat.maxRounds}`),
     supportBlock(app, b),
-    b.factors.length ? h('ul', { class: 'reasons' }, b.factors.map((x) => h('li', null, x))) : null,
+    b.tally ? h('div', { 'data-sk': 'battle-sofar' }, h('div', { class: 'eyebrow', style: 'margin-top:6px' }, 'So far'), h('ul', { class: 'reasons' }, battleReasons(averageFigures(b.tally)).map((x) => h('li', null, x)))) : null,
+    b.factors.length ? h('details', null, h('summary', { class: 'small' }, 'Every modifier (this round)'), h('ul', { class: 'reasons' }, b.factors.map((x) => h('li', null, x)))) : null,
     h('p', { class: 'small faint' }, 'A side breaks at 25% morale or after losing 90% of its men. Reinforcements arriving in the province join the battle.'),
   );
 }

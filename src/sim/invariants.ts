@@ -1,6 +1,8 @@
 // State invariants checked by tests, AI campaigns and after loading a save.
 // Returns a list of violations (empty = consistent).
 
+import { FORMABLES, IDEOLOGIES, LEADER_TRAITS } from './government';
+import { COMMANDER_TRAITS } from './commanders';
 import { C, SHIPS, UNITS, WINGS } from './config';
 import { deckSlots } from './air';
 import { devMax } from './construction';
@@ -8,6 +10,7 @@ import { maxMorale } from './military';
 import { checkIndexes } from './index';
 import { atWar, hasTreaty, type Sim } from './state';
 import { getFocus } from './focus';
+import { orderTotals, PRODUCTION_LIMITS } from './production';
 
 function scanFinite(v: unknown, path: string, out: string[]): void {
   if (out.length > 20) return;
@@ -240,5 +243,53 @@ export function checkInvariants(sim: Sim): string[] {
   for (const [id, a] of Object.entries(st.armies)) member('army', id, a);
   for (const [id, f] of Object.entries(st.fleets)) member('fleet', id, f);
   for (const [id, w] of Object.entries(st.wings)) member('wing', id, w);
+  // government (format 9): known forms and traits; one commander per force (per branch of an
+  // operation), each of its realm; a formable proclaimed once
+  const formedBy = new Map<string, string>();
+  for (const [nid, n] of Object.entries(st.nations)) {
+    if (n.ideology && !IDEOLOGIES[n.ideology.id]) out.push(`${nid}: unknown government ${n.ideology.id}`);
+    if (n.leader && !LEADER_TRAITS[n.leader.trait]) out.push(`${nid}: unknown leader trait ${n.leader.trait}`);
+    if (n.formed) {
+      if (!FORMABLES[n.formed.id]) out.push(`${nid}: unknown formable ${n.formed.id}`);
+      if (formedBy.has(n.formed.id)) out.push(`${n.formed.id} proclaimed by ${formedBy.get(n.formed.id)} and ${nid}`);
+      formedBy.set(n.formed.id, nid);
+    }
+    const posts = new Set<string>();
+    for (const c of n.commanders ?? []) {
+      if (!COMMANDER_TRAITS[c.trait] || COMMANDER_TRAITS[c.trait].branch !== c.branch) out.push(`${nid}: commander ${c.id} trait ${c.trait}`);
+      if (!c.assigned) continue;
+      const key = `${c.assigned}|${c.branch}`;
+      if (posts.has(key)) out.push(`${nid}: two commanders lead ${c.assigned}`);
+      posts.add(key);
+      const u = st.armies[c.assigned] ?? st.fleets[c.assigned] ?? st.wings[c.assigned] ?? st.operations[c.assigned];
+      if (u && u.nation !== nid) out.push(`${nid}: commander ${c.id} leads another realm's force`);
+    }
+    const t = n.cabinet?.trade;
+    if (t && (t.competence < 1 || t.competence > 3 || t.log.length > 30 || t.managed.length > 6)) out.push(`${nid}: trade minister out of bounds`);
+  }
+  // offensive leagues (format 9): 2–4 known members each, a realm in one league at most
+  const inLeague = new Map<string, string>();
+  for (const l of st.leagues ?? []) {
+    if (l.members.length > 4 || new Set(l.members).size !== l.members.length) out.push(`${l.id}: members ${l.members.join(',')}`);
+    if (l.record.length > 20) out.push(`${l.id}: record not bounded`);
+    for (const m of l.members) {
+      if (!st.nations[m]) out.push(`${l.id}: unknown member ${m}`);
+      if (inLeague.has(m)) out.push(`${m} in two leagues (${inLeague.get(m)}, ${l.id})`);
+      inLeague.set(m, l.id);
+    }
+  }
+  // production orders (format 9): bounded, at known places, never more started than ordered
+  for (const [nid, n] of Object.entries(st.nations)) {
+    const list = n.production ?? [];
+    if (list.length > PRODUCTION_LIMITS.orders) out.push(`${nid}: ${list.length} production orders`);
+    if (new Set(list.map((o) => o.id)).size !== list.length) out.push(`${nid}: duplicate production order`);
+    for (const o of list) {
+      const t = orderTotals(o);
+      if (o.places.length > PRODUCTION_LIMITS.places || o.places.some((p) => !st.provinces[p])) out.push(`${o.id}: places`);
+      if (t.total > PRODUCTION_LIMITS.count || o.count < 1) out.push(`${o.id}: ${t.total} ordered`);
+      if (t.started > t.total || o.done > t.started) out.push(`${o.id}: ${t.started} started, ${o.done} done of ${t.total}`);
+      if (o.formed.length > PRODUCTION_LIMITS.count) out.push(`${o.id}: ${o.formed.length} formations`);
+    }
+  }
   return out;
 }

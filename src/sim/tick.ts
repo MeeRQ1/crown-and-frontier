@@ -37,6 +37,11 @@ import { resolveAirDrops } from './airborne';
 import { monthlyEvents } from './events';
 import { monthlyIntegration } from './integration';
 import { weeklyArmyCareSteps, weeklyRecruitment } from './military';
+import { weeklyProduction } from './production';
+import { monthlyLeaders } from './government';
+import { weeklyCommanders } from './commanders';
+import { monthlyCabinet } from './cabinet';
+import { monthlyLeagues } from './leagues';
 import { weeklyMovement, weeklyOrders } from './movement';
 import { monthlyResearch } from './progression';
 import { monthlyFocus } from './focus';
@@ -145,11 +150,15 @@ export function* weekSlices(sim: Sim, opts: StepOptions = {}): Generator<void, v
   yield* phase('sieges', () => weeklySieges(sim));
   yield* phaseSteps('armyCare', weeklyArmyCareSteps(sim));
   yield* phase('recruitment', () => {
+    weeklyProduction(sim);
     weeklyRecruitment(sim);
     weeklyShipyards(sim);
     weeklyHangars(sim);
   });
-  yield* phase('construction', () => weeklyConstruction(sim));
+  yield* phase('construction', () => {
+    weeklyConstruction(sim);
+    weeklyCommanders(sim);
+  });
   yield* phase('warScores', () => weeklyWarScores(sim));
   if ((st.tick + 1) % WEEKS_PER_MONTH === 0) {
     yield* phaseSteps('m.economy', monthlyEconomySteps(sim));
@@ -158,10 +167,16 @@ export function* weekSlices(sim: Sim, opts: StepOptions = {}): Generator<void, v
       monthlyFocus(sim);
     });
     yield* phase('m.integration', () => monthlyIntegration(sim));
+    // the government: heads of government whose term is over, the cabinet's routine work
+    yield* phase('m.government', () => {
+      monthlyLeaders(sim);
+      monthlyCabinet(sim);
+    });
     yield* phaseSteps(
       'm.diplomacy',
       (function* () {
         monthlyDiplomacy(sim);
+        monthlyLeagues(sim);
         yield* monthlyInfluenceSteps(sim);
       })(),
     );

@@ -42,6 +42,7 @@
 // land missions, plans ground support for this week's battles, resolves losses,
 // readiness and replacements; the battle round then reads the support plan.
 
+import { commanderMod } from './commanders';
 import { aaAgainst } from './airborne';
 import { noteOpLoss } from './ops/losses';
 import { C, SHIPS, WINGS, WING_TYPES } from './config';
@@ -49,6 +50,7 @@ import { armiesIn, battleGen, geoRev, memoEpochNow } from './index';
 import { nationMods } from './modifiers';
 import { fleetEpoch, fleetsIn, zoneName } from './naval';
 import { opDistance, placesWithin, type Place } from './reach';
+import { orderWing } from './production';
 import { chance, range } from './rng';
 import { atWar, isFriendly, notify, provName, type Sim } from './state';
 import type { AirMission, AirWing, Battle, Fleet, FleetId, NationId, ProvinceId, Ship, StrategicResource, SupportLine, WingId, WingType, ZoneId } from './types';
@@ -359,8 +361,12 @@ export function weeklyHangars(sim: Sim): void {
       o.weeksLeft--;
       if (o.weeksLeft > 0) continue;
       p.hangar.splice(i, 1);
-      createWing(sim, o.nation, pid, o.wing);
+      const w = createWing(sim, o.nation, pid, o.wing);
       st.nations[o.nation].stats.wingsBuilt++;
+      if (o.order) {
+        orderWing(sim, o.nation, o.order, w);
+        continue;
+      }
       notify(sim, o.nation, 'low', 'air', `A new ${WINGS[o.wing].label.toLowerCase()} is ready at ${provName(sim, pid)}.`, { province: pid });
     }
   }
@@ -658,7 +664,7 @@ export function supportPlan(sim: Sim): Map<string, { att: SidePlan; def: SidePla
       if (w.mission === 'support') {
         const b = supportBattle(sim, w)!;
         const side = friendlySide(sim, b, w.nation)!;
-        const g = WINGS[w.type].ground * s.eff * Math.max(0.2, 1 + nationMods(sim, w.nation).airAttack) * (reconOver(sim, b.province, w.nation) ? 1 + C.air.reconBoost : 1) * aaFactor(sim, b.province, w.nation);
+        const g = WINGS[w.type].ground * s.eff * Math.max(0.2, 1 + nationMods(sim, w.nation).airAttack + commanderMod(sim, w.id, 'airAttack')) * (reconOver(sim, b.province, w.nation) ? 1 + C.air.reconBoost : 1) * aaFactor(sim, b.province, w.nation);
         const p = slot(b)[side];
         p.ground += g;
         p.lines.push({ kind: 'air', id: w.id, nation: w.nation, name: w.name, value: g });
@@ -743,7 +749,7 @@ export function airSupportForecast(sim: Sim, pid: ProvinceId, nations: NationId[
     if (w.mission !== 'support' || busy.has(w.id) || !missionArea(sim, w).includes(pid)) continue;
     const s = wingStatus(sim, w);
     if (s.state === 'grounded' || s.state === 'idle') continue;
-    ground += WINGS[w.type].ground * s.eff * Math.max(0.2, 1 + nationMods(sim, w.nation).airAttack);
+    ground += WINGS[w.type].ground * s.eff * Math.max(0.2, 1 + nationMods(sim, w.nation).airAttack + commanderMod(sim, w.id, 'airAttack'));
     n++;
   }
   const notes: string[] = [];
@@ -801,7 +807,7 @@ function cellMap(sim: Sim): Map<string, Map<NationId, AirPresence>> {
       const s = wingStatus(sim, w);
       if (s.state !== 'flying') continue;
       const r = WINGS[w.type];
-      const airMul = Math.max(0.2, 1 + nationMods(sim, w.nation).airAttack);
+      const airMul = Math.max(0.2, 1 + nationMods(sim, w.nation).airAttack + commanderMod(sim, w.id, 'airAttack'));
       for (const cell of wingCells(sim, w)) {
         const patrol = w.mission === 'superiority';
         add(cell, w.nation, 'air', r.air * s.eff * airMul * (patrol ? 1 : 0.5));
@@ -908,7 +914,7 @@ function bombingMap(sim: Sim): Map<ProvinceId, number> {
       if (!ctl || !atWar(sim, w.nation, ctl)) continue;
       const s = wingStatus(sim, w);
       if (s.state !== 'flying') continue;
-      const v = WINGS[w.type].bomb * s.eff * Math.max(0.2, 1 + nationMods(sim, w.nation).airAttack);
+      const v = WINGS[w.type].bomb * s.eff * Math.max(0.2, 1 + nationMods(sim, w.nation).airAttack + commanderMod(sim, w.id, 'airAttack'));
       const cur = raw.get(w.target);
       if (cur) cur.bomb += v;
       else raw.set(w.target, { bomb: v, by: w.nation });
@@ -1013,7 +1019,7 @@ function interception(sim: Sim, w: AirWing, cells: string[], eff: number): { los
     if (p > worst) (worst = p), (at = c), (enemy = b.theirFighters);
   }
   if (!at) return { loss: 0, cell: null, theirs: 0 };
-  const defence = Math.max(0.2, 1 + nationMods(sim, w.nation).airAttack);
+  const defence = Math.max(0.2, 1 + nationMods(sim, w.nation).airAttack + commanderMod(sim, w.id, 'airAttack'));
   void eff;
   return { loss: (C.air.combatLoss * worst * WINGS[w.type].vulnerability) / defence, cell: at, theirs: enemy };
 }
@@ -1088,7 +1094,7 @@ export function seaAir(sim: Sim): Fleet[] {
     for (const w of group) {
       const s = wingStatus(sim, w);
       const m = nationMods(sim, nid);
-      const v = WINGS[w.type].naval * s.eff * Math.max(0.2, 1 + m.airAttack) * (w.carrier ? Math.max(0.2, 1 + m.carrierAir) : 1);
+      const v = WINGS[w.type].naval * s.eff * Math.max(0.2, 1 + m.airAttack + commanderMod(sim, w.id, 'airAttack')) * (w.carrier ? Math.max(0.2, 1 + m.carrierAir + commanderMod(sim, w.id, 'carrierAir')) : 1);
       share.set(w.id, v);
       raw += v;
     }

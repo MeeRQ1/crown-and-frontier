@@ -31,7 +31,8 @@ export interface MapCheck {
 /** Limits for imported maps (built-in maps are well inside them). */
 export const MAP_LIMITS = {
   bytes: 8 * 1024 * 1024,
-  provinces: 1500,
+  // 2000 from format 9: the historical world maps were redrawn with about 1,600 provinces
+  provinces: 2000,
   nations: 96,
   regions: 600,
   edges: 60000,
@@ -267,6 +268,7 @@ export function normalizeMapPackage(raw: unknown): { pkg: MapPackage; errors: Ma
     };
     if (po.factories !== undefined) p.factories = r.int(po.factories, 'Factories', 0, 5, pid);
     if (version >= 3 && po.port !== undefined) p.port = r.int(po.port, 'Port', 0, 3, pid);
+    if (po.land !== undefined) p.land = r.num(po.land, 'Land', 0.05, 20, pid);
     pkg.provinces.push(p);
   }
   for (const x of r.arr(o.straits ?? [], 'Straits', 2000)) {

@@ -77,6 +77,30 @@ export async function provincePoint(page: Page, pid: string): Promise<{ x: numbe
   }, pid);
 }
 
+/** A point on screen inside a sea zone, clear of markers (the camera is centred on it first). */
+export async function zonePoint(page: Page, zone: string): Promise<{ x: number; y: number } | null> {
+  await page.evaluate((id) => {
+    const app = (window as any).cnf;
+    const c0 = app.renderer.zoneCenter(id);
+    app.renderer.camera.centerOn(c0.x, c0.y, app.renderer.camera.zoom, false);
+    app.mapDirty = true;
+  }, zone);
+  await page.waitForTimeout(120);
+  return page.evaluate((id) => {
+    const app = (window as any).cnf;
+    const r = app.canvas.getBoundingClientRect();
+    const c = app.renderer.zoneCenter(id);
+    const s = app.renderer.camera.toScreen(c.x, c.y);
+    for (let d = 0; d < 160; d += 4)
+      for (const [dx, dy] of [[0, d], [d, 0], [0, -d], [-d, 0], [d, d], [-d, -d], [d, -d], [-d, d]]) {
+        const x = s.x + dx;
+        const y = s.y + dy;
+        if (!app.renderer.provinceAt(x, y) && app.renderer.zoneAt(x, y) === id && !app.renderer.fleetAt(x, y) && !app.renderer.wingAt(x, y)) return { x: x + r.left, y: y + r.top };
+      }
+    return null;
+  }, zone);
+}
+
 /** Markers on screen by relation to the player: armies (with the units they stand for), fleets, wings. */
 async function markerCensus(page: Page): Promise<Record<string, Record<string, number>>> {
   return page.evaluate(() => {

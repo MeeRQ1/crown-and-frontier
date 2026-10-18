@@ -459,6 +459,8 @@ const sparseOf = (land: string, lat: number, lon: number): number => {
   else if (z === 'polar') s = Math.max(s * 2.5, 3);
   else if (z === 'boreal' && s < 1.5) s *= 1.6;
   else if (z === 'river') s = Math.min(s, 0.5);
+  // Europe and the Mediterranean, where most campaigns are fought, a third denser again
+  if (lat >= 34 && lat <= 66 && lon >= -12 && lon <= 42) s *= 0.75;
   return Math.min(s, 9);
 };
 
@@ -603,7 +605,12 @@ const HOME = 'Britain|France|Italy|Spain|Portugal|Netherlands|Belgium|Denmark|No
 export function earth1936Def(): RealMapDef {
   return {
     id: 'earth-1936',
-    revision: 1,
+    // 2 (format 9): denser provinces, most of all in Europe and around the Mediterranean
+    revision: 2,
+    // every realm keeps revision 1's development, population, forts, factories and deposits over its new
+    // provinces; each province records the land it holds, on which development and factories
+    // are priced and builders counted
+    conserve: 'src/data/maps/legacy/earth-1936-r1.scenario.json',
     startYear: 1936,
     campaignYears: { options: [10, 20, 30], default: 20 },
     nations: NATIONS,
@@ -643,7 +650,7 @@ export function earth1936Def(): RealMapDef {
     straitMaxKm: 160,
     treaties: TREATIES_WORLD,
     claims: CLAIMS_WORLD.map((c) => ({ ...c, km: 260 })),
-    cities: { max: 260, minPop: 150000, spacingKm: 260 },
+    cities: { max: 340, minPop: 150000, spacingKm: 220 },
     depositHints: DEPOSIT_HINTS,
     climate: 'temperate',
     wrapOcean: true,
@@ -651,7 +658,7 @@ export function earth1936Def(): RealMapDef {
       name: 'The World, 1936',
       description:
         'The whole world on 1 January 1936, from the Arctic to Cape Horn: the British and French empires at their greatest extent with the League mandates, a rearming Germany, the Soviet Union from the Dniester to the Pacific, Italy at war in Ethiopia, Japan with its creature Manchukuo, Nationalist China, and the United States in the Depression. The treaties of the day are in force and the claims of the time stand, Ethiopia and Manchuria among them. Borders approximated from present-day divisions; protectorates are drawn as their protector’s land.',
-      blurb: 'A huge historical campaign: over a thousand provinces and 69 realms on the eve of the Second World War.',
+      blurb: 'A huge historical campaign: about 1,600 provinces and 69 realms on the eve of the Second World War.',
       size: 'huge',
       difficulty: 'hard',
       style: 'Empires and revisionists across every ocean',

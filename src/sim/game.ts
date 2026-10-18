@@ -1,5 +1,7 @@
 // New-game construction.
 
+import { initGovernment } from './government';
+import { initCommanders } from './commanders';
 import { C, SCHEMA_VERSION, STRATEGIC, UNITS } from './config';
 import { startingTechs } from './data/techs';
 import { PERSONALITIES } from './data/personalities';
@@ -83,7 +85,7 @@ export function createGame(opts: NewGameOptions = {}): Sim {
     proposals: [],
     reports: [],
     notifications: [],
-    counters: { army: 0, battle: 0, war: 0, treaty: 0, note: 0, proposal: 0, event: 0, regiment: 0, coalition: 0, fleet: 0, ship: 0, wing: 0, loan: 0, bloc: 0, contract: 0, op: 0 },
+    counters: { army: 0, battle: 0, war: 0, treaty: 0, note: 0, proposal: 0, event: 0, regiment: 0, coalition: 0, fleet: 0, ship: 0, wing: 0, loan: 0, bloc: 0, contract: 0, op: 0, production: 0, commander: 0 },
     result: null,
     continueAfterResult: false,
     diagnostics: [],
@@ -139,6 +141,7 @@ export function createGame(opts: NewGameOptions = {}): Sim {
       debtMonths: 0,
       bankruptUntil: 0,
       modifiers: [],
+      production: [],
       eventCooldowns: {},
       nextEventTick: months(C.events.firstMonths) + (i % 4) * 4,
       pendingEvents: [],
@@ -222,6 +225,9 @@ export function createGame(opts: NewGameOptions = {}): Sim {
     n.manpower = Math.round(Math.max(0, reserve - menServing(sim, nid)) * C.population.startPoolShare);
   }
   startingFleets(sim, (nid) => provincialTaxes(sim, nid) * C.start.fleetShare);
+  // government, head of government and the commanders' staff (format 9)
+  initGovernment(sim);
+  initCommanders(sim);
   for (const nid of world.nationIds) st.nations[nid].lastMonth = computeLedger(sim, nid);
   return sim;
 }

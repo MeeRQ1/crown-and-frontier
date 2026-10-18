@@ -8,32 +8,41 @@
 // settled land at 20.
 //
 // Monthly gain = 3 * (1 + 0.25*roads) * (1.5 if claimed) * (1.3 if garrisoned)
-//                * max(0.5, 1 - 0.05*hops to capital) * (1 + modifiers)
+//                * max(0.5, 1 - 0.05*steps to capital) * (1 + modifiers)
+//   (steps on a redrawn map: hops times the province's width, √land, so the same
+//   distance costs the same)
 //                * (1 - unrest/200) * min(1, capacity / frontier load)
 // Frontier load = sum(1 - integration/100); capacity = 3 + 0.1*provinces + modifiers.
 // A realm beyond capacity is overextended: slower integration and more unrest.
 
 import { C } from './config';
-import { armiesIn, ownedBy } from './index';
+import { armiesIn, landHeld, landOf, ownedBy } from './index';
 import { nationMods } from './modifiers';
 import { chance } from './rng';
 import { clamp, months, notify, provName, type Sim } from './state';
 import type { NationId, ProvinceId } from './types';
 
+// both on land held (ProvinceDef.land): a map drawn more finely neither eases nor adds to the burden of the same frontier
 export function adminCapacity(sim: Sim, nid: NationId): number {
-  return C.integration.capacityBase + C.integration.capacityPerProvince * ownedBy(sim, nid).length + nationMods(sim, nid).adminCapacity;
+  return C.integration.capacityBase + C.integration.capacityPerProvince * landHeld(sim, nid) + nationMods(sim, nid).adminCapacity;
 }
 
 export function frontierLoad(sim: Sim, nid: NationId): number {
   let l = 0;
-  for (const pid of ownedBy(sim, nid)) l += 1 - sim.state.provinces[pid].integration / 100;
+  for (const pid of ownedBy(sim, nid)) l += (1 - sim.state.provinces[pid].integration / 100) * landOf(sim, pid);
   return l;
 }
 
-export function overextension(sim: Sim, nid: NationId): number {
-  const cap = adminCapacity(sim, nid);
-  const load = frontierLoad(sim, nid);
+export function overextension(sim: Sim, nid: NationId, admin?: Admin): number {
+  const cap = admin?.cap ?? adminCapacity(sim, nid);
+  const load = admin?.load ?? frontierLoad(sim, nid);
   return Math.max(0, (load - cap) / Math.max(1, cap));
+}
+
+/** A realm's frontier load and capacity, worked out once for a monthly pass over its provinces and kept up to date as they integrate. */
+export interface Admin {
+  load: number;
+  cap: number;
 }
 
 export function garrisoned(sim: Sim, pid: ProvinceId): boolean {
@@ -48,7 +57,7 @@ export interface IntegrationBreakdown {
   parts: Array<[string, number]>;
 }
 
-export function integrationRate(sim: Sim, pid: ProvinceId): IntegrationBreakdown {
+export function integrationRate(sim: Sim, pid: ProvinceId, admin?: Admin): IntegrationBreakdown {
   const st = sim.state;
   const p = st.provinces[pid];
   const parts: Array<[string, number]> = [];
@@ -68,17 +77,19 @@ export function integrationRate(sim: Sim, pid: ProvinceId): IntegrationBreakdown
   if (p.claims.includes(nid)) mul('Rightful claim', 1 + C.integration.claimBonus);
   if (garrisoned(sim, pid)) mul('Garrisoned', 1 + C.integration.garrisonBonus);
   const cap = st.nations[nid].capital;
-  const hops = cap ? (sim.world.hop(cap, pid) ?? 10) : 10;
+  const hop = cap ? sim.world.hop(cap, pid) : undefined;
+  const land = sim.world.prov[pid].land;
+  const hops = hop === undefined ? 10 : land === undefined ? hop : Math.round(hop * Math.sqrt(land) * 10) / 10;
   mul(`${hops} step${hops === 1 ? '' : 's'} from the capital`, Math.max(C.integration.distanceFloor, 1 - C.integration.distancePenalty * hops));
   mul('Realm modifiers', Math.max(0.1, 1 + nationMods(sim, nid).integration));
   mul(`Unrest ${Math.round(p.unrest)}`, 1 - p.unrest / 200);
-  const load = frontierLoad(sim, nid);
-  const capa = adminCapacity(sim, nid);
+  const load = admin?.load ?? frontierLoad(sim, nid);
+  const capa = admin?.cap ?? adminCapacity(sim, nid);
   if (load > capa) mul(`Overextended (load ${load.toFixed(1)} / capacity ${capa.toFixed(1)})`, capa / load);
   return { rate: r, parts };
 }
 
-export function unrestTarget(sim: Sim, pid: ProvinceId): { target: number; parts: Array<[string, number]> } {
+export function unrestTarget(sim: Sim, pid: ProvinceId, admin?: Admin): { target: number; parts: Array<[string, number]> } {
   const st = sim.state;
   const p = st.provinces[pid];
   const parts: Array<[string, number]> = [];
@@ -88,7 +99,7 @@ export function unrestTarget(sim: Sim, pid: ProvinceId): { target: number; parts
     if (Math.abs(v) >= 0.5) parts.push([label, v]);
   };
   add(`Integration ${Math.floor(p.integration)}`, (100 - p.integration) * C.unrest.fromIntegration);
-  add('Overextension', overextension(sim, nid) * C.unrest.overextension);
+  add('Overextension', overextension(sim, nid, admin) * C.unrest.overextension);
   add('War exhaustion', st.nations[nid].warExhaustion * C.unrest.warExhaustion);
   add('Realm modifiers', nationMods(sim, nid).unrest);
   if (p.controller !== nid) add('Occupied', C.unrest.occupied);
@@ -100,13 +111,21 @@ export function unrestTarget(sim: Sim, pid: ProvinceId): { target: number; parts
 
 export function monthlyIntegration(sim: Sim): void {
   const st = sim.state;
+  // each realm's load and capacity once, the load kept current as its provinces integrate
+  // (as if summed again for each province, without the realm-sized loop per province)
+  const admins = new Map<NationId, Admin>();
   for (const pid of sim.world.provIds) {
     const p = st.provinces[pid];
     if (!p.owner) continue;
     const nid = p.owner;
-    const rate = integrationRate(sim, pid).rate;
+    let admin = admins.get(nid);
+    if (!admin) admins.set(nid, (admin = { load: frontierLoad(sim, nid), cap: adminCapacity(sim, nid) }));
+    const land = landOf(sim, pid);
+    const before = p.integration;
+    const rate = integrationRate(sim, pid, admin).rate;
     p.integration = clamp(p.integration + rate, 0, 100);
-    const { target } = unrestTarget(sim, pid);
+    admin.load -= ((p.integration - before) / 100) * land;
+    const { target } = unrestTarget(sim, pid, admin);
     p.unrest = clamp(p.unrest + (target - p.unrest) * C.unrest.approach, 0, 100);
     if (p.revoltUntil && p.revoltUntil <= st.tick) {
       p.revoltUntil = 0;
@@ -115,7 +134,9 @@ export function monthlyIntegration(sim: Sim): void {
     if (p.revoltUntil === 0 && p.controller === nid && p.unrest >= C.unrest.revoltThreshold && p.integration < 50 && !garrisoned(sim, pid)) {
       if (chance(st.rng, C.unrest.revoltChance)) {
         p.revoltUntil = st.tick + months(C.unrest.revoltMonths);
+        const was = p.integration;
         p.integration = Math.max(0, p.integration - C.unrest.revoltIntegrationLoss);
+        admin.load += ((was - p.integration) / 100) * land;
         p.unrest = 40;
         if (p.project && p.project.nation === nid) p.project = null;
         notify(sim, nid, 'urgent', 'revolt', `Revolt in ${provName(sim, pid)}! It yields nothing for six months and loses integration. Garrison troops in restless frontier provinces to prevent revolts.`, { province: pid });

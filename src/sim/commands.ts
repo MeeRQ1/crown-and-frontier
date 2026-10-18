@@ -7,7 +7,12 @@ import { C, SHIPS, WINGS } from './config';
 import { nextMemoEpoch } from './index';
 import { buildProblem, cancelProblem, cancelProject, PROJECT_LABELS, startProject } from './construction';
 import { runBatchBuild, runBatchRecruit } from './batch';
-import { assignUnits, cancelOperation, createOperation, createOpProblem, editOperation, editOpProblem, opSummaryLine, releaseUnits, resumeUnits, setOpStatus, takeUnderDirectCommand, unitRef } from './ops/operations';
+import { createProductionOrder, orderProductionProblem, orderTotals, setProductionState, unitLabel } from './production';
+import { formNation, formProblem, ideologyProblem, replaceLeader, replaceLeaderProblem, setIdeology } from './government';
+import { assignCommander, assignCommanderProblem, COMMANDER_TRAITS, recruitCommander, recruitCommanderProblem } from './commanders';
+import { cabinetAction, cabinetProblem } from './cabinet';
+import { admitToLeague, honourLeague, leagueOf, leaveLeague, proposeLeague, proposeLeagueProblem } from './leagues';
+import { assignUnits, cancelOperation, createOperation, createOpProblem, editOperation, editOpProblem, opSummaryLine, releaseUnits, reserveUnits, resumeUnits, setOpStatus, takeUnderDirectCommand, unitRef } from './ops/operations';
 import {
   cancelTreaty,
   cancelTreatyProblem,
@@ -72,7 +77,8 @@ import { researchProblem } from './progression';
 import { cancelContract, cancelContractProblem, cleanTerms, contractProblem, offerContract, signContract } from './trade';
 import { serialize } from './save';
 import { nationName, notify, provName, type Sim } from './state';
-import type { Command, CommandResult, Proposal } from './types';
+import { hostileArmiesAt } from './ai/common';
+import type { Command, CommandResult, NationId, Proposal, ProvinceId } from './types';
 import { answerCallToArms, applyPeace, declareWar, declareWarProblem, evaluatePeace, goalOptions, peaceProblem } from './war';
 
 function atSeaProblem(sim: Sim, fleet: string): string {
@@ -249,9 +255,9 @@ export function checkCommand(sim: Sim, cmd: Command): string | null {
       return declareWarProblem(sim, cmd.nation, cmd.target, goal);
     }
     case 'createOp':
-      return createOpProblem(sim, cmd.nation, cmd.kind, cmd.area ?? [], cmd.zones ?? [], cmd.settings ?? {}, cmd.units ?? []);
+      return createOpProblem(sim, cmd.nation, cmd.kind, cmd.area ?? [], cmd.zones ?? [], cmd.settings ?? {}, cmd.units ?? [], cmd.enemies ?? []);
     case 'editOp':
-      return editOpProblem(sim, cmd.nation, cmd.op, cmd.area, cmd.zones, cmd.settings ?? {});
+      return editOpProblem(sim, cmd.nation, cmd.op, cmd.area, cmd.zones, cmd.settings ?? {}, cmd.enemies);
     case 'assignOp': {
       const op = st.operations?.[cmd.op];
       if (!op || op.nation !== cmd.nation) return 'Not our operation.';
@@ -281,6 +287,35 @@ export function checkCommand(sim: Sim, cmd: Command): string | null {
       const a = st.armies[cmd.army];
       return a && a.nation === cmd.nation ? null : 'Not your army.';
     }
+    case 'reserveUnits':
+      for (const id of cmd.units) {
+        const r = unitRef(sim, id);
+        if (!r || r.unit.nation !== cmd.nation) return 'Not our force.';
+      }
+      return cmd.units.length ? null : 'Choose the forces.';
+    case 'orderProduction':
+      return orderProductionProblem(sim, cmd.nation, cmd.kind, cmd.unit, cmd.places, cmd.count, cmd.mode, cmd.assign);
+    case 'setIdeology':
+      return ideologyProblem(sim, cmd.nation, cmd.ideology);
+    case 'replaceLeader':
+      return replaceLeaderProblem(sim, cmd.nation, cmd.trait);
+    case 'assignCommander':
+      return assignCommanderProblem(sim, cmd.nation, cmd.commander, cmd.to);
+    case 'recruitCommander':
+      return recruitCommanderProblem(sim, cmd.nation, cmd.trait);
+    case 'formNation':
+      return formProblem(sim, cmd.nation, cmd.formable);
+    case 'proposeLeague':
+      return proposeLeagueProblem(sim, cmd.nation, cmd.to);
+    case 'leaveLeague':
+      return leagueOf(sim, cmd.nation) ? null : 'We belong to no league.';
+    case 'cabinet':
+      return cabinetProblem(sim, cmd.nation, cmd.action, cmd.candidate, cmd.settings);
+    case 'productionState': {
+      const o = (st.nations[cmd.nation].production ?? []).find((x) => x.id === cmd.order);
+      if (!o) return 'No such production order.';
+      return ['paused', 'active', 'cancel'].includes(cmd.state) ? null : 'Unknown state.';
+    }
     case 'batchBuild': {
       if (!cmd.provinces.length) return 'Choose the provinces.';
       if (cmd.provinces.length > 400 || new Set(cmd.provinces).size !== cmd.provinces.length) return 'Each province once, at most 400.';
@@ -296,6 +331,21 @@ export function checkCommand(sim: Sim, cmd: Command): string | null {
     default:
       return 'Unknown command.';
   }
+}
+
+/**
+ * The route of a march passes enemy troops before it arrives (the shortest legal route
+ * does not go round them): said when the order is given, so a march is never walked
+ * into an enemy army unawares.
+ */
+export function routeWarning(sim: Sim, nid: NationId, path: ProvinceId[]): string | null {
+  for (const pid of path.slice(0, -1)) {
+    const foes = hostileArmiesAt(sim, nid, pid);
+    if (!foes.length) continue;
+    const regs = foes.reduce((n, f) => n + f.regiments.length, 0);
+    return `The route passes ${provName(sim, pid)}, where ${regs} enemy regiment${regs === 1 ? ' stands' : 's stand'}: the army will fight there before it goes on. Shift+click adds a waypoint to go round.`;
+  }
+  return null;
 }
 
 export interface ApplyOptions {
@@ -357,7 +407,7 @@ function execute(sim: Sim, cmd: Command, auto = false): CommandResult {
       const res = findPath(sim, cmd.nation, a.location, cmd.dest)!;
       if (a.path[0] !== res.path[0]) a.progress = 0;
       a.path = res.path;
-      return { ok: true };
+      return { ok: true, message: routeWarning(sim, cmd.nation, res.path) ?? undefined };
     }
     case 'stop': {
       const a = st.armies[cmd.army];
@@ -490,7 +540,11 @@ function execute(sim: Sim, cmd: Command, auto = false): CommandResult {
       return { ok: true, message: 'Our clerks begin forging a claim (12 months).' };
     case 'declareWar': {
       const w = declareWar(sim, cmd.nation, cmd.target, cmd.goal);
-      return { ok: true, message: `${w.name} begins.` };
+      // a deliberate declaration: the declarer's offensive league honours it (once; the
+      // joins are not declarations and trigger nothing further)
+      honourLeague(sim, w, cmd.nation);
+      const joined = w.attackers.filter((a) => a !== cmd.nation);
+      return { ok: true, message: `${w.name} begins.${joined.length ? ` ${joined.map((a) => nationName(sim, a)).join(', ')} join${joined.length === 1 ? 's' : ''} us.` : ''}` };
     }
     case 'peace': {
       const other = st.nations[cmd.with];
@@ -630,6 +684,13 @@ function execute(sim: Sim, cmd: Command, auto = false): CommandResult {
         notify(sim, p.from, 'normal', 'contract', `${nationName(sim, cmd.nation)} accepted our contract.`);
         return { ok: true, message: 'Contract signed.' };
       }
+      if (p.kind === 'league') {
+        const prob = proposeLeagueProblem(sim, p.from, cmd.nation);
+        // the proposal itself is the one awaiting an answer: that is not a reason to refuse it
+        if (prob && !/awaiting an answer|less than a year ago/.test(prob)) return { ok: false, reason: `The proposal is no longer valid: ${prob}` };
+        const l = admitToLeague(sim, p.from, cmd.nation);
+        return { ok: true, message: `We are bound by the ${l.name}.` };
+      }
       if (p.kind === 'peace') {
         const prob = peaceProblem(sim, p.from, p.war!, cmd.nation, p.terms!);
         if (prob) return { ok: false, reason: `The offer is no longer valid: ${prob}` };
@@ -658,12 +719,12 @@ function execute(sim: Sim, cmd: Command, auto = false): CommandResult {
       return { ok: true, message: `${w.name} begins.` };
     }
     case 'createOp': {
-      const op = createOperation(sim, cmd.nation, cmd.kind, cmd.area ?? [], cmd.zones ?? [], cmd.settings ?? {}, cmd.units ?? [], cmd.name, !!cmd.activate);
+      const op = createOperation(sim, cmd.nation, cmd.kind, cmd.area ?? [], cmd.zones ?? [], cmd.settings ?? {}, cmd.units ?? [], cmd.name, !!cmd.activate, cmd.enemies ?? []);
       return { ok: true, message: `${op.name} ${op.status === 'active' ? 'begins' : 'is prepared'}: ${opSummaryLine(sim, op)}.` };
     }
     case 'editOp': {
       const op = st.operations[cmd.op];
-      editOperation(sim, op, cmd.area, cmd.zones, cmd.settings ?? {}, cmd.name);
+      editOperation(sim, op, cmd.area, cmd.zones, cmd.settings ?? {}, cmd.name, cmd.enemies);
       return { ok: true, message: `${op.name} updated.` };
     }
     case 'assignOp': {
@@ -687,6 +748,37 @@ function execute(sim: Sim, cmd: Command, auto = false): CommandResult {
       cancelOperation(sim, op);
       return { ok: true, message: `${op.name} cancelled: its forces keep their last orders under your direct command.` };
     }
+    case 'reserveUnits':
+      reserveUnits(sim, cmd.units, cmd.reserved);
+      return { ok: true, message: cmd.reserved ? `${cmd.units.length === 1 ? 'Kept' : `${cmd.units.length} forces kept`} for your direct command: Auto-conquer will not use ${cmd.units.length === 1 ? 'it' : 'them'}.` : `Auto-conquer may use ${cmd.units.length === 1 ? 'it' : 'them'} again.` };
+    case 'orderProduction': {
+      const o = createProductionOrder(sim, cmd.nation, cmd.kind, cmd.unit, cmd.places, cmd.count, cmd.mode, cmd.assign);
+      const t = orderTotals(o);
+      const now = Object.values(o.started).reduce((a, b) => a + b, 0);
+      return { ok: true, message: `${t.total} ${unitLabel(o.kind, o.unit, t.total)} ordered: ${now} started now${t.left ? `, ${t.left} follow as ${o.kind === 'ship' ? 'slipways' : o.kind === 'wing' ? 'airfield room' : 'training places'} and means allow${o.blocked ? ` (waiting: ${o.blocked.why})` : ''}` : ''}.` };
+    }
+    case 'productionState':
+      return { ok: true, message: setProductionState(sim, cmd.nation, cmd.order, cmd.state) };
+    case 'setIdeology':
+      return { ok: true, message: setIdeology(sim, cmd.nation, cmd.ideology) };
+    case 'replaceLeader':
+      return { ok: true, message: replaceLeader(sim, cmd.nation, cmd.trait) };
+    case 'assignCommander':
+      return { ok: true, message: assignCommander(sim, cmd.nation, cmd.commander, cmd.to) };
+    case 'recruitCommander': {
+      const c = recruitCommander(sim, cmd.nation, cmd.trait);
+      return { ok: true, message: `${c.name} joins the staff (${COMMANDER_TRAITS[cmd.trait].label.toLowerCase()}): assign them to a force or an operation.` };
+    }
+    case 'formNation':
+      return { ok: true, message: formNation(sim, cmd.nation, cmd.formable) };
+    case 'proposeLeague': {
+      const r = proposeLeague(sim, cmd.nation, cmd.to);
+      return r.ok ? { ok: true, message: r.message } : { ok: false, reason: r.message };
+    }
+    case 'leaveLeague':
+      return { ok: true, message: leaveLeague(sim, cmd.nation) };
+    case 'cabinet':
+      return { ok: true, message: cabinetAction(sim, cmd.nation, cmd.action, cmd.candidate, cmd.settings) };
     case 'keepFormation': {
       const a = st.armies[cmd.army];
       a.keep = cmd.keep;

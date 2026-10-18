@@ -2,6 +2,8 @@
 // wing, and the port and airfield sections of a province card. Unavailable
 // actions always say why.
 
+import { unitCommanderSection } from './commander';
+import { orderHereButton } from './production';
 import { airBalance, airControl, airfieldRoom, buildWingProblem, deckSlots, ferryRange, LAND_MISSIONS, MISSION_HELP, MISSION_LABELS, missionPlace, missionProblem, placeName, readyFactor, rebaseProblem, SEA_MISSIONS, wingCost, wingRange, wingsAboard, wingStatus, wingUnlocked, type WingState } from '../../sim/air';
 import { C, RESOURCE_INFO, SHIP_TYPES, SHIPS, WING_TYPES, WINGS } from '../../sim/config';
 import {
@@ -144,6 +146,7 @@ export function fleetCard(app: App, f: Fleet): HTMLElement[] {
 
   const body = h('div', { class: 'ins-body scroll', 'data-sk': 'ins' });
   { const ops = f.nation === app.player ? unitOpSection(app, f.id) : null; if (ops) body.appendChild(ops); }
+  { const cmd = f.nation === app.player ? unitCommanderSection(app, f.id) : null; if (cmd) body.appendChild(cmd); }
   const cap = fleetCapacity(f);
   body.appendChild(
     h(
@@ -486,6 +489,7 @@ export function wingCard(app: App, w: AirWing): HTMLElement[] {
   }
   const body = h('div', { class: 'ins-body scroll', 'data-sk': 'ins' });
   { const ops = w.nation === app.player ? unitOpSection(app, w.id) : null; if (ops) body.appendChild(ops); }
+  { const cmd = w.nation === app.player ? unitCommanderSection(app, w.id) : null; if (cmd) body.appendChild(cmd); }
   const rng = wingRange(sim, w);
   body.appendChild(
     h(
@@ -624,7 +628,7 @@ export function portSection(app: App, pid: ProvinceId): HTMLElement | null {
       );
     });
     items.push(h('div', { class: 'actions' }, acts));
-    if (p.dock.some((o) => o.nation === me)) items.push(button('Cancel the newest ship', () => app.do({ type: 'cancelShip', province: pid }), { cls: 'small quiet' }));
+    items.push(h('div', { class: 'row wrap', style: 'gap:6px;margin-top:4px' }, orderHereButton(app, 'ship', pid), p.dock.some((o) => o.nation === me) ? button('Cancel the newest ship', () => app.do({ type: 'cancelShip', province: pid }), { cls: 'small quiet' }) : null));
   }
   const near = (sim.world.provZones[pid] ?? []).flatMap((z) => [...fleetsIn(sim, z)]);
   if (near.length) items.push(h('div', { style: 'margin-top:6px' }, h('div', { class: 'eyebrow' }, 'Fleets off this coast'), ...near.map((f) => fleetRow(app, f))));
@@ -657,7 +661,7 @@ export function airfieldSection(app: App, pid: ProvinceId): HTMLElement | null {
       );
     });
     items.push(h('div', { class: 'actions' }, acts));
-    if (p.hangar.some((o) => o.nation === me)) items.push(button('Cancel the newest wing', () => app.do({ type: 'cancelWing', province: pid }), { cls: 'small quiet' }));
+    items.push(h('div', { class: 'row wrap', style: 'gap:6px;margin-top:4px' }, orderHereButton(app, 'wing', pid), p.hangar.some((o) => o.nation === me) ? button('Cancel the newest wing', () => app.do({ type: 'cancelWing', province: pid }), { cls: 'small quiet' }) : null));
   }
   return section('Airfield and air wings', ...items);
 }
