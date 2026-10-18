@@ -652,7 +652,8 @@ function airContext(sim: Sim, nid: NationId): AirContext {
     .map((id) => st.battles[id])
     .filter((b) => b.attackerNations.includes(nid) || b.defenderNations.includes(nid))
     .map((b) => ({ pid: b.province, men: [...b.attackers, ...b.defenders].reduce((s, a) => s + (st.armies[a]?.regiments.length ?? 0), 0) }));
-  const objectives = [...new Set(Object.values(st.nations[nid].ai.objectives).map((o) => o.target))].sort();
+  // the provinces our armies attack or defend (not where a reserve waits)
+  const objectives = [...new Set(Object.values(st.nations[nid].ai.objectives).filter((o) => ['attack', 'defend', 'liberate', 'battle'].includes(o.kind)).map((o) => o.target))].sort();
   const enemyFleets: AirContext['enemyFleets'] = [];
   const enemyArmies: AirContext['enemyArmies'] = [];
   const targets: AirContext['targets'] = [];

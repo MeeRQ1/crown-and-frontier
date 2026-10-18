@@ -6,9 +6,8 @@
 
 import { C, UNITS, UNIT_TYPES } from '../config';
 import { PERSONALITIES } from '../data/personalities';
-import { forecastBattle } from '../combat';
 import { grossIncome } from '../economy';
-import { armyStrength, maxMorale, recruitProblem, unitCost, unitUnlocked } from '../military';
+import { armyStrength, recruitProblem, unitCost, unitUnlocked } from '../military';
 import { nationMods } from '../modifiers';
 import { findPath } from '../movement';
 import {
@@ -17,16 +16,16 @@ import {
   diag,
   enemiesOf,
   isFriendly,
-  menOf,
   ownedProvinces,
   provName,
   warsOf,
   type Sim,
 } from '../state';
-import { supplyAt, supplyDistances } from '../supply';
+import { supplyDistances } from '../supply';
 import type { Army, NationId, ProvinceId, UnitType } from '../types';
-import { diffOf, hostileArmiesAt, issue, pathVia, reachFrom, sumStrength, threatAround, type Reach } from './common';
+import { aiRand, diffOf, hostileArmiesAt, issue, pathVia, reachFrom, sumStrength, threatAround, type Reach } from './common';
 import { airOps, navalOps } from './navy';
+import { planGround, recordFailures, siegeRegiments, type GroundPolicy, type GroundTarget } from '../ops/ground';
 import { memoize } from '../index';
 
 function regimentsByType(sim: Sim, nid: NationId): Record<UnitType, number> {
@@ -163,36 +162,6 @@ function moveTo(sim: Sim, a: Army, dest: ProvinceId, why?: string): void {
   issue(sim, { type: 'move', nation: a.nation, army: a.id, dest }, why);
 }
 
-function setObjective(sim: Sim, a: Army, target: ProvinceId, kind: string, value: number, detail?: string): void {
-  const ai = sim.state.nations[a.nation].ai;
-  const prev = ai.objectives[a.id];
-  if (!prev || prev.target !== target || prev.kind !== kind) {
-    ai.objectives[a.id] = { target, since: sim.state.tick, kind, value };
-    diag(sim, a.nation, 'operational', `${a.name} → ${kind} ${provName(sim, target)} (value ${value.toFixed(1)})${detail ? ` ${detail}` : ''}`);
-  }
-  a.task = `${kind}:${target}`;
-}
-
-function safeHome(sim: Sim, nid: NationId, from: ProvinceId, reach: Reach): ProvinceId | null {
-  const st = sim.state;
-  const n = st.nations[nid];
-  let best: ProvinceId | null = null;
-  let bs = Infinity;
-  for (const pid of ownedProvinces(sim, nid)) {
-    if (st.provinces[pid].controller !== nid) continue;
-    const d = reach.dist[pid];
-    if (d === undefined) continue;
-    if (threatAround(sim, nid, pid, 0.8) > 0) continue;
-    const s = d - (pid === n.capital ? 2 : 0) - (pid === n.ai.rally ? 1 : 0);
-    if (s < bs) {
-      bs = s;
-      best = pid;
-    }
-  }
-  void from;
-  return best;
-}
-
 // ───────────────────────────── Peace-time operations ────────────────────────
 
 function peaceOps(sim: Sim, nid: NationId, armies: Army[]): void {
@@ -300,127 +269,78 @@ export function warObjectives(sim: Sim, nid: NationId): Objective[] {
   return [...defend, ...attack.slice(0, d.objectives)];
 }
 
+/** How a realm conducts its war, by difficulty and personality (the shared ground planner's policy). */
+export function aiGroundPolicy(sim: Sim, nid: NationId): GroundPolicy {
+  const d = diffOf(sim);
+  const pers = sim.state.nations[nid].ai.personality;
+  const reserve = !d.coordinate ? 0 : pers === 'defensive' ? 0.2 : pers === 'expansionist' ? 0.05 : pers === 'opportunist' ? 0.1 : 0.15;
+  const regs = armiesOf(sim, nid).reduce((n, a) => n + a.regiments.length, 0);
+  const armies = armiesOf(sim, nid).length;
+  // detachments: never more armies than one per four regiments (plus two), at most three new a week
+  const room = Math.max(0, Math.ceil(regs / 4) + 2 - armies);
+  return {
+    margin: d.attackMargin,
+    accept: d.acceptUncertain ? ['Likely victory', 'Uncertain'] : ['Likely victory'],
+    minReadiness: 0.45,
+    reserve,
+    commitReserve: d.coordinate ? 'battles' : 'never',
+    coordinate: d.coordinate,
+    merge: d.coordinate,
+    maxDetach: d.coordinate ? Math.min(3, room) : 0,
+    minDetach: 3,
+    failWait: d.coordinate ? (d.mistake === 0 ? 10 : 8) : 4,
+    maxCost: 16,
+    supplyLimit: true,
+    withdraw: 1.6,
+  };
+}
+
+/**
+ * The war, planned with the same ground planner as the player's operations
+ * (sim/ops/ground.ts): defence and liberation first, attack objectives by value
+ * with commitment (an army keeps its target until it is taken, lost or
+ * hopeless), task forces sized to the opposition, staging and merging before a
+ * strike, the forecast gate by difficulty, a memory of failed attacks, a reserve
+ * by personality committed to battles we are losing, bounded detachments for
+ * undefended targets, regrouping, recovery and withdrawal; armies with nothing
+ * to do cover the fronts or march toward the war. Small seeded variation in the
+ * objectives' value keeps realms from being predictable without breaking replays.
+ */
 function warOps(sim: Sim, nid: NationId, armies: Army[]): void {
   const st = sim.state;
   const n = st.nations[nid];
-  const d = diffOf(sim);
   const objs = warObjectives(sim, nid);
-  const reach = new Map<string, Reach>();
-  for (const a of armies) reach.set(a.id, reachFrom(sim, nid, a.location));
-  // committed objectives get a bonus (hysteresis against oscillation)
-  for (const o of objs) {
-    const committed = Object.entries(n.ai.objectives).some(([aid, ob]) => ob.target === o.pid && st.armies[aid]);
-    if (committed) o.value *= 1.3;
+  for (const o of objs) if (o.kind === 'attack') o.value *= 0.95 + aiRand(sim) * 0.1;
+  const targets: GroundTarget[] = objs.map((o) => ({ pid: o.pid, kind: o.kind, value: o.value, need: o.need, hostile: o.hostile, siegeRegs: siegeRegiments(st.provinces[o.pid].fort) }));
+  n.ai.failures ??= {};
+  n.ai.reorganized ??= {};
+  const memory = { assigned: n.ai.objectives, failures: n.ai.failures, reorganized: n.ai.reorganized };
+  for (const p of recordFailures(sim, nid, memory, st.tick - 2)) diag(sim, nid, 'operational', `Attack on ${provName(sim, p)} failed: not again for a while, and then only stronger`);
+  const posts = frontPosts(sim, nid).map((p) => ({ pid: p.post, threat: p.threat }));
+  const before = new Map(Object.entries(n.ai.objectives).map(([id, o]) => [id, o.target]));
+  const out = planGround(sim, armies, targets, {
+    nation: nid,
+    policy: aiGroundPolicy(sim, nid),
+    memory,
+    base: n.ai.rally ?? n.capital,
+    posts,
+    issue: (cmd, why) => issue(sim, cmd, why),
+    note: (text) => diag(sim, nid, 'operational', text),
+    advance: (a) => stagingFor(sim, nid, a.location, reachFrom(sim, nid, a.location), objs),
+  });
+  // the record the rest of the AI reads (air support, diagnostics): target, kind and value
+  const value = new Map(objs.map((o) => [o.pid, o.value]));
+  for (const [id, o] of Object.entries(n.ai.objectives)) {
+    (o as { value?: number }).value = value.get(o.target) ?? 0;
+    const a = st.armies[id];
+    if (a) a.task = `${o.kind}:${o.target}`;
+    if (before.get(id) !== o.target && a) diag(sim, nid, 'operational', `${a.name} → ${o.kind} ${provName(sim, o.target)}${value.has(o.target) ? ` (value ${value.get(o.target)!.toFixed(1)})` : ''}`);
   }
-  objs.sort((a, b) => (a.kind === 'attack' ? 1 : 0) - (b.kind === 'attack' ? 1 : 0) || b.value - a.value || (a.pid < b.pid ? -1 : 1));
-  const assigned = new Set<string>();
-  const newObjectives: typeof n.ai.objectives = {};
-  const mm = maxMorale(sim, nid);
-  const fit = (a: Army) => a.morale >= mm * 0.45 && menOf(a) >= a.regiments.length * C.regimentSize * 0.55;
-  for (const o of objs) {
-    const cands = armies
-      .filter((a) => !assigned.has(a.id) && reach.get(a.id)!.dist[o.pid] !== undefined && (fit(a) || a.location === o.pid))
-      .sort((a, b) => reach.get(a.id)!.dist[o.pid] - reach.get(b.id)!.dist[o.pid] || (a.id < b.id ? -1 : 1));
-    const group: Army[] = [];
-    let str = 0;
-    for (const a of cands) {
-      if (str >= o.need && group.length) break;
-      if (reach.get(a.id)!.dist[o.pid] > 16) continue;
-      group.push(a);
-      str += armyStrength(sim, a);
-    }
-    if (!group.length) continue;
-    if (str < o.need) {
-      if (o.kind === 'attack') continue;
-      // too weak to defend: do not feed armies in piecemeal unless it is the capital
-      if (o.pid !== n.capital) continue;
-    }
-    for (const a of group) assigned.add(a.id);
-    // coordinate: gather at a staging province next to the objective, then strike together
-    const lead = group.reduce((x, y) => (armyStrength(sim, y) > armyStrength(sim, x) ? y : x));
-    const leadPath = pathVia(reach.get(lead.id)!, lead.location, o.pid) ?? [];
-    const staging = leadPath.length <= 1 ? lead.location : leadPath[leadPath.length - 2];
-    const together = group.every((a) => a.location === staging && a.path.length === 0) || group.length === 1 || !d.coordinate;
-    if (d.coordinate && group.length > 1 && together) {
-      const r = issue(sim, { type: 'merge', nation: nid, armies: group.map((a) => a.id) });
-      if (r.ok) {
-        const merged = group[0];
-        group.splice(1);
-        reach.set(merged.id, reachFrom(sim, nid, merged.location));
-      }
-    }
-    for (const a of group) {
-      if (!st.armies[a.id]) continue;
-      newObjectives[a.id] = { target: o.pid, since: n.ai.objectives[a.id]?.target === o.pid ? n.ai.objectives[a.id].since : st.tick, kind: o.kind, value: o.value };
-      setObjective(sim, a, o.pid, o.kind, o.value, `need ${o.need.toFixed(1)} have ${str.toFixed(1)}`);
-      if (d.coordinate && group.length > 1 && !together) {
-        moveTo(sim, a, staging);
-        continue;
-      }
-      if (o.hostile.length && a.location !== o.pid) {
-        const f = forecastBattle(sim, o.pid, group.filter((g) => st.armies[g.id]), o.hostile);
-        if (f.verdict === 'Likely defeat' || (f.verdict === 'Uncertain' && !d.acceptUncertain)) {
-          diag(sim, nid, 'operational', `Attack on ${provName(sim, o.pid)} held back: forecast ${f.verdict}`);
-          const path = pathVia(reach.get(a.id)!, a.location, o.pid) ?? [];
-          const hold = path.length >= 2 ? path[path.length - 2] : a.location;
-          moveTo(sim, a, hold);
-          continue;
-        }
-      }
-      moveTo(sim, a, o.pid);
-    }
+  for (const [id, t] of Object.entries(out.tasks)) {
+    const a = st.armies[id];
+    if (a && !n.ai.objectives[id]) a.task = t.kind === 'recover' ? 'recover' : t.kind === 'hold' ? `front:${t.target}` : t.kind === 'stage' ? `advance:${t.target}` : t.kind;
   }
-  n.ai.objectives = newObjectives;
-  // unassigned armies: recover, withdraw from danger, or cover a front
-  const rally = n.ai.rally ?? n.capital;
-  const posts = frontPosts(sim, nid);
-  const covered = new Map<ProvinceId, number>();
-  for (const a of armies) {
-    if (!st.armies[a.id] || !assigned.has(a.id)) continue;
-    const post = posts.find((p) => p.post === a.location || (sim.world.hop(p.post, a.location) ?? 99) <= 1);
-    if (post) covered.set(post.post, (covered.get(post.post) ?? 0) + armyStrength(sim, a));
-  }
-  for (const a of armies) {
-    if (assigned.has(a.id) || !st.armies[a.id]) continue;
-    const r = reach.get(a.id)!;
-    const danger = threatAround(sim, nid, a.location, 0.8);
-    const mine = armyStrength(sim, a);
-    const home = safeHome(sim, nid, a.location, r);
-    const sup = supplyAt(sim, nid, a.location, 0, false);
-    if (danger > mine * 1.6 || !fit(a) || sup.status === 'unsupplied') {
-      if (home && home !== a.location) {
-        a.task = 'recover';
-        moveTo(sim, a, home, danger > mine * 1.6 ? `${a.name} withdraws from superior enemy` : undefined);
-        continue;
-      }
-    }
-    if (a.task?.startsWith('garrison:') && st.provinces[a.task.slice(9)]?.controller === nid && danger === 0) continue;
-    // cover the front whose threat is least matched by the armies already there
-    const mine2 = armyStrength(sim, a);
-    let best: { post: ProvinceId; gap: number } | null = null;
-    for (const p of posts) {
-      if (r.dist[p.post] === undefined || r.dist[p.post] > 20) continue;
-      const gap = p.threat - (covered.get(p.post) ?? 0);
-      if (gap > 0 && (!best || gap > best.gap)) best = { post: p.post, gap };
-    }
-    if (best) {
-      covered.set(best.post, (covered.get(best.post) ?? 0) + mine2);
-      a.task = `front:${best.post}`;
-      moveTo(sim, a, best.post);
-      continue;
-    }
-    // no front of ours to cover (an ally's war, or the enemy is far off): march
-    // to the war rather than wait at the rally point, stopping at the last
-    // friendly province before enemy land, where supply still reaches
-    const stage = fit(a) ? stagingFor(sim, nid, a.location, r, objs) : null;
-    if (stage) {
-      a.task = `advance:${stage}`;
-      moveTo(sim, a, stage, a.location !== stage && a.path[a.path.length - 1] !== stage ? `${a.name} marches to the front at ${provName(sim, stage)}` : undefined);
-      continue;
-    }
-    a.task = 'reserve';
-    if (rally && a.location !== rally) moveTo(sim, a, rally);
-  }
+  for (const b of out.blocked.slice(0, 2)) if (b.why.startsWith('an attack failed')) diag(sim, nid, 'operational', `${provName(sim, b.pid)} left alone: ${b.why}`);
 }
 
 /**

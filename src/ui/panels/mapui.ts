@@ -2,6 +2,7 @@
 // presentation options, the navigation cluster and the minimap.
 
 import type { App } from '../app';
+import { VIEW_HELP, VIEW_LABELS, viewCounts } from '../map/visibility';
 import { h, rebuild, setChildren } from '../dom';
 import { icon } from '../icons';
 import { legendFor, MODE_MAP, MODES, realmFill } from '../map/modes';
@@ -103,6 +104,24 @@ function legend(app: App): HTMLElement {
   return h('div', { class: 'legend' }, ...kids);
 }
 
+/** What the unit view shows, and how many forces of each kind it shows and hides. */
+export function unitViewNote(app: App): HTMLElement | null {
+  const sim = app.sim;
+  if (!sim) return null;
+  const f = app.unitFilter();
+  const c = viewCounts(sim, f, new Set([app.selectedArmy, app.selectedFleet, app.selectedWing].filter((x): x is string => !!x)));
+  const parts = [`${c.shown.own} ours`, `${c.shown.enemy} enemy`, `${c.shown.allied} allied`, ...(c.shown.neutral ? [`${c.shown.neutral} neutral`] : [])];
+  const hid = c.hidden.enemy + c.hidden.allied + c.hidden.neutral;
+  return h(
+    'div',
+    { class: 'small', style: 'margin-top:6px', 'data-fk': 'unit-view-note' },
+    h('div', { class: 'muted' }, `${VIEW_HELP[f.mode]}`),
+    h('div', null, h('b', null, 'Shown: '), `${parts.join(' · ')} (armies, fleets and air wings, on screen or not).`),
+    hid ? h('div', { class: 'faint' }, `Hidden by this view: ${[c.hidden.enemy ? `${c.hidden.enemy} enemy` : '', c.hidden.allied ? `${c.hidden.allied} allied` : '', c.hidden.neutral ? `${c.hidden.neutral} neutral` : ''].filter(Boolean).join(' · ')}. "All" shows every force.`) : null,
+    h('div', { class: 'faint' }, f.context),
+  );
+}
+
 function presentationPanel(app: App): HTMLElement {
   const s = app.settings;
   const seg = <T extends string>(label: string, value: T, options: Array<[T, string]>, set: (v: T) => void) =>
@@ -132,8 +151,10 @@ function presentationPanel(app: App): HTMLElement {
     seg('Place names', s.labelDensity, [['few', 'Few'], ['normal', 'Normal'], ['many', 'Many']], (v) => app.updateSettings({ labelDensity: v })),
     seg('Terrain drawing', s.terrainDetail, [['full', 'Full'], ['reduced', 'Light'], ['off', 'Off']], (v) => app.updateSettings({ terrainDetail: v })),
     seg('Borders', s.borderEmphasis, [['subtle', 'Subtle'], ['normal', 'Normal'], ['strong', 'Strong']], (v) => app.updateSettings({ borderEmphasis: v })),
-    seg('Armies shown', s.armyMarkers, [['all', 'All'], ['relevant', 'Relevant'], ['mine', 'Mine + enemies']], (v) => app.updateSettings({ armyMarkers: v })),
-    h('p', { class: 'faint', style: 'margin-top:8px' }, '"Relevant" hides neutral realms’ armies at a distance. Reduced motion and UI scale are in Settings.'),
+    seg('Forces shown', s.armyMarkers, [['all', VIEW_LABELS.all], ['relevant', VIEW_LABELS.relevant], ['mine', VIEW_LABELS.mine]], (v) => app.updateSettings({ armyMarkers: v })),
+    unitViewNote(app),
+    s.armyMarkers === 'relevant' ? seg('Allies in Relevant', s.relevantAllies ? 'on' : 'off', [['on', 'Shown'], ['off', 'Hidden']], (v) => app.updateSettings({ relevantAllies: v === 'on' })) : null,
+    h('p', { class: 'faint', style: 'margin-top:8px' }, 'Reduced motion and UI scale are in Settings.'),
   );
 }
 
@@ -162,9 +183,20 @@ export function renderNavCluster(app: App): void {
       btn('target', 'Centre on selection', 'C', () => app.centreSelection(), app.selectedArmy || app.selectedProvince ? null : 'nothing selected'),
       btn('army', 'Next army', 'N', () => app.cycleArmy(), app.player && Object.values(sim.state.armies).some((a) => a.nation === app.player) ? null : 'no armies'),
       btn('battle', 'Next battle', 'K', () => app.nextBattle(), battles.length ? null : 'no battles involving you', battles.length),
+      selectToggle(app),
     );
     setChildren(el, app.minimapEl, col);
   });
+}
+
+/** The Select tool (touch-friendly): forces → provinces → off; taps add or remove, a drag draws a box. */
+function selectToggle(app: App): HTMLElement {
+  const m = app.selectMode;
+  const label = m === 'off' ? 'Select several' : m === 'forces' ? 'Selecting forces' : 'Selecting provinces';
+  const b = h('button', { class: m === 'off' ? '' : 'active', type: 'button', 'aria-label': label, 'aria-pressed': m === 'off' ? 'false' : 'true', 'data-fk': 'nav-select' }, icon(m === 'provinces' ? 'build' : 'check'), m === 'off' ? null : h('span', { class: 'badge' }, String(m === 'forces' ? app.forceSel.length : app.provSel.length)));
+  b.addEventListener('click', () => app.setSelectMode(m === 'off' ? 'forces' : m === 'forces' ? 'provinces' : 'off'));
+  tip(b, `${label} (X): ${m === 'off' ? 'tap forces to select several, drag a box; press again for provinces' : m === 'forces' ? 'press again to select provinces instead' : 'press again to finish'}`);
+  return b;
 }
 
 /** Minimap: political overview with the current view outlined; click to jump. */

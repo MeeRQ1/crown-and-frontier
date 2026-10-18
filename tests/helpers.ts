@@ -128,3 +128,44 @@ export function longSeaScenario(): ScenarioDef {
 }
 
 registerScenario('test-longsea', longSeaScenario);
+
+// A grid for operations: 7 columns × 4 rows of plains, g{x}{y}; columns 0–1 are
+// realm a's, 2–4 realm b's, 5–6 realm c's (neutral unless a test says otherwise).
+// Capitals: a g01, b g41, c g61. Province ids sort column-major.
+export function gridScenario(): ScenarioDef {
+  const W = 7;
+  const H = 4;
+  const owner = (x: number) => (x <= 1 ? 'a' : x <= 4 ? 'b' : 'c');
+  const provinces: ProvinceDef[] = [];
+  for (let x = 0; x < W; x++)
+    for (let y = 0; y < H; y++) {
+      const nb: string[] = [];
+      if (x > 0) nb.push(`g${x - 1}${y}`);
+      if (x < W - 1) nb.push(`g${x + 1}${y}`);
+      if (y > 0) nb.push(`g${x}${y - 1}`);
+      if (y < H - 1) nb.push(`g${x}${y + 1}`);
+      provinces.push(prov(`g${x}${y}`, 'plains', owner(x), nb, { region: owner(x) }));
+    }
+  return {
+    id: 'test-grid',
+    name: 'Test grid',
+    description: 'synthetic',
+    startYear: 1930,
+    nations: [nation('a', 'g01', 'expansionist'), nation('b', 'g41'), nation('c', 'g61')],
+    regions: [{ id: 'a', name: 'A' }, { id: 'b', name: 'B' }, { id: 'c', name: 'C' }],
+    straits: [],
+    rivers: [],
+    provinces,
+  };
+}
+
+registerScenario('test-grid', gridScenario);
+
+/** A game on the grid with no armies, fleets or wings (precise setups); player a unless told otherwise. */
+export function gridGame(opts: NewGameOptions = {}): Sim {
+  const sim = createGame({ scenario: 'test-grid', seed: 11, playerNation: 'a', ...opts });
+  sim.state.armies = {};
+  sim.state.fleets = {};
+  sim.state.wings = {};
+  return sim;
+}

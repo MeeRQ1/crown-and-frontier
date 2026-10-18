@@ -23,6 +23,7 @@
 // the target can no longer be reached.
 
 import { airControl, stepsTo, wingRange, wingStatus } from './air';
+import { noteOpLoss } from './ops/losses';
 import { C, WINGS } from './config';
 import { warDead } from './economy';
 import { armiesIn, touchArmies } from './index';
@@ -57,14 +58,14 @@ export function aaOwn(sim: Sim, pid: ProvinceId, nid: NationId): { batteries: nu
   return { batteries, mobile, total: Math.min(C.air.aaMax, batteries + mobile) };
 }
 
-/** Transport wings of ours based at a province, ready to fly an airborne operation. */
-export function transportsAt(sim: Sim, nid: NationId, pid: ProvinceId): WingId[] {
+/** Transport wings of ours based at a province, ready to fly an airborne operation (`only`: among these wings). */
+export function transportsAt(sim: Sim, nid: NationId, pid: ProvinceId, only?: readonly WingId[]): WingId[] {
   const st = sim.state;
   return Object.keys(st.wings)
     .sort()
     .filter((id) => {
       const w = st.wings[id];
-      return w.nation === nid && w.type === 'transport' && !w.carrier && w.base === pid && w.strength >= 50 && w.readiness >= C.air.minReady && !wingBusy(sim, id);
+      return w.nation === nid && w.type === 'transport' && !w.carrier && w.base === pid && w.strength >= 50 && w.readiness >= C.air.minReady && !wingBusy(sim, id) && (!only || only.includes(id));
     });
 }
 
@@ -74,8 +75,8 @@ function wingBusy(sim: Sim, id: WingId): boolean {
   return false;
 }
 
-/** Why this army cannot be dropped there (null: it can). */
-export function airDropProblem(sim: Sim, nid: NationId, armyId: ArmyId, target: ProvinceId): string | null {
+/** Why this army cannot be dropped there (null: it can). `only`: flown by these transport wings alone (an operation's own). */
+export function airDropProblem(sim: Sim, nid: NationId, armyId: ArmyId, target: ProvinceId, only?: readonly WingId[]): string | null {
   const st = sim.state;
   const a = st.armies[armyId];
   if (!a || a.nation !== nid) return 'Not our army.';
@@ -88,9 +89,10 @@ export function airDropProblem(sim: Sim, nid: NationId, armyId: ArmyId, target: 
   if (other.length) return `Only airborne regiments can be dropped: detach the other ${other.length} regiment${other.length === 1 ? '' : 's'} first.`;
   const base = st.provinces[a.location];
   if (!(base.airfield > 0) || base.controller !== nid) return `${a.name} must stand at one of our airfields to be flown (it is at ${provName(sim, a.location)}).`;
-  const ready = transportsAt(sim, nid, a.location);
+  if (only?.some((id) => st.wings[id]?.nation !== nid || st.wings[id]?.type !== 'transport')) return 'Only our transport wings can fly an airborne operation.';
+  const ready = transportsAt(sim, nid, a.location, only);
   const lift = ready.reduce((n, id) => n + (WINGS[st.wings[id].type].lift ?? 0), 0);
-  const allT = Object.values(st.wings).filter((w) => w.nation === nid && w.type === 'transport' && w.base === a.location && !w.carrier).length;
+  const allT = Object.values(st.wings).filter((w) => w.nation === nid && w.type === 'transport' && w.base === a.location && !w.carrier && (!only || only.includes(w.id))).length;
   if (lift < a.regiments.length) return `Needs ${a.regiments.length} ready transport wing${a.regiments.length === 1 ? '' : 's'} at ${provName(sim, a.location)} (one regiment each); ${ready.length} of ${allT} there ${ready.length === 1 ? 'is' : 'are'} ready (strength 50% and readiness ${C.air.minReady}% at least).`;
   const t = st.provinces[target];
   if (!t) return 'Unknown province.';
@@ -136,13 +138,13 @@ export function airDropRisk(sim: Sim, nid: NationId, target: ProvinceId): DropRi
 }
 
 /** Orders the drop: the army waits at the airfield and is flown in this week's air phase. */
-export function launchAirDrop(sim: Sim, nid: NationId, armyId: ArmyId, target: ProvinceId): void {
+export function launchAirDrop(sim: Sim, nid: NationId, armyId: ArmyId, target: ProvinceId, only?: readonly WingId[]): void {
   const st = sim.state;
   const a = st.armies[armyId];
   const need = a.regiments.length;
   const wings: WingId[] = [];
   let lift = 0;
-  for (const id of transportsAt(sim, nid, a.location)) {
+  for (const id of transportsAt(sim, nid, a.location, only)) {
     if (lift >= need) break;
     wings.push(id);
     lift += WINGS[st.wings[id].type].lift ?? 0;
@@ -202,7 +204,10 @@ export function resolveAirDrops(sim: Sim): void {
       lost += l;
     }
     a.regiments = a.regiments.filter((r) => r.men >= 50);
-    if (lost > 0) warDead(sim, a.nation, lost);
+    if (lost > 0) {
+      warDead(sim, a.nation, lost);
+      noteOpLoss(sim, a.op, 'men', lost);
+    }
     // the transports: shot at in proportion, worn by the sortie
     for (const wid of d.wings) {
       const w = st.wings[wid];

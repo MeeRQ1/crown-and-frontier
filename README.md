@@ -99,6 +99,10 @@ this if you try.
 | Carry an army by sea | "Ship by sea" in the army card, or "Embark …" in the fleet card, then click the beach | the same, with taps |
 | Air missions | Select a wing (its counter, its airfield's province card, its carrier's fleet card or the Military ledger), then right-click the target, or choose a mission in the card and click it (the shading is its range); several wings at one airfield take one order from the wing card | the same, with taps and long-presses |
 | Airborne drop | Select an army of airborne regiments at an airfield with transport wings, "Airborne drop", click the target, review the risks, launch | the same, with taps |
+| Select several forces | **Shift**+click or **Shift**+drag a box; **X** (Select tool) then drag; check boxes in Military (**U**) | The check-mark button, then tap or drag |
+| Select several provinces | **Ctrl/Cmd**+click or **Ctrl/Cmd**+drag a box; **X** twice | The check-mark button, then "Provinces" on its banner |
+| Build or recruit in many provinces | With provinces selected: the batch card (Build or Recruit), read the preview, confirm once | the same, with taps |
+| Operations (delegated command) | With forces selected: New operation, choose the objective and the area on the map, read the preview, choose the posture, Activate; **U** lists them | the same, with taps |
 | Cancel choosing a place | **Esc**, or Cancel on the banner | Cancel on the banner |
 | Add a waypoint | **Shift**+right-click | — |
 | Pan / zoom | Drag / mouse wheel, arrow keys, **+ / −** | Drag / pinch |
@@ -106,7 +110,7 @@ this if you try.
 | Ledgers | **B** realm, **I** industry, **M** military, **T** research, **P** national focus, **D** diplomacy, **W** wars, **V** victory, **L** chronicle, **H** help | Bottom bar |
 | Map modes | **Shift+1…9**, **O** cycles | Mode bar |
 | Navigate | **F** whole map, **C** centre selection, **Home** capital, **N** next army (next wing or fleet when one is selected), **Shift+N** next army group, **K** next battle, **J** latest alert | Navigation buttons |
-| Close | **Esc** cancels, closes, then opens the menu | ✕ buttons |
+| Close | **Esc** cancels, clears a multiple selection, closes, then opens the menu | ✕ buttons |
 
 ### Saves
 
@@ -123,8 +127,8 @@ this if you try.
   on. Saves of imported maps carry the map with them.
 - **Saving into a used slot keeps the save it replaces,** listed as "Slot N (the save it
   replaced)" on the Load screen.
-- **Older saves are converted, never discarded.** Saves from earlier releases (formats 1–4)
-  are converted to the current format (5, trade contracts) when loaded, and the game says
+- **Older saves are converted, never discarded.** Saves from earlier releases (formats 1–7)
+  are converted to the current format (8, operations) when loaded, and the game says
   what changed. A save that cannot be converted stays in the list with the reason and can
   still be exported.
 

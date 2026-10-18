@@ -1,0 +1,250 @@
+{
+ "weeks": 26,
+ "seed": 3,
+ "manual": {
+  "workflow": "manual",
+  "inputs": 183,
+  "inputsByWeek": [
+   26,
+   0,
+   8,
+   0,
+   14,
+   4,
+   6,
+   4,
+   6,
+   8,
+   0,
+   0,
+   2,
+   4,
+   0,
+   4,
+   0,
+   8,
+   4,
+   8,
+   12,
+   14,
+   4,
+   16,
+   4,
+   6
+  ],
+  "taken": 16,
+  "lost": 0,
+  "gerMenLost": 30285,
+  "enemyMenLost": 25863,
+  "battlesWon": 6,
+  "battlesLost": 3,
+  "regimentsEnd": 110,
+  "planMs": {
+   "mean": 0,
+   "max": 0
+  },
+  "stepMs": {
+   "mean": 64.5,
+   "max": 141
+  },
+  "invariantFailures": [],
+  "events": []
+ },
+ "delegated": {
+  "workflow": "delegated",
+  "inputs": 29,
+  "inputsByWeek": [
+   0,
+   0,
+   0,
+   0,
+   0,
+   2,
+   0,
+   0,
+   1,
+   1,
+   0,
+   1,
+   0,
+   2,
+   0,
+   0,
+   0,
+   0,
+   0,
+   0,
+   0,
+   0,
+   0,
+   0,
+   0,
+   0
+  ],
+  "taken": 12,
+  "lost": 0,
+  "gerMenLost": 11765,
+  "enemyMenLost": 6169,
+  "battlesWon": 1,
+  "battlesLost": 7,
+  "regimentsEnd": 110,
+  "planMs": {
+   "mean": 6.56,
+   "max": 19.67
+  },
+  "stepMs": {
+   "mean": 58.9,
+   "max": 105.6
+  },
+  "invariantFailures": [],
+  "events": [
+   "operations created: east, west, sea, landing; beach caen",
+   "week 6: 3rd Army ordered home by the player: held true",
+   "week 9: resumed 1",
+   "week 10: West paused",
+   "week 12: West resumed",
+   "week 13: save and load, 4 weeks played twice from the save: identical; operations in the save 4",
+   "week 14: East aggressive"
+  ],
+  "autoOrders": 289,
+  "ops": {
+   "East": {
+    "kind": "conquer",
+    "status": "active",
+    "armies": 12,
+    "regiments": 70,
+    "fleets": 0,
+    "wings": 5,
+    "stats": {
+     "taken": 10,
+     "lost": 0,
+     "menLost": 6126,
+     "shipsLost": 0,
+     "wingStrengthLost": 174.42441579989443,
+     "drops": 1,
+     "landings": 0
+    },
+    "detachedLive": 6,
+    "detachedLogged": 7,
+    "merges": 4,
+    "rebases": 0,
+    "issue": null,
+    "tasks": {
+     "reserve": 3,
+     "stage": 4,
+     "occupy": 3,
+     "wait": 2,
+     "recover": 1,
+     "rest": 2,
+     "cover": 2,
+     "interdict": 1
+    },
+    "lastLog": [
+     "wk 14: Took Grodno, Inowrocław.",
+     "wk 15: Took East Poznań.",
+     "wk 19: Took Białystok.",
+     "wk 22: Took Warsaw.",
+     "wk 24: Took South Warsaw.",
+     "wk 25: 2 idle armies at Warsaw regrouped into 17th Army."
+    ]
+   },
+   "West": {
+    "kind": "hold",
+    "status": "active",
+    "armies": 3,
+    "regiments": 36,
+    "fleets": 0,
+    "wings": 1,
+    "stats": {
+     "taken": 0,
+     "lost": 0,
+     "menLost": 208,
+     "shipsLost": 0,
+     "wingStrengthLost": 82.70593166722918,
+     "drops": 0,
+     "landings": 0
+    },
+    "detachedLive": 0,
+    "detachedLogged": 0,
+    "merges": 1,
+    "rebases": 0,
+    "issue": null,
+    "tasks": {
+     "reserve": 1,
+     "hold": 2,
+     "rest": 1
+    },
+    "lastLog": [
+     "wk 0: Hold an area: 5 provinces (Essen, Freiburg, Mainz…). Active.",
+     "wk 0: Assigned: 11th Army, 12th Army, 13th Army, 14th Army, German Bomber wing 1.",
+     "wk 2: 2 idle armies at Stuttgart regrouped into 12th Army.",
+     "wk 9: Paused: members keep their current orders, and take new ones only from you.",
+     "wk 11: Resumed: the planner takes up the routine orders again."
+    ]
+   },
+   "Baltic": {
+    "kind": "sea",
+    "status": "active",
+    "armies": 0,
+    "regiments": 0,
+    "fleets": 2,
+    "wings": 0,
+    "stats": {
+     "taken": 0,
+     "lost": 0,
+     "menLost": 0,
+     "shipsLost": 0,
+     "wingStrengthLost": 0,
+     "drops": 0,
+     "landings": 0
+    },
+    "detachedLive": 0,
+    "detachedLogged": 0,
+    "merges": 0,
+    "rebases": 0,
+    "issue": null,
+    "tasks": {
+     "patrol": 2
+    },
+    "lastLog": [
+     "wk 0: Keep the seas: 2 sea zones (Vejle Channel, Copenhagen Sound). Active.",
+     "wk 0: Assigned: German Home Fleet, North Sea Group."
+    ]
+   },
+   "Landing": {
+    "kind": "landing",
+    "status": "complete",
+    "armies": 1,
+    "regiments": 4,
+    "fleets": 1,
+    "wings": 0,
+    "stats": {
+     "taken": 2,
+     "lost": 2,
+     "menLost": 4644,
+     "shipsLost": 0,
+     "wingStrengthLost": 0,
+     "drops": 0,
+     "landings": 1
+    },
+    "detachedLive": 0,
+    "detachedLogged": 0,
+    "merges": 0,
+    "rebases": 0,
+    "issue": null,
+    "tasks": {
+     "recover": 1,
+     "blockade": 1
+    },
+    "lastLog": [
+     "wk 1: Landed at Caen: the area is now taken like a conquest.",
+     "wk 2: Took Caen.",
+     "wk 2: Objective reached: the whole area is held by our side. Hold the area.",
+     "wk 10: Lost Caen.",
+     "wk 17: Took Caen.",
+     "wk 20: Lost Caen."
+    ]
+   }
+  }
+ }
+}

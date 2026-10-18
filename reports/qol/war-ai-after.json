@@ -1,0 +1,150 @@
+{
+ "weeks": 40,
+ "seeds": [
+  1,
+  2,
+  3,
+  4
+ ],
+ "results": [
+  {
+   "setup": "Europe 1936: Germany and Italy against Poland, Romania and France",
+   "seeds": [
+    {
+     "seed": 1,
+     "attacks": 10,
+     "lost": 5,
+     "repeated": 1,
+     "idleShare": 0.104,
+     "churnPerArmyMonth": 0.329,
+     "taken": {
+      "side1": 2
+     },
+     "menLost": {
+      "side0": 14370,
+      "side1": 13437
+     },
+     "planMsPerWeek": 52.2
+    },
+    {
+     "seed": 2,
+     "attacks": 13,
+     "lost": 8,
+     "repeated": 0,
+     "idleShare": 0.078,
+     "churnPerArmyMonth": 0.253,
+     "taken": {
+      "side1": 9
+     },
+     "menLost": {
+      "side0": 13976,
+      "side1": 16882
+     },
+     "planMsPerWeek": 48.1
+    },
+    {
+     "seed": 3,
+     "attacks": 12,
+     "lost": 6,
+     "repeated": 0,
+     "idleShare": 0.081,
+     "churnPerArmyMonth": 0.253,
+     "taken": {
+      "side1": 6
+     },
+     "menLost": {
+      "side0": 13800,
+      "side1": 24140
+     },
+     "planMsPerWeek": 41.7
+    },
+    {
+     "seed": 4,
+     "attacks": 15,
+     "lost": 7,
+     "repeated": 0,
+     "idleShare": 0.092,
+     "churnPerArmyMonth": 0.201,
+     "taken": {
+      "side1": 14
+     },
+     "menLost": {
+      "side0": 17132,
+      "side1": 16570
+     },
+     "planMsPerWeek": 47.3
+    }
+   ]
+  },
+  {
+   "setup": "Aldmere: the two strongest neighbours at war",
+   "seeds": [
+    {
+     "seed": 1,
+     "attacks": 5,
+     "lost": 4,
+     "repeated": 0,
+     "idleShare": 0.017,
+     "churnPerArmyMonth": 0.243,
+     "taken": {
+      "side1": 2
+     },
+     "menLost": {
+      "side0": 2888,
+      "side1": 8187
+     },
+     "planMsPerWeek": 10.4
+    },
+    {
+     "seed": 2,
+     "attacks": 4,
+     "lost": 3,
+     "repeated": 0,
+     "idleShare": 0.01,
+     "churnPerArmyMonth": 0.38,
+     "taken": {
+      "side1": 2
+     },
+     "menLost": {
+      "side0": 4771,
+      "side1": 9392
+     },
+     "planMsPerWeek": 10.4
+    },
+    {
+     "seed": 3,
+     "attacks": 9,
+     "lost": 4,
+     "repeated": 0,
+     "idleShare": 0.014,
+     "churnPerArmyMonth": 0.207,
+     "taken": {
+      "side0": 1
+     },
+     "menLost": {
+      "side0": 4751,
+      "side1": 13537
+     },
+     "planMsPerWeek": 9.6
+    },
+    {
+     "seed": 4,
+     "attacks": 2,
+     "lost": 2,
+     "repeated": 0,
+     "idleShare": 0.011,
+     "churnPerArmyMonth": 0.291,
+     "taken": {
+      "side0": 4,
+      "side1": 1
+     },
+     "menLost": {
+      "side0": 1690,
+      "side1": 2677
+     },
+     "planMsPerWeek": 10.7
+    }
+   ]
+  }
+ ]
+}

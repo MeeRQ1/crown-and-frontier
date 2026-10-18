@@ -13,6 +13,9 @@
 //      surplus between trade partners
 //   6  air wings gain readiness, carrier basing, sea targets and a weekly
 //      report; fleets and battles keep last week's support and report
+//   7  military control: fleet duties, airborne operations, anti-aircraft
+//      batteries, population in people; AI peace and treaty memory
+//   8  operations (delegated command); the AI's failure memory
 
 import { checkMapObject } from '../maps/validate';
 import { mapChecksum, type MapPackage } from '../maps/format';
@@ -215,6 +218,38 @@ const STEPS: Record<number, Step> = {
       `This save was made before the military control and national scale update (save format 6) and was converted to format 7. ` +
         `Population is now counted in people (a province of 40 holds 400,000), 5% of them fit for service; manpower pools and treasuries are unchanged and refill under the new rules. ` +
         `Commerce from trade agreements now follows the partners' economies, so income from many small agreements falls.`,
+    );
+  },
+  // 7 → 8: operations (delegated command), the AI's failure memory, province batches
+  7: (save, notices) => {
+    const st = save.state as Record<string, any>;
+    st.operations = {};
+    st.counters = { ...st.counters, op: 0 };
+    // every force stays under direct command: nothing joins an operation by itself
+    for (const a of Object.values<any>(st.armies ?? {})) {
+      a.op = null;
+      a.opHold = false;
+      a.keep = false;
+    }
+    for (const f of Object.values<any>(st.fleets ?? {})) {
+      f.op = null;
+      f.opHold = false;
+    }
+    for (const w of Object.values<any>(st.wings ?? {})) {
+      w.op = null;
+      w.opHold = false;
+    }
+    for (const n of Object.values<any>(st.nations ?? {})) {
+      if (n.ai) {
+        n.ai.failures = {};
+        n.ai.reorganized = {};
+      }
+    }
+    st.schema = 8;
+    save.schema = 8;
+    notices.push(
+      `This save was made before operations were added (save format 7) and was converted to format 8. ` +
+        `Every army, fleet and air wing is still under your direct command with the orders it had; none has joined an operation.`,
     );
   },
 };

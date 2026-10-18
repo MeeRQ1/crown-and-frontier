@@ -24,6 +24,7 @@ import { Camera } from './camera';
 import { geoIndex, pairKey, type GeoIndex, type MapGeometry, type ProvGeo } from './geometry';
 import { buildContext, fillFor, realmFill, realmInk, realmWash, type MapMode } from './modes';
 import { LANDMARK_BOUNDS, landmark, sprite } from './sprites';
+import { unitFilter, type UnitFilter } from './visibility';
 
 export interface Presentation {
   labels: 'few' | 'normal' | 'many';
@@ -63,6 +64,18 @@ export interface RenderState {
   fleetPreviewLabel?: string | null;
   /** trade deliveries to draw (Industry & Trade open): [from province, to province] */
   tradeRoutes?: Array<{ from: ProvinceId; to: ProvinceId; sea: boolean }> | null;
+  /** which forces are shown (ui/map/visibility.ts); without one, the presentation mode alone decides */
+  units?: UnitFilter;
+  /** forces selected together (drawn as selected) */
+  selectedSet?: Set<string> | null;
+  /** provinces selected together (batch actions) */
+  provSel?: ProvinceId[] | null;
+  /** the area of the operation being prepared or shown */
+  opArea?: { provinces: ProvinceId[]; zones: string[]; draft: boolean } | null;
+  /** the routes the operation being prepared would order (preview) */
+  opRoutes?: Array<{ army: string; path: ProvinceId[] }> | null;
+  /** a selection box being drawn (screen coordinates) */
+  box?: { x0: number; y0: number; x1: number; y1: number } | null;
 }
 
 export interface Marker {
@@ -397,6 +410,46 @@ export class MapRenderer {
       }
       ctx.restore();
     }
+    // the operation's area: hatched in brick (being prepared: brass), its sea zones washed
+    if (rs.opArea && (rs.opArea.provinces.length || rs.opArea.zones.length)) {
+      ctx.save();
+      const col = rs.opArea.draft ? BRASS_INK : DANGER;
+      for (const z of rs.opArea.zones) {
+        const path = this.geo.zonePath(z);
+        if (!path) continue;
+        ctx.save();
+        ctx.clip(this.geo.seaClip(), 'evenodd');
+        ctx.globalAlpha = 0.22;
+        ctx.fillStyle = col;
+        ctx.fill(path);
+        ctx.restore();
+      }
+      ctx.fillStyle = rs.opArea.draft ? 'rgba(194, 171, 114, 0.22)' : 'rgba(156, 58, 44, 0.12)';
+      ctx.strokeStyle = col;
+      ctx.lineWidth = 2 * px;
+      ctx.setLineDash([5 * px, 3 * px]);
+      for (const id of rs.opArea.provinces) {
+        const p = this.geo.provs.get(id);
+        if (!p) continue;
+        ctx.fill(p.path);
+        ctx.stroke(p.path);
+      }
+      ctx.restore();
+    }
+    // provinces selected for a batch
+    if (rs.provSel?.length) {
+      ctx.save();
+      ctx.fillStyle = 'rgba(194, 171, 114, 0.32)';
+      ctx.strokeStyle = BRASS_INK;
+      ctx.lineWidth = 2.4 * px;
+      for (const id of rs.provSel) {
+        const p = this.geo.provs.get(id);
+        if (!p) continue;
+        ctx.fill(p.path);
+        ctx.stroke(p.path);
+      }
+      ctx.restore();
+    }
     if (rs.mode === 'military' && mctx.fronts?.size) {
       ctx.save();
       ctx.strokeStyle = DANGER;
@@ -454,6 +507,11 @@ export class MapRenderer {
     const sel = rs.selectedArmy ? sim.state.armies[rs.selectedArmy] : undefined;
     if (sel?.path.length) this.drawRoute(pos.get(sel.id)!, sel.path, LINE.armyOrder.stroke, px, false, 1);
     if (sel && rs.previewPath?.length) this.drawRoute(pos.get(sel.id)!, rs.previewPath, rs.previewBad ? MUTED : LINE.armyOrder.stroke, px, true, 1);
+    // the operation being prepared: the routes it would order first
+    for (const r of rs.opRoutes ?? []) {
+      const a = sim.state.armies[r.army];
+      if (a && r.path.length) this.drawRoute(pos.get(a.id) ?? this.armyPos(sim, a), r.path, BRASS_INK, px, true, 0.9);
+    }
 
     // screen-space layers, all through one collision registry
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
@@ -485,6 +543,20 @@ export class MapRenderer {
     this.drawSites(sim, rs, tier, visible);
     this.drawZoneNames(rs, tier);
     this.drawLabels(sim, rs, tier, visible);
+    // the selection box being drawn
+    if (rs.box) {
+      const b = rs.box;
+      ctx.save();
+      ctx.fillStyle = 'rgba(194, 171, 114, 0.16)';
+      ctx.strokeStyle = BRASS_INK;
+      ctx.lineWidth = 1.5;
+      ctx.setLineDash([5, 3]);
+      const x = Math.min(b.x0, b.x1);
+      const y = Math.min(b.y0, b.y1);
+      ctx.fillRect(x, y, Math.abs(b.x1 - b.x0), Math.abs(b.y1 - b.y0));
+      ctx.strokeRect(x + 0.5, y + 0.5, Math.abs(b.x1 - b.x0), Math.abs(b.y1 - b.y0));
+      ctx.restore();
+    }
     // a battle's pulse animates only while one is on screen
     return animating || this.pending || (!rs.reducedMotion && this.battleMarkers.length > 0);
   }
@@ -1574,14 +1646,13 @@ export class MapRenderer {
   private drawFleets(sim: Sim, rs: RenderState, tier: Tier): void {
     const cam = this.camera;
     const me = rs.player;
+    const units = this.unitsOf(sim, rs);
     const byZone = new Map<string, Fleet[]>();
     for (const id of Object.keys(sim.state.fleets).sort()) {
       const f = sim.state.fleets[id];
-      const mine = f.nation === me;
-      const hostile = me ? atWar(sim, me, f.nation) : false;
-      if (!mine && !hostile && f.id !== rs.selectedFleet && rs.presentation.armies === 'mine') continue;
-      if (!mine && !hostile && tier === 'far' && f.id !== rs.selectedFleet) continue;
-      const k = f.path.length && f.progress > 0 ? `m${f.id}` : f.zone;
+      if (f.id !== rs.selectedFleet && !units.shows(f.nation, { zone: f.zone })) continue;
+      // at a distance one counter per zone and realm (with every ship of its fleets)
+      const k = tier === 'far' ? `${f.zone}|${f.nation}` : f.path.length && f.progress > 0 ? `m${f.id}` : f.zone;
       (byZone.get(k) ?? byZone.set(k, []).get(k)!).push(f);
     }
     for (const list of byZone.values()) {
@@ -1589,6 +1660,18 @@ export class MapRenderer {
       const base = this.fleetPos(list[0]);
       const s = cam.toScreen(base.x, base.y);
       if (s.x < -80 || s.y < -80 || s.x > this.width + 80 || s.y > this.height + 80) continue;
+      if (tier === 'far' && list.length > 1) {
+        // one realm's fleets in one zone: a single counter with all their ships
+        const ships = list.reduce((n, f) => n + f.ships.length, 0);
+        const sel = list.find((f) => f.id === rs.selectedFleet) ?? list[0];
+        const { w, h } = this.counterSize('pill', String(ships));
+        const x = s.x - w / 2;
+        const y = s.y - h / 2;
+        this.counter(sim, { kind: 'pill', nation: sel.nation, x, y, symbol: 'naval', count: String(ships), detail: '', bars: null, status: null, relation: this.relation(sim, sel.nation, me), selected: list.some((f) => f.id === rs.selectedFleet) });
+        this.fleetMarkers.push({ fleet: sel.id, x, y, w, h });
+        this.placed.add({ x, y, w, h });
+        continue;
+      }
       const kind = this.counterKind(tier);
       const dims = list.map((f) => this.counterSize(kind, String(f.ships.length)));
       const total = dims.reduce((x, d) => x + d.w + 3, -3);
@@ -1610,7 +1693,7 @@ export class MapRenderer {
           bars: [hp, fit],
           status: f.cargo.length ? 'moving' : null,
           relation: this.relation(sim, f.nation, me),
-          selected: f.id === rs.selectedFleet,
+          selected: f.id === rs.selectedFleet || !!rs.selectedSet?.has(f.id),
         });
         this.fleetMarkers.push({ fleet: f.id, x, y, w, h });
         this.placed.add({ x, y, w, h });
@@ -1622,20 +1705,18 @@ export class MapRenderer {
 
   private drawWings(sim: Sim, rs: RenderState, tier: Tier): void {
     const me = rs.player;
+    const units = this.unitsOf(sim, rs);
+    void tier;
     // one counter per airfield, and one per fleet for the wings aboard its carriers
     const at = new Map<string, { nation: NationId; wings: string[]; sel: boolean; base: ProvinceId | null; fleet: string | null }>();
     for (const id of Object.keys(sim.state.wings).sort()) {
       const w = sim.state.wings[id];
-      const mine = w.nation === me;
-      const hostile = me ? atWar(sim, me, w.nation) : false;
-      if (!mine && !hostile && w.id !== rs.selectedWing && rs.presentation.armies !== 'all') continue;
-      // far out, only our own wings (as with fleets): they stay easy to find and select
-      if (tier === 'far' && w.id !== rs.selectedWing && !mine) continue;
       const fleet = w.carrier && sim.state.fleets[w.carrier] ? w.carrier : null;
+      if (w.id !== rs.selectedWing && !units.shows(w.nation, fleet ? { zone: sim.state.fleets[fleet].zone } : { prov: w.base })) continue;
       const key = fleet ? `f${fleet}` : `p${w.base}`;
       const cur = at.get(key) ?? { nation: w.nation, wings: [], sel: false, base: fleet ? null : w.base, fleet };
       cur.wings.push(w.id);
-      if (w.id === rs.selectedWing) cur.sel = true;
+      if (w.id === rs.selectedWing || rs.selectedSet?.has(w.id)) cur.sel = true;
       at.set(key, cur);
     }
     const kind = 'pill';
@@ -1865,6 +1946,17 @@ export class MapRenderer {
     void rs;
   }
 
+  /** The unit filter for this frame: the app's, or one from the presentation mode alone (no focus). */
+  private unitsOf(sim: Sim, rs: RenderState): UnitFilter {
+    if (rs.units) return rs.units;
+    if (this.unitsMemo?.sim !== sim || this.unitsMemo.key !== `${rs.player}|${rs.presentation.armies}|${sim.state.rev}`) {
+      this.unitsMemo = { sim, key: `${rs.player}|${rs.presentation.armies}|${sim.state.rev}`, f: unitFilter(sim, rs.player, rs.presentation.armies, { allies: true, focus: null }) };
+    }
+    return this.unitsMemo.f;
+  }
+
+  private unitsMemo: { sim: Sim; key: string; f: UnitFilter } | null = null;
+
   private relation(sim: Sim, nid: NationId, me: NationId | null): 'own' | 'allied' | 'hostile' | 'other' {
     if (nid === me) return 'own';
     if (!me) return 'other';
@@ -2031,14 +2123,8 @@ export class MapRenderer {
     const st = sim.state;
     const cam = this.camera;
     const me = rs.player;
-    const mode = rs.presentation.armies;
-    const relevant = (a: Army) => {
-      if (a.nation === me || a.id === rs.selectedArmy) return true;
-      if (!me) return mode === 'all';
-      if (atWar(sim, me, a.nation)) return mode !== 'mine';
-      if (mode === 'all') return true;
-      return mode === 'relevant' && isFriendly(sim, me, a.nation) && tier !== 'far';
-    };
+    const units = this.unitsOf(sim, rs);
+    const relevant = (a: Army) => a.id === rs.selectedArmy || units.shows(a.nation, { prov: a.location });
     // group stacks by rounded screen position
     const stacks = new Map<string, Army[]>();
     for (const a of Object.values(st.armies)) {
@@ -2061,7 +2147,7 @@ export class MapRenderer {
       if (tier === 'far') {
         const a = list[0];
         const regs = list.reduce((n, x) => n + x.regiments.length, 0);
-        this.farMarker(sim, a, s.x, s.y - 8, regs, list.some((x) => x.id === rs.selectedArmy), me);
+        this.farMarker(sim, a, s.x, s.y - 8, regs, list.some((x) => x.id === rs.selectedArmy || !!rs.selectedSet?.has(x.id)), me);
         continue;
       }
       const kind = this.counterKind(tier);
@@ -2087,7 +2173,7 @@ export class MapRenderer {
           bars: [a.morale / Math.max(0.01, mm), mine ? a.supply : 1],
           status,
           relation: this.relation(sim, a.nation, me),
-          selected: a.id === rs.selectedArmy,
+          selected: a.id === rs.selectedArmy || !!rs.selectedSet?.has(a.id),
           group: mine ? a.group : null,
           dim: a.retreating,
         });

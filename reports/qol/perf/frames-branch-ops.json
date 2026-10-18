@@ -1,0 +1,26 @@
+{
+ "dist": "dist",
+ "ops": true,
+ "seconds": 15,
+ "weeksSimulated": 13,
+ "operations": 3,
+ "frames": 878,
+ "frameMs": {
+  "p50": 16.7,
+  "p95": 16.8,
+  "p99": 33.3,
+  "max": 50.1
+ },
+ "framesOver50ms": 1,
+ "longTasks": {
+  "count": 1,
+  "maxMs": 55,
+  "totalMs": 55
+ },
+ "clickToFrameMs": {
+  "clicks": 10,
+  "p50": 3.6,
+  "max": 11.7
+ },
+ "errors": []
+}

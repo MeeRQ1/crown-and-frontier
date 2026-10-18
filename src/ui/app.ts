@@ -2,7 +2,7 @@
 // bridge between interface actions and simulation commands. All game actions
 // go through applyCommand() — the same validation the AI uses.
 
-import { MISSION_LABELS, missionProblem, SEA_MISSIONS, stepsTo, wingHome, wingRange } from '../sim/air';
+import { MISSION_LABELS, missionProblem, SEA_MISSIONS, stepsTo, wingCoverage, wingHome, wingRange } from '../sim/air';
 import { applyCommand } from '../sim/commands';
 import { buildProblem, projectCost } from '../sim/construction';
 import { createGame, type NewGameOptions } from '../sim/game';
@@ -27,6 +27,11 @@ import { parseMapPackage, type MapCheck } from '../maps/validate';
 import { isBuiltinMap, registerMapScenario } from '../sim/world';
 import { MODES, type MapMode } from './map/modes';
 import { MapRenderer } from './map/renderer';
+import { provincesNear, unitFilter, zonesNear, type Focus, type UnitFilter } from './map/visibility';
+import { draftFromOp, newDraft, opPreview, type OpDraft } from './panels/operations';
+import { freshBatchUI, type BatchUI } from './panels/batch';
+import { opForces, unitRef } from '../sim/ops/operations';
+import type { OperationKind } from '../sim/types';
 import { hideTip, installTips, shield, tip } from './panels/common';
 import { dialog, pendingDecisions, renderDock } from './panels/dialogs';
 import { attention, renderHud } from './panels/hud';
@@ -130,7 +135,25 @@ export class App {
     | { kind: 'air'; wing: string; mission: AirMission; group?: string[] }
     | { kind: 'duty'; fleet: string; duty: FleetDutyKind }
     | { kind: 'drop'; army: string }
+    /** the area of the operation being prepared: clicks add or remove provinces (or sea zones) */
+    | { kind: 'opArea' }
     | null = null;
+  /** forces selected together (armies, fleets, wings of ours), for operations and group orders */
+  forceSel: string[] = [];
+  /** provinces selected together, for batch construction and recruitment */
+  provSel: ProvinceId[] = [];
+  /** the Select tool (touch-friendly): taps add or remove, a drag draws a box, instead of panning */
+  selectMode: 'off' | 'forces' | 'provinces' = 'off';
+  /** the operation being prepared or changed */
+  opDraft: OpDraft | null = null;
+  /** the operation whose card is open */
+  selectedOp: string | null = null;
+  /** armies marching together to the next province clicked (March all to…) */
+  groupMoveIds: string[] | null = null;
+  /** a selection box being drawn (screen coordinates) */
+  box: { x0: number; y0: number; x1: number; y1: number; kind: 'forces' | 'provinces' } | null = null;
+  /** the province batch card's choices and its last result */
+  batch: BatchUI = freshBatchUI();
   hoverProvince: ProvinceId | null = null;
   moveMode = false;
   mode: MapMode = 'political';
@@ -163,7 +186,7 @@ export class App {
   private endShown = false;
   private raf = 0;
   private starting = 0;
-  private pointers = new Map<number, { x: number; y: number; sx: number; sy: number; t: number; button: number; shift: boolean; moved: boolean }>();
+  private pointers = new Map<number, { x: number; y: number; sx: number; sy: number; t: number; button: number; shift: boolean; ctrl: boolean; moved: boolean }>();
   private pinchDist = 0;
   private longPress: number | null = null;
   private hoverPos: { x: number; y: number } | null = null;
@@ -320,6 +343,15 @@ export class App {
     this.teardownGame();
     this.sim = sim;
     this.geometry = geometry;
+    // nothing carries over from another campaign: selections, an operation being prepared, the batch card
+    this.forceSel = [];
+    this.provSel = [];
+    this.selectMode = 'off';
+    this.opDraft = null;
+    this.selectedOp = null;
+    this.groupMoveIds = null;
+    this.box = null;
+    this.batch = freshBatchUI();
     this.lastNote = sim.state.notifications.at(-1)?.id ?? 0;
     this.lastAutosave = sim.state.tick;
     this.endShown = !!sim.state.result && !sim.state.continueAfterResult;
@@ -574,6 +606,12 @@ export class App {
         fleetPreview,
         fleetPreviewLabel,
         tradeRoutes: this.ui.ledgerTab === 'industry' && this.player ? this.tradeRoutes(sim, this.player) : null,
+        units: this.unitFilter(),
+        selectedSet: this.forceSel.length ? new Set(this.forceSel) : null,
+        provSel: this.provSel.length ? this.provSel : null,
+        opArea: this.opAreaShown(),
+        opRoutes: this.opDraft ? opPreview(this, this.opDraft).routes : null,
+        box: this.box,
       },
       now,
     );
@@ -589,6 +627,50 @@ export class App {
   }
 
   private legendKey = '';
+  private focusMemo: { key: string; value: Focus | null } | null = null;
+  private filterMemo: { key: string; value: UnitFilter } | null = null;
+
+  /** What the selection is about, for the "Relevant" unit view (worked out when the selection or the week changes). */
+  viewFocus(): Focus | null {
+    const sim = this.sim;
+    if (!sim) return null;
+    const st = sim.state;
+    const a = this.selectedArmy ? st.armies[this.selectedArmy] : undefined;
+    const f = this.selectedFleet ? st.fleets[this.selectedFleet] : undefined;
+    const w = this.selectedWing ? st.wings[this.selectedWing] : undefined;
+    const op = this.selectedOp ? st.operations?.[this.selectedOp] : this.opDraft ? { name: 'the operation being prepared', area: this.opDraft.area, zones: this.opDraft.zones, id: this.opDraft.editing ?? '' } : undefined;
+    const key = `${a?.id}|${a?.location}|${a?.path.join(',')}|${f?.id}|${f?.zone}|${w?.id}|${w?.base}|${w?.carrier}|${op?.id}|${op?.area.length}|${op?.zones.length}|${st.tick}|${st.rev}`;
+    if (this.focusMemo?.key === key) return this.focusMemo.value;
+    let value: Focus | null = null;
+    if (op) {
+      // an operation: its area and its forces, and two marches around them
+      const members = op.id ? opForces(sim, op.id) : { armies: [], fleets: [], wings: [] };
+      const provinces = provincesNear(sim, [...op.area, ...members.armies.map((x) => x.location)], 2);
+      value = { label: op.name, provinces, zones: zonesNear(sim, [...op.zones, ...members.fleets.map((x) => x.zone)], 1, provinces) };
+    } else if (a) {
+      const provinces = provincesNear(sim, [a.location, ...a.path], 3);
+      value = { label: a.name, provinces, zones: zonesNear(sim, [], 0, provinces) };
+    } else if (f) {
+      const zones = zonesNear(sim, [f.zone, ...f.path], 2);
+      value = { label: f.name, provinces: new Set([...zones].flatMap((z) => sim.world.zones[z].coasts)), zones };
+    } else if (w) {
+      const c = wingCoverage(sim, w);
+      value = { label: w.name, provinces: new Set(c.provs), zones: new Set(c.zones) };
+    }
+    this.focusMemo = { key, value };
+    return value;
+  }
+
+  /** Which forces the map and the panels show (ui/map/visibility.ts). */
+  unitFilter(): UnitFilter {
+    const sim = this.sim!;
+    const focus = this.viewFocus();
+    const s = this.settings;
+    const key = `${this.player}|${s.armyMarkers}|${s.relevantAllies}|${sim.state.rev}|${sim.state.tick}|${focus ? this.focusMemo?.key : ''}`;
+    if (this.filterMemo?.key !== key) this.filterMemo = { key, value: unitFilter(sim, this.player, s.armyMarkers, { allies: s.relevantAllies, focus }) };
+    return this.filterMemo.value;
+  }
+
   private rebaseMemo: { key: string; value: { provinces: ProvinceId[]; fleets: string[] } } | null = null;
 
   /** The airfields and carriers the selected wing of ours could move to (worked out once a week). */
@@ -744,6 +826,13 @@ export class App {
     if (this.orderArmy && !st.armies[this.orderArmy]) this.orderArmy = null;
     if (this.selectedFleet && !st.fleets[this.selectedFleet]) this.selectedFleet = null;
     if (this.selectedWing && !st.wings[this.selectedWing]) this.selectedWing = null;
+    // forces merged, destroyed or disbanded leave the selection; a cancelled operation's card closes
+    const exists = (id: string) => !!(st.armies[id] || st.fleets[id] || st.wings[id]);
+    if (this.forceSel.some((id) => !exists(id))) this.forceSel = this.forceSel.filter(exists);
+    if (this.opDraft?.units.some((id) => !exists(id))) this.opDraft.units = this.opDraft.units.filter(exists);
+    if (this.groupMoveIds?.some((id) => !st.armies[id])) this.groupMoveIds = this.groupMoveIds.filter((id) => st.armies[id]);
+    if (this.selectedOp && !st.operations?.[this.selectedOp]) this.selectedOp = null;
+    if (this.opDraft?.editing && !st.operations?.[this.opDraft.editing]) this.opDraft = null;
     if (this.targeting && (((this.targeting.kind === 'fleet' || this.targeting.kind === 'duty') && !st.fleets[this.targeting.fleet]) || (this.targeting.kind === 'air' && !st.wings[this.targeting.wing]) || (this.targeting.kind === 'drop' && !st.armies[this.targeting.army]))) this.targeting = null;
   }
 
@@ -829,6 +918,7 @@ export class App {
   // ───────────────────────────── Selection ──────────────────────────────────
 
   selectProvince(pid: ProvinceId | null, center = false): void {
+    this.selectedOp = null;
     // keep the player's army in mind so the province card can offer "March here"
     const a = this.selectedArmy ? this.sim?.state.armies[this.selectedArmy] : undefined;
     this.orderArmy = pid && a && a.nation === this.player ? a.id : pid ? this.orderArmy : null;
@@ -850,6 +940,7 @@ export class App {
   }
 
   selectFleet(id: string | null, center = false): void {
+    this.selectedOp = null;
     this.selectedArmy = null;
     this.selectedProvince = null;
     this.clearSea();
@@ -866,6 +957,7 @@ export class App {
   }
 
   selectZone(id: string | null): void {
+    this.selectedOp = null;
     this.selectedArmy = null;
     this.selectedProvince = null;
     this.clearSea();
@@ -876,6 +968,7 @@ export class App {
   }
 
   selectWing(id: string | null): void {
+    this.selectedOp = null;
     this.selectedArmy = null;
     this.selectedProvince = null;
     this.clearSea();
@@ -883,6 +976,248 @@ export class App {
     this.selectedWing = id;
     this.ui.inspectorPeek = false;
     this.refresh();
+  }
+
+  // ───────────────────────────── Selections and operations ─────────────────
+
+  /** Adds a force of ours to the selection, or takes it out (the first one added brings the unit already selected along). */
+  toggleForce(id: string): void {
+    const sim = this.sim;
+    if (!sim) return;
+    if (this.opDraft && !this.opDraft.editing) {
+      const d = this.opDraft;
+      d.units = d.units.includes(id) ? d.units.filter((x) => x !== id) : [...d.units, id];
+    }
+    if (this.forceSel.includes(id)) this.forceSel = this.forceSel.filter((x) => x !== id);
+    else {
+      if (!this.forceSel.length) {
+        const cur = this.selectedArmy ?? this.selectedFleet ?? this.selectedWing;
+        const r = cur ? unitRef(sim, cur) : null;
+        if (r && r.unit.nation === this.player && cur !== id) this.forceSel.push(cur!);
+      }
+      this.forceSel.push(id);
+    }
+    if (!this.opDraft) this.selectedOp = null;
+    this.mapDirty = true;
+    this.refresh();
+  }
+
+  setForceSel(ids: string[]): void {
+    this.forceSel = [...new Set(ids)];
+    this.selectedOp = null;
+    this.mapDirty = true;
+    this.refresh();
+  }
+
+  clearForceSel(): void {
+    this.forceSel = [];
+    this.mapDirty = true;
+    this.refresh();
+  }
+
+  toggleProvince(pid: ProvinceId): void {
+    this.provSel = this.provSel.includes(pid) ? this.provSel.filter((p) => p !== pid) : [...this.provSel, pid];
+    this.selectedProvince = null;
+    this.selectedArmy = null;
+    this.clearSea();
+    this.mapDirty = true;
+    this.refresh();
+  }
+
+  setProvSel(pids: ProvinceId[]): void {
+    this.provSel = [...new Set(pids)];
+    this.mapDirty = true;
+    this.refresh();
+  }
+
+  clearProvSel(): void {
+    this.provSel = [];
+    this.mapDirty = true;
+    this.refresh();
+  }
+
+  setSelectMode(m: 'off' | 'forces' | 'provinces'): void {
+    this.selectMode = m;
+    this.mapDirty = true;
+    this.refresh();
+  }
+
+  /** A box drawn on the map: our forces (or the provinces) whose markers (or centres) lie inside join the selection. */
+  private finishBox(b: { x0: number; y0: number; x1: number; y1: number; kind: 'forces' | 'provinces' }): void {
+    const r = this.renderer;
+    const sim = this.sim;
+    if (!r || !sim) return;
+    const [x0, x1] = [Math.min(b.x0, b.x1), Math.max(b.x0, b.x1)];
+    const [y0, y1] = [Math.min(b.y0, b.y1), Math.max(b.y0, b.y1)];
+    const inside = (x: number, y: number) => x >= x0 && x <= x1 && y >= y0 && y <= y1;
+    if (b.kind === 'provinces') {
+      const add: ProvinceId[] = [];
+      for (const pid of sim.world.provIds) {
+        const c = r.provinceCenter(pid);
+        const s = r.camera.toScreen(c.x, c.y);
+        if (inside(s.x, s.y)) add.push(pid);
+      }
+      this.setProvSel([...this.provSel, ...add]);
+      return;
+    }
+    const st = sim.state;
+    const add: string[] = [];
+    // stacked markers stand for every army of ours in that place
+    for (const m of r.markers) {
+      if (!inside(m.x + m.w / 2, m.y + m.h / 2)) continue;
+      const a = st.armies[m.army];
+      if (!a || a.nation !== this.player) continue;
+      for (const x of Object.values(st.armies)) if (x.nation === this.player && x.location === a.location && !x.embarked) add.push(x.id);
+    }
+    for (const m of r.fleetMarkers) if (inside(m.x + m.w / 2, m.y + m.h / 2) && st.fleets[m.fleet]?.nation === this.player) add.push(m.fleet);
+    for (const m of r.wingMarkers) if (inside(m.x + m.w / 2, m.y + m.h / 2)) for (const w of m.wings) if (st.wings[w]?.nation === this.player) add.push(w);
+    if (this.opDraft && !this.opDraft.editing) this.opDraft.units = [...new Set([...this.opDraft.units, ...add])];
+    this.setForceSel([...this.forceSel, ...add]);
+    if (add.length) this.toast(`${add.length} force${add.length === 1 ? '' : 's'} added to the selection.`);
+  }
+
+  /** Selects an army, fleet or wing by id. */
+  selectUnit(id: string): void {
+    const st = this.sim?.state;
+    if (!st) return;
+    if (st.armies[id]) this.selectArmy(id, true);
+    else if (st.fleets[id]) this.selectFleet(id, true);
+    else if (st.wings[id]) this.selectWing(id);
+  }
+
+  /** Opens an operation's card (null: closes it). */
+  selectOp(id: string | null): void {
+    this.selectedOp = id;
+    if (id) {
+      this.selectedArmy = null;
+      this.selectedProvince = null;
+      this.clearSea();
+    }
+    this.ui.inspectorPeek = false;
+    this.mapDirty = true;
+    this.refresh();
+  }
+
+  /** Prepares a new operation with the selected forces (or the force selected). */
+  startOpDraft(kind?: OperationKind): void {
+    const units = this.forceSel.length ? [...this.forceSel] : [this.selectedArmy ?? this.selectedFleet ?? this.selectedWing].filter((x): x is string => !!x && unitRef(this.sim!, x)?.unit.nation === this.player);
+    this.opDraft = newDraft(this, units, kind);
+    this.forceSel = [...units];
+    this.selectedOp = null;
+    this.selectedArmy = null;
+    this.selectedProvince = null;
+    this.clearSea();
+    this.pickOpArea();
+  }
+
+  /** Opens an operation for changes. */
+  editOp(id: string): void {
+    const sim = this.sim;
+    const op = sim?.state.operations[id];
+    if (!sim || !op) return;
+    const f = opForces(sim, id);
+    this.opDraft = draftFromOp(op, [...f.armies, ...f.fleets, ...f.wings].map((u) => u.id));
+    this.refresh();
+  }
+
+  cancelOpDraft(): void {
+    const editing = this.opDraft?.editing ?? null;
+    this.opDraft = null;
+    if (this.targeting?.kind === 'opArea') this.targeting = null;
+    this.canvas?.classList.remove('move-mode');
+    if (editing) this.selectedOp = editing;
+    this.mapDirty = true;
+    this.refresh();
+  }
+
+  /** The next map clicks choose the area of the operation being prepared. */
+  pickOpArea(): void {
+    this.targeting = { kind: 'opArea' };
+    this.canvas.classList.add('move-mode');
+    this.mapDirty = true;
+    this.refresh();
+  }
+
+  private toggleOpArea(x: number, y: number, region: boolean): void {
+    const sim = this.sim;
+    const d = this.opDraft;
+    const r = this.renderer;
+    if (!sim || !d || !r) return;
+    const pid = r.provinceAt(x, y);
+    if (d.kind === 'sea') {
+      const z = pid ? null : r.zoneAt(x, y);
+      if (z) d.zones = d.zones.includes(z) ? d.zones.filter((q) => q !== z) : [...d.zones, z];
+    } else if (pid) {
+      if (d.kind === 'advance') d.area = [pid];
+      else if (region && d.kind !== 'landing') {
+        const reg = sim.world.prov[pid].region;
+        const all = sim.world.provIds.filter((p) => sim.world.prov[p].region === reg);
+        const on = d.area.includes(pid);
+        d.area = on ? d.area.filter((p) => !all.includes(p)) : [...new Set([...d.area, ...all])];
+      } else d.area = d.area.includes(pid) ? d.area.filter((p) => p !== pid) : [...d.area, pid];
+    }
+    this.mapDirty = true;
+    this.refresh();
+  }
+
+  /** Creates the operation prepared (or saves the changes to the one being changed). */
+  commitOpDraft(activate: boolean): void {
+    const d = this.opDraft;
+    if (!d) return;
+    const r = d.editing
+      ? this.do({ type: 'editOp', op: d.editing, area: d.kind === 'sea' ? undefined : d.area, zones: d.kind === 'sea' ? d.zones : undefined, settings: d.settings, name: d.name || undefined })
+      : this.do({ type: 'createOp', kind: d.kind, area: d.area, zones: d.zones, settings: d.settings, units: d.units, name: d.name || undefined, activate });
+    if (!r.ok) return;
+    const id = d.editing ?? Object.values(this.sim!.state.operations).filter((o) => o.nation === this.player).map((o) => o.id).sort((a, b) => Number(a.slice(2)) - Number(b.slice(2))).at(-1) ?? null;
+    this.opDraft = null;
+    this.forceSel = [];
+    if (this.targeting?.kind === 'opArea') this.targeting = null;
+    this.canvas?.classList.remove('move-mode');
+    this.selectOp(id);
+  }
+
+  cancelOp(id: string): void {
+    const op = this.sim?.state.operations[id];
+    if (!op) return;
+    confirmDialog(this, `Cancel ${op.name}?`, [h('p', null, 'Every force in it returns to your direct command and keeps its last orders. Nothing else changes.')], () => {
+      this.do({ type: 'cancelOp', op: id });
+      this.selectOp(null);
+    }, 'Cancel the operation', false);
+  }
+
+  /** The area drawn on the map: the operation being prepared, or the one whose card is open. */
+  private opAreaShown(): { provinces: ProvinceId[]; zones: string[]; draft: boolean } | null {
+    if (this.opDraft) return { provinces: this.opDraft.area, zones: this.opDraft.zones, draft: true };
+    const op = this.selectedOp ? this.sim?.state.operations[this.selectedOp] : undefined;
+    return op ? { provinces: op.area, zones: op.zones, draft: false } : null;
+  }
+
+  /** March all to…: the selected armies march to the next province clicked. */
+  startGroupMove(): void {
+    const sim = this.sim;
+    if (!sim) return;
+    const ids = this.forceSel.filter((id) => sim.state.armies[id]?.nation === this.player);
+    if (!ids.length) return;
+    this.groupMoveIds = ids;
+    this.moveMode = true;
+    this.canvas.classList.add('move-mode');
+    this.refresh();
+  }
+
+  private groupMoveTo(dest: ProvinceId): void {
+    const ids = this.groupMoveIds ?? [];
+    this.finishWeek();
+    let ok = 0;
+    const why: string[] = [];
+    for (const id of ids) {
+      const a = this.sim!.state.armies[id];
+      if (!a) continue;
+      const r = applyCommand(this.sim!, { type: 'move', nation: this.player!, army: id, dest });
+      if (r.ok) ok++;
+      else why.push(`${a.name}: ${r.reason}`);
+    }
+    this.toast(`${ok} of ${ids.length} armies marching to ${this.sim!.world.prov[dest].name}.${why.length ? ` ${why[0]}` : ''}`, why.length ? 'fail' : 'good');
+    this.cancelMoveMode();
   }
 
   /** The next map click picks a destination zone for the selected fleet. */
@@ -988,6 +1323,7 @@ export class App {
 
   selectArmy(id: string | null, center = false): void {
     if (id !== this.selectedArmy) this.ui.groupOrders = false;
+    this.selectedOp = null;
     this.clearSea();
     this.selectedArmy = id;
     this.moveMode = false;
@@ -1002,6 +1338,7 @@ export class App {
   }
 
   clearSelection(): void {
+    this.selectedOp = null;
     this.selectedArmy = null;
     this.selectedProvince = null;
     this.clearSea();
@@ -1038,6 +1375,7 @@ export class App {
 
   cancelMoveMode(): void {
     this.moveMode = false;
+    this.groupMoveIds = null;
     this.canvas.classList.remove('move-mode');
     this.refresh();
   }
@@ -1472,7 +1810,7 @@ export class App {
       const r = c.getBoundingClientRect();
       const x = e.clientX - r.left;
       const y = e.clientY - r.top;
-      this.pointers.set(e.pointerId, { x, y, sx: x, sy: y, t: performance.now(), button: e.button, shift: e.shiftKey, moved: false });
+      this.pointers.set(e.pointerId, { x, y, sx: x, sy: y, t: performance.now(), button: e.button, shift: e.shiftKey, ctrl: e.ctrlKey || e.metaKey, moved: false });
       if (this.pointers.size === 2) {
         const [a, b] = [...this.pointers.values()];
         this.pinchDist = Math.hypot(a.x - b.x, a.y - b.y);
@@ -1512,9 +1850,16 @@ export class App {
       }
       if (!p.moved && Math.hypot(x - p.sx, y - p.sy) > 6) {
         p.moved = true;
-        c.classList.add('dragging');
+        // a drag with Shift (forces), Ctrl/Cmd (provinces) or the Select tool draws a selection box instead of panning
+        const kind = p.button !== 0 || this.targeting ? null : this.selectMode !== 'off' ? this.selectMode : p.shift ? 'forces' : p.ctrl ? 'provinces' : null;
+        if (kind) this.box = { x0: p.sx, y0: p.sy, x1: x, y1: y, kind };
+        else c.classList.add('dragging');
       }
-      if (p.moved && this.renderer) {
+      if (p.moved && this.box) {
+        this.box.x1 = x;
+        this.box.y1 = y;
+        this.mapDirty = true;
+      } else if (p.moved && this.renderer) {
         this.renderer.camera.pan(x - p.x, y - p.y);
         this.mapDirty = true;
         this.tipEl.classList.add('hidden');
@@ -1530,9 +1875,16 @@ export class App {
         clearTimeout(this.longPress);
         this.longPress = null;
       }
+      if (this.box) {
+        const b = this.box;
+        this.box = null;
+        this.mapDirty = true;
+        if (e.type !== 'pointercancel') this.finishBox(b);
+        return;
+      }
       if (!p || p.moved || this.pointers.size > 0 || e.type === 'pointercancel') return;
       if (p.button === 2) this.secondaryAt(p.x, p.y, p.shift || e.shiftKey);
-      else if (p.button === 0) this.primaryAt(p.x, p.y, e.shiftKey);
+      else if (p.button === 0) this.primaryAt(p.x, p.y, e.shiftKey, p.ctrl || e.ctrlKey || e.metaKey);
     };
     c.addEventListener('pointerup', end);
     c.addEventListener('pointercancel', end);
@@ -1718,17 +2070,60 @@ export class App {
     tipEl.style.top = `${Math.min(y + 18, H - th - 8)}px`;
   }
 
-  private primaryAt(x: number, y: number, shift: boolean): void {
+  private primaryAt(x: number, y: number, shift: boolean, ctrl = false): void {
     if (!this.renderer || !this.sim) return;
     this.canvas.focus({ preventScroll: true });
     this.ui.attentionOpen = false;
     const pid = this.renderer.provinceAt(x, y);
+    if (this.moveMode && this.groupMoveIds) {
+      if (pid) this.groupMoveTo(pid);
+      else this.cancelMoveMode();
+      return;
+    }
     if (this.moveMode && this.selectedArmy) {
       if (pid) this.orderMove(pid, undefined, shift);
       else this.cancelMoveMode();
       return;
     }
     const tg = this.targeting;
+    if (tg?.kind === 'opArea') {
+      // choosing an operation's area: each click adds or removes (the pick stays open)
+      this.toggleOpArea(x, y, shift);
+      return;
+    }
+    // forces of ours under the pointer (for the selection)
+    const ownAt = () => {
+      const r = this.renderer!;
+      const st = this.sim!.state;
+      const f = r.fleetAt(x, y);
+      if (f && st.fleets[f]?.nation === this.player) return f;
+      const wm = r.wingAt(x, y);
+      if (wm) {
+        const w = wm.wings.find((id) => st.wings[id]?.nation === this.player);
+        if (w) return w;
+      }
+      const a = r.armyAt(x, y);
+      if (a && st.armies[a]?.nation === this.player) return a;
+      return null;
+    };
+    // preparing an operation: clicks on our forces add or remove them
+    if (this.opDraft && !tg) {
+      const u = ownAt();
+      if (u) this.toggleForce(u);
+      return;
+    }
+    if (!tg && (this.selectMode === 'provinces' || (ctrl && !shift))) {
+      if (pid) this.toggleProvince(pid);
+      return;
+    }
+    if (!tg && (this.selectMode === 'forces' || shift)) {
+      const u = ownAt();
+      if (u) {
+        this.toggleForce(u);
+        return;
+      }
+      if (this.selectMode === 'forces') return;
+    }
     if (tg) {
       this.targeting = null;
       this.canvas.classList.remove('move-mode');
@@ -1868,6 +2263,11 @@ export class App {
       if (dialogOpen) return;
       if (this.targeting) this.cancelTargeting();
       else if (this.moveMode) this.cancelMoveMode();
+      else if (this.opDraft) this.cancelOpDraft();
+      else if (this.selectMode !== 'off') this.setSelectMode('off');
+      else if (this.forceSel.length) this.clearForceSel();
+      else if (this.provSel.length) this.clearProvSel();
+      else if (this.selectedOp) this.selectOp(null);
       else if (this.ui.attentionOpen) this.toggleAttention();
       else if (this.ui.presentationOpen) {
         this.ui.presentationOpen = false;
@@ -1912,6 +2312,8 @@ export class App {
     else if (lk === 'c') this.centreSelection();
     else if (lk === 'k') this.nextBattle();
     else if (lk === 'j') this.jumpToAlert();
+    else if (lk === 'x') this.setSelectMode(this.selectMode === 'off' ? 'forces' : this.selectMode === 'forces' ? 'provinces' : 'off');
+    else if (lk === 'u') this.openLedger('military');
     else if (lk === 'n' && e.shiftKey) this.cycleGroup();
     else if (lk === 'n') this.cycleArmy();
     else if (k === 'Home') this.goCapital();
@@ -1930,7 +2332,28 @@ export class App {
   private renderBanner(): void {
     const a = this.selectedArmy && this.sim ? this.sim.state.armies[this.selectedArmy] : undefined;
     const tg = this.targeting;
-    if (this.moveMode && a) {
+    if (this.moveMode && this.groupMoveIds) {
+      this.bannerEl.classList.remove('hidden');
+      const cancel = h('button', { class: 'btn small quiet', type: 'button', 'data-fk': 'banner-cancel' }, 'Cancel (Esc)');
+      cancel.addEventListener('click', () => this.cancelMoveMode());
+      setChildren(this.bannerEl, icon('move'), h('span', null, `Choose where the ${this.groupMoveIds.length} selected armies march (each by its own best route).`), cancel);
+    } else if (tg?.kind === 'opArea' && this.opDraft) {
+      this.bannerEl.classList.remove('hidden');
+      const done = h('button', { class: 'btn small primary', type: 'button', 'data-fk': 'banner-cancel' }, 'Done');
+      done.addEventListener('click', () => this.cancelTargeting());
+      const k = this.opDraft.kind;
+      const n = k === 'sea' ? this.opDraft.zones.length : this.opDraft.area.length;
+      setChildren(this.bannerEl, icon('target'), h('span', null, k === 'sea' ? `Click sea zones to add or remove them (${n} chosen).` : k === 'advance' ? 'Click the province to advance to.' : k === 'landing' ? `Click the beach, then the provinces to take after landing (${n} chosen).` : `Click provinces to add or remove them; Shift+click: a whole region (${n} chosen).`), done);
+    } else if (this.selectMode !== 'off' && !tg) {
+      this.bannerEl.classList.remove('hidden');
+      const done = h('button', { class: 'btn small quiet', type: 'button', 'data-fk': 'banner-cancel' }, 'Done');
+      done.addEventListener('click', () => this.setSelectMode('off'));
+      // switch what is being selected (the map buttons are hidden under an open card on small screens)
+      const other = h('button', { class: 'btn small quiet', type: 'button', 'data-fk': 'banner-switch' }, this.selectMode === 'forces' ? 'Provinces' : 'Forces');
+      other.addEventListener('click', () => this.setSelectMode(this.selectMode === 'forces' ? 'provinces' : 'forces'));
+      const n = this.selectMode === 'forces' ? this.forceSel.length : this.provSel.length;
+      setChildren(this.bannerEl, icon('check'), h('span', null, `${this.selectMode === 'forces' ? 'Forces' : 'Provinces'} (${n}): tap to add or remove, drag for a box.`), other, done);
+    } else if (this.moveMode && a) {
       this.bannerEl.classList.remove('hidden');
       const cancel = h('button', { class: 'btn small quiet', type: 'button' }, 'Cancel (Esc)');
       cancel.addEventListener('click', () => this.cancelMoveMode());
@@ -1939,7 +2362,9 @@ export class App {
       // choosing a place for a fleet, a landing, a mission or an order: the banner can cancel it (touch has no Esc)
       const sim = this.sim;
       const text =
-        tg.kind === 'fleet'
+        tg.kind === 'opArea'
+          ? 'Choose the operation’s area.'
+          : tg.kind === 'fleet'
           ? `Click the sea zone (or a coast) where ${sim.state.fleets[tg.fleet]?.name ?? 'the fleet'} sails.`
           : tg.kind === 'ship'
             ? `Click the coast where the troops land (${sim.state.fleets[tg.fleet]?.name ?? 'the fleet'} carries them).`

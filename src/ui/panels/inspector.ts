@@ -20,6 +20,9 @@ import type { App } from '../app';
 import { orderStatus, readiness } from '../../sim/readiness';
 import { action, bar, button, h, rebuild, row, setChildren } from '../dom';
 import { fmt, men, people, plural, signed, weeks } from '../format';
+import { VIEW_LABELS } from '../map/visibility';
+import { opCard, opEditor, selectionCard, unitOpSection } from './operations';
+import { provinceBatchCard } from './batch';
 import { icon, type IconName } from '../icons';
 import { section, shield, tip } from './common';
 import { confirmDialog } from './dialogs';
@@ -34,7 +37,8 @@ export function renderInspector(app: App): void {
   const fleet = app.selectedFleet ? sim.state.fleets[app.selectedFleet] : undefined;
   const wing = app.selectedWing ? sim.state.wings[app.selectedWing] : undefined;
   const zone = app.selectedZone && sim.world.zones[app.selectedZone] ? app.selectedZone : null;
-  const open = !!army || !!app.selectedProvince || !!fleet || !!wing || !!zone;
+  const multi = app.forceSel.length >= 2;
+  const open = !!army || !!app.selectedProvince || !!fleet || !!wing || !!zone || !!app.opDraft || !!app.selectedOp || multi || app.provSel.length > 0;
   el.classList.toggle('closed', !open);
   el.setAttribute('aria-hidden', open ? 'false' : 'true');
   if (!open) {
@@ -42,7 +46,26 @@ export function renderInspector(app: App): void {
     return;
   }
   rebuild(el, () => {
-    const card = fleet ? fleetCard(app, fleet) : wing ? wingCard(app, wing) : zone ? zoneCard(app, zone) : army ? armyCard(app, army) : provinceCard(app, app.selectedProvince!);
+    // in the order Esc clears them: an open operation editor, then several forces,
+    // then provinces, then an operation's card (which stays above a force selection
+    // for its "Add the selected forces", and comes back when the provinces are cleared)
+    const card = app.opDraft
+      ? opEditor(app)
+      : app.provSel.length && !multi
+        ? provinceBatchCard(app)
+        : app.selectedOp
+          ? opCard(app, app.selectedOp)
+          : multi
+            ? selectionCard(app)
+            : fleet
+              ? fleetCard(app, fleet)
+              : wing
+                ? wingCard(app, wing)
+                : zone
+                  ? zoneCard(app, zone)
+                  : army
+                    ? armyCard(app, army)
+                    : provinceCard(app, app.selectedProvince!);
     setChildren(el, ...card);
   });
 }
@@ -257,8 +280,12 @@ function provinceCard(app: App, pid: ProvinceId): HTMLElement[] {
       ),
     );
   }
-  const here = armiesAt(sim, pid);
-  if (here.length) body.appendChild(section('Armies here', ...here.map((a) => armyRow(app, a))));
+  // the forces here, by the map's unit view (the rest are counted, so nothing is silently missing)
+  const units = app.unitFilter();
+  const all = armiesAt(sim, pid);
+  const here = all.filter((a) => a.id === app.selectedArmy || units.shows(a.nation, { prov: pid }));
+  const hidden = all.length - here.length;
+  if (all.length) body.appendChild(section('Armies here', ...here.map((a) => armyRow(app, a)), hidden ? h('p', { class: 'small faint', 'data-fk': 'hidden-armies' }, `${plural(hidden, 'army', 'armies')} of other realms here ${hidden === 1 ? 'is' : 'are'} hidden by the unit view (${VIEW_LABELS[units.mode]}); "All" shows them.`) : null));
   // the navy and the air arm
   const port = portSection(app, pid);
   if (port) body.appendChild(port);
@@ -387,6 +414,7 @@ function armyCard(app: App, a: Army): HTMLElement[] {
   }
 
   const body = h('div', { class: 'ins-body scroll', 'data-sk': 'ins' });
+  { const ops = mine ? unitOpSection(app, a.id) : null; if (ops) body.appendChild(ops); }
   const byType = (t: UnitType) => a.regiments.filter((r) => r.type === t);
   const mm = maxMorale(sim, a.nation);
   body.appendChild(

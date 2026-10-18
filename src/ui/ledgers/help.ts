@@ -55,6 +55,7 @@ function articles(): Article[] {
         h('span', null, h('kbd', null, 'G'), ' set a destination · ', h('kbd', null, 'N'), ' next army (', h('kbd', null, 'Shift'), '+', h('kbd', null, 'N'), ' next group) · ', h('kbd', null, 'C'), ' centre the selection · ', h('kbd', null, 'F'), ' fit the world · ', h('kbd', null, 'Home'), ' capital · ', h('kbd', null, 'K'), ' next battle · ', h('kbd', null, 'J'), ' jump to an alert'),
         h('span', null, 'Map modes: ', h('kbd', null, 'Shift'), '+', h('kbd', null, '1'), '…', h('kbd', null, String(MODES.length)), ` (${MODES.map((m) => m.label.toLowerCase()).join(', ')}); `, h('kbd', null, 'O'), ' cycles them. Arrow keys pan; ', h('kbd', null, '+'), ' and ', h('kbd', null, '−'), ' zoom.'),
         'In the Research and Focus plans, the arrow keys move between nodes.',
+        h('span', null, 'Several at once: ', h('kbd', null, 'Shift'), '+click or ', h('kbd', null, 'Shift'), '+drag selects forces of ours; ', h('kbd', null, 'Ctrl'), '/', h('kbd', null, 'Cmd'), '+click or drag selects provinces; ', h('kbd', null, 'X'), ' is the Select tool (forces, then provinces; on touch, the check-mark button); ', h('kbd', null, 'U'), ' opens Military with the operations.'),
       ],
     },
     {
@@ -165,6 +166,35 @@ function articles(): Article[] {
       links: [['military', 'Open Military']],
     },
     {
+      id: 'operations',
+      title: 'Operations: delegated command',
+      icon: 'target',
+      group: 'War',
+      lead: 'Give forces an objective and the limits; the operation gives the routine orders every week through the same rules as your own, until it is done, paused or cancelled.',
+      points: [
+        'Select forces (Shift+click, Shift+drag a box, the Select tool, or the boxes in Military), then New operation. Choose the objective (conquer an area, advance to a province, hold an area, keep sea zones, a landing) and the area on the map, read the preview (the first orders are drawn on the map, with forecasts and what stands in the way), choose the posture and Activate.',
+        'Cautious attacks only with a clear edge and a forecast of victory; balanced with 1.2× the defenders unless the forecast is defeat; aggressive with about equal strength. None attacks a realm we are not at war with, declares war, makes peace, buys forces or builds anything.',
+        'Armies march, fight and besiege by the ordinary rules: no shortcut, no bonus. A failed attack bars that target for a while, then only a stronger force tries; marches go round enemy troops; tired, depleted or unsupplied armies fall back to rest; a share can be held in reserve and committed where our battles need it.',
+        'With leave to reorganise, a large army detaches task forces (whole regiments, at least two, at most six detachments) for undefended targets, and idle armies standing together merge again. Keep together on an army’s card protects it.',
+        'Fleets repair, shell the coast where our armies fight, blockade, patrol, intercept and escort; wings rest, keep the sky, support and strike; they move between airfields only with leave. Airborne drops happen only under the mandate, inside the area, within the loss limit, with the operation’s own transports.',
+        'Any order you give a member takes it under your direct command at once: the operation leaves it alone until you resume it (or, if set, until your order is carried out). Pause, change, add forces, detach or cancel at any time; cancelling hands every force back with its last orders.',
+        'Routine events go to the operation’s log; only a decision you have to make is a notification (Cannot make progress, attacks failing, aircraft out of range, a landing that cannot sail), with the actions that answer it.',
+      ],
+      links: [['military', 'Open Military']],
+    },
+    {
+      id: 'batches',
+      title: 'Provinces in batches',
+      icon: 'build',
+      group: 'Basics',
+      lead: 'Select provinces together (Ctrl/Cmd+click or Ctrl/Cmd+drag, or the Select tool on touch) to build one project or raise one regiment type in all of them at once.',
+      points: [
+        'The card lists every province: what it gets (railway 1 → 2, a regiment) or why not (not ours, at its maximum, no free slot, not enough crowns left after the provinces before it).',
+        'Shared pools are spent once, in the order shown (as selected, highest development first, or cheapest first): if the crowns, materiel, men or construction slots run out, the rest are skipped, never overspent.',
+        'Recruitment counts per province or as a total spread over them; what is already training is shown. One confirmation queues exactly what the preview shows, each province checked again as it is queued; the same request is not sent twice.',
+      ],
+    },
+    {
       id: 'diplomacy',
       title: 'Diplomacy',
       icon: 'diplomacy',
@@ -261,7 +291,10 @@ function articles(): Article[] {
       icon: 'eye',
       group: 'Utility',
       lead: 'There is no fog of war: all information is public, and AI realms see exactly what you see.',
-      points: ['Battle reports and explanations use only that public information; no realm’s plans or intentions are shown.'],
+      points: [
+        'Battle reports and explanations use only that public information; no realm’s plans or intentions are shown.',
+        'Forces shown (map presentation): All is every realm’s armies, fleets and air wings; Mine + enemies is ours and every force of a realm at war with us, anywhere; Relevant is ours and the forces in our wars (allies by the setting), near the selected force or operation when there is one; neutral realms never. The same forces at every zoom (grouped at a distance), and the count of what a view hides is shown under it. The view changes only what is drawn.',
+      ],
     },
   ];
 }

@@ -34,6 +34,7 @@
 import { airControl, mergeAir, outrangedThisWeek, portBombed, relocateAir, reportFleet, seaAir, splitAir, subsExposed, wingsAboard } from './air';
 import { C, SHIPS, SHIP_TYPES } from './config';
 import { warDead } from './economy';
+import { noteOpLoss } from './ops/losses';
 import { memoGeo, memoize, ownedBy, touchArmies } from './index';
 import { armyCap } from './influence';
 import { nationMods } from './modifiers';
@@ -223,6 +224,7 @@ export function removeFleet(sim: Sim, f: Fleet, drownCargo = true): void {
       let men = 0;
       for (const r of a.regiments) men += r.men;
       warDead(sim, a.nation, men);
+      noteOpLoss(sim, a.op, 'men', men);
       delete st.armies[id];
     }
     if (f.cargo.length) touchArmies(sim);
@@ -797,6 +799,7 @@ export function drownExcess(sim: Sim, f: Fleet): void {
     while (excess > 0 && a.regiments.length) {
       const reg = a.regiments.pop()!;
       warDead(sim, a.nation, reg.men);
+      noteOpLoss(sim, a.op, 'men', reg.men);
       excess--;
     }
     if (!a.regiments.length) {
@@ -816,6 +819,7 @@ function sinkStruck(sim: Sim, fleets: Fleet[]): void {
     const lost = before - f.ships.length;
     if (!lost) continue;
     sim.state.nations[f.nation].stats.shipsLost += lost;
+    noteOpLoss(sim, f.op, 'ships', lost);
     drownExcess(sim, f);
     if (!f.ships.length) removeFleet(sim, f);
     else relocateAir(sim, f.id);
@@ -1317,6 +1321,10 @@ export function splitFleet(sim: Sim, fleetId: FleetId, shipIds: string[]): Fleet
   const g = createFleet(sim, f.nation, f.zone, moving, f.home);
   // the air group goes where the carriers go
   splitAir(sim, f, g);
+  if (f.op) {
+    g.op = f.op;
+    g.opHold = f.opHold ?? false;
+  }
   return g;
 }
 
