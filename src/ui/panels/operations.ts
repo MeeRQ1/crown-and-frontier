@@ -8,10 +8,10 @@
 // the area on the map → read the preview → choose the posture → Activate →
 // watch, change, pause, take over or cancel at any time.
 
-import { inRangeOf, wingRange } from '../../sim/air';
+import { inRangeOf, MISSION_HELP, MISSION_LABELS, wingRange } from '../../sim/air';
 import { forecastBattle } from '../../sim/combat';
-import { SHIPS } from '../../sim/config';
-import { fleetCapacity } from '../../sim/naval';
+import { SHIPS, WINGS } from '../../sim/config';
+import { DUTY_HELP, fleetCapacity } from '../../sim/naval';
 import { findPath } from '../../sim/movement';
 import {
   COMPLETION_LABELS,
@@ -29,7 +29,7 @@ import {
 import { hostileArmiesAt } from '../../sim/ai/common';
 import { atWar, enemiesOf, isFriendly, menOf, nationName, provName } from '../../sim/state';
 import { supplyDistances, supplyRange } from '../../sim/supply';
-import type { Army, NationId, Operation, OperationKind, OperationSettings, OpPosture, OpStrategy, OpTask, ProvinceId, ZoneId } from '../../sim/types';
+import type { AirMission, AirWing, Army, Fleet, FleetDutyKind, NationId, Operation, OperationKind, OperationSettings, OpPosture, OpStrategy, OpTask, ProvinceId, ZoneId } from '../../sim/types';
 import type { App } from '../app';
 import { action, bar, button, h, row } from '../dom';
 import { men, plural } from '../format';
@@ -242,11 +242,15 @@ export function selectionCard(app: App): HTMLElement[] {
     button('New operation…', () => app.startOpDraft(), { cls: 'small primary', icon: 'target', fk: 'op-new' }),
   ];
   const ops = Object.values(sim.state.operations).filter((o) => o.nation === app.player);
-  if (armies.length > 1) prim.push(button('March all to…', () => app.startGroupMove(), { cls: 'small', icon: 'move', fk: 'sel-march' }));
-  const sameProv = armies.length > 1 && armies.every((a) => a.location === armies[0].location);
-  if (sameProv) prim.push(button('Merge', () => app.do({ type: 'merge', armies: armies.map((a) => a.id) }), { cls: 'small', icon: 'merge', fk: 'sel-merge' }));
   out.push(h('div', { class: 'ins-primary' }, prim));
   const body = h('div', { class: 'ins-body scroll', 'data-sk': 'ins' });
+  // the same pattern for every branch: one order for all of a kind, each member by its
+  // own route, range and rules; the result lists every one that could not, and why
+  const result = groupResultSection(app);
+  if (result) body.appendChild(result);
+  if (armies.length) body.appendChild(armyOrders(app, armies));
+  if (fleets.length) body.appendChild(fleetOrders(app, fleets.map((r) => r.unit as Fleet)));
+  if (wings.length) body.appendChild(wingOrders(app, wings.map((r) => r.unit as AirWing)));
   if (ops.length) {
     body.appendChild(
       section(
@@ -274,6 +278,85 @@ export function selectionCard(app: App): HTMLElement[] {
   body.appendChild(h('p', { class: 'small faint' }, 'Shift+click a force on the map to add or remove it; Shift+drag draws a box. On touch, use the Select tool. Esc clears the selection.'));
   out.push(body);
   return out;
+}
+
+function orderRow(...kids: Array<HTMLElement | null>): HTMLElement {
+  return h('div', { class: 'row wrap', style: 'gap:6px' }, kids);
+}
+
+function armyOrders(app: App, armies: Army[]): HTMLElement {
+  const ids = armies.map((a) => a.id);
+  const sameProv = armies.length > 1 && armies.every((a) => a.location === armies[0].location);
+  return section(
+    `Armies (${armies.length})`,
+    orderRow(
+      button('March all to…', () => app.startGroupMove(), { cls: 'small', icon: 'move', fk: 'sel-march', title: 'Each marches by its own best route' }),
+      button('Stop all', () => app.groupOrder('Stop', ids, () => ({ type: 'stop', army: '' }), 'army'), { cls: 'small quiet', icon: 'stop', fk: 'sel-army-stop' }),
+      sameProv ? button('Merge', () => app.do({ type: 'merge', armies: ids }), { cls: 'small', icon: 'merge', fk: 'sel-merge' }) : null,
+    ),
+  );
+}
+
+function fleetOrders(app: App, fleets: Fleet[]): HTMLElement {
+  const ids = fleets.map((f) => f.id);
+  const sameZone = fleets.length > 1 && fleets.every((f) => f.zone === fleets[0].zone);
+  const pick = (order: 'sail' | FleetDutyKind, label: string, fk: string, title: string) => button(label, () => app.startGroupTarget(order, ids), { cls: 'small', fk, title });
+  return section(
+    `Fleets (${fleets.length})`,
+    orderRow(
+      pick('sail', 'Sail all to…', 'sel-fleet-sail', 'Each sails by its own route; standing orders end'),
+      pick('patrol', 'Patrol…', 'sel-fleet-patrol', DUTY_HELP.patrol),
+      pick('blockade', 'Blockade…', 'sel-fleet-blockade', DUTY_HELP.blockade),
+      pick('raid', 'Raid…', 'sel-fleet-raid', DUTY_HELP.raid),
+      pick('bombard', 'Bombard…', 'sel-fleet-bombard', DUTY_HELP.bombard),
+      pick('escort', 'Escort…', 'sel-fleet-escort', DUTY_HELP.escort),
+    ),
+    orderRow(
+      button('Hold where they are', () => app.groupOrder('Hold', ids, () => ({ type: 'fleetDuty', fleet: '', duty: { kind: 'hold' } }), 'fleet'), { cls: 'small quiet', fk: 'sel-fleet-hold' }),
+      button('Each to its home port', () => app.groupOrder('Return to port', ids, (id) => {
+        const f = app.sim!.state.fleets[id];
+        return f?.home ? { type: 'fleetDuty', fleet: id, duty: { kind: 'port', province: f.home } } : 'It has no home port: choose a port for it on its card.';
+      }), { cls: 'small quiet', fk: 'sel-fleet-port' }),
+      button('End standing orders', () => app.groupOrder('Standing orders ended', ids, () => ({ type: 'fleetDuty', fleet: '', duty: null }), 'fleet'), { cls: 'small quiet', fk: 'sel-fleet-clear' }),
+      sameZone ? button('Merge', () => app.do({ type: 'mergeFleets', fleets: ids }), { cls: 'small', icon: 'merge', fk: 'sel-fleet-merge' }) : null,
+    ),
+  );
+}
+
+function wingOrders(app: App, wings: AirWing[]): HTMLElement {
+  const ids = wings.map((w) => w.id);
+  const missions: AirMission[] = ['superiority', 'support', 'interdiction', 'bombing', 'naval', 'recon'];
+  return section(
+    `Air wings (${wings.length})`,
+    orderRow(button('Move to an airfield…', () => app.startGroupTarget('rebase', ids), { cls: 'small', icon: 'plane', fk: 'sel-wing-rebase', title: 'Changes where they are based (an airfield, or a fleet with carriers): each flies there if it is within its ferry range and there is room' })),
+    h('div', { class: 'small muted', style: 'margin:6px 0 4px' }, 'Missions (flown from where they are based):'),
+    orderRow(
+      ...missions.map((m) => {
+        const able = wings.filter((w) => (WINGS[w.type].missions as AirMission[]).includes(m)).length;
+        return button(`${MISSION_LABELS[m]}${able < wings.length ? ` (${able} of ${wings.length})` : ''}…`, () => app.startAirTarget(ids[0], m, ids), {
+          cls: 'small',
+          fk: `sel-wing-${m}`,
+          disabled: able ? null : `None of these wings can fly ${MISSION_LABELS[m].toLowerCase()}.`,
+          title: able < wings.length ? `${wings.length - able} cannot fly it (their type): they will say so` : MISSION_HELP[m],
+        });
+      }),
+      button('Stand down', () => app.groupOrder('Stand down', ids, () => ({ type: 'airMission', wing: '', mission: 'idle', target: null }), 'wing'), { cls: 'small quiet', fk: 'sel-wing-idle', title: MISSION_HELP.idle }),
+    ),
+  );
+}
+
+/** What the last order for several forces did: every member that could not, and why. */
+function groupResultSection(app: App): HTMLElement | null {
+  const g = app.groupResult;
+  if (!g || !g.rows.some((r) => app.forceSel.includes(r.id))) return null;
+  const ok = g.rows.filter((r) => r.ok).length;
+  const failed = g.rows.filter((r) => !r.ok);
+  return h(
+    'div',
+    { class: `callout ${failed.length ? 'warn' : 'good'}`, style: 'margin-bottom:8px;display:block', 'data-sk': 'group-result' },
+    h('b', null, `${g.title}: ${ok} of ${g.rows.length}`),
+    failed.length ? h('ul', { class: 'notes small', style: 'margin:4px 0 0' }, failed.map((r) => h('li', null, h('b', null, r.name), `: ${r.text}`))) : h('div', { class: 'small' }, 'Every one of them took the order.'),
+  );
 }
 
 // ───────────────────────────── The editor ───────────────────────────────────

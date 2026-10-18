@@ -1,0 +1,33 @@
+{
+ "phase": "after",
+ "places": {
+  "airfields": 7,
+  "ports": 4,
+  "fleets": 4,
+  "wings": 6
+ },
+ "tenWings": {
+  "inputs": 6,
+  "inTraining": 10,
+  "queued": 0
+ },
+ "tenShips": {
+  "inputs": 6,
+  "slipwaysFree": 0,
+  "onSlipways": 8,
+  "queued": 2,
+  "note": "the rest wait in the order and are laid down as slipways free"
+ },
+ "groupResult": "Patrol: 3 of 4\nGerman Second Squadron: Transports alone cannot patrol, blockade or raid: join warships to them.",
+ "fourFleetsPatrol": {
+  "inputs": 3,
+  "patrolling": 3
+ },
+ "wingResult": "Move to Bielefeld: 6 of 6\nEvery one of them took the order.",
+ "sixWingsMove": {
+  "inputs": 3,
+  "wings": 6,
+  "moved": 6
+ },
+ "errors": []
+}

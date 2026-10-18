@@ -167,18 +167,22 @@ function militaryLedger(app: App): HTMLElement {
     ),
   ];
 
+  const fleetsOf = (sim: Sim, nid: NationId) => Object.values(sim.state.fleets).filter((f) => f.nation === nid).sort((a, b) => (a.id < b.id ? -1 : 1));
+  const wingsOf = (sim: Sim, nid: NationId) => Object.values(sim.state.wings).filter((w) => w.nation === nid).sort((a, b) => (a.id < b.id ? -1 : 1));
   // Auto-conquer (one order against our enemies), then the detailed operations
   kids.push(autoConquerSection(app));
   kids.push(operationsSection(app));
   // several ships, air wings or regiments in one order
   kids.push(productionSection(app));
-  if (armies.length)
+  if (armies.length || fleetsOf(sim, pid).length || wingsOf(sim, pid).length)
     kids.push(
       h(
         'div',
         { class: 'row wrap', style: 'gap:6px;margin:4px 0 8px' },
         button('Select all armies', () => app.setForceSel(armies.map((a) => a.id)), { cls: 'small quiet', fk: 'sel-all-armies' }),
         button('Select idle armies', () => app.setForceSel(armies.filter((a) => !a.path.length && !a.battle && !a.op && orderStatus(sim, a).state !== 'moving').map((a) => a.id)), { cls: 'small quiet', fk: 'sel-idle', title: 'Armies of ours under direct command that stand still and are not fighting' }),
+        fleetsOf(sim, pid).length ? button('Select all fleets', () => app.setForceSel(fleetsOf(sim, pid).map((f) => f.id)), { cls: 'small quiet', fk: 'sel-all-fleets' }) : null,
+        wingsOf(sim, pid).length ? button('Select all air wings', () => app.setForceSel(wingsOf(sim, pid).map((w) => w.id)), { cls: 'small quiet', fk: 'sel-all-wings' }) : null,
         app.forceSel.length ? button(`New operation with ${app.forceSel.length} selected`, () => app.startOpDraft(), { cls: 'small primary', icon: 'target', fk: 'sel-new-op' }) : null,
       ),
     );

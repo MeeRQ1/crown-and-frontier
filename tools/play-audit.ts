@@ -9,9 +9,11 @@
 import { existsSync, mkdirSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { chromium, type Page } from 'playwright';
+import { createWing } from '../src/sim/air';
+import { createFleet, newShip, portZone, touchFleets } from '../src/sim/naval';
 import { serialize } from '../src/sim/save';
 import { natural } from './concentration';
-import { loadSave, provincePoint, serve } from './qol-audit';
+import { loadSave, provincePoint, serve, zonePoint } from './qol-audit';
 
 const args = process.argv.slice(2);
 const get = (k: string, d: string) => {
@@ -32,8 +34,18 @@ function makeSave(): void {
   for (const r of Object.keys(n.stock) as Array<keyof typeof n.stock>) n.stock[r] = Math.max(n.stock[r], 2000);
   const own = sim.world.provIds.filter((p) => st.provinces[p].owner === 'ger' && st.provinces[p].controller === 'ger').sort();
   // five airfields (level 2) away from the front, as a developed realm would have
-  for (const p of own.filter((x) => !sim.world.prov[x].neighbors.some((y) => st.provinces[y].owner === 'pol')).slice(0, 5)) st.provinces[p].airfield = Math.max(2, st.provinces[p].airfield);
+  for (const p of own.filter((x) => !sim.world.prov[x].neighbors.some((y) => st.provinces[y].owner === 'pol')).slice(0, 5)) st.provinces[p].airfield = Math.max(3, st.provinces[p].airfield);
   for (const p of own.filter((x) => st.provinces[x].port > 0)) st.provinces[p].port = Math.max(2, st.provinces[p].port);
+  // a navy and an air arm worth ordering together: four fleets with warships, six fighter wings
+  const ports = own.filter((x) => st.provinces[x].port > 0 && portZone(sim, x));
+  for (let i = Object.values(st.fleets).filter((f) => f.nation === 'ger').length; i < 4; i++) {
+    const port = ports[i % ports.length];
+    createFleet(sim, 'ger', portZone(sim, port)!, [newShip(sim, 'cruiser'), newShip(sim, 'screen')], port);
+  }
+  const fields = own.filter((x) => st.provinces[x].airfield > 0);
+  if (!n.research.done.includes('fighters')) n.research.done.push('fighters');
+  for (let i = Object.values(st.wings).filter((w) => w.nation === 'ger').length; i < 6; i++) createWing(sim, 'ger', fields[i % fields.length], 'fighter');
+  touchFleets(sim);
   writeFileSync(SAVE, serialize(sim));
 }
 
@@ -161,14 +173,57 @@ async function main(): Promise<void> {
       await page.evaluate(([x, z]) => (window as any).cnf.do({ type: 'fleetDuty', fleet: x, duty: { kind: 'patrol', zone: z } }), [id, zone]);
     }
   } else {
+    // the selection (a box or Shift+clicks; counted as one), Patrol…, a click on the zone
     await page.evaluate((ids) => (window as any).cnf.setForceSel(ids), fleets);
     inputs++;
+    await page.waitForTimeout(100);
     await page.locator('[data-fk="sel-fleet-patrol"]').click();
     inputs++;
-    await page.evaluate((z) => (window as any).cnf.pickZone?.(z), zone);
+    const pt = await zonePoint(page, zone);
+    if (pt) await page.mouse.click(pt.x, pt.y);
     inputs++;
+    await page.waitForTimeout(150);
+    report.groupResult = await page.locator('[data-sk="group-result"]').innerText().catch(() => null);
+    await page.screenshot({ path: join(OUT, 'fleets.png') });
   }
   report.fourFleetsPatrol = { inputs, patrolling: await page.evaluate((ids) => ids.filter((x: string) => (window as any).cnf.sim.state.fleets[x]?.duty?.kind === 'patrol').length, fleets) };
+
+  // ── six wings move to one airfield (a level-3 airfield with room for them) ──
+  await page.evaluate(() => (window as any).cnf.clearForceSel());
+  const six = places.wings.slice(0, 6);
+  const dest = await page.evaluate((ws) => {
+    const app = (window as any).cnf;
+    const st = app.sim.state;
+    const bases = new Set(ws.map((w: string) => st.wings[w]?.base));
+    const p = (app.sim.world.provIds as string[]).find((x) => st.provinces[x].owner === 'ger' && st.provinces[x].airfield > 0 && !bases.has(x));
+    if (p) st.provinces[p].airfield = Math.max(st.provinces[p].airfield, 5);
+    return p;
+  }, six);
+  inputs = 0;
+  if (six.length && dest) {
+    if (PHASE === 'before') {
+      // each wing: select it (1), Change base… (1), click the airfield (1)
+      for (const id of six) {
+        await page.evaluate((x) => (window as any).cnf.selectWing(x), id);
+        inputs++;
+        inputs += 2;
+        await page.evaluate(([x, b]) => (window as any).cnf.do({ type: 'rebaseWing', wing: x, base: b }), [id, dest]);
+      }
+    } else {
+      await page.evaluate((ids) => (window as any).cnf.setForceSel(ids), six);
+      inputs++;
+      await page.waitForTimeout(100);
+      await page.locator('[data-fk="sel-wing-rebase"]').click();
+      inputs++;
+      const pt = await provincePoint(page, dest);
+      if (pt) await page.mouse.click(pt.x, pt.y);
+      inputs++;
+      await page.waitForTimeout(150);
+      report.wingResult = await page.locator('[data-sk="group-result"]').innerText().catch(() => null);
+      await page.screenshot({ path: join(OUT, 'wings-rebase.png') });
+    }
+  }
+  report.sixWingsMove = { inputs, wings: six.length, moved: await page.evaluate(([ws, b]) => (ws as string[]).filter((x) => (window as any).cnf.sim.state.wings[x]?.base === b).length, [six, dest] as [string[], string]) };
   report.errors = errors;
   writeFileSync(join(OUT, 'audit.json'), `${JSON.stringify(report, null, 1)}\n`);
   console.log(JSON.stringify(report, null, 1));

@@ -137,7 +137,11 @@ export class App {
     | { kind: 'drop'; army: string }
     /** the area of the operation being prepared: clicks add or remove provinces (or sea zones) */
     | { kind: 'opArea' }
+    /** several fleets or wings at once: where they sail, the place of their standing order, or the airfield they move to */
+    | { kind: 'group'; order: 'sail' | 'rebase' | FleetDutyKind; ids: string[] }
     | null = null;
+  /** the last order given to several forces at once: what each did, or why not (the selection card lists them all) */
+  groupResult: { title: string; rows: Array<{ id: string; name: string; ok: boolean; text: string }> } | null = null;
   /** forces selected together (armies, fleets, wings of ours), for operations and group orders */
   forceSel: string[] = [];
   /** provinces selected together, for batch construction and recruitment */
@@ -1212,18 +1216,102 @@ export class App {
 
   private groupMoveTo(dest: ProvinceId): void {
     const ids = this.groupMoveIds ?? [];
-    this.finishWeek();
-    let ok = 0;
-    const why: string[] = [];
-    for (const id of ids) {
-      const a = this.sim!.state.armies[id];
-      if (!a) continue;
-      const r = applyCommand(this.sim!, { type: 'move', nation: this.player!, army: id, dest });
-      if (r.ok) ok++;
-      else why.push(`${a.name}: ${r.reason}`);
-    }
-    this.toast(`${ok} of ${ids.length} armies marching to ${this.sim!.world.prov[dest].name}.${why.length ? ` ${why[0]}` : ''}`, why.length ? 'fail' : 'good');
     this.cancelMoveMode();
+    this.groupOrder(`March to ${this.sim!.world.prov[dest].name}`, ids, () => ({ type: 'move', army: '', dest }), 'army');
+  }
+
+  /**
+   * One order for several forces: each is checked and given it on its own (by the
+   * ordinary rules, as if ordered one by one); every one that cannot says why, and the
+   * selection card lists them all, so none is dropped silently.
+   */
+  groupOrder(title: string, ids: string[], make: (id: string) => PlayerCommand | string, field?: 'army' | 'fleet' | 'wing'): void {
+    const sim = this.sim;
+    if (!sim) return;
+    this.finishWeek();
+    const rows: Array<{ id: string; name: string; ok: boolean; text: string }> = [];
+    for (const id of ids) {
+      const ref = unitRef(sim, id);
+      if (!ref || ref.unit.nation !== this.player) {
+        rows.push({ id, name: id, ok: false, text: 'No longer ours (lost or disbanded).' });
+        continue;
+      }
+      const c = make(id);
+      if (typeof c === 'string') {
+        rows.push({ id, name: ref.unit.name, ok: false, text: c });
+        continue;
+      }
+      const cmd = (field ? { ...c, [field]: id } : c) as PlayerCommand;
+      const r = this.do(cmd, true);
+      rows.push({ id, name: ref.unit.name, ok: r.ok, text: r.ok ? (r.message ?? 'Done.') : r.reason });
+    }
+    const ok = rows.filter((r) => r.ok).length;
+    this.groupResult = { title, rows };
+    this.toast(`${title}: ${ok} of ${rows.length}${ok < rows.length ? ` · ${rows.length - ok} could not (each says why on the selection card)` : ''}.`, ok < rows.length ? 'fail' : 'good');
+    this.refresh();
+  }
+
+  /** The next map click picks the place for several fleets or wings at once. */
+  startGroupTarget(order: 'sail' | 'rebase' | FleetDutyKind, ids: string[]): void {
+    if (!ids.length) return;
+    this.targeting = { kind: 'group', order, ids };
+    this.canvas.classList.add('move-mode');
+    this.dutyHint = order === 'sail' ? 'Click the sea zone (or a coast) where they sail.' : order === 'rebase' ? 'Click the airfield (or a fleet with carriers) to move them to.' : '';
+    if (order !== 'sail' && order !== 'rebase') this.startDutyHint(order);
+    this.refresh();
+  }
+
+  private startDutyHint(duty: FleetDutyKind): void {
+    const what: Record<FleetDutyKind, string> = {
+      hold: 'Click anywhere.',
+      patrol: 'Click the sea zone to patrol.',
+      blockade: 'Click the sea zone to blockade (a coast takes the waters off it).',
+      raid: 'Click the sea zone to raid in.',
+      escort: 'Click the fleet of ours to escort.',
+      bombard: 'Click the coast province to shell.',
+      port: 'Click the port to return to.',
+    };
+    this.dutyHint = what[duty];
+  }
+
+  /** Where each fleet would sail for a click (its own route to that coast). */
+  private fleetZoneAt(fleetId: string, x: number, y: number): string | null {
+    const sim = this.sim;
+    const f = sim?.state.fleets[fleetId];
+    if (!sim || !f || !this.renderer) return null;
+    const pid = this.renderer.provinceAt(x, y);
+    return this.renderer.zoneAt(x, y) ?? (pid ? pathToCoast(sim, f.zone, pid)?.at(-1) ?? (sim.world.provZones[pid]?.includes(f.zone) ? f.zone : null) : null);
+  }
+
+  private resolveGroupTarget(tg: { order: 'sail' | 'rebase' | FleetDutyKind; ids: string[] }, x: number, y: number): void {
+    const sim = this.sim!;
+    const r = this.renderer!;
+    if (tg.order === 'sail') {
+      const pid = r.provinceAt(x, y);
+      const zone = r.zoneAt(x, y);
+      const where = zone ? zoneName(sim, zone) : pid ? `the coast of ${provName(sim, pid)}` : 'there';
+      this.groupOrder(`Sail to ${where}`, tg.ids, (id) => {
+        const z = this.fleetZoneAt(id, x, y);
+        return z ? { type: 'moveFleet', fleet: id, zone: z } : pid ? `${provName(sim, pid)} is not on a coast it can reach.` : 'Choose a sea zone.';
+      });
+      return;
+    }
+    if (tg.order === 'rebase') {
+      const fleet = r.fleetAt(x, y);
+      const carrier = fleet && sim.state.fleets[fleet]?.nation === this.player ? fleet : null;
+      const pid = carrier ? null : r.provinceAt(x, y);
+      if (!carrier && !pid) {
+        this.refresh();
+        return;
+      }
+      this.groupOrder(`Move to ${carrier ? sim.state.fleets[carrier].name : provName(sim, pid!)}`, tg.ids, (id) => (carrier ? { type: 'rebaseWing', wing: id, carrier } : { type: 'rebaseWing', wing: id, base: pid! }));
+      return;
+    }
+    const duty = tg.order;
+    this.groupOrder(DUTY_LABELS[duty], tg.ids, (id) => {
+      const d = this.dutyAt(id, duty, x, y);
+      return d ? { type: 'fleetDuty', fleet: id, duty: d } : `Nothing it can ${DUTY_LABELS[duty].toLowerCase()} there.`;
+    });
   }
 
   /** The next map click picks a destination zone for the selected fleet. */
@@ -2142,22 +2230,13 @@ export class App {
         const d = this.dutyAt(tg.fleet, tg.duty, x, y);
         if (d) this.do({ type: 'fleetDuty', fleet: tg.fleet, duty: d });
         else this.refresh();
-      } else if (tg.kind === 'air') {
+      } else if (tg.kind === 'group') this.resolveGroupTarget(tg, x, y);
+      else if (tg.kind === 'air') {
         const t = this.airTargetAt(tg.mission, x, y);
         if (t && tg.group) {
           // several wings at once: each flies it if it can; the others say why not
-          const sim = this.sim;
-          let ok = 0;
-          const why: string[] = [];
-          for (const id of tg.group) {
-            const w = sim.state.wings[id];
-            if (!w) continue;
-            const prob = missionProblem(sim, w.nation, id, tg.mission, t.target, t.zone);
-            if (prob) why.push(`${w.name}: ${prob}`);
-            else if (this.do({ type: 'airMission', wing: id, mission: tg.mission, target: t.target, zone: t.zone }, true).ok) ok++;
-          }
-          this.toast(`${ok} of ${tg.group.length} wings fly ${MISSION_LABELS[tg.mission].toLowerCase()}${why.length ? `. ${why.slice(0, 2).join(' ')}` : '.'}`, why.length ? 'fail' : undefined);
-          this.refresh();
+          const where = t.zone ? zoneName(this.sim, t.zone) : provName(this.sim, t.target!);
+          this.groupOrder(`${MISSION_LABELS[tg.mission]} over ${where}`, tg.group, (id) => ({ type: 'airMission', wing: id, mission: tg.mission, target: t.target, zone: t.zone }));
         } else if (t) this.do({ type: 'airMission', wing: tg.wing, mission: tg.mission, target: t.target, zone: t.zone });
         else this.refresh();
       } else this.refresh();
@@ -2376,6 +2455,8 @@ export class App {
             ? `Click the coast where the troops land (${sim.state.fleets[tg.fleet]?.name ?? 'the fleet'} carries them).`
             : tg.kind === 'duty'
               ? `${DUTY_LABELS[tg.duty]} (${sim.state.fleets[tg.fleet]?.name ?? 'the fleet'}): ${this.dutyHint}`
+              : tg.kind === 'group'
+                ? `${tg.order === 'sail' ? 'Sail' : tg.order === 'rebase' ? 'Move' : DUTY_LABELS[tg.order]} (${tg.ids.length} ${tg.order === 'rebase' ? 'wings' : 'fleets'}, each by its own route and range): ${this.dutyHint}`
               : tg.kind === 'drop'
                 ? `Airborne drop: click where ${sim.state.armies[tg.army]?.name ?? 'the army'} lands; the tooltip shows the range and the risks.`
               : `${MISSION_LABELS[tg.mission]}: click where ${tg.group ? `${tg.group.length} wings fly` : `${sim.state.wings[tg.wing]?.name ?? 'the wing'} flies`} (${tg.mission === 'naval' ? 'a sea zone' : SEA_MISSIONS.includes(tg.mission) ? 'a province or a sea zone' : 'a province'}; the shaded area is within range).`;
