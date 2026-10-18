@@ -14,6 +14,7 @@ import { maxMorale, nationStrength, unitUnlocked } from '../../sim/military';
 import { operationsSection, selectBox } from './operations';
 import { autoConquerSection, startAutoConquer, warOps } from './autoconquer';
 import { productionSection } from './production';
+import { forcesOverview } from './overview';
 import { aliveNations, alliesOf, armiesOf, atWar, dateOf, hasTreaty, menOf, nationName, ownedProvinces, provName, sideOf, truceUntil, warsOf, type Sim } from '../../sim/state';
 import { armySupplyInfo } from '../../sim/supply';
 import type { Army, Demand, DemandKind, NationId, PeaceTerms, StrategicResource, TreatyType, War } from '../../sim/types';
@@ -169,7 +170,9 @@ function militaryLedger(app: App): HTMLElement {
 
   const fleetsOf = (sim: Sim, nid: NationId) => Object.values(sim.state.fleets).filter((f) => f.nation === nid).sort((a, b) => (a.id < b.id ? -1 : 1));
   const wingsOf = (sim: Sim, nid: NationId) => Object.values(sim.state.wings).filter((w) => w.nation === nid).sort((a, b) => (a.id < b.id ? -1 : 1));
-  // Auto-conquer (one order against our enemies), then the detailed operations
+  // every branch at a glance, and what needs attention; then Auto-conquer (one order
+  // against our enemies) and the detailed operations
+  kids.push(forcesOverview(app));
   kids.push(autoConquerSection(app));
   kids.push(operationsSection(app));
   // several ships, air wings or regiments in one order
