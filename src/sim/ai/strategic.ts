@@ -48,6 +48,7 @@ import { buildSettlement, counterOffer, describeDemand, evaluateSettlement, sett
 import { aiRand, diffOf, issue } from './common';
 import { coastalShare, navalStrategy, planInvasion } from './navy';
 import { aiTrade } from './trade';
+import { aiGovernment } from './government';
 import { dependenceOn } from '../trade';
 import {
   blocOf,
@@ -1172,6 +1173,7 @@ export function strategic(sim: Sim, nid: NationId): void {
   planInvasion(sim, nid);
   diplomacy(sim, nid);
   aiTrade(sim, nid);
+  aiGovernment(sim, nid);
   considerWar(sim, nid);
   // rivals close to victory make everyone nervous
   const rival = rivalLeader(sim, nid);

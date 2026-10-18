@@ -9,6 +9,8 @@
 // changed since (another revision), the save loads only when the provinces and
 // realms are the same, with a notice; otherwise it is refused.
 
+import { applyIdentities, initGovernment } from './government';
+import { initCommanders } from './commanders';
 import { C, RESOURCE_INFO, SCHEMA_VERSION } from './config';
 import { provincialTaxes } from './economy';
 import { convertLegacyTrade } from './trade';
@@ -188,6 +190,11 @@ export function readSave(text: string): LoadedSave {
         `. Industry & Trade shows them, with what each realm can offer.`,
     );
   }
+  // government, heads of government and commanders for a campaign saved before them;
+  // a formed nation's name and colours (format 9)
+  initGovernment(sim);
+  initCommanders(sim);
+  applyIdentities(sim);
   const problems = checkInvariants(sim);
   if (problems.length) throw new SaveError(`The save is inconsistent: ${problems.slice(0, 3).join('; ')}.`);
   // bug reports from this campaign replay from the state as loaded

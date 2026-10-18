@@ -5,6 +5,7 @@
 // disbanding returns survivors to the pool (capped by the reserve), and
 // casualties leave the system permanently (and reduce population).
 
+import { commanderMod } from './commanders';
 import { interdiction } from './air';
 import { C, RESOURCE_INFO, UNITS, UNIT_TYPES } from './config';
 import { TECHS } from './data/techs';
@@ -387,7 +388,7 @@ export function* weeklyArmyCareSteps(sim: Sim): Generator<void, void, void> {
     if (a.battle) continue;
     const status = supplyStatus(a.supply);
     if (status === 'unsupplied') {
-      const rate = C.supply.attrition * Math.max(0.1, 1 + mods.attrition);
+      const rate = C.supply.attrition * Math.max(0.1, 1 + mods.attrition + commanderMod(sim, a.id, 'attrition'));
       let lost = 0;
       for (const r of a.regiments) {
         const l = Math.round(r.men * rate);
@@ -414,7 +415,7 @@ export function* weeklyArmyCareSteps(sim: Sim): Generator<void, void, void> {
       const friendlyGround = isFriendly(sim, a.nation, st.provinces[a.location].controller);
       let rate = friendlyGround ? C.army.moraleRecovery : C.army.moraleRecoveryHostile;
       if (status === 'strained') rate *= 0.5;
-      rate *= Math.max(0, 1 + mods.moraleRecovery);
+      rate *= Math.max(0, 1 + mods.moraleRecovery + commanderMod(sim, a.id, 'moraleRecovery'));
       a.morale = Math.min(mm, a.morale + rate);
       if (status === 'supplied' && friendlyGround) reinforce(sim, a);
     }

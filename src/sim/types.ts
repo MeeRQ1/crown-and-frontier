@@ -354,6 +354,72 @@ export interface RecruitOrder {
   order?: string;
 }
 
+// ───────────────────────────── Government (format 9) ─────────────────────────
+
+export type IdeologyId = 'monarchy' | 'democracy' | 'authoritarian' | 'fascism' | 'communism';
+export type LeaderTrait = 'reformer' | 'industrialist' | 'diplomat' | 'militarist' | 'financier' | 'administrator';
+export type CommanderTrait = 'offensive' | 'defensive' | 'organiser' | 'logistician' | 'gunnery' | 'shipwright' | 'interceptor' | 'striker';
+export type FormableId = 'austria-hungary' | 'scandinavia' | 'iberia' | 'yugoslavia' | 'baltic';
+
+export interface Leader {
+  name: string;
+  trait: LeaderTrait;
+  since: number;
+  /** names are generated, not historical */
+  generated: true;
+}
+
+export interface Commander {
+  id: string;
+  name: string;
+  branch: 'land' | 'sea' | 'air';
+  trait: CommanderTrait;
+  /** an army, fleet or wing of its branch, or an operation (its members of that branch without their own commander) */
+  assigned: string | null;
+}
+
+export interface TradeMinisterSettings {
+  /** the goods it may buy and sell */
+  resources: Tradeable[];
+  /** realms it may deal with (empty: any trade partner) */
+  partners: NationId[];
+  /** stock to keep of each good (missing: the reserve the realm keeps by default) */
+  targets: Partial<Record<Tradeable, number>>;
+  /** crowns a month its purchase contracts may cost in all */
+  budget: number;
+  /** the most it pays, as a multiple of the list price */
+  maxPrice: number;
+  /** it may sell what lies above the targets */
+  sell: boolean;
+  /** the least it sells for, as a multiple of the list price */
+  minPrice: number;
+}
+
+export interface TradeMinister {
+  name: string;
+  /** 1–3: contracts it can manage at once (2, 4, 6) and how well it bargains */
+  competence: number;
+  /** crowns a month */
+  salary: number;
+  hired: number;
+  paused: boolean;
+  settings: TradeMinisterSettings;
+  /** the contracts it signed (it manages only these; the player's own are left alone) */
+  managed: string[];
+  /** what it did or could not do, newest last (bounded) */
+  log: Array<{ tick: number; text: string }>;
+  /** goods it bought or sold recently, so it never turns round on them within six months */
+  recent: Partial<Record<Tradeable, { side: 'buy' | 'sell'; tick: number }>>;
+  /** when it last reported a goal it could not meet, per good */
+  told: Partial<Record<Tradeable, number>>;
+}
+
+export interface Cabinet {
+  trade?: TradeMinister | null;
+  /** candidates on offer (refreshed yearly), by portfolio */
+  candidates?: { trade: Array<{ name: string; competence: number; salary: number }>; tick: number };
+}
+
 /**
  * A standing production order (format 9): several ships, air wings or regiments of one
  * type, at one place or spread over several. Each week it lays down (and pays for, as
@@ -922,6 +988,16 @@ export interface NationState {
   modifiers: Modifier[];
   /** standing production orders (format 9): ships, air wings and regiments laid down as capacity and money allow */
   production?: ProductionOrder[];
+  /** the form of government (format 9) and since when; a change has a cost and a ten-year wait */
+  ideology?: { id: IdeologyId; since: number };
+  /** the head of government (format 9): a generated name and one trait */
+  leader?: Leader;
+  /** generals, admirals and air marshals (format 9), each assigned to at most one force or operation */
+  commanders?: Commander[];
+  /** the nation this realm formed (format 9): once a campaign; the identity shown instead of the starting one */
+  formed?: { id: FormableId; tick: number };
+  /** the paid cabinet (format 9) */
+  cabinet?: Cabinet;
   eventCooldowns: Record<EventId, number>;
   nextEventTick: number;
   pendingEvents: PendingEvent[];
@@ -1160,7 +1236,7 @@ export interface GameState {
   proposals: Proposal[];
   reports: BattleReport[];
   notifications: Notification[];
-  counters: { army: number; battle: number; war: number; treaty: number; note: number; proposal: number; event: number; regiment: number; coalition: number; fleet: number; ship: number; wing: number; loan: number; bloc: number; contract: number; op?: number; production?: number };
+  counters: { army: number; battle: number; war: number; treaty: number; note: number; proposal: number; event: number; regiment: number; coalition: number; fleet: number; ship: number; wing: number; loan: number; bloc: number; contract: number; op?: number; production?: number; commander?: number };
   result: GameResult | null;
   continueAfterResult: boolean;
   diagnostics: AIDiagnostic[];
@@ -1208,6 +1284,12 @@ export type Command =
   | { type: 'reserveUnits'; nation: NationId; units: string[]; reserved: boolean }
   | { type: 'orderProduction'; nation: NationId; kind: ProductionOrder['kind']; unit: string; places: ProvinceId[]; count: number; mode: 'per' | 'total'; assign?: { op?: string | null; rally?: string | null } }
   | { type: 'productionState'; nation: NationId; order: string; state: 'paused' | 'active' | 'cancel' }
+  | { type: 'setIdeology'; nation: NationId; ideology: IdeologyId }
+  | { type: 'replaceLeader'; nation: NationId; trait: LeaderTrait }
+  | { type: 'assignCommander'; nation: NationId; commander: string; to: string | null }
+  | { type: 'recruitCommander'; nation: NationId; trait: CommanderTrait }
+  | { type: 'formNation'; nation: NationId; formable: FormableId }
+  | { type: 'cabinet'; nation: NationId; action: 'hire' | 'dismiss' | 'pause' | 'resume' | 'settings'; candidate?: number; settings?: Partial<TradeMinisterSettings> }
   /** armies, fleets and wings (by id) join the operation (leaving any other) */
   | { type: 'assignOp'; nation: NationId; op: string; units: string[] }
   /** members leave their operation and keep their last orders under direct command */

@@ -30,16 +30,18 @@ import { icon } from '../icons';
 import { emblem, type EmblemName } from '../emblems';
 import { industryLedger as industryLedgerNew } from '../ledgers/industry';
 import { realmLedger as realmLedgerNew } from '../ledgers/realm';
+import { governmentLedger } from '../ledgers/government';
 import { researchLedger as researchLedgerNew } from '../ledgers/research';
 import { focusLedger as focusLedgerNew } from '../ledgers/focus';
 import { victoryLedger as victoryLedgerNew } from '../ledgers/victory';
 import { chronicleLedger } from '../ledgers/chronicle';
 import { helpLedger as helpLedgerNew } from '../ledgers/help';
 
-export type LedgerTab = 'realm' | 'industry' | 'military' | 'research' | 'focus' | 'diplomacy' | 'wars' | 'victory' | 'log' | 'help';
+export type LedgerTab = 'realm' | 'government' | 'industry' | 'military' | 'research' | 'focus' | 'diplomacy' | 'wars' | 'victory' | 'log' | 'help';
 
 const TITLES: Record<LedgerTab, string> = {
   realm: 'Realm & Budget',
+  government: 'Government & Cabinet',
   industry: 'Industry & Trade',
   military: 'Military',
   research: 'Research',
@@ -54,6 +56,7 @@ const TITLES: Record<LedgerTab, string> = {
 /** Each ledger's section motif (the pack's menu emblems), shown once in its header. */
 const EMBLEMS: Record<LedgerTab, EmblemName> = {
   realm: 'realm-budget',
+  government: 'realm-budget',
   industry: 'industry-trade',
   military: 'military',
   research: 'research',
@@ -91,6 +94,7 @@ const WIDE = new Set<LedgerTab>(['industry', 'research', 'focus']);
 
 const BODIES: Record<LedgerTab, (app: App) => HTMLElement> = {
   realm: realmLedgerNew,
+  government: governmentLedger,
   industry: industryLedgerNew,
   military: militaryLedger,
   research: researchLedgerNew,

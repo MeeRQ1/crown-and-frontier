@@ -2,6 +2,7 @@
 // wing, and the port and airfield sections of a province card. Unavailable
 // actions always say why.
 
+import { unitCommanderSection } from './commander';
 import { orderHereButton } from './production';
 import { airBalance, airControl, airfieldRoom, buildWingProblem, deckSlots, ferryRange, LAND_MISSIONS, MISSION_HELP, MISSION_LABELS, missionPlace, missionProblem, placeName, readyFactor, rebaseProblem, SEA_MISSIONS, wingCost, wingRange, wingsAboard, wingStatus, wingUnlocked, type WingState } from '../../sim/air';
 import { C, RESOURCE_INFO, SHIP_TYPES, SHIPS, WING_TYPES, WINGS } from '../../sim/config';
@@ -145,6 +146,7 @@ export function fleetCard(app: App, f: Fleet): HTMLElement[] {
 
   const body = h('div', { class: 'ins-body scroll', 'data-sk': 'ins' });
   { const ops = f.nation === app.player ? unitOpSection(app, f.id) : null; if (ops) body.appendChild(ops); }
+  { const cmd = f.nation === app.player ? unitCommanderSection(app, f.id) : null; if (cmd) body.appendChild(cmd); }
   const cap = fleetCapacity(f);
   body.appendChild(
     h(
@@ -487,6 +489,7 @@ export function wingCard(app: App, w: AirWing): HTMLElement[] {
   }
   const body = h('div', { class: 'ins-body scroll', 'data-sk': 'ins' });
   { const ops = w.nation === app.player ? unitOpSection(app, w.id) : null; if (ops) body.appendChild(ops); }
+  { const cmd = w.nation === app.player ? unitCommanderSection(app, w.id) : null; if (cmd) body.appendChild(cmd); }
   const rng = wingRange(sim, w);
   body.appendChild(
     h(

@@ -8,6 +8,9 @@ import { nextMemoEpoch } from './index';
 import { buildProblem, cancelProblem, cancelProject, PROJECT_LABELS, startProject } from './construction';
 import { runBatchBuild, runBatchRecruit } from './batch';
 import { createProductionOrder, orderProductionProblem, orderTotals, setProductionState, unitLabel } from './production';
+import { formNation, formProblem, ideologyProblem, replaceLeader, replaceLeaderProblem, setIdeology } from './government';
+import { assignCommander, assignCommanderProblem, COMMANDER_TRAITS, recruitCommander, recruitCommanderProblem } from './commanders';
+import { cabinetAction, cabinetProblem } from './cabinet';
 import { assignUnits, cancelOperation, createOperation, createOpProblem, editOperation, editOpProblem, opSummaryLine, releaseUnits, reserveUnits, resumeUnits, setOpStatus, takeUnderDirectCommand, unitRef } from './ops/operations';
 import {
   cancelTreaty,
@@ -291,6 +294,18 @@ export function checkCommand(sim: Sim, cmd: Command): string | null {
       return cmd.units.length ? null : 'Choose the forces.';
     case 'orderProduction':
       return orderProductionProblem(sim, cmd.nation, cmd.kind, cmd.unit, cmd.places, cmd.count, cmd.mode, cmd.assign);
+    case 'setIdeology':
+      return ideologyProblem(sim, cmd.nation, cmd.ideology);
+    case 'replaceLeader':
+      return replaceLeaderProblem(sim, cmd.nation, cmd.trait);
+    case 'assignCommander':
+      return assignCommanderProblem(sim, cmd.nation, cmd.commander, cmd.to);
+    case 'recruitCommander':
+      return recruitCommanderProblem(sim, cmd.nation, cmd.trait);
+    case 'formNation':
+      return formProblem(sim, cmd.nation, cmd.formable);
+    case 'cabinet':
+      return cabinetProblem(sim, cmd.nation, cmd.action, cmd.candidate, cmd.settings);
     case 'productionState': {
       const o = (st.nations[cmd.nation].production ?? []).find((x) => x.id === cmd.order);
       if (!o) return 'No such production order.';
@@ -728,6 +743,20 @@ function execute(sim: Sim, cmd: Command, auto = false): CommandResult {
     }
     case 'productionState':
       return { ok: true, message: setProductionState(sim, cmd.nation, cmd.order, cmd.state) };
+    case 'setIdeology':
+      return { ok: true, message: setIdeology(sim, cmd.nation, cmd.ideology) };
+    case 'replaceLeader':
+      return { ok: true, message: replaceLeader(sim, cmd.nation, cmd.trait) };
+    case 'assignCommander':
+      return { ok: true, message: assignCommander(sim, cmd.nation, cmd.commander, cmd.to) };
+    case 'recruitCommander': {
+      const c = recruitCommander(sim, cmd.nation, cmd.trait);
+      return { ok: true, message: `${c.name} joins the staff (${COMMANDER_TRAITS[cmd.trait].label.toLowerCase()}): assign them to a force or an operation.` };
+    }
+    case 'formNation':
+      return { ok: true, message: formNation(sim, cmd.nation, cmd.formable) };
+    case 'cabinet':
+      return { ok: true, message: cabinetAction(sim, cmd.nation, cmd.action, cmd.candidate, cmd.settings) };
     case 'keepFormation': {
       const a = st.armies[cmd.army];
       a.keep = cmd.keep;

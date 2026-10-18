@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { governmentSources } from '../src/sim/government';
 import { applyCommand, checkCommand } from '../src/sim/commands';
 import { EVENTS, EVENT_MAP } from '../src/sim/data/events';
 import { GENERIC_BY_ID } from '../src/sim/focus';
@@ -84,7 +85,9 @@ describe('research and national focus', () => {
     n.focus.done = ['dip_service', 'dip_charter'];
     n.research.done = ['joint_stock'];
     const m = computeMods(sim, 'a');
-    expect(m.income).toBeCloseTo((GENERIC_BY_ID.dip_charter.effects.income ?? 0) + (TECHS.joint_stock.effects.income ?? 0), 9);
+    // the form of government and the head of government add their own income effects (format 9)
+    const gov = governmentSources(sim, 'a').reduce((a, s) => a + (s.effects.income ?? 0), 0);
+    expect(m.income).toBeCloseTo((GENERIC_BY_ID.dip_charter.effects.income ?? 0) + (TECHS.joint_stock.effects.income ?? 0) + gov, 9);
   });
 });
 

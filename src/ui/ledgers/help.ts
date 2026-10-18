@@ -52,7 +52,7 @@ function articles(): Article[] {
       lead: 'Click or tap to select; drag to pan; wheel or pinch to zoom. Right-click or long-press moves the selected army or fleet.',
       points: [
         h('span', null, h('kbd', null, 'Space'), ' pause · ', h('kbd', null, '1'), '–', h('kbd', null, '4'), ' speed · ', h('kbd', null, 'Esc'), ' close or deselect'),
-        h('span', null, 'Ledgers: ', h('kbd', null, 'B'), ' Realm, ', h('kbd', null, 'I'), ' Industry, ', h('kbd', null, 'M'), ' Military, ', h('kbd', null, 'T'), ' Research, ', h('kbd', null, 'P'), ' Focus, ', h('kbd', null, 'D'), ' Diplomacy, ', h('kbd', null, 'W'), ' Wars, ', h('kbd', null, 'V'), ' Victory, ', h('kbd', null, 'L'), ' Chronicle, ', h('kbd', null, 'H'), ' Help'),
+        h('span', null, 'Ledgers: ', h('kbd', null, 'B'), ' Realm, ', h('kbd', null, 'R'), ' Government, ', h('kbd', null, 'I'), ' Industry, ', h('kbd', null, 'M'), ' Military, ', h('kbd', null, 'T'), ' Research, ', h('kbd', null, 'P'), ' Focus, ', h('kbd', null, 'D'), ' Diplomacy, ', h('kbd', null, 'W'), ' Wars, ', h('kbd', null, 'V'), ' Victory, ', h('kbd', null, 'L'), ' Chronicle, ', h('kbd', null, 'H'), ' Help'),
         h('span', null, h('kbd', null, 'G'), ' set a destination · ', h('kbd', null, 'N'), ' next army (', h('kbd', null, 'Shift'), '+', h('kbd', null, 'N'), ' next group) · ', h('kbd', null, 'C'), ' centre the selection · ', h('kbd', null, 'F'), ' fit the world · ', h('kbd', null, 'Home'), ' capital · ', h('kbd', null, 'K'), ' next battle · ', h('kbd', null, 'J'), ' jump to an alert'),
         h('span', null, 'Map modes: ', h('kbd', null, 'Shift'), '+', h('kbd', null, '1'), '…', h('kbd', null, String(MODES.length)), ` (${MODES.map((m) => m.label.toLowerCase()).join(', ')}); `, h('kbd', null, 'O'), ' cycles them. Arrow keys pan; ', h('kbd', null, '+'), ' and ', h('kbd', null, '−'), ' zoom.'),
         'In the Research and Focus plans, the arrow keys move between nodes.',
@@ -211,6 +211,22 @@ function articles(): Article[] {
         'Ships of an order form one squadron at each port (and join up at the zone you send them to); regiments form one army in each province. Pause, resume or cancel at any time: cancelling stops what has not started (nothing was paid for it); what is on the slipways or in training continues.',
       ],
       links: [['military', 'Open Military']],
+    },
+    {
+      id: 'government',
+      title: 'Government, commanders and cabinet',
+      icon: 'charter',
+      group: 'Basics',
+      lead: 'The Government ledger (R) holds the form of government, the head of government, a nation to proclaim, the commanders and the cabinet; every effect is shown before it is chosen, and the same rules bind every realm.',
+      points: [
+        'Five forms of government trade strengths for costs: a constitutional monarchy settles new land faster, a democracy trades and researches better but wearies of war, an authoritarian state keeps a cheaper and larger army, a fascist state expands by claims and alarms its neighbours, a communist state builds industry at the expense of commerce. A change costs four months of income and a year of unrest, needs peace, and then waits ten years.',
+        'The head of government has one trait with a strength and a cost; a democracy elects a new one every five years, other governments keep one longer. You may replace the head once in three years for a price.',
+        'Some realms may proclaim a nation once they own and hold its land (Austria may restore Austria-Hungary on the 1936 maps; Sweden, Norway or Denmark may form Scandinavia; and more): the ledger lists the conditions, shows the land still missing on the map, and the price. The realm keeps its forces, treaties and research; nothing is annexed by proclaiming it.',
+        'Commanders lead one army, fleet or air wing, or an operation (its members of their branch without a commander of their own). One commander per force: no benefit stacks. Their effect shows on the force’s card with the realm’s own.',
+        'A trade minister buys the goods you allow that are forecast to fall short of their targets, within your monthly budget and price limit, from your trade partners, and may sell surpluses; it never touches contracts you signed and reports what it could not do. Pause or dismiss it at any time.',
+        'National modifiers and their sources: the table at the foot of the ledger lists every modifier, its total and where each part comes from (one accounting for everything).',
+      ],
+      links: [['government', 'Open Government']],
     },
     {
       id: 'skill',

@@ -93,6 +93,7 @@ export interface UIState {
 
 const RAIL: Array<{ tab: LedgerTab; label: string; icon: Parameters<typeof icon>[0]; key: string; desk?: boolean }> = [
   { tab: 'realm', label: 'Realm', icon: 'crown', key: 'B' },
+  { tab: 'government', label: 'Govt', icon: 'charter', key: 'R' },
   { tab: 'industry', label: 'Industry', icon: 'factory', key: 'I' },
   { tab: 'military', label: 'Military', icon: 'military', key: 'M' },
   { tab: 'research', label: 'Research', icon: 'research', key: 'T' },
@@ -1197,11 +1198,26 @@ export class App {
     }, 'Cancel the operation', false);
   }
 
-  /** The area drawn on the map: the operation being prepared, or the one whose card is open. */
+  /** Provinces shown on the map from a ledger (a nation's required land), until cleared. */
+  shownArea: { provinces: ProvinceId[]; label: string } | null = null;
+
+  showProvinces(provinces: ProvinceId[], label: string): void {
+    this.shownArea = provinces.length ? { provinces, label } : null;
+    if (provinces.length) {
+      this.closeLedger();
+      this.centerOn(provinces[0], 30);
+      this.toast(`${label}: shaded on the map (Esc clears it).`, 'info');
+    }
+    this.mapDirty = true;
+    this.refresh();
+  }
+
+  /** The area drawn on the map: the operation being prepared, the one whose card is open, or a ledger's highlight. */
   private opAreaShown(): { provinces: ProvinceId[]; zones: string[]; draft: boolean } | null {
     if (this.opDraft) return { provinces: this.opDraft.area, zones: this.opDraft.zones, draft: true };
     const op = this.selectedOp ? this.sim?.state.operations[this.selectedOp] : undefined;
-    return op ? { provinces: op.area, zones: op.zones, draft: false } : null;
+    if (op) return { provinces: op.area, zones: op.zones, draft: false };
+    return this.shownArea ? { provinces: this.shownArea.provinces, zones: [], draft: true } : null;
   }
 
   /** March all to…: the selected armies march to the next province clicked. */
@@ -2340,7 +2356,11 @@ export class App {
     const dialogOpen = !this.dialogLayer.classList.contains('hidden');
     if (k === 'Escape') {
       if (dialogOpen) return;
-      if (this.targeting) this.cancelTargeting();
+      if (this.shownArea && !this.ui.ledgerTab) {
+        this.shownArea = null;
+        this.mapDirty = true;
+        this.refresh();
+      } else if (this.targeting) this.cancelTargeting();
       else if (this.moveMode) this.cancelMoveMode();
       else if (this.opDraft) this.cancelOpDraft();
       else if (this.selectMode !== 'off') this.setSelectMode('off');
@@ -2366,7 +2386,7 @@ export class App {
       e.preventDefault();
       return;
     }
-    const ledgers: Record<string, LedgerTab> = { b: 'realm', i: 'industry', m: 'military', t: 'research', p: 'focus', d: 'diplomacy', w: 'wars', v: 'victory', l: 'log', h: 'help' };
+    const ledgers: Record<string, LedgerTab> = { b: 'realm', r: 'government', i: 'industry', m: 'military', t: 'research', p: 'focus', d: 'diplomacy', w: 'wars', v: 'victory', l: 'log', h: 'help' };
     const lk = k.toLowerCase();
     if (k === ' ') {
       this.togglePause();

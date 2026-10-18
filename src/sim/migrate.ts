@@ -17,7 +17,8 @@
 //      batteries, population in people; AI peace and treaty memory
 //   8  operations (delegated command); the AI's failure memory
 //   9  Simple Auto-conquer (forces kept for direct command), standing production
-//      orders for ships, air wings and regiments
+//      orders for ships, air wings and regiments; forms of government, heads of
+//      government, commanders, formable nations and the cabinet
 
 import { checkMapObject } from '../maps/validate';
 import { mapChecksum, type MapPackage } from '../maps/format';
@@ -262,8 +263,9 @@ const STEPS: Record<number, Step> = {
     st.schema = 9;
     save.schema = 9;
     notices.push(
-      `This save was made before Auto-conquer and production orders (save format 8) and was converted to format 9. ` +
-        `Your forces, operations and shipyards are as they were: nothing has been ordered for you.`,
+      `This save was made before Auto-conquer, production orders and the government (save format 8) and was converted to format 9. ` +
+        `Every realm has the form of government of the scenario's date, a head of government and a small staff of commanders, none of them assigned; ` +
+        `your forces, operations and shipyards are as they were: nothing has been ordered for you.`,
     );
   },
 };

@@ -1,6 +1,8 @@
 // State invariants checked by tests, AI campaigns and after loading a save.
 // Returns a list of violations (empty = consistent).
 
+import { FORMABLES, IDEOLOGIES, LEADER_TRAITS } from './government';
+import { COMMANDER_TRAITS } from './commanders';
 import { C, SHIPS, UNITS, WINGS } from './config';
 import { deckSlots } from './air';
 import { devMax } from './construction';
@@ -241,6 +243,30 @@ export function checkInvariants(sim: Sim): string[] {
   for (const [id, a] of Object.entries(st.armies)) member('army', id, a);
   for (const [id, f] of Object.entries(st.fleets)) member('fleet', id, f);
   for (const [id, w] of Object.entries(st.wings)) member('wing', id, w);
+  // government (format 9): known forms and traits; one commander per force (per branch of an
+  // operation), each of its realm; a formable proclaimed once
+  const formedBy = new Map<string, string>();
+  for (const [nid, n] of Object.entries(st.nations)) {
+    if (n.ideology && !IDEOLOGIES[n.ideology.id]) out.push(`${nid}: unknown government ${n.ideology.id}`);
+    if (n.leader && !LEADER_TRAITS[n.leader.trait]) out.push(`${nid}: unknown leader trait ${n.leader.trait}`);
+    if (n.formed) {
+      if (!FORMABLES[n.formed.id]) out.push(`${nid}: unknown formable ${n.formed.id}`);
+      if (formedBy.has(n.formed.id)) out.push(`${n.formed.id} proclaimed by ${formedBy.get(n.formed.id)} and ${nid}`);
+      formedBy.set(n.formed.id, nid);
+    }
+    const posts = new Set<string>();
+    for (const c of n.commanders ?? []) {
+      if (!COMMANDER_TRAITS[c.trait] || COMMANDER_TRAITS[c.trait].branch !== c.branch) out.push(`${nid}: commander ${c.id} trait ${c.trait}`);
+      if (!c.assigned) continue;
+      const key = `${c.assigned}|${c.branch}`;
+      if (posts.has(key)) out.push(`${nid}: two commanders lead ${c.assigned}`);
+      posts.add(key);
+      const u = st.armies[c.assigned] ?? st.fleets[c.assigned] ?? st.wings[c.assigned] ?? st.operations[c.assigned];
+      if (u && u.nation !== nid) out.push(`${nid}: commander ${c.id} leads another realm's force`);
+    }
+    const t = n.cabinet?.trade;
+    if (t && (t.competence < 1 || t.competence > 3 || t.log.length > 30 || t.managed.length > 6)) out.push(`${nid}: trade minister out of bounds`);
+  }
   // production orders (format 9): bounded, at known places, never more started than ordered
   for (const [nid, n] of Object.entries(st.nations)) {
     const list = n.production ?? [];

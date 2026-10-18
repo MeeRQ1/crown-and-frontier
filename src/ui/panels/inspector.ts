@@ -2,6 +2,7 @@
 // what is selected, a fact grid gives the essentials, primary actions come
 // next, and details follow. Unavailable actions always say why.
 
+import { unitCommanderSection } from './commander';
 import { airBalance, airControl } from '../../sim/air';
 import { C, RESOURCE_INFO, TERRAIN, UNITS, UNIT_TYPES } from '../../sim/config';
 import { checkCommand } from '../../sim/commands';
@@ -415,6 +416,7 @@ function armyCard(app: App, a: Army): HTMLElement[] {
 
   const body = h('div', { class: 'ins-body scroll', 'data-sk': 'ins' });
   { const ops = mine ? unitOpSection(app, a.id) : null; if (ops) body.appendChild(ops); }
+  { const cmd = mine ? unitCommanderSection(app, a.id) : null; if (cmd) body.appendChild(cmd); }
   const byType = (t: UnitType) => a.regiments.filter((r) => r.type === t);
   const mm = maxMorale(sim, a.nation);
   body.appendChild(

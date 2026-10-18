@@ -30,6 +30,7 @@
 // province without enemies (friendly ground and short supply lines preferred);
 // with no legal retreat they surrender.
 
+import { commanderMod } from './commanders';
 import { airSupportFor, airSupportForecast, interdiction } from './air';
 import { noteOpLoss } from './ops/losses';
 import { C, TERRAIN, UNITS } from './config';
@@ -206,6 +207,7 @@ function sideCalc(sim: Sim, pid: ProvinceId, s: SideSnap, enemyAntiCav = 0, fire
   let dropped = false;
   let supW = 0;
   let supBase = 0;
+  const led = new Map<string, number>();
   for (const e of [...f, ...g]) {
     const nat = e.army.nation;
     const m = nationMods(sim, nat);
@@ -214,7 +216,10 @@ function sideCalc(sim: Sim, pid: ProvinceId, s: SideSnap, enemyAntiCav = 0, fire
     const smul = supplyCombatMul(e.army.supply);
     supW += base * smul;
     supBase += base;
-    let v = base * (1 + m.attack) * smul;
+    // the army's general adds to its realm's (one accounting path: see commanders.ts)
+    let lead = led.get(e.army.id);
+    if (lead === undefined) led.set(e.army.id, (lead = commanderMod(sim, e.army.id, 'attack')));
+    let v = base * (1 + m.attack + lead) * smul;
     const key = ATTACK_MOD[e.reg.type];
     if (key) v *= 1 + m[key];
     if (e.reg.type === 'cavalry') v *= (1 + terr.cav) * (1 - enemyAntiCav);
@@ -321,7 +326,7 @@ export function defenceBonus(sim: Sim, pid: ProvinceId, def: SideSnap, river = f
     for (const r of a.regs) m += r.men;
     men += m;
     ent += entrenchBonus(sim, a.nation, a.stationary, hasEngineers(a)) * m;
-    tech += nationMods(sim, a.nation).defense * m;
+    tech += (nationMods(sim, a.nation).defense + commanderMod(sim, a.id, 'defense')) * m;
   }
   if (men > 0) {
     ent /= men;
