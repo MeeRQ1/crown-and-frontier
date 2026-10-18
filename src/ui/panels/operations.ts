@@ -22,18 +22,21 @@ import {
   opForces,
   planOpGround,
   POSTURE_HELP,
+  STRATEGY_HELP,
+  STRATEGY_LABELS,
   unitRef,
 } from '../../sim/ops/operations';
 import { hostileArmiesAt } from '../../sim/ai/common';
-import { atWar, isFriendly, menOf, provName } from '../../sim/state';
+import { atWar, enemiesOf, isFriendly, menOf, nationName, provName } from '../../sim/state';
 import { supplyDistances, supplyRange } from '../../sim/supply';
-import type { Army, Operation, OperationKind, OperationSettings, OpPosture, OpTask, ProvinceId, ZoneId } from '../../sim/types';
+import type { Army, NationId, Operation, OperationKind, OperationSettings, OpPosture, OpStrategy, OpTask, ProvinceId, ZoneId } from '../../sim/types';
 import type { App } from '../app';
 import { action, bar, button, h, row } from '../dom';
 import { men, plural } from '../format';
 import { icon } from '../icons';
 import { section } from './common';
 import { head } from './inspector';
+import { reserveToggle, warStatus } from './autoconquer';
 
 /** An operation being prepared (or an existing one being changed). */
 export interface OpDraft {
@@ -45,6 +48,8 @@ export interface OpDraft {
   units: string[];
   settings: OperationSettings;
   name: string;
+  /** Auto-conquer: the enemies chosen */
+  enemies: NationId[];
 }
 
 export interface OpPreview {
@@ -87,7 +92,7 @@ export function newDraft(app: App, units: string[], kind?: OperationKind): OpDra
   const forces = units.map((id) => unitRef(sim, id)).filter((r): r is NonNullable<typeof r> => !!r);
   const navalOnly = forces.length > 0 && forces.every((r) => r.kind !== 'army');
   const k: OperationKind = kind ?? (navalOnly && forces.some((r) => r.kind === 'fleet') ? 'sea' : 'conquer');
-  return { editing: null, kind: k, area: [], zones: [], units: [...units], settings: { ...DEFAULT_OP_SETTINGS }, name: '' };
+  return { editing: null, kind: k, area: [], zones: [], units: [...units], settings: { ...DEFAULT_OP_SETTINGS }, name: '', enemies: [] };
 }
 
 export function draftFromOp(op: Operation, units: string[]): OpDraft {
@@ -104,8 +109,9 @@ export function draftFromOp(op: Operation, units: string[]): OpDraft {
     airborneRisk: op.airborneRisk,
     resumeAfterOrder: op.resumeAfterOrder,
     onComplete: op.onComplete,
+    ...(op.kind === 'war' ? { autoAssign: !!op.autoAssign, strategy: op.strategy ?? 'none', focus: op.focus ?? null } : {}),
   };
-  return { editing: op.id, kind: op.kind, area: [...op.area], zones: [...op.zones], units, settings, name: op.name };
+  return { editing: op.id, kind: op.kind, area: [...op.area], zones: [...op.zones], units, settings, name: op.name, enemies: [...(op.enemies ?? [])] };
 }
 
 /** A stand-in operation for the preview (never in the state). */
@@ -133,6 +139,7 @@ function tempOp(app: App, d: OpDraft): Operation {
     issue: null,
     stats: { taken: 0, lost: 0, menLost: 0, shipsLost: 0, wingStrengthLost: 0, drops: 0, landings: 0 },
     landing: d.kind === 'landing' ? (real?.landing ?? { stage: 'gather', port: null }) : null,
+    ...(d.kind === 'war' ? { enemies: [...d.enemies] } : {}),
   };
 }
 
@@ -312,18 +319,19 @@ export function opEditor(app: App): HTMLElement[] {
   // 1. the objective
   if (!d.editing) {
     body.appendChild(
-      seg('Objective', d.kind, (Object.keys(OP_LABELS) as OperationKind[]).map((k) => [k, OP_LABELS[k].replace(/ (an area|to a province|the seas)$/, '')]), (k) => {
+      seg('Objective', d.kind, (Object.keys(OP_LABELS) as OperationKind[]).filter((k) => k !== 'war').map((k) => [k, OP_LABELS[k].replace(/ (an area|to a province|the seas)$/, '')]), (k) => {
         d.kind = k;
         if (k === 'advance' || k === 'landing') d.area = d.area.slice(0, 1);
         app.refresh();
       }, OP_HELP[d.kind]),
     );
   } else body.appendChild(h('p', { class: 'small muted' }, OP_HELP[d.kind]));
-  // 2. the area
+  // 2. the area (Auto-conquer: the enemies, its priority and who joins)
+  if (d.kind === 'war') body.appendChild(warSettings(app, d));
   const picking = app.targeting?.kind === 'opArea';
   const areaText = d.kind === 'sea' ? (d.zones.length ? describeArea(sim, { kind: 'sea', area: [], zones: d.zones }) : 'no sea zones yet') : d.area.length ? describeArea(sim, { kind: d.kind, area: d.area, zones: [] }) : 'nothing chosen yet';
   const fill = d.kind === 'conquer' ? reachableEnemyLand(app, d) : [];
-  body.appendChild(
+  if (d.kind !== 'war') body.appendChild(
     section(
       d.kind === 'sea' ? 'Sea zones' : d.kind === 'advance' ? 'Destination' : d.kind === 'landing' ? 'Beach (then the area)' : 'Area',
       h('p', null, areaText),
@@ -392,7 +400,43 @@ export function opEditor(app: App): HTMLElement[] {
   return out;
 }
 
+/** Auto-conquer in the editor: the enemies (realms at war with us), its priority, and whether new forces join. */
+function warSettings(app: App, d: OpDraft): HTMLElement {
+  const sim = app.sim!;
+  const enemies = enemiesOf(sim, app.player!).sort();
+  const boxes = enemies.map((e) => {
+    const box = h('input', { type: 'checkbox', 'data-fk': `op-enemy-${e}` }) as HTMLInputElement;
+    box.checked = d.enemies.includes(e);
+    box.addEventListener('change', () => {
+      d.enemies = box.checked ? [...new Set([...d.enemies, e])] : d.enemies.filter((x) => x !== e);
+      if (d.settings.focus && !d.enemies.includes(d.settings.focus)) d.settings = { ...d.settings, focus: null };
+      app.refresh();
+    });
+    return h('label', { class: 'switch', style: 'margin-right:10px' }, box, h('span', null, nationName(sim, e)));
+  });
+  const strat = (d.settings.strategy ?? 'none') as OpStrategy;
+  return section(
+    'Enemies',
+    enemies.length ? h('div', { class: 'row wrap' }, boxes) : h('p', { class: 'small muted' }, 'We are at war with no one: Auto-conquer never starts a war.'),
+    seg('Priority', strat, (Object.keys(STRATEGY_LABELS) as OpStrategy[]).map((k) => [k, STRATEGY_LABELS[k]]), (v) => {
+      d.settings = { ...d.settings, strategy: v, focus: v === 'focus' ? (d.settings.focus ?? d.enemies[0] ?? null) : null };
+      app.refresh();
+    }, STRATEGY_HELP[strat]),
+    strat === 'focus' && d.enemies.length > 1
+      ? seg('Concentrate on', d.settings.focus ?? d.enemies[0], d.enemies.map((e) => [e, nationName(sim, e)]), (v) => {
+          d.settings = { ...d.settings, focus: v };
+          app.refresh();
+        })
+      : null,
+    check('New forces join', !!d.settings.autoAssign, (v) => {
+      d.settings = { ...d.settings, autoAssign: v };
+      app.refresh();
+    }, 'Armies, fleets and air wings that are in no operation and not kept for your direct command join as they appear (recruits, ships launched, wings raised).'),
+  );
+}
+
 function draftProblem(app: App, d: OpDraft): string | null {
+  if (d.kind === 'war') return d.enemies.length ? null : 'Choose at least one enemy.';
   if (d.kind === 'sea' ? !d.zones.length : !d.area.length) return d.kind === 'sea' ? 'Choose the sea zones on the map.' : 'Choose the area on the map.';
   if (d.kind === 'advance' && d.area.length !== 1) return 'An advance has one destination.';
   if (!d.units.length && !d.editing) return 'Select forces first.';
@@ -434,10 +478,11 @@ export function opCard(app: App, id: string): HTMLElement[] {
   out.push(head(app, op.nation, op.name, [`${OP_LABELS[op.kind]} · ${describeArea(sim, op)}`], [h('span', { class: `tag ${op.status === 'active' ? 'good' : op.status === 'paused' ? 'warn' : 'brass'}` }, status), op.issue ? h('span', { class: 'tag bad' }, 'Needs a decision') : h('span', { class: 'tag' }, op.posture)]));
   const prim: HTMLElement[] = [];
   if (op.status !== 'complete') prim.push(op.status === 'active' ? button('Pause', () => app.do({ type: 'opState', op: op.id, state: 'paused' }), { cls: 'small', icon: 'pause', fk: 'op-pause' }) : button('Resume', () => app.do({ type: 'opState', op: op.id, state: 'active' }), { cls: 'small primary', icon: 'play', fk: 'op-resume' }));
-  prim.push(button('Change…', () => app.editOp(op.id), { cls: 'small', icon: 'settings', fk: 'op-edit' }));
+  prim.push(button(op.kind === 'war' ? 'Settings…' : 'Change…', () => app.editOp(op.id), { cls: 'small', icon: 'settings', fk: 'op-edit' }));
+  if (op.kind === 'war' && op.status !== 'complete') prim.push(button('Take over all', () => app.do({ type: 'releaseOp', units: [...f.armies, ...f.fleets, ...f.wings].map((u) => u.id) }), { cls: 'small quiet', fk: 'ac-takeover', title: 'Every force returns to your direct command (and is kept for it: Auto-conquer will not take it again until you allow it).' }));
   if (app.forceSel.length) prim.push(button(`Add ${plural(app.forceSel.length, 'selected force')}`, () => app.do({ type: 'assignOp', op: op.id, units: [...app.forceSel] }), { cls: 'small', icon: 'plus', fk: 'op-add' }));
   prim.push(button('Select its forces', () => app.setForceSel([...f.armies, ...f.fleets, ...f.wings].map((u) => u.id)), { cls: 'small quiet', fk: 'op-select' }));
-  prim.push(button('Cancel operation', () => app.cancelOp(op.id), { cls: 'small quiet', icon: 'close', fk: 'op-cancel-op' }));
+  prim.push(button(op.kind === 'war' ? 'Stop' : 'Cancel operation', () => app.cancelOp(op.id), { cls: 'small quiet', icon: 'close', fk: 'op-cancel-op' }));
   out.push(h('div', { class: 'ins-primary' }, prim));
   const body = h('div', { class: 'ins-body scroll', 'data-sk': `ins-op-${op.id}` });
   if (op.issue) {
@@ -465,8 +510,9 @@ export function opCard(app: App, id: string): HTMLElement[] {
   const area = op.area;
   const ours = area.filter((p) => isFriendly(sim, op.nation, st.provinces[p].controller)).length;
   const regs = f.armies.reduce((n, a) => n + a.regiments.length, 0);
-  if (op.kind !== 'sea') body.appendChild(section('Progress', bar(ours, Math.max(1, area.length), 'good', 'Area held'), row('Area held by our side', `${ours} of ${area.length}`), row('Taken / lost since it began', `${op.stats.taken} / ${op.stats.lost}`), op.kind === 'landing' ? row('Landing', op.landing?.stage === 'ashore' ? 'ashore' : op.landing?.stage === 'sail' ? 'at sea' : `gathering${op.landing?.port ? ` at ${provName(sim, op.landing.port)}` : ''}`) : null));
-  body.appendChild(
+  if (op.kind === 'war') for (const el of warStatus(app, op)) body.appendChild(el);
+  else if (op.kind !== 'sea') body.appendChild(section('Progress', bar(ours, Math.max(1, area.length), 'good', 'Area held'), row('Area held by our side', `${ours} of ${area.length}`), row('Taken / lost since it began', `${op.stats.taken} / ${op.stats.lost}`), op.kind === 'landing' ? row('Landing', op.landing?.stage === 'ashore' ? 'ashore' : op.landing?.stage === 'sail' ? 'at sea' : `gathering${op.landing?.port ? ` at ${provName(sim, op.landing.port)}` : ''}`) : null));
+  if (op.kind !== 'war') body.appendChild(
     section(
       'Forces',
       row('Under its command', `${plural(f.armies.length, 'army', 'armies')} (${regs} regiments, ${men(f.armies.reduce((s, a) => s + menOf(a), 0))}) · ${plural(f.fleets.length, 'fleet')} · ${plural(f.wings.length, 'wing')}`),
@@ -511,8 +557,13 @@ export function unitOpSection(app: App, id: string): HTMLElement | null {
   const u = r.unit;
   if (!u.op) {
     const ops = Object.values(sim.state.operations).filter((o) => o.nation === app.player);
-    if (!ops.length) return null;
-    return section('Operation', h('p', { class: 'small muted' }, 'Under your direct command.'), h('div', { class: 'row wrap', style: 'gap:6px' }, ...ops.slice(0, 4).map((o) => button(`Join ${o.name}`, () => app.do({ type: 'assignOp', op: o.id, units: [u.id] }), { cls: 'small quiet', fk: `join-${o.id}` }))));
+    if (!ops.length && !u.reserved) return null;
+    return section(
+      'Operation',
+      h('p', { class: 'small muted' }, 'Under your direct command.'),
+      h('div', { class: 'row wrap', style: 'gap:6px' }, ...ops.slice(0, 4).map((o) => button(`Join ${o.name}`, () => app.do({ type: 'assignOp', op: o.id, units: [u.id] }), { cls: 'small quiet', fk: `join-${o.id}` }))),
+      reserveToggle(app, u.id),
+    );
   }
   const op = sim.state.operations[u.op];
   if (!op) return null;
@@ -542,7 +593,8 @@ function keepToggle(app: App, a: Army): HTMLElement {
 export function operationsSection(app: App): HTMLElement {
   const sim = app.sim!;
   const st = sim.state;
-  const ops = Object.values(st.operations).filter((o) => o.nation === app.player).sort((a, b) => b.priority - a.priority || (a.id < b.id ? -1 : 1));
+  // Auto-conquer mandates have their own section above
+  const ops = Object.values(st.operations).filter((o) => o.nation === app.player && o.kind !== 'war').sort((a, b) => b.priority - a.priority || (a.id < b.id ? -1 : 1));
   const kids: Array<Node | null> = [];
   if (!ops.length) kids.push(h('p', { class: 'small muted' }, 'No operations. Select forces (Shift+click or Shift+drag on the map, or the boxes below), then New operation: the planner gives the routine orders while you set the objective and the limits.'));
   for (const op of ops) {

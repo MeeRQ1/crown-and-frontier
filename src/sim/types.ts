@@ -267,6 +267,8 @@ export interface Fleet {
   /** the player's operation it serves, and whether a player order has taken it under direct command (format 8) */
   op?: string | null;
   opHold?: boolean;
+  /** reserved for the player's direct command (format 9): Auto-conquer never takes it */
+  reserved?: boolean;
 }
 
 /**
@@ -323,6 +325,8 @@ export interface AirWing {
   /** the player's operation it serves, and whether a player order has taken it under direct command (format 8) */
   op?: string | null;
   opHold?: boolean;
+  /** reserved for the player's direct command (format 9): Auto-conquer never takes it */
+  reserved?: boolean;
 }
 
 /** One week of a wing's operations, as the player is told it. */
@@ -389,6 +393,8 @@ export interface Army {
   opHold?: boolean;
   /** the player keeps this formation as it is: operations never split it or merge it into another */
   keep?: boolean;
+  /** reserved for the player's direct command (format 9): Auto-conquer never takes it */
+  reserved?: boolean;
 }
 
 /** An airborne operation: the army, at an airfield, is flown to a province and dropped there. */
@@ -947,7 +953,10 @@ export interface MapFingerprint {
  *   sea       keep sea zones: patrol and intercept, escort, strike enemy fleets
  *   landing   carry the armies to an enemy coast under escort and cover, then take the area
  */
-export type OperationKind = 'conquer' | 'advance' | 'hold' | 'sea' | 'landing';
+export type OperationKind = 'conquer' | 'advance' | 'hold' | 'sea' | 'landing' | 'war';
+
+/** What an Auto-conquer mandate favours (format 9): nothing in particular, sparing men, ports, industry, or one enemy. */
+export type OpStrategy = 'none' | 'manpower' | 'ports' | 'industry' | 'focus';
 export type OpPosture = 'cautious' | 'balanced' | 'aggressive';
 export type OpStatus = 'active' | 'paused' | 'complete';
 /** when the objective is reached: hold the area, regroup in it, return home, or stand and wait */
@@ -976,6 +985,11 @@ export interface OperationSettings {
   /** a member given a direct order rejoins the operation once that order is carried out */
   resumeAfterOrder: boolean;
   onComplete: OpCompletion;
+  /** Auto-conquer (format 9): forces of ours that are free (in no operation, not reserved) join it as they appear */
+  autoAssign?: boolean;
+  /** Auto-conquer (format 9): what it favours, and the enemy it concentrates on when that is 'focus' */
+  strategy?: OpStrategy;
+  focus?: NationId | null;
 }
 
 export type OpTaskKind =
@@ -1024,6 +1038,10 @@ export interface Operation extends OperationSettings {
   stats: { taken: number; lost: number; menLost: number; shipsLost: number; wingStrengthLost: number; drops: number; landings: number };
   /** a landing's progress (landing operations) */
   landing?: { stage: 'gather' | 'sail' | 'ashore'; port: ProvinceId | null } | null;
+  /** Auto-conquer (format 9): the realms at war with us it is to defeat (it never adds one) */
+  enemies?: NationId[];
+  /** Auto-conquer (format 9): the enemies' provinces when it began (for its progress) */
+  startLand?: number;
 }
 
 export interface GameState {
@@ -1111,8 +1129,9 @@ export type Command =
   | { type: 'disbandWing'; nation: NationId; wing: WingId }
   | { type: 'cancelBuild'; nation: NationId; province: ProvinceId }
   /** operations (format 8): create one (prepared, or active at once) with forces assigned */
-  | { type: 'createOp'; nation: NationId; kind: OperationKind; area: ProvinceId[]; zones?: ZoneId[]; settings?: Partial<OperationSettings>; units?: string[]; name?: string; activate?: boolean }
-  | { type: 'editOp'; nation: NationId; op: string; area?: ProvinceId[]; zones?: ZoneId[]; settings?: Partial<OperationSettings>; name?: string }
+  | { type: 'createOp'; nation: NationId; kind: OperationKind; area: ProvinceId[]; zones?: ZoneId[]; settings?: Partial<OperationSettings>; units?: string[]; name?: string; activate?: boolean; enemies?: NationId[] }
+  | { type: 'editOp'; nation: NationId; op: string; area?: ProvinceId[]; zones?: ZoneId[]; settings?: Partial<OperationSettings>; name?: string; enemies?: NationId[] }
+  | { type: 'reserveUnits'; nation: NationId; units: string[]; reserved: boolean }
   /** armies, fleets and wings (by id) join the operation (leaving any other) */
   | { type: 'assignOp'; nation: NationId; op: string; units: string[] }
   /** members leave their operation and keep their last orders under direct command */

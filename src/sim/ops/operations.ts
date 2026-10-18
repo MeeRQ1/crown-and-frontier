@@ -22,7 +22,7 @@ import { C } from '../config';
 import { applyCommand } from '../commands';
 import { armyStrength } from '../military';
 import { armiesOf, atWar, enemiesOf, isFriendly, menOf, nationName, notify, provName, type Sim } from '../state';
-import type { AirWing, Army, Command, CommandResult, Fleet, NationId, Operation, OperationKind, OperationSettings, OpPosture, ProvinceId, RealmCommand, ZoneId } from '../types';
+import type { AirWing, Army, Command, CommandResult, Fleet, NationId, Operation, OperationKind, OperationSettings, OpPosture, OpStrategy, ProvinceId, RealmCommand, ZoneId } from '../types';
 import { reachFrom } from '../ai/common';
 import { areaTargets, planGround, recordFailures, restingPlace, type GroundOutcome, type GroundPolicy, type GroundTarget } from './ground';
 import { planForces } from './forces';
@@ -33,6 +33,7 @@ export const OP_LABELS: Record<OperationKind, string> = {
   hold: 'Hold an area',
   sea: 'Keep the seas',
   landing: 'Landing',
+  war: 'Auto-conquer',
 };
 
 export const OP_HELP: Record<OperationKind, string> = {
@@ -41,6 +42,23 @@ export const OP_HELP: Record<OperationKind, string> = {
   hold: 'Defend the area: cover its threatened border, counter-attack enemies inside it, retake what is lost.',
   sea: 'Keep the chosen sea zones: patrol and intercept enemy fleets, escort our ships, strike at sea from the air.',
   landing: 'Carry the armies by sea to the beach under escort and air cover, land them, then take the area.',
+  war: 'Win the war with the chosen enemies: every free army, fleet and air wing of ours is used, the enemies\' land is taken, ours is defended against anyone at war with us, and the forces recover, regroup and change targets as the war goes. It never declares war, makes peace or spends.',
+};
+
+export const STRATEGY_LABELS: Record<OpStrategy, string> = {
+  none: 'No particular priority',
+  manpower: 'Spare our men',
+  ports: 'Take and keep ports',
+  industry: 'Protect our industry',
+  focus: 'Concentrate on one enemy',
+};
+
+export const STRATEGY_HELP: Record<OpStrategy, string> = {
+  none: 'The nearest and most valuable objectives first, our land defended first.',
+  manpower: 'Attacks only with a forecast of victory and a clear edge, a larger reserve, armies rest earlier: slower, with fewer losses.',
+  ports: 'Enemy ports and coasts count for more as objectives; our own ports are defended first.',
+  industry: 'Our provinces with factories are covered and defended first; enemy industry counts for more as an objective.',
+  focus: 'The chosen enemy\'s land counts for much more than the others\' (the others are still fought where they attack).',
 };
 
 export const POSTURE_HELP: Record<OpPosture, string> = {
@@ -70,6 +88,9 @@ export const DEFAULT_OP_SETTINGS: OperationSettings = {
   resumeAfterOrder: false,
   onComplete: 'hold',
 };
+
+/** Auto-conquer's visible defaults: every free force joins, aircraft move to reach the fighting, no airborne drops without leave. */
+export const WAR_DEFAULTS: Partial<OperationSettings> = { autoAssign: true, rebase: true, airborne: 'off', strategy: 'none', focus: null, onComplete: 'regroup', reserve: 0.15 };
 
 const POLICY: Record<OpPosture, Pick<GroundPolicy, 'margin' | 'accept' | 'failWait' | 'withdraw' | 'uncertainWins'>> = {
   cautious: { margin: 1.5, accept: ['Likely victory'], failWait: 12, withdraw: 1.2 },
@@ -180,23 +201,52 @@ function unitsProblem(sim: Sim, nid: NationId, units: string[]): string | null {
   return null;
 }
 
-export function createOpProblem(sim: Sim, nid: NationId, kind: OperationKind, area: ProvinceId[], zones: ZoneId[], settings: Partial<OperationSettings>, units: string[]): string | null {
+export function createOpProblem(sim: Sim, nid: NationId, kind: OperationKind, area: ProvinceId[], zones: ZoneId[], settings: Partial<OperationSettings>, units: string[], enemies: NationId[] = []): string | null {
   if (!(kind in OP_LABELS)) return 'Unknown kind of operation.';
   if (opsOf(sim, nid).length >= OP_LIMITS.perRealm) return `At most ${OP_LIMITS.perRealm} operations at once: cancel one first.`;
+  if (kind === 'war') return enemiesProblem(sim, nid, enemies, null) ?? settingsProblem(settings) ?? unitsProblem(sim, nid, units);
   return areaProblem(sim, nid, kind, area, zones) ?? settingsProblem(settings) ?? unitsProblem(sim, nid, units);
 }
 
-export function createOperation(sim: Sim, nid: NationId, kind: OperationKind, area: ProvinceId[], zones: ZoneId[], settings: Partial<OperationSettings>, units: string[], name: string | undefined, activate: boolean): Operation {
+/** The enemies of an Auto-conquer: realms we are at war with now, each in at most one mandate of ours. */
+export function enemiesProblem(sim: Sim, nid: NationId, enemies: NationId[], self: string | null): string | null {
+  if (!enemies.length) return 'Choose at least one realm we are at war with.';
+  if (new Set(enemies).size !== enemies.length) return 'A realm is listed twice.';
+  for (const e of enemies) {
+    if (!sim.state.nations[e]?.alive) return 'Unknown realm.';
+    if (!atWar(sim, nid, e)) return `We are not at war with ${nationName(sim, e)}: Auto-conquer never starts a war.`;
+    const other = opsOf(sim, nid).find((o) => o.kind === 'war' && o.id !== self && o.status !== 'complete' && o.enemies?.includes(e));
+    if (other) return `${nationName(sim, e)} is already in ${other.name}.`;
+  }
+  return null;
+}
+
+/**
+ * An Auto-conquer's area this week: the land the chosen enemies own or hold, and
+ * ours they hold. (Ownership changes only at peace, so what we take stays in it
+ * and counts as taken.)
+ */
+export function warArea(sim: Sim, op: Operation): ProvinceId[] {
+  const st = sim.state;
+  const foes = new Set(op.enemies ?? []);
+  return sim.world.provIds.filter((p) => {
+    const ps = st.provinces[p];
+    return (ps.owner && foes.has(ps.owner)) || (ps.controller && foes.has(ps.controller));
+  });
+}
+
+export function createOperation(sim: Sim, nid: NationId, kind: OperationKind, area: ProvinceId[], zones: ZoneId[], settings: Partial<OperationSettings>, units: string[], name: string | undefined, activate: boolean, enemies: NationId[] = []): Operation {
   const st = sim.state;
   st.counters.op = (st.counters.op ?? 0) + 1;
   const id = `op${st.counters.op}`;
   const n = opsOf(sim, nid).length + 1;
   const op: Operation = {
     ...DEFAULT_OP_SETTINGS,
+    ...(kind === 'war' ? WAR_DEFAULTS : {}),
     ...settings,
     id,
     nation: nid,
-    name: name?.trim().slice(0, 40) || defaultName(sim, kind, area, zones, n),
+    name: name?.trim().slice(0, 40) || defaultName(sim, kind, area, zones, n, enemies),
     kind,
     status: activate ? 'active' : 'paused',
     area: [...area],
@@ -213,15 +263,22 @@ export function createOperation(sim: Sim, nid: NationId, kind: OperationKind, ar
     issue: null,
     stats: { taken: 0, lost: 0, menLost: 0, shipsLost: 0, wingStrengthLost: 0, drops: 0, landings: 0 },
     landing: kind === 'landing' ? { stage: 'gather', port: null } : null,
+    ...(kind === 'war' ? { enemies: [...enemies] } : {}),
   };
   st.operations[id] = op;
-  op.held = area.filter((p) => isFriendly(sim, nid, st.provinces[p].controller));
+  if (kind === 'war') {
+    op.area = warArea(sim, op);
+    op.startLand = op.area.filter((p) => !isFriendly(sim, nid, st.provinces[p].controller)).length;
+  }
+  op.held = op.area.filter((p) => isFriendly(sim, nid, st.provinces[p].controller));
   opLog(sim, op, `${OP_LABELS[kind]}: ${describeArea(sim, op)}. ${activate ? 'Active.' : 'Prepared, not yet active.'}`);
   assignUnits(sim, op, units);
+  if (kind === 'war' && op.autoAssign) autoAssign(sim, op);
   return op;
 }
 
-function defaultName(sim: Sim, kind: OperationKind, area: ProvinceId[], zones: ZoneId[], n: number): string {
+function defaultName(sim: Sim, kind: OperationKind, area: ProvinceId[], zones: ZoneId[], n: number, enemies: NationId[] = []): string {
+  if (kind === 'war') return `Auto-conquer: ${enemies.map((e) => sim.world.nationDefs[e]?.short ?? e).join(', ')}`.slice(0, 40);
   // one province: its name; an area: the realms that hold most of it
   const holders = new Map<string, number>();
   for (const p of area) {
@@ -230,25 +287,40 @@ function defaultName(sim: Sim, kind: OperationKind, area: ProvinceId[], zones: Z
   }
   const top = [...holders].sort((a, b) => b[1] - a[1] || (a[0] < b[0] ? -1 : 1)).slice(0, 2).map(([nid]) => sim.world.nationDefs[nid]?.short ?? nid);
   const where = kind === 'sea' ? sim.world.zones[zones[0]]?.name : area.length === 1 || kind === 'advance' || kind === 'landing' ? provName(sim, area[0]) : top.join(' and ');
-  const word: Record<OperationKind, string> = { conquer: 'Conquest', advance: 'Advance', hold: 'Defence', sea: 'Sea control', landing: 'Landing' };
+  const word: Record<OperationKind, string> = { conquer: 'Conquest', advance: 'Advance', hold: 'Defence', sea: 'Sea control', landing: 'Landing', war: 'Auto-conquer' };
   return `${word[kind]} of ${where || `area ${n}`}`.slice(0, 40);
 }
 
-export function describeArea(sim: Sim, op: Pick<Operation, 'kind' | 'area' | 'zones'>): string {
+export function describeArea(sim: Sim, op: Pick<Operation, 'kind' | 'area' | 'zones'> & { enemies?: NationId[] }): string {
+  if (op.kind === 'war') return `against ${(op.enemies ?? []).map((e) => nationName(sim, e)).join(', ') || 'no enemy'}`;
   if (op.kind === 'sea') return `${op.zones.length} sea zone${op.zones.length === 1 ? '' : 's'} (${op.zones.slice(0, 3).map((z) => sim.world.zones[z].name).join(', ')}${op.zones.length > 3 ? '…' : ''})`;
   if (op.kind === 'advance') return `to ${provName(sim, op.area[0])}`;
   if (op.kind === 'landing') return `on ${provName(sim, op.area[0])}${op.area.length > 1 ? `, then ${op.area.length - 1} more province${op.area.length === 2 ? '' : 's'}` : ''}`;
   return `${op.area.length} province${op.area.length === 1 ? '' : 's'} (${op.area.slice(0, 3).map((p) => provName(sim, p)).join(', ')}${op.area.length > 3 ? '…' : ''})`;
 }
 
-export function editOpProblem(sim: Sim, nid: NationId, opId: string, area: ProvinceId[] | undefined, zones: ZoneId[] | undefined, settings: Partial<OperationSettings>): string | null {
+export function editOpProblem(sim: Sim, nid: NationId, opId: string, area: ProvinceId[] | undefined, zones: ZoneId[] | undefined, settings: Partial<OperationSettings>, enemies?: NationId[]): string | null {
   const op = sim.state.operations?.[opId];
   if (!op || op.nation !== nid) return 'Not our operation.';
+  if (op.kind === 'war') {
+    if (enemies) return enemiesProblem(sim, nid, enemies, op.id) ?? settingsProblem(settings);
+    if (settings.focus && !(op.enemies ?? []).includes(settings.focus)) return 'Concentrate on one of the mandate\'s enemies.';
+    return settingsProblem(settings);
+  }
   return areaProblem(sim, nid, op.kind, area ?? op.area, zones ?? op.zones) ?? settingsProblem(settings);
 }
 
-export function editOperation(sim: Sim, op: Operation, area: ProvinceId[] | undefined, zones: ZoneId[] | undefined, settings: Partial<OperationSettings>, name?: string): void {
+export function editOperation(sim: Sim, op: Operation, area: ProvinceId[] | undefined, zones: ZoneId[] | undefined, settings: Partial<OperationSettings>, name?: string, enemies?: NationId[]): void {
   const changed: string[] = [];
+  if (op.kind === 'war' && enemies) {
+    op.enemies = [...enemies];
+    if (op.focus && !enemies.includes(op.focus)) op.focus = null;
+    op.area = warArea(sim, op);
+    op.held = op.area.filter((p) => isFriendly(sim, op.nation, sim.state.provinces[p].controller));
+    op.failures = {};
+    if (op.status === 'complete') op.status = 'active';
+    changed.push(`enemies ${describeArea(sim, op)}`);
+  }
   if (area) {
     op.area = [...area];
     op.held = op.area.filter((p) => isFriendly(sim, op.nation, sim.state.provinces[p].controller));
@@ -303,11 +375,40 @@ export function releaseUnits(sim: Sim, ids: string[], why = 'detached'): void {
     const op = sim.state.operations[r.unit.op];
     r.unit.op = null;
     r.unit.opHold = false;
+    // taken out of an Auto-conquer by the player: it is not taken back the next week
+    if (op?.kind === 'war' && op.autoAssign) r.unit.reserved = true;
     if (op) {
       delete op.tasks[id];
       delete op.assigned[id];
-      opLog(sim, op, `${r.unit.name} ${why}: under direct command.`);
+      opLog(sim, op, `${r.unit.name} ${why}: under direct command${op.kind === 'war' && op.autoAssign ? ' (reserved: Auto-conquer will not take it again until you allow it)' : ''}.`);
     }
+  }
+}
+
+/**
+ * Auto-conquer's forces: every army, fleet and air wing of ours that is in no other
+ * operation and not reserved for direct command joins (forces at sea with troops
+ * aboard, and airborne troops, only once they are free). Told once in the log.
+ */
+export function autoAssign(sim: Sim, op: Operation): void {
+  const st = sim.state;
+  const nid = op.nation;
+  const free = (u: { nation: NationId; op?: string | null; reserved?: boolean }) => u.nation === nid && !u.op && !u.reserved;
+  const ids: string[] = [];
+  for (const a of Object.values(st.armies)) if (free(a) && !a.embarked && !a.drop) ids.push(a.id);
+  for (const f of Object.values(st.fleets)) if (free(f) && !f.cargo.length) ids.push(f.id);
+  for (const w of Object.values(st.wings)) if (free(w)) ids.push(w.id);
+  if (ids.length) assignUnits(sim, op, ids.sort());
+}
+
+/** Forces the player keeps for direct command (Auto-conquer never takes them), or hands back to it. */
+export function reserveUnits(sim: Sim, ids: string[], reserved: boolean): void {
+  for (const id of ids) {
+    const r = unitRef(sim, id);
+    if (!r) continue;
+    if (reserved && r.unit.op && sim.state.operations[r.unit.op]?.kind === 'war') releaseUnits(sim, [id], 'reserved for direct command');
+    r.unit.reserved = reserved || undefined;
+    if (!reserved) delete r.unit.reserved;
   }
 }
 
@@ -438,6 +539,7 @@ export function opTargets(sim: Sim, op: Operation, armies: Army[], margin: numbe
   const kind = op.status === 'complete' && op.onComplete === 'hold' ? 'hold' : op.kind;
   if (kind === 'sea') return { targets: [], posts: [] };
   if (kind === 'landing' && op.landing?.stage !== 'ashore') return { targets: [], posts: [] };
+  if (kind === 'war') return warTargets(sim, op, armies, margin);
   if (kind === 'advance') {
     // the enemy-held provinces on the way from our main body to the destination
     const dest = op.area[0];
@@ -495,6 +597,82 @@ export function opTargets(sim: Sim, op: Operation, armies: Army[], margin: numbe
   return { targets: scored.slice(0, 24).map((x) => x.t), posts: [] };
 }
 
+/**
+ * Auto-conquer's targets: the chosen enemies' land (and ours they hold), our own land
+ * entered or held by anyone at war with us (defended first, whoever attacks), and the
+ * posts on our borders facing an enemy army; weighed by the mandate's priority.
+ * Never a province of a realm outside the mandate unless it is ours.
+ */
+function warTargets(sim: Sim, op: Operation, armies: Army[], margin: number): { targets: GroundTarget[]; posts: Array<{ pid: ProvinceId; threat: number }> } {
+  const st = sim.state;
+  const nid = op.nation;
+  const inArea = new Set(op.area);
+  const all = areaTargets(sim, nid, op.area, margin);
+  // our land under attack or occupied by any enemy (homeland defence)
+  const home = sim.world.provIds.filter((p) => {
+    if (inArea.has(p) || st.provinces[p].owner !== nid) return false;
+    const c = st.provinces[p].controller;
+    return (c && atWar(sim, nid, c)) || Object.values(st.armies).some((a) => a.location === p && !a.retreating && atWar(sim, nid, a.nation));
+  });
+  for (const t of areaTargets(sim, nid, home, margin)) if (t.kind === 'defend' || t.kind === 'liberate') all.push(t);
+  // the priority
+  const strat = op.strategy ?? 'none';
+  for (const t of all) {
+    const ps = st.provinces[t.pid];
+    const ours = ps.owner === nid;
+    if (strat === 'ports' && ps.port > 0) t.value += ours ? 3 : 4;
+    if (strat === 'industry' && ps.factories > 0) t.value += ours ? ps.factories * 2 : ps.factories * 1.5;
+    if (strat === 'focus' && op.focus && !ours) t.value = ps.owner === op.focus || ps.controller === op.focus ? t.value * 1.5 + 3 : t.value * 0.7;
+  }
+  // posts: our border provinces with an enemy army (any realm at war with us) within two marches
+  const posts: Array<{ pid: ProvinceId; threat: number }> = [];
+  const foes = Object.values(st.armies).filter((a) => !a.retreating && !a.embarked && atWar(sim, nid, a.nation));
+  if (foes.length) {
+    for (const p of sim.world.provIds) {
+      const ps = st.provinces[p];
+      if (ps.owner !== nid || ps.controller !== nid) continue;
+      if (!sim.world.prov[p].neighbors.some((n) => !isFriendly(sim, nid, st.provinces[n].controller))) continue;
+      let threat = 0;
+      for (const f of foes) {
+        const d = sim.world.hop(p, f.location) ?? 99;
+        if (d >= 1 && d <= 2) threat += armyStrength(sim, f) * (d === 1 ? 1 : 0.5);
+      }
+      if (threat <= 0) continue;
+      if (strat === 'industry') threat *= 1 + 0.3 * ps.factories;
+      if (strat === 'ports' && ps.port > 0) threat *= 1.3;
+      posts.push({ pid: p, threat });
+    }
+    posts.sort((a, b) => b.threat - a.threat || (a.pid < b.pid ? -1 : 1));
+  }
+  if (all.length <= 24) return { targets: all, posts: posts.slice(0, 12) };
+  const near = (pid: ProvinceId) => {
+    let d = 99;
+    for (const a of armies) d = Math.min(d, sim.world.hop(a.location, pid) ?? 99);
+    return d;
+  };
+  const scored = all.map((t) => ({ t, s: (t.kind === 'defend' ? -100 : t.kind === 'liberate' && !inArea.has(t.pid) ? -60 : 0) + near(t.pid) * 3 - t.value })).sort((a, b) => a.s - b.s || (a.t.pid < b.t.pid ? -1 : 1));
+  return { targets: scored.slice(0, 24).map((x) => x.t), posts: posts.slice(0, 12) };
+}
+
+/**
+ * The enemies still at war with us (a peace drops one, told once); none left: the
+ * mandate is complete. Its area follows the enemies' land.
+ */
+function refreshWar(sim: Sim, op: Operation): string | null {
+  const nid = op.nation;
+  const before = op.enemies ?? [];
+  const still = before.filter((e) => sim.state.nations[e]?.alive && atWar(sim, nid, e));
+  const gone = before.filter((e) => !still.includes(e));
+  if (gone.length) {
+    opLog(sim, op, `No longer at war with ${gone.map((e) => nationName(sim, e)).join(', ')}: ${still.length ? 'the mandate goes on against the others' : 'the mandate is complete'}.`, 'good');
+    op.enemies = still;
+    if (op.focus && !still.includes(op.focus)) op.focus = null;
+  }
+  op.area = warArea(sim, op);
+  if (!still.length) return gone.length ? `the war${gone.length > 1 ? 's' : ''} with ${gone.map((e) => nationName(sim, e)).join(', ')} ended` : 'no enemy left';
+  return null;
+}
+
 export function groundPolicy(op: Operation): GroundPolicy {
   const p = POLICY[op.posture];
   const live = op.detached.length;
@@ -513,6 +691,10 @@ export function groundPolicy(op: Operation): GroundPolicy {
     maxCost: 40,
     supplyLimit: op.supplyLimit,
     withdraw: p.withdraw,
+    // sparing men: only clear victories, a larger reserve, rest earlier
+    ...(op.kind === 'war' && op.strategy === 'manpower'
+      ? { accept: ['Likely victory'] as const, margin: Math.max(p.margin, 1.4), reserve: Math.min(0.4, op.reserve + 0.1), minReadiness: Math.max(op.minReadiness, 0.55), withdraw: Math.min(p.withdraw, 1.3) }
+      : {}),
   };
 }
 
@@ -562,7 +744,7 @@ function countCaptures(sim: Sim, op: Operation): void {
 function finished(sim: Sim, op: Operation): string | null {
   const st = sim.state;
   const nid = op.nation;
-  if (op.kind === 'sea' || op.kind === 'hold') return null;
+  if (op.kind === 'sea' || op.kind === 'hold' || op.kind === 'war') return null;
   if (op.kind === 'landing' && op.landing?.stage !== 'ashore') {
     const c = st.provinces[op.area[0]].controller;
     return c && isFriendly(sim, nid, c) ? `${provName(sim, op.area[0])} is held by our side` : null;
@@ -662,8 +844,22 @@ export function planOperation(sim: Sim, op: Operation): void {
   // forget detachments that are gone; keep the count of those still serving
   op.detached = op.detached.filter((id) => st.armies[id]?.op === op.id);
   for (const id of Object.keys(op.tasks)) if (!unitRef(sim, id) || unitRef(sim, id)!.unit.op !== op.id) delete op.tasks[id];
+  if (op.kind === 'war' && op.status !== 'complete') {
+    const over = refreshWar(sim, op);
+    if (over) {
+      countCaptures(sim, op);
+      complete(sim, op, over, f);
+      return;
+    }
+  }
   countCaptures(sim, op);
   if (op.status === 'paused') return;
+  if (op.kind === 'war' && op.autoAssign) {
+    const before = f.armies.length + f.fleets.length + f.wings.length;
+    autoAssign(sim, op);
+    const now = opForces(sim, op.id);
+    if (now.armies.length + now.fleets.length + now.wings.length !== before) Object.assign(f, now);
+  }
   resumeIdle(sim, op, f);
   const fresh = recordFailures(sim, op.nation, { assigned: op.assigned, failures: op.failures, reorganized: op.reorganized }, Math.max(op.since, st.tick - 2), new Set(op.area));
   for (const p of fresh) opLog(sim, op, `The attack on ${provName(sim, p)} failed: no new attack there for ${POLICY[op.posture].failWait} weeks, and then only stronger.`, 'bad');

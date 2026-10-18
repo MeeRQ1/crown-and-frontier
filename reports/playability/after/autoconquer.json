@@ -1,0 +1,57 @@
+{
+ "chooser": 1,
+ "enemiesOffered": 1,
+ "afterActivate": {
+  "id": "op1",
+  "status": "active",
+  "enemies": [
+   "pol"
+  ],
+  "strategy": "none",
+  "members": 10,
+  "free": 0,
+  "reserved": 0,
+  "taken": 0,
+  "issue": null,
+  "playerLog": 2
+ },
+ "after8": {
+  "id": "op1",
+  "status": "active",
+  "enemies": [
+   "pol"
+  ],
+  "strategy": "none",
+  "members": 16,
+  "free": 0,
+  "reserved": 0,
+  "taken": 2,
+  "issue": null,
+  "playerLog": 2
+ },
+ "ordersByPlayerIn8Weeks": 0,
+ "paused": "paused",
+ "resumed": "active",
+ "editorEnemyBoxes": 1,
+ "saveCovered": null,
+ "strategy": "manpower",
+ "armyReserved": true,
+ "reserveCallout": 1,
+ "armyStillOut": true,
+ "afterTakeover": {
+  "id": "op1",
+  "status": "active",
+  "enemies": [
+   "pol"
+  ],
+  "strategy": "manpower",
+  "members": 0,
+  "free": 12,
+  "reserved": 12,
+  "taken": 2,
+  "issue": null,
+  "playerLog": 7
+ },
+ "warsButton": 1,
+ "errors": []
+}

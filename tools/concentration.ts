@@ -14,6 +14,7 @@
 //   Both realms: the same research, 3,000 crowns and 3,000 materiel.
 //
 // Workflows (each for --weeks, default 30):
+//   auto        Simple Auto-conquer: the current enemies chosen, Activate; defaults
 //   delegated   one conquest operation over all of Poland with every German
 //               army and wing, default settings (what "auto-conquest" does)
 //   greedy      a busy player: each week every idle fit army marches to the
@@ -218,7 +219,7 @@ interface Run {
   invariantFailures: string[];
 }
 
-function run(workflow: 'delegated' | 'greedy' | 'massed', seed: number): Run {
+function run(workflow: 'delegated' | 'auto' | 'greedy' | 'massed', seed: number): Run {
   const { sim, stack, ger } = SETUP === 'natural' ? natural(seed) : concentration(seed);
   const st = sim.state;
   const polStart = sim.world.provIds.filter((p) => st.provinces[p].controller === 'pol');
@@ -259,7 +260,13 @@ function run(workflow: 'delegated' | 'greedy' | 'massed', seed: number): Run {
   const gerArmies = () => Object.values(st.armies).filter((a) => a.nation === 'ger');
   const wings = Object.values(st.wings).filter((w) => w.nation === 'ger');
   let opId: string | null = null;
-  if (workflow === 'delegated') {
+  if (workflow === 'auto') {
+    // Simple Auto-conquer: the current enemies chosen, Activate (every free force joins); defaults
+    const enemies = Object.keys(st.nations).filter((e) => st.nations[e].alive && atWar(sim, 'ger', e));
+    const r = cmd({ type: 'createOp', nation: 'ger', kind: 'war', area: [], enemies, activate: true }, 3);
+    if (!r.ok) issues.push(`createOp: ${r.reason}`);
+    opId = Object.keys(st.operations).at(-1) ?? null;
+  } else if (workflow === 'delegated') {
     const r = cmd({ type: 'createOp', nation: 'ger', kind: 'conquer', area: polStart, units: [...ger, ...wings.map((w) => w.id)], activate: true, name: 'Poland' }, 4);
     if (!r.ok) issues.push(`createOp: ${r.reason}`);
     opId = Object.keys(st.operations).at(-1) ?? null;
@@ -437,7 +444,7 @@ function run(workflow: 'delegated' | 'greedy' | 'massed', seed: number): Run {
 }
 
 function main(): void {
-  const flows = (ONLY ? ONLY.split(',') : ['delegated', 'greedy', 'massed']) as Array<'delegated' | 'greedy' | 'massed'>;
+  const flows = (ONLY ? ONLY.split(',') : ['auto', 'delegated', 'greedy', 'massed']) as Array<'delegated' | 'auto' | 'greedy' | 'massed'>;
   const out: Run[] = [];
   for (const seed of SEEDS)
     for (const f of flows) {

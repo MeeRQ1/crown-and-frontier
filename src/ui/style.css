@@ -656,6 +656,9 @@ canvas.map.dragging { cursor: grabbing; }
    (their height is measured into --modes-h) instead of covering them */
 @media (min-width: 761px) {
   .drawer:not(.closed) ~ .dock { left: calc(var(--rail-w) + var(--drawer-w) + var(--s4)); transform: none; align-items: flex-start; bottom: calc(var(--s4) + var(--modes-h, 52px) + var(--s3)); width: min(calc(580px * var(--scale)), calc(100% - var(--rail-w) - var(--drawer-w) - 32px - 52px)); }
+  /* nor over an open selection card: the decision keeps to the map between them (its buttons stay reachable) */
+  .inspector:not(.closed) ~ .dock { left: calc(var(--rail-w) + (100% - var(--rail-w) - var(--inspector-w)) / 2); width: min(calc(580px * var(--scale)), calc(100% - var(--rail-w) - var(--inspector-w) - 32px)); }
+  .drawer:not(.closed) ~ .inspector:not(.closed) ~ .dock { left: calc(var(--rail-w) + var(--drawer-w) + var(--s4)); transform: none; width: min(calc(580px * var(--scale)), calc(100% - var(--rail-w) - var(--drawer-w) - var(--inspector-w) - 2 * var(--s4))); }
 }
 
 /* inspector (selection card, right): slate head, ivory body */

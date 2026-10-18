@@ -25,7 +25,7 @@ import { airDropProblem, airDropRisk, transportsAt } from '../airborne';
 import { C, SHIPS, WINGS } from '../config';
 import { armyStrength, maxMorale } from '../military';
 import { forecastBattle } from '../combat';
-import { fleetCapacity, fleetDutyProblem, moveFleetProblem, pathToCoast, portsOf, returnPort, routeThreats, shipArmiesProblem, zonePath } from '../naval';
+import { fleetCapacity, fleetDutyProblem, moveFleetProblem, pathToCoast, portsOf, returnPort, routeThreats, shipArmiesProblem, surfacePower, zoneBalance, zonePath } from '../naval';
 import { atWar, isFriendly, menOf, provName, type Sim } from '../state';
 import type { AirMission, AirWing, Army, ArmyId, CommandResult, Fleet, FleetDuty, Operation, OpTask, OpTaskKind, ProvinceId, RealmCommand, WingId, ZoneId } from '../types';
 import { hostileArmiesAt, reachFrom, sumStrength, threatAround } from '../ai/common';
@@ -238,6 +238,14 @@ export function planForces(sim: Sim, op: Operation, f: OpForces, issue: (cmd: Re
           continue;
         }
       }
+      // Auto-conquer: the strongest squadrons go for enemy ships they can beat, off our coasts or theirs
+      if (op.kind === 'war' && warships(fl)) {
+        const hot = interceptZone(sim, op, fl);
+        if (hot) {
+          setDuty(fl, { kind: 'patrol', zone: hot.zone }, 'patrol', `intercepting ${hot.ships} enemy ship${hot.ships === 1 ? '' : 's'} in ${sim.world.zones[hot.zone].name}`);
+          continue;
+        }
+      }
       if (warships(fl) && enemyCoast.length) {
         const z = enemyCoast.map((p) => nearestZone(sim, fl, p)).find((x) => x) ?? null;
         if (z) {
@@ -249,6 +257,30 @@ export function planForces(sim: Sim, op: Operation, f: OpForces, issue: (cmd: Re
     }
   };
   return plan;
+}
+
+/**
+ * A zone off our coast or the enemies' where enemy warships lie that this fleet
+ * outguns (with the friends already there), within six zones: the nearest first.
+ */
+function interceptZone(sim: Sim, op: Operation, fl: Fleet): { zone: ZoneId; ships: number } | null {
+  const st = sim.state;
+  const nid = op.nation;
+  const mine = surfacePower(fl);
+  let best: { zone: ZoneId; ships: number; d: number } | null = null;
+  for (const e of Object.values(st.fleets)) {
+    if (!atWar(sim, nid, e.nation) || !e.ships.length) continue;
+    const z = e.zone;
+    const coasts = sim.world.zones[z]?.coasts ?? [];
+    if (!coasts.some((p) => st.provinces[p].owner === nid || op.area.includes(p))) continue;
+    const b = zoneBalance(sim, z, nid);
+    if (b.hostileSurface <= 0 || mine + b.friendSurface < b.hostileSurface * 1.2) continue;
+    const path = z === fl.zone ? [] : zonePath(sim, fl.zone, z);
+    if (!path || path.length > 6) continue;
+    const ships = Object.values(st.fleets).filter((x) => x.zone === z && atWar(sim, nid, x.nation)).reduce((n, x) => n + x.ships.length, 0);
+    if (!best || path.length < best.d) best = { zone: z, ships, d: path.length };
+  }
+  return best ? { zone: best.zone, ships: best.ships } : null;
 }
 
 /** An airfield of ours with room, in range of the target, with no enemy army next to it (nearest the target first). */

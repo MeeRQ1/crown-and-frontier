@@ -12,6 +12,7 @@ import { checkCommand } from '../../sim/commands';
 import { armyCap, blocOf, evaluateBloc, evaluateLoan, foundBlocProblem, guaranteeProblem, guaranteesBy, guaranteeSlots, guarantorsOf, influenceGain, influenceOver, inviteProblem, joinProblem, loanProblem, sphereMembers, sphereOf } from '../../sim/influence';
 import { maxMorale, nationStrength, unitUnlocked } from '../../sim/military';
 import { operationsSection, selectBox } from './operations';
+import { autoConquerSection, startAutoConquer, warOps } from './autoconquer';
 import { aliveNations, alliesOf, armiesOf, atWar, dateOf, hasTreaty, menOf, nationName, ownedProvinces, provName, sideOf, truceUntil, warsOf, type Sim } from '../../sim/state';
 import { armySupplyInfo } from '../../sim/supply';
 import type { Army, Demand, DemandKind, NationId, PeaceTerms, StrategicResource, TreatyType, War } from '../../sim/types';
@@ -165,7 +166,8 @@ function militaryLedger(app: App): HTMLElement {
     ),
   ];
 
-  // operations: what is delegated, and what needs a decision
+  // Auto-conquer (one order against our enemies), then the detailed operations
+  kids.push(autoConquerSection(app));
   kids.push(operationsSection(app));
   if (armies.length)
     kids.push(
@@ -771,6 +773,20 @@ function warsLedger(app: App): HTMLElement {
   );
 }
 
+/** "Auto-conquer" for the enemies of a war of ours that no mandate covers yet; or the mandate that does. */
+function autoButton(app: App, enemies: NationId[]): HTMLElement | null {
+  const sim = app.sim!;
+  const live = warOps(app).filter((o) => o.status !== 'complete');
+  const covered = live.find((o) => enemies.some((e) => o.enemies?.includes(e)));
+  const free = enemies.filter((e) => atWar(sim, app.player!, e) && !live.some((o) => o.enemies?.includes(e)));
+  return h(
+    'div',
+    { class: 'row wrap', style: 'gap:6px;margin-top:8px' },
+    free.length ? button(`Auto-conquer ${free.length === 1 ? nationName(sim, free[0]) : `${free.length} enemies`}`, () => (app.closeLedger(), startAutoConquer(app, free)), { cls: 'small primary', icon: 'target', fk: `war-auto-${free.join('-')}`, title: 'Every free army, fleet and air wing of ours conquers their land and defends ours: no further orders needed.' }) : null,
+    covered ? button(`Open ${covered.name}`, () => (app.closeLedger(), app.selectOp(covered.id)), { cls: 'small quiet', fk: `war-auto-open-${covered.id}` }) : null,
+  );
+}
+
 /**
  * A war as a campaign briefing: the sides, what is being fought for and who
  * holds it now, the war score in its components, what it has cost and when
@@ -824,6 +840,7 @@ function warCard(app: App, w: War, mine: boolean): HTMLElement {
         h('h4', null, `War goal: ${w.goal.type === 'claim' ? 'press claims' : w.goal.type === 'conquest' ? 'conquest' : 'coalition war'}`),
         goal,
         w.goal.provinces.length ? button('Show the goal on the map', () => app.highlightProvinces(w.goal.provinces), { cls: 'small quiet', icon: 'target' }) : null,
+        side ? autoButton(app, them) : null,
       ),
       h(
         'div',

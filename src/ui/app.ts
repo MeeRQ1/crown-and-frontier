@@ -1110,6 +1110,11 @@ export class App {
     this.pickOpArea();
   }
 
+  /** Auto-conquer's opponents: its settings, where the enemies are chosen. */
+  editWarEnemies(id: string): void {
+    this.editOp(id);
+  }
+
   /** Opens an operation for changes. */
   editOp(id: string): void {
     const sim = this.sim;
@@ -1164,9 +1169,10 @@ export class App {
   commitOpDraft(activate: boolean): void {
     const d = this.opDraft;
     if (!d) return;
+    const war = d.kind === 'war';
     const r = d.editing
-      ? this.do({ type: 'editOp', op: d.editing, area: d.kind === 'sea' ? undefined : d.area, zones: d.kind === 'sea' ? d.zones : undefined, settings: d.settings, name: d.name || undefined })
-      : this.do({ type: 'createOp', kind: d.kind, area: d.area, zones: d.zones, settings: d.settings, units: d.units, name: d.name || undefined, activate });
+      ? this.do({ type: 'editOp', op: d.editing, area: d.kind === 'sea' || war ? undefined : d.area, zones: d.kind === 'sea' ? d.zones : undefined, settings: d.settings, name: d.name || undefined, enemies: war ? d.enemies : undefined })
+      : this.do({ type: 'createOp', kind: d.kind, area: war ? [] : d.area, zones: d.zones, settings: d.settings, units: d.units, name: d.name || undefined, activate, enemies: war ? d.enemies : undefined });
     if (!r.ok) return;
     const id = d.editing ?? Object.values(this.sim!.state.operations).filter((o) => o.nation === this.player).map((o) => o.id).sort((a, b) => Number(a.slice(2)) - Number(b.slice(2))).at(-1) ?? null;
     this.opDraft = null;

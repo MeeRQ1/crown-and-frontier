@@ -7,7 +7,7 @@ import { C, SHIPS, WINGS } from './config';
 import { nextMemoEpoch } from './index';
 import { buildProblem, cancelProblem, cancelProject, PROJECT_LABELS, startProject } from './construction';
 import { runBatchBuild, runBatchRecruit } from './batch';
-import { assignUnits, cancelOperation, createOperation, createOpProblem, editOperation, editOpProblem, opSummaryLine, releaseUnits, resumeUnits, setOpStatus, takeUnderDirectCommand, unitRef } from './ops/operations';
+import { assignUnits, cancelOperation, createOperation, createOpProblem, editOperation, editOpProblem, opSummaryLine, releaseUnits, reserveUnits, resumeUnits, setOpStatus, takeUnderDirectCommand, unitRef } from './ops/operations';
 import {
   cancelTreaty,
   cancelTreatyProblem,
@@ -249,9 +249,9 @@ export function checkCommand(sim: Sim, cmd: Command): string | null {
       return declareWarProblem(sim, cmd.nation, cmd.target, goal);
     }
     case 'createOp':
-      return createOpProblem(sim, cmd.nation, cmd.kind, cmd.area ?? [], cmd.zones ?? [], cmd.settings ?? {}, cmd.units ?? []);
+      return createOpProblem(sim, cmd.nation, cmd.kind, cmd.area ?? [], cmd.zones ?? [], cmd.settings ?? {}, cmd.units ?? [], cmd.enemies ?? []);
     case 'editOp':
-      return editOpProblem(sim, cmd.nation, cmd.op, cmd.area, cmd.zones, cmd.settings ?? {});
+      return editOpProblem(sim, cmd.nation, cmd.op, cmd.area, cmd.zones, cmd.settings ?? {}, cmd.enemies);
     case 'assignOp': {
       const op = st.operations?.[cmd.op];
       if (!op || op.nation !== cmd.nation) return 'Not our operation.';
@@ -281,6 +281,12 @@ export function checkCommand(sim: Sim, cmd: Command): string | null {
       const a = st.armies[cmd.army];
       return a && a.nation === cmd.nation ? null : 'Not your army.';
     }
+    case 'reserveUnits':
+      for (const id of cmd.units) {
+        const r = unitRef(sim, id);
+        if (!r || r.unit.nation !== cmd.nation) return 'Not our force.';
+      }
+      return cmd.units.length ? null : 'Choose the forces.';
     case 'batchBuild': {
       if (!cmd.provinces.length) return 'Choose the provinces.';
       if (cmd.provinces.length > 400 || new Set(cmd.provinces).size !== cmd.provinces.length) return 'Each province once, at most 400.';
@@ -658,12 +664,12 @@ function execute(sim: Sim, cmd: Command, auto = false): CommandResult {
       return { ok: true, message: `${w.name} begins.` };
     }
     case 'createOp': {
-      const op = createOperation(sim, cmd.nation, cmd.kind, cmd.area ?? [], cmd.zones ?? [], cmd.settings ?? {}, cmd.units ?? [], cmd.name, !!cmd.activate);
+      const op = createOperation(sim, cmd.nation, cmd.kind, cmd.area ?? [], cmd.zones ?? [], cmd.settings ?? {}, cmd.units ?? [], cmd.name, !!cmd.activate, cmd.enemies ?? []);
       return { ok: true, message: `${op.name} ${op.status === 'active' ? 'begins' : 'is prepared'}: ${opSummaryLine(sim, op)}.` };
     }
     case 'editOp': {
       const op = st.operations[cmd.op];
-      editOperation(sim, op, cmd.area, cmd.zones, cmd.settings ?? {}, cmd.name);
+      editOperation(sim, op, cmd.area, cmd.zones, cmd.settings ?? {}, cmd.name, cmd.enemies);
       return { ok: true, message: `${op.name} updated.` };
     }
     case 'assignOp': {
@@ -687,6 +693,9 @@ function execute(sim: Sim, cmd: Command, auto = false): CommandResult {
       cancelOperation(sim, op);
       return { ok: true, message: `${op.name} cancelled: its forces keep their last orders under your direct command.` };
     }
+    case 'reserveUnits':
+      reserveUnits(sim, cmd.units, cmd.reserved);
+      return { ok: true, message: cmd.reserved ? `${cmd.units.length === 1 ? 'Kept' : `${cmd.units.length} forces kept`} for your direct command: Auto-conquer will not use ${cmd.units.length === 1 ? 'it' : 'them'}.` : `Auto-conquer may use ${cmd.units.length === 1 ? 'it' : 'them'} again.` };
     case 'keepFormation': {
       const a = st.armies[cmd.army];
       a.keep = cmd.keep;
