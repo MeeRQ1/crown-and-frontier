@@ -2,6 +2,7 @@
 // wing, and the port and airfield sections of a province card. Unavailable
 // actions always say why.
 
+import { orderHereButton } from './production';
 import { airBalance, airControl, airfieldRoom, buildWingProblem, deckSlots, ferryRange, LAND_MISSIONS, MISSION_HELP, MISSION_LABELS, missionPlace, missionProblem, placeName, readyFactor, rebaseProblem, SEA_MISSIONS, wingCost, wingRange, wingsAboard, wingStatus, wingUnlocked, type WingState } from '../../sim/air';
 import { C, RESOURCE_INFO, SHIP_TYPES, SHIPS, WING_TYPES, WINGS } from '../../sim/config';
 import {
@@ -624,7 +625,7 @@ export function portSection(app: App, pid: ProvinceId): HTMLElement | null {
       );
     });
     items.push(h('div', { class: 'actions' }, acts));
-    if (p.dock.some((o) => o.nation === me)) items.push(button('Cancel the newest ship', () => app.do({ type: 'cancelShip', province: pid }), { cls: 'small quiet' }));
+    items.push(h('div', { class: 'row wrap', style: 'gap:6px;margin-top:4px' }, orderHereButton(app, 'ship', pid), p.dock.some((o) => o.nation === me) ? button('Cancel the newest ship', () => app.do({ type: 'cancelShip', province: pid }), { cls: 'small quiet' }) : null));
   }
   const near = (sim.world.provZones[pid] ?? []).flatMap((z) => [...fleetsIn(sim, z)]);
   if (near.length) items.push(h('div', { style: 'margin-top:6px' }, h('div', { class: 'eyebrow' }, 'Fleets off this coast'), ...near.map((f) => fleetRow(app, f))));
@@ -657,7 +658,7 @@ export function airfieldSection(app: App, pid: ProvinceId): HTMLElement | null {
       );
     });
     items.push(h('div', { class: 'actions' }, acts));
-    if (p.hangar.some((o) => o.nation === me)) items.push(button('Cancel the newest wing', () => app.do({ type: 'cancelWing', province: pid }), { cls: 'small quiet' }));
+    items.push(h('div', { class: 'row wrap', style: 'gap:6px;margin-top:4px' }, orderHereButton(app, 'wing', pid), p.hangar.some((o) => o.nation === me) ? button('Cancel the newest wing', () => app.do({ type: 'cancelWing', province: pid }), { cls: 'small quiet' }) : null));
   }
   return section('Airfield and air wings', ...items);
 }

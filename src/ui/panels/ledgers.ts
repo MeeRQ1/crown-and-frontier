@@ -13,6 +13,7 @@ import { armyCap, blocOf, evaluateBloc, evaluateLoan, foundBlocProblem, guarante
 import { maxMorale, nationStrength, unitUnlocked } from '../../sim/military';
 import { operationsSection, selectBox } from './operations';
 import { autoConquerSection, startAutoConquer, warOps } from './autoconquer';
+import { productionSection } from './production';
 import { aliveNations, alliesOf, armiesOf, atWar, dateOf, hasTreaty, menOf, nationName, ownedProvinces, provName, sideOf, truceUntil, warsOf, type Sim } from '../../sim/state';
 import { armySupplyInfo } from '../../sim/supply';
 import type { Army, Demand, DemandKind, NationId, PeaceTerms, StrategicResource, TreatyType, War } from '../../sim/types';
@@ -169,6 +170,8 @@ function militaryLedger(app: App): HTMLElement {
   // Auto-conquer (one order against our enemies), then the detailed operations
   kids.push(autoConquerSection(app));
   kids.push(operationsSection(app));
+  // several ships, air wings or regiments in one order
+  kids.push(productionSection(app));
   if (armies.length)
     kids.push(
       h(

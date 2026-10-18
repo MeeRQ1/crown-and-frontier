@@ -8,6 +8,7 @@ import { maxMorale } from './military';
 import { checkIndexes } from './index';
 import { atWar, hasTreaty, type Sim } from './state';
 import { getFocus } from './focus';
+import { orderTotals, PRODUCTION_LIMITS } from './production';
 
 function scanFinite(v: unknown, path: string, out: string[]): void {
   if (out.length > 20) return;
@@ -240,5 +241,18 @@ export function checkInvariants(sim: Sim): string[] {
   for (const [id, a] of Object.entries(st.armies)) member('army', id, a);
   for (const [id, f] of Object.entries(st.fleets)) member('fleet', id, f);
   for (const [id, w] of Object.entries(st.wings)) member('wing', id, w);
+  // production orders (format 9): bounded, at known places, never more started than ordered
+  for (const [nid, n] of Object.entries(st.nations)) {
+    const list = n.production ?? [];
+    if (list.length > PRODUCTION_LIMITS.orders) out.push(`${nid}: ${list.length} production orders`);
+    if (new Set(list.map((o) => o.id)).size !== list.length) out.push(`${nid}: duplicate production order`);
+    for (const o of list) {
+      const t = orderTotals(o);
+      if (o.places.length > PRODUCTION_LIMITS.places || o.places.some((p) => !st.provinces[p])) out.push(`${o.id}: places`);
+      if (t.total > PRODUCTION_LIMITS.count || o.count < 1) out.push(`${o.id}: ${t.total} ordered`);
+      if (t.started > t.total || o.done > t.started) out.push(`${o.id}: ${t.started} started, ${o.done} done of ${t.total}`);
+      if (o.formed.length > PRODUCTION_LIMITS.count) out.push(`${o.id}: ${o.formed.length} formations`);
+    }
+  }
   return out;
 }

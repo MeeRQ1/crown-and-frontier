@@ -84,7 +84,7 @@ describe('map packages', () => {
 describe('save format', () => {
   it('a format-1 save is converted step by step, with notices, and keeps playing', () => {
     const { sim, notices } = readSave(FIXTURE);
-    expect(notices).toHaveLength(7);
+    expect(notices).toHaveLength(8);
     expect(notices[0]).toMatch(/format 1/);
     expect(notices[1]).toMatch(/industrial age.*Foot became infantry.*continues in 1896/);
     expect(notices[2]).toMatch(/focus/);
@@ -92,7 +92,8 @@ describe('save format', () => {
     expect(notices[3]).toMatch(/naval and air update \(save format 5\).*format 6/);
     expect(notices[4]).toMatch(/save format 6.*format 7/);
     expect(notices[5]).toMatch(/save format 7.*format 8.*operation/);
-    expect(notices[6]).toMatch(/save format 4.*trade contracts|trade contracts.*format 5/);
+    expect(notices[6]).toMatch(/save format 8.*format 9.*nothing has been ordered for you/);
+    expect(notices[7]).toMatch(/save format 4.*trade contracts|trade contracts.*format 5/);
     const regs = Object.values(sim.state.armies).flatMap((a) => a.regiments.map((r) => r.type));
     expect(regs.length).toBeGreaterThan(0);
     expect(regs.every((t) => ['infantry', 'cavalry', 'artillery'].includes(t))).toBe(true);
@@ -179,13 +180,14 @@ describe('save format', () => {
     const before = JSON.parse(FORMAT2_ALDMERE);
     expect(before.schema).toBe(2);
     const { sim, notices } = readSave(FORMAT2_ALDMERE);
-    expect(notices).toHaveLength(6);
+    expect(notices).toHaveLength(7);
     expect(notices[0]).toMatch(/save format 2.*industrial age.*continues in 1885/);
     expect(notices[1]).toMatch(/save format 3.*focus/);
     expect(notices[2]).toMatch(/format 6/);
     expect(notices[3]).toMatch(/format 7/);
     expect(notices[4]).toMatch(/format 8/);
-    expect(notices[5]).toMatch(/trade contracts/);
+    expect(notices[5]).toMatch(/format 9/);
+    expect(notices[6]).toMatch(/trade contracts/);
     expect(sim.state.schema).toBe(SCHEMA_VERSION);
     expect(sim.state.map).toEqual(mapFingerprint('aldmere'));
     const regs = Object.values(sim.state.armies).flatMap((a) => a.regiments.map((r) => r.type));
@@ -215,12 +217,13 @@ describe('save format', () => {
     const before = JSON.parse(FORMAT3_ALDMERE);
     expect(before.schema).toBe(3);
     const { sim, notices } = readSave(FORMAT3_ALDMERE);
-    expect(notices).toHaveLength(5);
+    expect(notices).toHaveLength(6);
     expect(notices[0]).toMatch(/save format 3.*focus.*\(yours included\)/);
     expect(notices[1]).toMatch(/format 6/);
     expect(notices[2]).toMatch(/format 7/);
     expect(notices[3]).toMatch(/format 8/);
-    expect(notices[4]).toMatch(/trade contracts/);
+    expect(notices[4]).toMatch(/format 9/);
+    expect(notices[5]).toMatch(/trade contracts/);
     expect(sim.state.schema).toBe(SCHEMA_VERSION);
     // every policy became its focus (with the focus it requires)
     const policyOf = (id: string) => before.state.nations[id].policy as string;

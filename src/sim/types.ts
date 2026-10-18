@@ -226,12 +226,16 @@ export interface ShipOrder {
   nation: NationId;
   ship: ShipType;
   weeksLeft: number;
+  /** the production order that laid it down (format 9) */
+  order?: string;
 }
 
 export interface WingOrder {
   nation: NationId;
   wing: WingType;
   weeksLeft: number;
+  /** the production order that raised it (format 9) */
+  order?: string;
 }
 
 export interface Ship {
@@ -346,6 +350,44 @@ export interface RecruitOrder {
   nation: NationId;
   unit: UnitType;
   weeksLeft: number;
+  /** the production order that raised it (format 9) */
+  order?: string;
+}
+
+/**
+ * A standing production order (format 9): several ships, air wings or regiments of one
+ * type, at one place or spread over several. Each week it lays down (and pays for, as
+ * an order by hand would) what the free slipways, airfield room, money, materiel,
+ * resources and men allow; nothing is reserved in advance. A blocked order waits and
+ * says why. Cancelling stops what is not yet started; what is on the slipways or in
+ * training stays (it is cancelled where it is, by the ordinary rules).
+ */
+export interface ProductionOrder {
+  id: string;
+  kind: 'ship' | 'wing' | 'regiment';
+  /** ShipType, WingType or UnitType */
+  unit: string;
+  /** the ports, airfields or provinces, in the order chosen */
+  places: ProvinceId[];
+  /** per place (each place gets `count`) or total (spread over them, a place at a time) */
+  mode: 'per' | 'total';
+  count: number;
+  /** units ordered in all (per place: count × places; less when a place is lost before its share starts) */
+  total: number;
+  /** started so far at each place */
+  started: Record<ProvinceId, number>;
+  /** finished so far */
+  done: number;
+  paused: boolean;
+  created: number;
+  /** why nothing (more) started last week, and since when */
+  blocked: { why: string; since: number } | null;
+  /** where finished units go: an operation of ours, and for wings an airfield to move to / for fleets a zone to sail to */
+  assign: { op: string | null; rally: string | null };
+  /** the fleet or army this order is filling at each place (later units join it there while it waits) */
+  groups: Record<ProvinceId, string>;
+  /** fleets this order formed (bounded by its count): with a zone to sail to, they join up there */
+  formed: string[];
 }
 
 export interface Regiment {
@@ -852,6 +894,8 @@ export interface NationState {
   debtMonths: number;
   bankruptUntil: number;
   modifiers: Modifier[];
+  /** standing production orders (format 9): ships, air wings and regiments laid down as capacity and money allow */
+  production?: ProductionOrder[];
   eventCooldowns: Record<EventId, number>;
   nextEventTick: number;
   pendingEvents: PendingEvent[];
@@ -1090,7 +1134,7 @@ export interface GameState {
   proposals: Proposal[];
   reports: BattleReport[];
   notifications: Notification[];
-  counters: { army: number; battle: number; war: number; treaty: number; note: number; proposal: number; event: number; regiment: number; coalition: number; fleet: number; ship: number; wing: number; loan: number; bloc: number; contract: number; op?: number };
+  counters: { army: number; battle: number; war: number; treaty: number; note: number; proposal: number; event: number; regiment: number; coalition: number; fleet: number; ship: number; wing: number; loan: number; bloc: number; contract: number; op?: number; production?: number };
   result: GameResult | null;
   continueAfterResult: boolean;
   diagnostics: AIDiagnostic[];
@@ -1136,6 +1180,8 @@ export type Command =
   | { type: 'createOp'; nation: NationId; kind: OperationKind; area: ProvinceId[]; zones?: ZoneId[]; settings?: Partial<OperationSettings>; units?: string[]; name?: string; activate?: boolean; enemies?: NationId[] }
   | { type: 'editOp'; nation: NationId; op: string; area?: ProvinceId[]; zones?: ZoneId[]; settings?: Partial<OperationSettings>; name?: string; enemies?: NationId[] }
   | { type: 'reserveUnits'; nation: NationId; units: string[]; reserved: boolean }
+  | { type: 'orderProduction'; nation: NationId; kind: ProductionOrder['kind']; unit: string; places: ProvinceId[]; count: number; mode: 'per' | 'total'; assign?: { op?: string | null; rally?: string | null } }
+  | { type: 'productionState'; nation: NationId; order: string; state: 'paused' | 'active' | 'cancel' }
   /** armies, fleets and wings (by id) join the operation (leaving any other) */
   | { type: 'assignOp'; nation: NationId; op: string; units: string[] }
   /** members leave their operation and keep their last orders under direct command */

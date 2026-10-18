@@ -4,7 +4,7 @@
 // way, with pause, resume, stop, the opponents, manual takeover and (optional) the
 // detailed settings. Forces the player keeps for direct command are never taken.
 
-import { enemiesOf, isFriendly, nationName, provName } from '../../sim/state';
+import { enemiesOf, isFriendly, nationName } from '../../sim/state';
 import { opForces, STRATEGY_HELP, STRATEGY_LABELS, unitRef } from '../../sim/ops/operations';
 import type { NationId, Operation, OpStrategy } from '../../sim/types';
 import type { App } from '../app';
@@ -180,8 +180,6 @@ export function warStatus(app: App, op: Operation): HTMLElement[] {
   }
   const top = [...counts].sort((a, b) => b[1] - a[1]).slice(0, 4);
   if (top.length) out.push(section('Waiting or recovering', ...top.map(([k, n]) => h('div', { class: 'small' }, `${n} × ${k}`))));
-  void st;
-  void provName;
   return out;
 }
 

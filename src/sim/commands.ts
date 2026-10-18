@@ -7,6 +7,7 @@ import { C, SHIPS, WINGS } from './config';
 import { nextMemoEpoch } from './index';
 import { buildProblem, cancelProblem, cancelProject, PROJECT_LABELS, startProject } from './construction';
 import { runBatchBuild, runBatchRecruit } from './batch';
+import { createProductionOrder, orderProductionProblem, orderTotals, setProductionState, unitLabel } from './production';
 import { assignUnits, cancelOperation, createOperation, createOpProblem, editOperation, editOpProblem, opSummaryLine, releaseUnits, reserveUnits, resumeUnits, setOpStatus, takeUnderDirectCommand, unitRef } from './ops/operations';
 import {
   cancelTreaty,
@@ -287,6 +288,13 @@ export function checkCommand(sim: Sim, cmd: Command): string | null {
         if (!r || r.unit.nation !== cmd.nation) return 'Not our force.';
       }
       return cmd.units.length ? null : 'Choose the forces.';
+    case 'orderProduction':
+      return orderProductionProblem(sim, cmd.nation, cmd.kind, cmd.unit, cmd.places, cmd.count, cmd.mode, cmd.assign);
+    case 'productionState': {
+      const o = (st.nations[cmd.nation].production ?? []).find((x) => x.id === cmd.order);
+      if (!o) return 'No such production order.';
+      return ['paused', 'active', 'cancel'].includes(cmd.state) ? null : 'Unknown state.';
+    }
     case 'batchBuild': {
       if (!cmd.provinces.length) return 'Choose the provinces.';
       if (cmd.provinces.length > 400 || new Set(cmd.provinces).size !== cmd.provinces.length) return 'Each province once, at most 400.';
@@ -696,6 +704,14 @@ function execute(sim: Sim, cmd: Command, auto = false): CommandResult {
     case 'reserveUnits':
       reserveUnits(sim, cmd.units, cmd.reserved);
       return { ok: true, message: cmd.reserved ? `${cmd.units.length === 1 ? 'Kept' : `${cmd.units.length} forces kept`} for your direct command: Auto-conquer will not use ${cmd.units.length === 1 ? 'it' : 'them'}.` : `Auto-conquer may use ${cmd.units.length === 1 ? 'it' : 'them'} again.` };
+    case 'orderProduction': {
+      const o = createProductionOrder(sim, cmd.nation, cmd.kind, cmd.unit, cmd.places, cmd.count, cmd.mode, cmd.assign);
+      const t = orderTotals(o);
+      const now = Object.values(o.started).reduce((a, b) => a + b, 0);
+      return { ok: true, message: `${t.total} ${unitLabel(o.kind, o.unit, t.total)} ordered: ${now} started now${t.left ? `, ${t.left} follow as ${o.kind === 'ship' ? 'slipways' : o.kind === 'wing' ? 'airfield room' : 'training places'} and means allow${o.blocked ? ` (waiting: ${o.blocked.why})` : ''}` : ''}.` };
+    }
+    case 'productionState':
+      return { ok: true, message: setProductionState(sim, cmd.nation, cmd.order, cmd.state) };
     case 'keepFormation': {
       const a = st.armies[cmd.army];
       a.keep = cmd.keep;

@@ -49,6 +49,7 @@ import { armiesIn, battleGen, geoRev, memoEpochNow } from './index';
 import { nationMods } from './modifiers';
 import { fleetEpoch, fleetsIn, zoneName } from './naval';
 import { opDistance, placesWithin, type Place } from './reach';
+import { orderWing } from './production';
 import { chance, range } from './rng';
 import { atWar, isFriendly, notify, provName, type Sim } from './state';
 import type { AirMission, AirWing, Battle, Fleet, FleetId, NationId, ProvinceId, Ship, StrategicResource, SupportLine, WingId, WingType, ZoneId } from './types';
@@ -359,8 +360,12 @@ export function weeklyHangars(sim: Sim): void {
       o.weeksLeft--;
       if (o.weeksLeft > 0) continue;
       p.hangar.splice(i, 1);
-      createWing(sim, o.nation, pid, o.wing);
+      const w = createWing(sim, o.nation, pid, o.wing);
       st.nations[o.nation].stats.wingsBuilt++;
+      if (o.order) {
+        orderWing(sim, o.nation, o.order, w);
+        continue;
+      }
       notify(sim, o.nation, 'low', 'air', `A new ${WINGS[o.wing].label.toLowerCase()} is ready at ${provName(sim, pid)}.`, { province: pid });
     }
   }

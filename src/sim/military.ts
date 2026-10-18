@@ -13,6 +13,7 @@ import { touchArmies } from './index';
 import { armyCap } from './influence';
 import { noteOpLoss } from './ops/losses';
 import { nationMods, type Mods } from './modifiers';
+import { orderRegiment } from './production';
 import { armiesAt, armiesOf, atWar, bump, enemiesOf, isFriendly, notify, provName, type Sim } from './state';
 import { supplyAt, supplyStatus } from './supply';
 import type { Army, ArmyId, NationId, ProvinceId, Regiment, StrategicResource, UnitType } from './types';
@@ -210,6 +211,8 @@ export function weeklyRecruitment(sim: Sim): void {
       const nid = r.nation;
       const mm = maxMorale(sim, nid);
       const reg = newRegiment(sim, r.unit);
+      // a production order's regiment joins the army it is forming there (told once, when the order is done)
+      if (orderRegiment(sim, nid, r.order, pid, reg, mm * C.army.newRecruitMorale)) continue;
       const host = armiesAt(sim, pid).find(
         (a) => a.nation === nid && !a.battle && !a.retreating && a.path.length === 0 && a.regiments.length < C.army.maxRegiments,
       );

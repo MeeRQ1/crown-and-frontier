@@ -39,6 +39,7 @@ import { memoGeo, memoize, ownedBy, touchArmies } from './index';
 import { armyCap } from './influence';
 import { nationMods } from './modifiers';
 import { range } from './rng';
+import { orderShip } from './production';
 import { addContribution, atWar, borders, isFriendly, nationName, notify, provName, type Sim } from './state';
 import type { Army, BattleReport, Fleet, FleetDuty, FleetDutyKind, FleetId, NationId, ProvinceId, Ship, ShipType, StrategicResource, ZoneId } from './types';
 import { edgeKey } from './world';
@@ -357,10 +358,12 @@ export function weeklyShipyards(sim: Sim): void {
       const zone = portZone(sim, pid);
       if (!zone) continue;
       const ship = newShip(sim, o.ship);
+      st.nations[o.nation].stats.shipsBuilt++;
+      // a production order's ship joins the squadron it is forming (told once, when the order is done)
+      if (orderShip(sim, o.nation, o.order, pid, zone, ship)) continue;
       const join = fleetsIn(sim, zone).find((f) => f.nation === o.nation && f.home === pid && !f.path.length && !f.cargo.length);
       if (join) join.ships.push(ship);
       else createFleet(sim, o.nation, zone, [ship], pid);
-      st.nations[o.nation].stats.shipsBuilt++;
       notify(sim, o.nation, 'low', 'navy', `A new ${SHIPS[o.ship].label.toLowerCase()} has left the yards of ${provName(sim, pid)}.`, { province: pid });
     }
   }

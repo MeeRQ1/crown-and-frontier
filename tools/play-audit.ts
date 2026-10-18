@@ -54,7 +54,7 @@ async function main(): Promise<void> {
       return {
         wings: prov.reduce((s, p) => s + p.hangar.filter((o: any) => o.nation === 'ger').length, 0),
         ships: prov.reduce((s, p) => s + p.dock.filter((o: any) => o.nation === 'ger').length, 0),
-        queued: (st.nations.ger.production ?? []).reduce((s: number, o: any) => s + (o.remaining ?? 0), 0),
+        queued: (st.nations.ger.production ?? []).reduce((s: number, o: any) => s + o.total - Object.values(o.started).reduce((a: number, b: any) => a + b, 0), 0),
       };
     });
   const places = await page.evaluate(() => {
@@ -93,7 +93,6 @@ async function main(): Promise<void> {
     }
   } else {
     // the Military ledger's Production: Air wings, Fighter, 10 in all over the airfields, Confirm
-    inputs += await page.evaluate(() => 0);
     await page.keyboard.press('m');
     inputs++;
     await page.locator('[data-fk="prod-new-wing"]').click();
@@ -146,7 +145,7 @@ async function main(): Promise<void> {
     await page.keyboard.press('Escape');
   }
   const c2 = await counts(page);
-  report.tenShips = { inputs, slipwaysFree: await page.evaluate((ps) => ps.reduce((s: number, p: string) => { const pr = (window as any).cnf.sim.state.provinces[p]; return s + pr.port - pr.dock.length; }, 0), places.ports), onSlipways: c2.ships - c1.ships, queued: c2.queued - c1.queued, note: 'ships beyond the free slipways must be ordered again later on main' };
+  report.tenShips = { inputs, slipwaysFree: await page.evaluate((ps) => ps.reduce((s: number, p: string) => { const pr = (window as any).cnf.sim.state.provinces[p]; return s + pr.port - pr.dock.length; }, 0), places.ports), onSlipways: c2.ships - c1.ships, queued: c2.queued - c1.queued, note: PHASE === 'before' ? 'ships beyond the free slipways must be ordered again later on main' : 'the rest wait in the order and are laid down as slipways free' };
   await page.screenshot({ path: join(OUT, 'ships.png') });
 
   // ── four fleets patrol one zone; six wings move to one airfield ──

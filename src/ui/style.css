@@ -1383,6 +1383,7 @@ ul.notes li.bad::before { background: var(--bad); border-radius: 0; transform: r
 .chips { display: flex; flex-wrap: wrap; gap: 4px; }
 .chip { padding: 2px 8px; font: inherit; font-size: var(--fs-xs); border: 1px solid var(--line); background: var(--cf-ivory); color: var(--text); cursor: pointer; }
 .chip:hover { border-color: var(--cf-ink); }
+.chip.on { border-color: var(--cf-brass-ink); background: var(--cf-brass); color: var(--cf-ink); }
 .chip.done { border-color: var(--good); color: var(--good); }
 .chip.current { border-color: var(--cf-brass-ink); background: #f6ecd2; }
 .chip.locked, .chip.early { border-style: dashed; color: var(--text-2); }

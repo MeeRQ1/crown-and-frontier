@@ -37,6 +37,7 @@ import { resolveAirDrops } from './airborne';
 import { monthlyEvents } from './events';
 import { monthlyIntegration } from './integration';
 import { weeklyArmyCareSteps, weeklyRecruitment } from './military';
+import { weeklyProduction } from './production';
 import { weeklyMovement, weeklyOrders } from './movement';
 import { monthlyResearch } from './progression';
 import { monthlyFocus } from './focus';
@@ -145,6 +146,7 @@ export function* weekSlices(sim: Sim, opts: StepOptions = {}): Generator<void, v
   yield* phase('sieges', () => weeklySieges(sim));
   yield* phaseSteps('armyCare', weeklyArmyCareSteps(sim));
   yield* phase('recruitment', () => {
+    weeklyProduction(sim);
     weeklyRecruitment(sim);
     weeklyShipyards(sim);
     weeklyHangars(sim);
