@@ -26,7 +26,7 @@
 // Every battle is traced: who fought on each side (regiments and men, how many
 // fit the frontage), terrain, forts, entrenchment, rivers, supply, morale,
 // fire support, reinforcements arriving later, rounds, losses, the winner.
-//   npx tsx tools/concentration.ts [--weeks 30] [--seeds 1,2,3,4] [--out reports/playability/concentration-before.json]
+//   npx tsx tools/concentration.ts [--weeks 30] [--seeds 1,2,3,4] [--scenario europe-1936-r1] [--out reports/playability/concentration-before.json]
 
 import { writeFileSync } from 'node:fs';
 import { createWing } from '../src/sim/air';
@@ -56,6 +56,13 @@ const ONLY = get('only', '');
 const SETUP = get('setup', 'built');
 /** natural setup: 'alone' sets Poland's alliances aside (the stronger-military case), 'allies' keeps them */
 const ALLIES = get('allies', 'alone');
+/** the map: Europe 1936 as shipped, or its revision 1 (`europe-1936-r1`, the map of the diagnosis) */
+const SCENARIO = get('scenario', 'europe-1936');
+{
+  const { ensureLegacyMap, parseLegacyId } = await import('../src/maps/legacy');
+  const legacy = parseLegacyId(SCENARIO);
+  if (legacy) await ensureLegacyMap(legacy[0], legacy[1]);
+}
 
 export interface Concentration {
   sim: Sim;
@@ -66,7 +73,7 @@ export interface Concentration {
 const TECH = ['aviation', 'fighters', 'ground_attack', 'all_metal_aircraft', 'tanks', 'engineering_corps'];
 
 export function concentration(seed: number): Concentration {
-  const sim = createGame({ scenario: 'europe-1936', seed, playerNation: 'ger' });
+  const sim = createGame({ scenario: SCENARIO, seed, playerNation: 'ger' });
   const st = sim.state;
   for (const nid of ['ger', 'pol']) {
     const n = st.nations[nid];
@@ -109,7 +116,7 @@ export function concentration(seed: number): Concentration {
  * stands in one concentration of about 40 regiments.
  */
 export function natural(seed: number): Concentration {
-  const sim = createGame({ scenario: 'europe-1936', seed, playerNation: 'ger' });
+  const sim = createGame({ scenario: SCENARIO, seed, playerNation: 'ger' });
   const st = sim.state;
   st.nations.ger.isPlayer = false;
   for (let w = 0; w < 52; w++) step(sim);

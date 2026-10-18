@@ -477,7 +477,6 @@ export function diplomacy(sim: Sim, nid: NationId): void {
         const op = opinion(sim, o, nid);
         let v = 0;
         if (wantsTreaty(sim, nid, o, 'alliance')) v += 3;
-        if (wantsTreaty(sim, nid, o, 'trade')) v += 1.5;
         if (n.ai.goal.victory === 'diplomatic') {
           v += 2;
           // a partner that counts toward leadership but whose opinion of us sits near the bar
@@ -487,6 +486,9 @@ export function diplomacy(sim: Sim, nid: NationId): void {
         // a smaller realm we could draw into our sphere
         if (sphereMinded && totalDev(sim, o) < myDev * 0.7 && !sphereOf(sim, o) && influenceOver(sim, nid, o) < C.influence.sphere * 1.3) v += 1.5;
         if (op >= 50 && !(sphereMinded && influenceOver(sim, nid, o) < C.influence.sphere)) v -= 3;
+        // the value of trade (an estimate over every pair of realms) only where it could make
+        // the difference between sending an envoy and not
+        if (v + 1.5 - op / 50 > 1 && wantsTreaty(sim, nid, o, 'trade')) v += 1.5;
         return { o, v: v - op / 50 };
       })
       .filter((x) => x.v > 1)

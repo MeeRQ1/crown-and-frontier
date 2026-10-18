@@ -464,9 +464,10 @@ export function blockadeShare(sim: Sim, nid: NationId): number {
   return memoGeo(sim, 'blockadeShare', `${nid}|${fleetEpoch(sim)}`, () => {
     let all = 0;
     let cut = 0;
-    for (const pid of sim.world.provIds) {
+    // the realm's own provinces (in world order, as a scan of the map would find them)
+    for (const pid of ownedBy(sim, nid)) {
       const p = sim.state.provinces[pid];
-      if (p.owner !== nid || !sim.world.provZones[pid]) continue;
+      if (!sim.world.provZones[pid]) continue;
       all += p.dev;
       if (provinceBlockaded(sim, pid)) cut += p.dev;
     }
