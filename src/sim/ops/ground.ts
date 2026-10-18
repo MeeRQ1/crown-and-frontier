@@ -27,11 +27,12 @@
 import { C } from '../config';
 import { forecastBattle, type Forecast } from '../combat';
 import { armyStrength, maxMorale } from '../military';
+import { armiesIn } from '../index';
 import { atWar, isFriendly, menOf, provName, type Sim } from '../state';
-import { supplyAt, supplyDistances, supplyRange } from '../supply';
+import { provinceSupplyCapacity, supplyAt, supplyDistances, supplyRange } from '../supply';
 import { findPath } from '../movement';
 import type { Army, ArmyId, CommandResult, NationId, OpTask, OpTaskKind, ProvinceId, RealmCommand, UnitType } from '../types';
-import { hostileArmiesAt, pathVia, reachFrom, sumStrength, threatAround } from '../ai/common';
+import { enemyRouteSet, hostileArmiesAt, pathVia, projectedThreat, reachFrom, sumStrength, threatAround } from '../ai/common';
 
 export interface GroundTarget {
   pid: ProvinceId;
@@ -49,6 +50,8 @@ export interface GroundPolicy {
   margin: number;
   /** forecast verdicts it attacks into */
   accept: ReadonlyArray<Forecast['verdict']>;
+  /** of the forecast's three rolls (bad, even, good luck), how many an "Uncertain" attack must win (default 2: it wins with even luck) */
+  uncertainWins?: number;
   /** below this share of full morale an army rests */
   minReadiness: number;
   /** share of the strength held back */
@@ -76,7 +79,7 @@ export interface GroundPolicy {
 
 export interface GroundMemory {
   assigned: Record<ArmyId, { target: ProvinceId; since: number; kind: string }>;
-  failures: Record<ProvinceId, { tick: number; count: number }>;
+  failures: Record<ProvinceId, { tick: number; count: number; held?: boolean }>;
   reorganized: Record<ArmyId, number>;
 }
 
@@ -139,7 +142,8 @@ export function areaTargets(sim: Sim, nid: NationId, area: Iterable<ProvinceId>,
     out.push({
       pid,
       kind: mineByRight ? 'liberate' : 'attack',
-      value: p.dev + 2 + (enemyCap ? 6 : 0) + (mineByRight ? 4 : 0) - p.fort * 1.5,
+      // an enemy field army is worth more than the land it stands on: beating it opens the rest
+      value: p.dev + 2 + (enemyCap ? 6 : 0) + (mineByRight ? 4 : 0) - p.fort * 1.5 + Math.min(10, hostile.reduce((n, a) => n + a.regiments.length, 0) * 0.25),
       need: targetNeed(sim, hostile, p.fort, margin),
       hostile,
       siegeRegs: siegeRegiments(p.fort),
@@ -149,6 +153,30 @@ export function areaTargets(sim: Sim, nid: NationId, area: Iterable<ProvinceId>,
 }
 
 const RANK: Record<GroundTarget['kind'], number> = { defend: 0, liberate: 1, hold: 2, attack: 3 };
+const VERDICT_RANK: Record<Forecast['verdict'], number> = { 'Likely defeat': 0, Uncertain: 1, 'Likely victory': 2 };
+
+/** A forecast the policy attacks into: an accepted verdict, and an uncertain one only if it wins with even luck (or as the policy allows). */
+export function acceptable(pol: GroundPolicy, f: Forecast): boolean {
+  if (!pol.accept.includes(f.verdict)) return false;
+  if (f.verdict !== 'Uncertain') return true;
+  return f.outcomes.filter((o) => o === 'attacker').length >= (pol.uncertainWins ?? 2);
+}
+/** weeks a task force waits next to a target the forecast refuses before setting it aside */
+const HELD_SET_ASIDE = 3;
+/** weeks a target set aside (not lost) waits before it is weighed again */
+const HELD_WAIT = 4;
+
+/**
+ * Regiments of ours a province can feed in the supplied band (the first wave of a
+ * strike), less those already there; null when it cannot be supplied at all (beyond
+ * our supply lines: no first wave helps).
+ */
+export function feedable(sim: Sim, nid: NationId, pid: ProvinceId): number | null {
+  if (!supplyAt(sim, nid, pid, 0, false).connected) return null;
+  let there = 0;
+  for (const a of armiesIn(sim, pid)) if (isFriendly(sim, nid, a.nation)) there += a.regiments.length;
+  return Math.max(1, Math.floor((2 * provinceSupplyCapacity(sim, nid, pid)) / C.supply.strainedBelow) - there);
+}
 
 /** The nearest province of ours (or a friend's) with no enemy close by: where an army rests. */
 export function restingPlace(sim: Sim, nid: NationId, from: ProvinceId, base: ProvinceId | null): ProvinceId | null {
@@ -215,19 +243,28 @@ export function planGround(sim: Sim, armies: Army[], targets: GroundTarget[], ct
     if (r.ok) out.orders++;
     return r.ok;
   };
-  // enemy troops on the way (not at the destination): marching through them is a battle nobody planned
-  const held = (p: ProvinceId) => hostileArmiesAt(sim, nid, p).length > 0;
-  const blockedAt = (path: readonly ProvinceId[]) => path.slice(0, -1).find(held) ?? null;
+  // enemy troops on the way (not at the destination): marching through them is a battle nobody planned.
+  // Troops standing on the route count wherever they are; troops about to enter it (their
+  // declared route) only on our first two steps, where we would meet. A garrison much weaker
+  // than the marching army is no obstacle.
+  const routes = enemyRouteSet(sim, nid);
+  const danger = (p: ProvinceId, k: number, a: Army) => {
+    const there = sumStrength(sim, hostileArmiesAt(sim, nid, p));
+    const arriving = k <= 1 && routes.has(p) ? projectedThreat(sim, nid, p, 0) : 0;
+    return Math.max(there, arriving) > str(a) * 0.5 || (there > 0 && str(a) < 3);
+  };
+  const held = (p: ProvinceId) => hostileArmiesAt(sim, nid, p).length > 0 || routes.has(p);
+  const blockedFor = (a: Army, path: readonly ProvinceId[]) => path.slice(0, -1).find((p, k) => danger(p, k, a)) ?? null;
   const routeNotes = new Map<ArmyId, string>();
   const moveTo = (a: Army, dest: ProvinceId, why?: string) => {
     if (a.location === dest) {
       if (a.path.length) order({ type: 'stop', nation: nid, army: a.id });
       return;
     }
-    if (a.path.length && a.path[a.path.length - 1] === dest && !blockedAt(a.path)) return;
+    if (a.path.length && a.path[a.path.length - 1] === dest && !blockedFor(a, a.path)) return;
     const direct = findPath(sim, nid, a.location, dest);
     if (!direct) return;
-    const bad = blockedAt(direct.path);
+    const bad = blockedFor(a, direct.path);
     if (!bad) {
       if (a.path.length && a.path[a.path.length - 1] === dest) return;
       order({ type: 'move', nation: nid, army: a.id, dest }, why);
@@ -235,14 +272,14 @@ export function planGround(sim: Sim, armies: Army[], targets: GroundTarget[], ct
     }
     // a way round the enemy troops: march to the farthest point of the detour the ordinary route follows
     const avoid = new Set<ProvinceId>();
-    for (const p of direct.path.slice(0, -1)) if (held(p)) avoid.add(p);
+    for (const [k, p] of direct.path.slice(0, -1).entries()) if (danger(p, k, a)) avoid.add(p);
     for (const p of sim.world.prov[a.location].neighbors) if (p !== dest && held(p)) avoid.add(p);
     const alt = findPath(sim, nid, a.location, dest, avoid);
-    if (alt && !blockedAt(alt.path)) {
+    if (alt && !blockedFor(a, alt.path)) {
       let way: ProvinceId | null = null;
       for (let i = Math.min(alt.path.length - 1, 6); i >= 0 && !way; i--) {
         const leg = findPath(sim, nid, a.location, alt.path[i]);
-        if (leg && leg.path.join() === alt.path.slice(0, i + 1).join() && !leg.path.some((p, k) => k < i && held(p))) way = alt.path[i];
+        if (leg && leg.path.join() === alt.path.slice(0, i + 1).join() && !leg.path.some((p, k) => k < i && danger(p, k, a))) way = alt.path[i];
       }
       if (way) {
         if (!(a.path.length && a.path[a.path.length - 1] === way)) order({ type: 'move', nation: nid, army: a.id, dest: way }, why);
@@ -261,6 +298,38 @@ export function planGround(sim: Sim, armies: Army[], targets: GroundTarget[], ct
   const recently = (id: ArmyId) => st.tick - (mem.reorganized[id] ?? -99) < 4;
   const dist = supplyDistances(sim, nid);
   const range = supplyRange(sim, nid);
+  // ── supply-aware placement: regiments of ours each province can feed, and those planned there ──
+  // (an army stacked beyond what a province feeds starves and wastes away, at home too)
+  const feedMemo = new Map<ProvinceId, number>();
+  const feed = (p: ProvinceId) => {
+    let f = feedMemo.get(p);
+    if (f === undefined) {
+      const cap = provinceSupplyCapacity(sim, nid, p);
+      // in supply: the supplied band; cut off: the strained band
+      f = dist[p] <= range ? Math.floor((2 * cap) / C.supply.strainedBelow) : Math.floor((C.supply.disconnectedMul * cap) / C.supply.unsuppliedBelow);
+      feedMemo.set(p, f);
+    }
+    return f;
+  };
+  const load = new Map<ProvinceId, number>();
+  for (const a of Object.values(st.armies)) if (isFriendly(sim, nid, a.nation) && !a.embarked) load.set(a.location, (load.get(a.location) ?? 0) + a.regiments.length);
+  const room = (p: ProvinceId, a: Army) => feed(p) - ((load.get(p) ?? 0) - (a.location === p ? a.regiments.length : 0)) - a.regiments.length;
+  /** Where an army sent to `dest` should stand: `dest` if it can feed it, else the nearest friendly province around `around` that can. */
+  const place = (a: Army, dest: ProvinceId, around: ProvinceId = dest): ProvinceId => {
+    let pick = dest;
+    if (room(dest, a) < 0) {
+      const r = reachFrom(sim, nid, a.location);
+      const cands = [...new Set([...sim.world.prov[around].neighbors, ...sim.world.prov[dest].neighbors, ...(around !== dest ? [around] : [])])]
+        .filter((p) => p !== dest && !hostileCtrl(p) && r.dist[p] !== undefined && room(p, a) >= 0 && hostileArmiesAt(sim, nid, p).length === 0)
+        .sort((x, y) => (sim.world.hop(x, around) ?? 9) - (sim.world.hop(y, around) ?? 9) || r.dist[x] - r.dist[y] || (x < y ? -1 : 1));
+      if (cands.length) pick = cands[0];
+    }
+    if (pick !== a.location) {
+      load.set(a.location, (load.get(a.location) ?? 0) - a.regiments.length);
+      load.set(pick, (load.get(pick) ?? 0) + a.regiments.length);
+    }
+    return pick;
+  };
 
   // ── 1. recovery ──
   const avail = armies.filter((a) => st.armies[a.id] && !a.battle && !a.retreating && !a.embarked && !a.drop);
@@ -283,7 +352,8 @@ export function planGround(sim: Sim, armies: Army[], targets: GroundTarget[], ct
         : tired
           ? `rests: morale ${Math.round((a.morale / mm) * 100)}% of full, ${Math.round(menShare * 100)}% of its men`
           : 'falls back into supply';
-      const home = restingPlace(sim, nid, a.location, ctx.base);
+      const rest = restingPlace(sim, nid, a.location, ctx.base);
+      const home = rest ? place(a, rest) : null;
       give(a, task(sim, 'recover', home, why, prevTasks[a.id]));
       if (home) moveTo(a, home, `${a.name} ${why}`);
       delete mem.assigned[a.id];
@@ -298,7 +368,7 @@ export function planGround(sim: Sim, armies: Army[], targets: GroundTarget[], ct
     for (const a of small) {
       const r = reachFrom(sim, nid, a.location);
       const host = fit
-        .filter((b) => b.id !== a.id && b.regiments.length >= pol.minDetach && r.dist[b.location] !== undefined && r.dist[b.location] <= 12 && b.regiments.length + a.regiments.length <= C.army.maxRegiments)
+        .filter((b) => b.id !== a.id && b.regiments.length >= pol.minDetach && r.dist[b.location] !== undefined && r.dist[b.location] <= 12 && b.regiments.length + a.regiments.length <= C.army.maxRegiments && room(b.location, a) >= 0)
         .sort((x, y) => r.dist[x.location] - r.dist[y.location] || (x.id < y.id ? -1 : 1))[0];
       if (!host) continue;
       fit.splice(fit.indexOf(a), 1);
@@ -311,7 +381,7 @@ export function planGround(sim: Sim, armies: Army[], targets: GroundTarget[], ct
         }
       }
       give(a, task(sim, 'regroup', host.location, `${a.regiments.length === 1 ? 'one regiment' : `${a.regiments.length} regiments`}, too few to fight alone: joining ${host.name} at ${provName(sim, host.location)}`, prevTasks[a.id]));
-      moveTo(a, host.location);
+      moveTo(a, place(a, host.location));
     }
   }
 
@@ -376,7 +446,8 @@ export function planGround(sim: Sim, armies: Army[], targets: GroundTarget[], ct
     for (const a of fit) d = Math.min(d, sim.world.hop(a.location, t.pid) ?? 99);
     near.set(t.pid, d);
   }
-  const score = (t: GroundTarget) => t.value * (committed.has(t.pid) ? 1.5 : 1) - 0.5 * Math.min(20, near.get(t.pid) ?? 20);
+  // distance counts a full point a march: a front advances by its nearest objectives, not by marching across itself
+  const score = (t: GroundTarget) => t.value * (committed.has(t.pid) ? 1.5 : 1) - Math.min(20, near.get(t.pid) ?? 20);
   const ranked = [...targets].sort((a, b) => RANK[a.kind] - RANK[b.kind] || score(b) - score(a) || (a.pid < b.pid ? -1 : 1));
   const assigned = new Set<ArmyId>();
   const groups: Array<{ t: GroundTarget; group: Army[]; have: number }> = [];
@@ -385,12 +456,16 @@ export function planGround(sim: Sim, armies: Army[], targets: GroundTarget[], ct
     if (t.kind === 'hold') continue;
     const fail = mem.failures[t.pid];
     // enemy troops next to the target can strike whoever takes it: a force must be able to stand
-    const exposure = t.kind === 'defend' ? 0 : threatAround(sim, nid, t.pid, 1) - sumStrength(sim, t.hostile);
+    const exposure = t.kind === 'defend' ? 0 : projectedThreat(sim, nid, t.pid, 1) - sumStrength(sim, t.hostile);
     let need = Math.max(t.need, exposure * 0.6);
     if (fail && t.kind !== 'defend') {
       const waited = st.tick - fail.tick;
-      if (waited < pol.failWait) {
-        out.blocked.push({ pid: t.pid, why: `an attack failed ${waited} week${waited === 1 ? '' : 's'} ago (${fail.count} so far): waiting ${pol.failWait - waited} more` });
+      const wait = fail.held && !fail.count ? Math.min(pol.failWait, HELD_WAIT) : pol.failWait;
+      if (waited < wait) {
+        out.blocked.push({
+          pid: t.pid,
+          why: fail.held && !fail.count ? `too strong for the force we can bring now: set aside for ${wait - waited} more week${wait - waited === 1 ? '' : 's'} (other targets first)` : `an attack failed ${waited} week${waited === 1 ? '' : 's'} ago (${fail.count} so far): waiting ${wait - waited} more`,
+        });
         continue;
       }
       need *= 1 + 0.3 * fail.count;
@@ -400,10 +475,14 @@ export function planGround(sim: Sim, armies: Army[], targets: GroundTarget[], ct
       out.blocked.push({ pid: t.pid, why: 'beyond our supply lines' });
       continue;
     }
+    // for land nobody defends, an army much larger than the need counts as farther away:
+    // the main body is not spent walking into empty provinces while a field army is loose
+    const oversize = (a: Army) => (t.hostile.length === 0 && t.kind !== 'defend' && str(a) > Math.max(need, 1) * 4 ? 6 : 0);
     const cands = pool()
       .map((a) => ({ a, d: reachFrom(sim, nid, a.location).dist[t.pid] }))
       .filter((x) => x.d !== undefined && x.d <= pol.maxCost)
-      .sort((x, y) => (mem.assigned[x.a.id]?.target === t.pid ? -1 : 0) - (mem.assigned[y.a.id]?.target === t.pid ? -1 : 0) || x.d - y.d || (x.a.id < y.a.id ? -1 : 1));
+      .map((x) => ({ ...x, k: x.d + oversize(x.a) }))
+      .sort((x, y) => (mem.assigned[x.a.id]?.target === t.pid ? -1 : 0) - (mem.assigned[y.a.id]?.target === t.pid ? -1 : 0) || x.k - y.k || (x.a.id < y.a.id ? -1 : 1));
     const group: Army[] = [];
     let have = 0;
     let regs = 0;
@@ -435,7 +514,7 @@ export function planGround(sim: Sim, armies: Army[], targets: GroundTarget[], ct
     for (const t of open) {
       if (budget <= 0) break;
       // a detachment must be able to hold what it takes against the enemy next door (no defeat in detail)
-      const nearby = threatAround(sim, nid, t.pid, 1);
+      const nearby = projectedThreat(sim, nid, t.pid, 1);
       // the task force with the most to spare within reach
       let best: { g: (typeof groups)[number]; a: Army; spare: number } | null = null;
       for (const g of groups) {
@@ -481,45 +560,105 @@ export function planGround(sim: Sim, armies: Army[], targets: GroundTarget[], ct
   }
 
   // ── 4. concentration, forecasts, orders ──
-  for (const { t, group } of groups) {
-    const live = group.filter((a) => st.armies[a.id]);
-    if (!live.length) continue;
-    const lead = live.reduce((x, y) => (str(y) > str(x) ? y : x));
+  const battleAt = (pid: ProvinceId) => Object.values(st.battles).some((b) => b.province === pid && (b.attackerNations.includes(nid) || b.defenderNations.includes(nid)));
+  let mainEffort: { staging: ProvinceId; have: number } | null = null;
+  for (const g of groups) {
+    const { t, group } = g;
+    const arm = group.filter((a) => st.armies[a.id]);
+    if (!arm.length) continue;
+    const lead = arm.reduce((x, y) => (str(y) > str(x) ? y : x));
     const leadPath = pathVia(reachFrom(sim, nid, lead.location), lead.location, t.pid) ?? [];
-    const staging = leadPath.length <= 1 ? lead.location : leadPath[leadPath.length - 2];
+    // gather in land we hold where we can (supplied, reinforced, no siege to sit through)
+    let staging = leadPath.length <= 1 ? lead.location : leadPath[leadPath.length - 2];
+    if (hostileCtrl(staging) && leadPath.length >= 3 && !hostileCtrl(leadPath[leadPath.length - 3])) staging = leadPath[leadPath.length - 3];
     const attackKind: OpTaskKind = t.kind === 'defend' ? 'defend' : t.hostile.length ? 'attack' : 'occupy';
-    let together = live.length === 1 || !pol.coordinate || live.every((a) => a.location === staging && a.path.length === 0);
+    // gathered: at the staging province or beside the target (spread as the provinces can feed them), not moving
+    const beside = new Set(sim.world.prov[t.pid].neighbors);
+    let together = arm.length === 1 || !pol.coordinate || arm.every((a) => (a.location === staging || beside.has(a.location)) && a.path.length === 0);
     // several armies already at the staging province: merge them into one before the strike
-    if (pol.coordinate && pol.merge && live.length > 1 && together && !ctx.dry) {
-      const ids = live.filter((a) => !a.keep && !recently(a.id)).map((a) => a.id);
-      const regs = live.reduce((n, a) => n + a.regiments.length, 0);
-      if (ids.length > 1 && regs <= C.army.maxRegiments) {
+    if (pol.coordinate && pol.merge && arm.length > 1 && together && !ctx.dry) {
+      const ids = arm.filter((a) => !a.keep && !recently(a.id)).map((a) => a.id);
+      const regs = arm.reduce((n, a) => n + a.regiments.length, 0);
+      if (ids.length > 1 && regs <= C.army.maxRegiments && regs <= feed(staging)) {
         const ok = order({ type: 'merge', nation: nid, armies: ids });
         if (ok) {
           out.merged++;
           mem.reorganized[ids[0]] = st.tick;
-          ctx.note(`${live.length} armies merged at ${provName(sim, staging)} to strike ${provName(sim, t.pid)} together.`);
-          live.splice(0, live.length, ...live.filter((a) => st.armies[a.id]));
+          ctx.note(`${arm.length} armies merged at ${provName(sim, staging)} to strike ${provName(sim, t.pid)} together.`);
+          arm.splice(0, arm.length, ...arm.filter((a) => st.armies[a.id]));
           together = true;
         }
       }
     }
-    const hostile = t.hostile.filter((h) => st.armies[h.id]);
+    // the defenders: those there, and enemy armies already marching in
+    const hostile = [...t.hostile.filter((h) => st.armies[h.id]), ...Object.values(st.armies).filter((h) => h.location !== t.pid && h.path.slice(0, 2).includes(t.pid) && !h.retreating && atWar(sim, nid, h.nation))];
     let held: string | null = null;
-    if (hostile.length && live.some((a) => a.location !== t.pid)) {
-      const f = forecastBattle(sim, t.pid, live, hostile);
-      if (!pol.accept.includes(f.verdict)) held = `held at ${provName(sim, staging)}: forecast ${f.verdict.toLowerCase()} (${f.attMen.toLocaleString()} men against ${f.defMen.toLocaleString()})`;
+    // the first wave: what the province can feed (a hungry force fights at −25%); the rest follows into the battle
+    let wave = arm;
+    let follow: Army[] = [];
+    if (hostile.length && arm.some((a) => a.location !== t.pid)) {
+      const all = forecastBattle(sim, t.pid, arm, hostile);
+      let best = all;
+      if (arm.length > 1) {
+        const cut = feedable(sim, nid, t.pid);
+        if (cut !== null) {
+          const sorted = [...arm].sort((x, y) => str(y) - str(x) || (x.id < y.id ? -1 : 1));
+          const first: Army[] = [];
+          let regs = 0;
+          for (const a of sorted) if (!first.length || regs + a.regiments.length <= cut) (first.push(a), (regs += a.regiments.length));
+          if (first.length < arm.length) {
+            const fw = forecastBattle(sim, t.pid, first, hostile);
+            if (VERDICT_RANK[fw.verdict] >= VERDICT_RANK[all.verdict]) {
+              best = fw;
+              wave = first;
+              follow = arm.filter((a) => !first.includes(a));
+            }
+          }
+        }
+      }
+      if (!acceptable(pol, best)) {
+        held = `held at ${provName(sim, staging)}: forecast ${best.verdict.toLowerCase()} (${best.attMen.toLocaleString()} men against ${best.defMen.toLocaleString()}${best.factors[0]?.startsWith('Attackers would be') ? `; ${best.factors[0].toLowerCase()}` : ''})`;
+        // a target the forecast keeps refusing is set aside for a while: the force is not left waiting next to it
+        const since = Math.min(...arm.map((a) => (mem.assigned[a.id]?.target === t.pid ? mem.assigned[a.id].since : st.tick)));
+        if (st.tick - since >= HELD_SET_ASIDE && together && !ctx.dry) {
+          const f = mem.failures[t.pid];
+          mem.failures[t.pid] = { tick: st.tick, count: f?.count ?? 0, held: true };
+          ctx.note(`${provName(sim, t.pid)} set aside: ${best.verdict.toLowerCase()} with the ${best.attMen.toLocaleString()} men we can bring against ${best.defMen.toLocaleString()}; other targets first.`);
+        }
+      }
     }
-    for (const a of live) {
+    if (!mainEffort || g.have > mainEffort.have) if (!hostileCtrl(staging)) mainEffort = { staging, have: g.have };
+    const battleOn = battleAt(t.pid);
+    for (const a of arm) {
       mem.assigned[a.id] = { target: t.pid, since: mem.assigned[a.id]?.target === t.pid ? mem.assigned[a.id].since : st.tick, kind: t.kind };
-      if (pol.coordinate && live.length > 1 && !together) {
-        give(a, task(sim, 'stage', staging, `gathering at ${provName(sim, staging)} with ${live.length - 1} other arm${live.length === 2 ? 'y' : 'ies'} to strike ${provName(sim, t.pid)} together`, prevTasks[a.id]));
-        moveTo(a, staging);
+      if (pol.coordinate && arm.length > 1 && !together) {
+        const spot = place(a, staging, t.pid);
+        give(a, task(sim, 'stage', spot, `gathering ${spot === staging ? 'at' : 'beside'} ${provName(sim, spot)} with ${arm.length - 1} other arm${arm.length === 2 ? 'y' : 'ies'} to strike ${provName(sim, t.pid)} together`, prevTasks[a.id]));
+        moveTo(a, spot);
         continue;
       }
       if (held) {
-        give(a, task(sim, 'stage', staging, held, prevTasks[a.id]));
-        moveTo(a, staging);
+        const spot = place(a, staging, t.pid);
+        give(a, task(sim, 'stage', spot, held, prevTasks[a.id]));
+        moveTo(a, spot);
+        continue;
+      }
+      if (follow.includes(a)) {
+        if (battleOn) {
+          give(a, task(sim, 'attack', t.pid, `second wave: joining the battle at ${provName(sim, t.pid)}`, prevTasks[a.id]));
+          moveTo(a, t.pid);
+        } else {
+          const spot = place(a, staging, t.pid);
+          give(a, task(sim, 'stage', spot, `second wave at ${provName(sim, spot)}: joins once the battle at ${provName(sim, t.pid)} is joined (the province feeds about ${feedable(sim, nid, t.pid) ?? 0} regiments of ours)`, prevTasks[a.id]));
+          moveTo(a, spot);
+        }
+        continue;
+      }
+      // land nobody holds now, but an enemy army is marching on: not a walk into its arms
+      if (attackKind === 'occupy' && hostile.length && sumStrength(sim, hostile) > str(a) * 0.7) {
+        const spot = place(a, staging, t.pid);
+        give(a, task(sim, 'wait', spot, `waiting at ${provName(sim, spot)}: enemy troops (strength ${sumStrength(sim, hostile).toFixed(1)}) are marching on ${provName(sim, t.pid)}`, prevTasks[a.id]));
+        moveTo(a, spot);
         continue;
       }
       const note =
@@ -527,7 +666,7 @@ export function planGround(sim: Sim, armies: Army[], targets: GroundTarget[], ct
           ? `taking ${provName(sim, t.pid)} (no defenders${st.provinces[t.pid].fort ? `; fort ${st.provinces[t.pid].fort}` : ''})`
           : attackKind === 'defend'
             ? `defending ${provName(sim, t.pid)} against ${sumStrength(sim, hostile).toFixed(1)} enemy strength`
-            : `attacking ${provName(sim, t.pid)} (enemy strength ${sumStrength(sim, hostile).toFixed(1)})`;
+            : `attacking ${provName(sim, t.pid)} (enemy strength ${sumStrength(sim, hostile).toFixed(1)})${follow.length ? `, first wave of ${wave.reduce((n, x) => n + x.regiments.length, 0)} regiments` : ''}`;
       give(a, task(sim, attackKind, t.pid, note, prevTasks[a.id]));
       moveTo(a, t.pid);
     }
@@ -552,7 +691,7 @@ export function planGround(sim: Sim, armies: Army[], targets: GroundTarget[], ct
         // only where the reserve tips the balance: the battle with it must be one the posture would fight
         const side = (ids: string[]) => ids.map((x) => st.armies[x]).filter((x): x is Army => !!x);
         const joined = b.attackerNations.includes(nid) ? forecastBattle(sim, b.province, [...side(ourSide), a], side(theirSide)) : null;
-        if (joined && !pol.accept.includes(joined.verdict)) continue;
+        if (joined && !acceptable(pol, joined)) continue;
         give(a, task(sim, 'attack', b.province, `reserve committed to the battle at ${provName(sim, b.province)} (${ours.toLocaleString()} men of ours against ${theirs.toLocaleString()})`, prevTasks[a.id]));
         if (prevTasks[a.id]?.target !== b.province) ctx.note(`Reserve ${a.name} committed to the battle at ${provName(sim, b.province)}.`);
         moveTo(a, b.province);
@@ -573,7 +712,9 @@ export function planGround(sim: Sim, armies: Army[], targets: GroundTarget[], ct
       }
     }
     if (sent) continue;
-    const home = ctx.base && reachFrom(sim, nid, a.location).dist[ctx.base] !== undefined ? ctx.base : a.location;
+    // behind the main effort (where our strongest task force gathers), within a march of the fighting
+    const station = mainEffort && r.dist[mainEffort.staging] !== undefined && projectedThreat(sim, nid, mainEffort.staging, 0.7) < str(a) * pol.withdraw ? mainEffort.staging : null;
+    const home = place(a, station ?? (ctx.base && r.dist[ctx.base] !== undefined ? ctx.base : a.location));
     give(a, task(sim, 'reserve', home, `in reserve at ${provName(sim, home)}${pol.commitReserve === 'never' ? '' : pol.commitReserve === 'battles' ? ': goes in where our battles need it' : ': goes in wherever a target needs it'}`, prevTasks[a.id]));
     mem.assigned[a.id] = { target: home, since: mem.assigned[a.id]?.kind === 'reserve' ? mem.assigned[a.id].since : st.tick, kind: 'reserve' };
     moveTo(a, home);
@@ -598,8 +739,9 @@ export function planGround(sim: Sim, armies: Army[], targets: GroundTarget[], ct
       }
     if (post) {
       covered.set(post.pid, (covered.get(post.pid) ?? 0) + str(a));
-      give(a, task(sim, 'hold', post.pid, `covering ${provName(sim, post.pid)} (enemy strength ${post.gap.toFixed(1)} nearby not yet matched)`, prevTasks[a.id]));
-      moveTo(a, post.pid);
+      const spot = place(a, post.pid);
+      give(a, task(sim, 'hold', spot, `covering ${provName(sim, post.pid)} (enemy strength ${post.gap.toFixed(1)} nearby not yet matched)`, prevTasks[a.id]));
+      moveTo(a, spot);
       continue;
     }
     // a target we cannot take yet: wait at the province before it
@@ -607,18 +749,19 @@ export function planGround(sim: Sim, armies: Army[], targets: GroundTarget[], ct
     if (wait) {
       const path = pathVia(r, a.location, wait.b.pid) ?? [];
       const stop = path.length >= 2 ? path[path.length - 2] : a.location;
-      const safeStop = hostileCtrl(stop) ? a.location : stop;
+      const safeStop = place(a, hostileCtrl(stop) ? a.location : stop, wait.b.pid);
       give(a, task(sim, 'wait', safeStop, `waiting before ${provName(sim, wait.b.pid)}: ${wait.b.why}`, prevTasks[a.id]));
       moveTo(a, safeStop);
       continue;
     }
     const forward = ctx.advance?.(a) ?? null;
     if (forward && forward !== a.location) {
-      give(a, task(sim, 'stage', forward, `marching to the front at ${provName(sim, forward)}`, prevTasks[a.id]));
-      moveTo(a, forward, `${a.name} marches to the front at ${provName(sim, forward)}`);
+      const spot = place(a, forward);
+      give(a, task(sim, 'stage', spot, `marching to the front at ${provName(sim, spot)}`, prevTasks[a.id]));
+      moveTo(a, spot, `${a.name} marches to the front at ${provName(sim, spot)}`);
       continue;
     }
-    const home = ctx.base && r.dist[ctx.base] !== undefined ? ctx.base : null;
+    const home = ctx.base && r.dist[ctx.base] !== undefined ? place(a, ctx.base) : null;
     if (home) {
       give(a, task(sim, 'stage', home, targets.length ? `gathering at ${provName(sim, home)}` : `standing by at ${provName(sim, home)}: nothing to take`, prevTasks[a.id]));
       moveTo(a, home);
@@ -638,7 +781,7 @@ export function planGround(sim: Sim, armies: Army[], targets: GroundTarget[], ct
     for (const [pid, list] of idle) {
       if (list.length < 2) continue;
       const regs = list.reduce((n, a) => n + a.regiments.length, 0);
-      if (regs > C.army.maxRegiments) continue;
+      if (regs > C.army.maxRegiments || regs > feed(pid)) continue;
       const keep = list.sort((x, y) => (x.id < y.id ? -1 : 1))[0];
       if (order({ type: 'merge', nation: nid, armies: list.map((a) => a.id) })) {
         out.merged++;

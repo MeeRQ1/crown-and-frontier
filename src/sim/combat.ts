@@ -30,7 +30,7 @@
 // province without enemies (friendly ground and short supply lines preferred);
 // with no legal retreat they surrender.
 
-import { airSupportFor, airSupportForecast } from './air';
+import { airSupportFor, airSupportForecast, interdiction } from './air';
 import { noteOpLoss } from './ops/losses';
 import { C, TERRAIN, UNITS } from './config';
 import { isShort, reserveCap, warDead } from './economy';
@@ -40,7 +40,7 @@ import { nationMods, type Mods } from './modifiers';
 import { canEnter, isRiver } from './movement';
 import { range } from './rng';
 import { addContribution, atWar, bump, isFriendly, menOf, nationName, notify, provName, type Sim } from './state';
-import { supplyCombatMul, supplyDistances, supplyStatus } from './supply';
+import { supplyAt, supplyCombatMul, supplyDistances, supplyStatus } from './supply';
 import { bombardPlan, bombardPower } from './naval';
 import type { Army, Battle, BattleReport, NationId, ProvinceId, SupportLine, UnitType } from './types';
 
@@ -429,6 +429,9 @@ export function forecastBattle(sim: Sim, pid: ProvinceId, attackers: Army[], def
   const def: SideSnap = { armies: defenders.map((x) => snapArmy(sim, x)) };
   // an attacker arriving has not dug in
   for (const a of att.armies) a.stationary = 0;
+  // and fights on the supply it will have there, with the whole attacking force in the province
+  const arrive = projectedSupply(sim, pid, attackers);
+  for (const a of att.armies) if (arrive.has(a.id)) a.supply = arrive.get(a.id)!;
   const river = attackers.length > 0 && attackers.every((a) => isRiver(sim, from ?? a.location, pid));
   // the support each side could call on this week (a forecast: commitments can change)
   const support = { att: supportForecast(sim, pid, [...new Set(attackers.map((a) => a.nation))]), def: supportForecast(sim, pid, [...new Set(defenders.map((a) => a.nation))]) };
@@ -437,6 +440,14 @@ export function forecastBattle(sim: Sim, pid: ProvinceId, attackers: Army[], def
   const hi = simulateSnap(sim, pid, att, def, C.combat.rollMax, C.combat.rollMin, river, support);
   const outcomes = [lo.outcome, mid.outcome, hi.outcome];
   const wins = outcomes.filter((o) => o === 'attacker').length;
+  const factors = [...mid.factors];
+  if (arrive.size) {
+    const worst = Math.min(...arrive.values());
+    if (supplyStatus(worst) !== 'supplied') {
+      const regs = attackers.reduce((n, a) => n + a.regiments.length, 0);
+      factors.unshift(`Attackers would be ${supplyStatus(worst)} there (${regs} regiments arriving; supply ${Math.round(worst * 100)}%)`);
+    }
+  }
   return {
     verdict: wins === 3 ? 'Likely victory' : wins === 0 ? 'Likely defeat' : 'Uncertain',
     attLoss: Math.round(mid.attLoss),
@@ -444,9 +455,28 @@ export function forecastBattle(sim: Sim, pid: ProvinceId, attackers: Army[], def
     rounds: mid.rounds,
     attMen: sideMen(att),
     defMen: sideMen(def),
-    factors: mid.factors,
+    factors,
     outcomes,
   };
+}
+
+/**
+ * The supply each arriving attacker would have at `pid` (armies already there keep
+ * theirs): the province's supply with every arriving regiment in it, less what
+ * enemy aircraft interdict. A forecast that used the supply at home would send a
+ * force into a battle it would fight hungry.
+ */
+export function projectedSupply(sim: Sim, pid: ProvinceId, attackers: Army[]): Map<string, number> {
+  const out = new Map<string, number>();
+  const byNation = new Map<NationId, Army[]>();
+  for (const a of attackers) if (a.location !== pid) (byNation.get(a.nation) ?? byNation.set(a.nation, []).get(a.nation)!).push(a);
+  if (!byNation.size) return out;
+  const arriving = attackers.filter((a) => a.location !== pid).reduce((n, a) => n + a.regiments.length, 0);
+  for (const [nid, list] of byNation) {
+    const level = Math.max(0, supplyAt(sim, nid, pid, arriving, false).level - interdiction(sim, pid, nid).supply);
+    for (const a of list) out.set(a.id, level);
+  }
+  return out;
 }
 
 // ───────────────────────────── Fire support ─────────────────────────────────

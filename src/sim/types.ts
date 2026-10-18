@@ -724,7 +724,7 @@ export interface AIState {
   /** remembers per-front objective commitments: armyId -> objective province */
   objectives: Record<ArmyId, { target: ProvinceId; since: number; kind: string; value: number }>;
   /** provinces where an attack of ours failed (format 8): no new attack there until the wait is over, and only stronger */
-  failures?: Record<ProvinceId, { tick: number; count: number }>;
+  failures?: Record<ProvinceId, { tick: number; count: number; held?: boolean }>;
   /** armies it detached or merged recently (format 8): they wait before reorganising again */
   reorganized?: Record<ArmyId, number>;
   /** desired regiment count set by the strategic layer */
@@ -1012,7 +1012,7 @@ export interface Operation extends OperationSettings {
   /** area provinces held by our side at the last planning (to count what changes hands) */
   held: ProvinceId[];
   /** targets where an attack failed: no new attack until the posture's wait is over (and only stronger) */
-  failures: Record<ProvinceId, { tick: number; count: number }>;
+  failures: Record<ProvinceId, { tick: number; count: number; held?: boolean }>;
   /** armies the planner detached (ids), and when an army last split or merged: it waits before reorganising again */
   detached: string[];
   reorganized: Record<string, number>;

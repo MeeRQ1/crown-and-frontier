@@ -116,6 +116,43 @@ export function threatAround(sim: Sim, nid: NationId, pid: ProvinceId, adjWeight
   return s;
 }
 
+/**
+ * Hostile strength that can be at `pid` within about a week: armies standing there,
+ * armies whose declared route (public, as everything is) enters it in the next two
+ * steps, armies next to it or about to be (weighted `adjWeight`), and large field
+ * armies two marches away (weighted 0.4: a concentration roams). What a force
+ * sent there must be able to stand.
+ */
+export function projectedThreat(sim: Sim, nid: NationId, pid: ProvinceId, adjWeight = 0.7): number {
+  return memoize(sim, 'projectedThreat', `${nid}|${pid}|${adjWeight}`, () => {
+    const near = sim.world.prov[pid].neighbors;
+    let s = 0;
+    for (const a of hostileField(sim, nid)) {
+      const ahead = a.path.slice(0, 2);
+      let w = 0;
+      if (a.location === pid || ahead.includes(pid)) w = 1;
+      else if (near.includes(a.location) || ahead.some((p) => near.includes(p))) w = adjWeight;
+      else if (a.regiments.length >= 20 && (sim.world.hop(a.location, pid) ?? 9) <= 2) w = 0.4;
+      if (w > 0) s += armyStrength(sim, a) * w;
+    }
+    return s;
+  });
+}
+
+/** Hostile armies in the field (not retreating, not at sea) of every realm at war with `nid`, once a week. */
+function hostileField(sim: Sim, nid: NationId): Army[] {
+  return memoize(sim, 'hostileField', nid, () => Object.values(sim.state.armies).filter((a) => !a.retreating && !a.embarked && atWar(sim, nid, a.nation)));
+}
+
+/** Provinces an enemy army will enter within two steps of its declared route: marching through one is a battle nobody planned. */
+export function enemyRouteSet(sim: Sim, nid: NationId): Set<ProvinceId> {
+  return memoize(sim, 'enemyRouteSet', nid, () => {
+    const out = new Set<ProvinceId>();
+    for (const a of hostileField(sim, nid)) for (const p of a.path.slice(0, 2)) out.add(p);
+    return out;
+  });
+}
+
 export function sumStrength(sim: Sim, armies: Army[]): number {
   let s = 0;
   for (const a of armies) s += armyStrength(sim, a);

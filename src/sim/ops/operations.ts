@@ -64,17 +64,17 @@ export const DEFAULT_OP_SETTINGS: OperationSettings = {
   minReadiness: 0.45,
   supplyLimit: true,
   reorganize: true,
-  rebase: false,
+  rebase: true,
   airborne: 'off',
   airborneRisk: 0.2,
   resumeAfterOrder: false,
   onComplete: 'hold',
 };
 
-const POLICY: Record<OpPosture, Pick<GroundPolicy, 'margin' | 'accept' | 'failWait' | 'withdraw'>> = {
+const POLICY: Record<OpPosture, Pick<GroundPolicy, 'margin' | 'accept' | 'failWait' | 'withdraw' | 'uncertainWins'>> = {
   cautious: { margin: 1.5, accept: ['Likely victory'], failWait: 12, withdraw: 1.2 },
-  balanced: { margin: 1.2, accept: ['Likely victory', 'Uncertain'], failWait: 8, withdraw: 1.6 },
-  aggressive: { margin: 0.95, accept: ['Likely victory', 'Uncertain'], failWait: 4, withdraw: 2.2 },
+  balanced: { margin: 1.2, accept: ['Likely victory', 'Uncertain'], uncertainWins: 2, failWait: 8, withdraw: 1.6 },
+  aggressive: { margin: 0.95, accept: ['Likely victory', 'Uncertain'], uncertainWins: 1, failWait: 4, withdraw: 2.2 },
 };
 
 /** At most this many operations a realm, detachments an operation, provinces and zones an area. */
@@ -483,14 +483,15 @@ export function opTargets(sim: Sim, op: Operation, armies: Army[], margin: numbe
   for (const p of op.area) for (const nb of sim.world.prov[p].neighbors) if (!inArea.has(nb)) guard.add(nb);
   for (const w of Object.values(st.wings)) if (w.op === op.id && !w.carrier) guard.add(w.base);
   for (const f of Object.values(st.fleets)) if (f.op === op.id && f.home) guard.add(f.home);
-  for (const t of areaTargets(sim, nid, guard, margin)) if (t.kind === 'defend') all.push(t);
+  // ours next to the area (or our bases) under attack, and ours the enemy has already taken there
+  for (const t of areaTargets(sim, nid, guard, margin)) if (t.kind === 'defend' || t.kind === 'liberate') all.push(t);
   if (all.length <= 24) return { targets: all, posts: [] };
   const near = (pid: ProvinceId) => {
     let d = 99;
     for (const a of armies) d = Math.min(d, sim.world.hop(a.location, pid) ?? 99);
     return d;
   };
-  const scored = all.map((t) => ({ t, s: (t.kind === 'defend' ? -100 : 0) + near(t.pid) * 3 - t.value })).sort((a, b) => a.s - b.s || (a.t.pid < b.t.pid ? -1 : 1));
+  const scored = all.map((t) => ({ t, s: (t.kind === 'defend' ? -100 : t.kind === 'liberate' && !inArea.has(t.pid) ? -60 : 0) + near(t.pid) * 3 - t.value })).sort((a, b) => a.s - b.s || (a.t.pid < b.t.pid ? -1 : 1));
   return { targets: scored.slice(0, 24).map((x) => x.t), posts: [] };
 }
 
@@ -500,6 +501,7 @@ export function groundPolicy(op: Operation): GroundPolicy {
   return {
     margin: p.margin,
     accept: p.accept,
+    uncertainWins: p.uncertainWins,
     minReadiness: op.posture === 'aggressive' ? Math.max(0.2, op.minReadiness - 0.1) : op.minReadiness,
     reserve: op.reserve,
     commitReserve: op.commitReserve,

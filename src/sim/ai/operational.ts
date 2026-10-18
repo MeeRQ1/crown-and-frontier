@@ -281,6 +281,8 @@ export function aiGroundPolicy(sim: Sim, nid: NationId): GroundPolicy {
   return {
     margin: d.attackMargin,
     accept: d.acceptUncertain ? ['Likely victory', 'Uncertain'] : ['Likely victory'],
+    // an uncertain attack must win with even luck; on Easy one lucky roll in three will do
+    uncertainWins: d.coordinate ? 2 : 1,
     minReadiness: 0.45,
     reserve,
     commitReserve: d.coordinate ? 'battles' : 'never',
