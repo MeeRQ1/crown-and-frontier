@@ -7,13 +7,17 @@
 import { C, UNITS, UNIT_TYPES } from '../config';
 import { PERSONALITIES } from '../data/personalities';
 import { grossIncome } from '../economy';
-import { armyStrength, recruitProblem, unitCost, unitUnlocked } from '../military';
+import { armyStrength, nationStrength, recruitProblem, unitCost, unitUnlocked } from '../military';
+import { coalitionAgainst, opinion } from '../diplomacy';
 import { nationMods } from '../modifiers';
 import { findPath } from '../movement';
 import {
+  aliveNations,
   armiesOf,
   atWar,
+  borders,
   diag,
+  hasTreaty,
   enemiesOf,
   isFriendly,
   ownedProvinces,
@@ -102,6 +106,7 @@ function recruit(sim: Sim, nid: NationId): void {
     if (smallest && (broke || smallest.regiments.length <= total - n.ai.armyTarget)) issue(sim, { type: 'disband', nation: nid, army: smallest.id }, `Disbanded ${smallest.name} to balance the budget`);
     return;
   }
+  if (demobilise(sim, nid, total)) return;
   const comp = targetComposition(sim, nid);
   const buffer = Math.max(15, grossIncome(n.lastMonth) * (war ? 0.2 : 0.4));
   for (let i = 0; i < d.recruitPerWeek; i++) {
@@ -125,6 +130,55 @@ function recruit(sim: Sim, nid: NationId): void {
     }
     if (!placed) return;
   }
+}
+
+/**
+ * After a war, back to the peace-time army (format 9). The war-time army used to stay
+ * at its war size for as long as the treasury could carry it, so every war ratcheted
+ * the standing army up and it never came down (the progression audit: Turkey 99
+ * regiments against a peace target of 57 for years). Now, three months after the last
+ * peace, at peace, with no war planned and no neighbour much stronger, a realm stands
+ * down what exceeds its own target by a fifth, a sixth of the excess a month (at least
+ * two regiments), from an army at home that is not fighting, by the ordinary split and
+ * disband orders. The men return to the pool as for anyone who disbands.
+ */
+function demobilise(sim: Sim, nid: NationId, total: number): boolean {
+  const st = sim.state;
+  const n = st.nations[nid];
+  // (a target of 0 is not yet planned: nothing is stood down before the first budget)
+  if (st.tick % 4 !== 0 || !n.ai.armyTarget || warsOf(sim, nid).length || n.ai.warPlan || st.tick - n.ai.lastWarEnd < 13) return false;
+  const excess = total - Math.ceil(n.ai.armyTarget * 1.2) - 2;
+  if (excess <= 0 || threatenedBy(sim, nid)) return false;
+  const home = armiesOf(sim, nid)
+    .filter((a) => !a.battle && !a.retreating && !a.embarked && !a.path.length && st.provinces[a.location].owner === nid && !a.op && a.regiments.length >= 2)
+    .sort((a, b) => b.regiments.length - a.regiments.length || (a.id < b.id ? -1 : 1))[0];
+  if (!home) return false;
+  const take = Math.min(home.regiments.length - 1, Math.max(2, Math.ceil(excess / 6)));
+  // the regiments the realm has most of, beyond its intended mix, go first
+  const comp = targetComposition(sim, nid);
+  const counts = regimentsByType(sim, nid);
+  const have: Partial<Record<UnitType, number>> = {};
+  for (const r of home.regiments) have[r.type] = (have[r.type] ?? 0) + 1;
+  const out: Partial<Record<UnitType, number>> = {};
+  for (let i = 0; i < take; i++) {
+    const t = UNIT_TYPES.filter((u) => (have[u] ?? 0) - (out[u] ?? 0) > 0).sort((a, b) => counts[b] - (out[b] ?? 0) - comp[b] * total - (counts[a] - (out[a] ?? 0) - comp[a] * total) || (a < b ? -1 : 1))[0];
+    if (!t) break;
+    out[t] = (out[t] ?? 0) + 1;
+  }
+  if (!Object.keys(out).length) return false;
+  const before = new Set(armiesOf(sim, nid).map((a) => a.id));
+  const sp = issue(sim, { type: 'split', nation: nid, army: home.id, counts: out });
+  if (!sp.ok) return false;
+  const part = armiesOf(sim, nid).find((a) => !before.has(a.id));
+  if (part) issue(sim, { type: 'disband', nation: nid, army: part.id }, `Stood down ${part.regiments.length} regiments after the war (${total} against a peace-time target of ${n.ai.armyTarget})`);
+  return true;
+}
+
+/** A bordering realm much stronger than us that is not our ally (the strategic layer's own test, without its side effects). */
+function threatenedBy(sim: Sim, nid: NationId): boolean {
+  if (coalitionAgainst(sim, nid)) return true;
+  const mine = Math.max(1, nationStrength(sim, nid));
+  return aliveNations(sim).some((o) => o !== nid && !hasTreaty(sim, 'alliance', o, nid) && borders(sim, nid, o) && (opinion(sim, o, nid) < 10 || atWar(sim, o, nid)) && nationStrength(sim, o) / mine > 1.25);
 }
 
 /**

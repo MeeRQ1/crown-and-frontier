@@ -2,7 +2,7 @@
 // live preview of the chosen start, saves, settings, the rules, the in-game
 // menu and the end of a campaign.
 
-import { DIFFICULTY } from '../sim/ai/common';
+import { DIFFICULTY, difficultyEffects, RECOMMENDED_DIFFICULTY } from '../sim/ai/common';
 import { PERSONALITIES } from '../sim/data/personalities';
 import { TECHS } from '../sim/data/techs';
 import { computeLedger, grossIncome, reserveCap, totalDev } from '../sim/economy';
@@ -339,20 +339,22 @@ export function renderNewGame(app: App, initialMap: string = DEFAULT_SCENARIO): 
       h('option', { value: '0.15', selected: aiBonus === 0.15 ? true : undefined }, '+15% AI income (disclosed)'),
     ]);
     assist.addEventListener('change', () => (aiBonus = Number(assist.value)));
-    const diffHelp = h('p', { class: 'hint small muted' }, DIFFICULTY[difficulty].label);
+    const diffHelp = h('ul', { class: 'hint small muted notes', 'data-sk': 'difficulty-effects' });
+    const drawDiff = () => setChildren(diffHelp, ...difficultyEffects(difficulty).map((t) => h('li', null, t)));
+    drawDiff();
     setChildren(
       settingsEl,
       h('div', { class: 'eyebrow' }, 'Campaign'),
-      segmented<Difficulty>('AI skill', [['easy', 'Easy'], ['normal', 'Normal'], ['hard', 'Hard']], difficulty, (v) => {
+      segmented<Difficulty>('AI skill', [['easy', 'Easy'], ['normal', RECOMMENDED_DIFFICULTY === 'normal' ? 'Normal (recommended)' : 'Normal'], ['hard', 'Hard']], difficulty, (v) => {
         difficulty = v;
-        diffHelp.textContent = DIFFICULTY[v].label;
+        drawDiff();
       }),
       diffHelp,
       segmented<number>('Length', info.lengths, years, (v) => (years = v)),
       h('div', { class: 'field' }, h('label', { for: 'setup-assist' }, 'AI economic assistance'), assist),
       h('div', { class: 'field' }, h('span', { class: 'label' }, 'Seed'), h('div', { class: 'row' }, seedIn, dice)),
       h('label', { class: 'switch', for: 'setup-tut' }, tut, h('span', null, 'Guided first steps (tutorial)')),
-      h('p', { class: 'small muted' }, 'AI skill changes how well rival realms decide, never their dice: no hidden bonuses. Income assistance, if chosen, is shown in the Help ledger.'),
+      h('p', { class: 'small muted' }, 'AI skill changes only how rival realms decide: the same rules, dice, income, production, replacement and combat apply to every realm. Income assistance, if chosen, is the only AI bonus and is shown in the Help ledger.'),
     );
   };
 

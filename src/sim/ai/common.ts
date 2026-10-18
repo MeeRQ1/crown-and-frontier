@@ -26,15 +26,32 @@ export interface DifficultyProfile {
   acceptUncertain: boolean;
   /** max regiments recruited per week */
   recruitPerWeek: number;
-  /** months of planning horizon when judging wars */
-  horizon: number;
 }
 
+// AI skill changes decisions only: every realm has the same rules, dice, income,
+// production, replacement and combat. (A "planning horizon" field was listed here
+// until format 9 but nothing read it; it is gone rather than described.)
 export const DIFFICULTY: Record<Difficulty, DifficultyProfile> = {
-  easy: { label: 'Easy', opEvery: 2, objectives: 3, coordinate: false, mistake: 0.3, attackMargin: 0.9, acceptUncertain: true, recruitPerWeek: 1, horizon: 6 },
-  normal: { label: 'Normal', opEvery: 1, objectives: 6, coordinate: true, mistake: 0.1, attackMargin: 1.15, acceptUncertain: true, recruitPerWeek: 2, horizon: 12 },
-  hard: { label: 'Hard', opEvery: 1, objectives: 12, coordinate: true, mistake: 0, attackMargin: 1.3, acceptUncertain: false, recruitPerWeek: 3, horizon: 24 },
+  easy: { label: 'Easy', opEvery: 2, objectives: 3, coordinate: false, mistake: 0.3, attackMargin: 0.9, acceptUncertain: true, recruitPerWeek: 1 },
+  normal: { label: 'Normal', opEvery: 1, objectives: 6, coordinate: true, mistake: 0.1, attackMargin: 1.15, acceptUncertain: true, recruitPerWeek: 2 },
+  hard: { label: 'Hard', opEvery: 1, objectives: 12, coordinate: true, mistake: 0, attackMargin: 1.3, acceptUncertain: false, recruitPerWeek: 3 },
 };
+
+/** The recommended skill (from the format-9 progression audit: see reports/playability). */
+export const RECOMMENDED_DIFFICULTY: Difficulty = 'normal';
+
+/** What a skill level actually changes, in the order a player notices it (setup screen, Help). */
+export function difficultyEffects(d: Difficulty): string[] {
+  const p = DIFFICULTY[d];
+  const pct = (x: number) => `${Math.round(x * 100)}%`;
+  return [
+    `Revises its war plans ${p.opEvery === 1 ? 'every week' : `every ${p.opEvery} weeks`} and weighs ${p.objectives} offensive objectives at a time.`,
+    p.coordinate ? 'Gathers and merges its armies before a hard attack, keeps a reserve and commits it to battles.' : 'Attacks piecemeal: it does not gather its armies first and keeps no reserve.',
+    `Attacks where it is at least ${p.attackMargin}× as strong locally, ${p.acceptUncertain ? `and accepts an uncertain forecast if ${p.coordinate ? 'two' : 'one'} of three rolls would win` : 'and only on a likely victory'}.`,
+    p.mistake ? `${pct(p.mistake)} of its strategic choices (research, focus, war targets) are a reasonable option rather than the best.` : 'Always makes the strategic choice it rates best.',
+    `Raises at most ${p.recruitPerWeek} regiment${p.recruitPerWeek === 1 ? '' : 's'} a week (under the same costs, men and limits as you).`,
+  ];
+}
 
 export function diffOf(sim: Sim): DifficultyProfile {
   return DIFFICULTY[sim.state.settings.difficulty] ?? DIFFICULTY.normal;

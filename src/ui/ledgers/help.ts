@@ -5,6 +5,7 @@
 
 import { C, TERRAIN } from '../../sim/config';
 import { TECH_EARLY_COST, TECH_LEAD_YEARS } from '../../sim/progression';
+import { difficultyEffects } from '../../sim/ai/common';
 import { MODES } from '../map/modes';
 import type { App } from '../app';
 import { h, type Child } from '../dom';
@@ -176,11 +177,53 @@ function articles(): Article[] {
         'Cautious attacks only with a clear edge and a forecast of victory; balanced with 1.2× the defenders unless the forecast is defeat; aggressive with about equal strength. None attacks a realm we are not at war with, declares war, makes peace, buys forces or builds anything.',
         'Armies march, fight and besiege by the ordinary rules: no shortcut, no bonus. A failed attack bars that target for a while, then only a stronger force tries; marches go round enemy troops; tired, depleted or unsupplied armies fall back to rest; a share can be held in reserve and committed where our battles need it.',
         'With leave to reorganise, a large army detaches task forces (whole regiments, at least two, at most six detachments) for undefended targets, and idle armies standing together merge again. Keep together on an army’s card protects it.',
-        'Fleets repair, shell the coast where our armies fight, blockade, patrol, intercept and escort; wings rest, keep the sky, support and strike; they move between airfields only with leave. Airborne drops happen only under the mandate, inside the area, within the loss limit, with the operation’s own transports.',
+        'Fleets repair, shell the coast where our armies fight, blockade, patrol, intercept and escort; wings rest, keep the sky, support and strike, and move to airfields within reach of the fighting (unless you forbid moving them). Airborne drops happen only under the mandate, inside the area, within the loss limit, with the operation’s own transports.',
+        'Before a hard attack it gathers enough to win at the target with the supply that target can give that many regiments (a province feeds only so many), waits for the second wave instead of feeding armies in one by one, and does not march through a province an enemy army is about to reach.',
         'Any order you give a member takes it under your direct command at once: the operation leaves it alone until you resume it (or, if set, until your order is carried out). Pause, change, add forces, detach or cancel at any time; cancelling hands every force back with its last orders.',
         'Routine events go to the operation’s log; only a decision you have to make is a notification (Cannot make progress, attacks failing, aircraft out of range, a landing that cannot sail), with the actions that answer it.',
       ],
       links: [['military', 'Open Military']],
+    },
+    {
+      id: 'autoconquer',
+      title: 'Auto-conquer',
+      icon: 'target',
+      group: 'War',
+      lead: 'One order against realms we are already at war with: every free army, fleet and air wing takes their land and defends ours, with sensible defaults you can see and change.',
+      points: [
+        'Military → Auto-conquer, or Auto-conquer on a war in the Wars ledger. Choose the enemies (only realms at war with us) and optionally a priority (spare our men, take their ports, their industry, or one enemy first).',
+        'It defends and liberates our land against anyone at war with us first, answers counterattacks, keeps a reserve, moves aircraft within reach, and organises a landing under the ordinary rules when the enemy land left lies overseas (it says what is missing if there are no transports).',
+        'It never declares war, adds an enemy, makes peace, buys, builds or takes a force you keep: Keep for direct command on a force’s card, or take a member out, and it stays out until you hand it back.',
+        'Its card shows the opponents, the land taken, the forces, the losses and what is waiting or recovering, with pause, resume, stop, Change opponents, Take over all and the detailed settings. When the war with an enemy ends, that enemy leaves the mandate; with none left it is complete.',
+      ],
+      links: [['military', 'Open Military'], ['wars', 'Open Wars']],
+    },
+    {
+      id: 'production',
+      title: 'Production orders',
+      icon: 'factory',
+      group: 'War',
+      lead: 'Order several ships, air wings or regiments of one type at once, at one place or spread over several; what can start starts now, the rest as slipways, airfield room and money allow.',
+      points: [
+        'Military → Production orders (or Order several… on a port or airfield card): the type, how many (in total, or at each place), the places, and where they go when ready (stay, join an operation, move to an airfield, sail to a zone).',
+        'The preview shows each place’s free room, what is already there, its share and what starts at once, the cost against what we have, the upkeep, and an estimate of when all are ready. Based wings fill an airfield, so it warns when they cannot all stay there.',
+        'Each unit is paid when it starts, as an order by hand would be: nothing is reserved, so an order can never overspend. A blocked order waits and says why (money, materiel, a resource, men, a lost port) and starts again by itself; after a month waiting for anything but its turn at the slipways, it tells you once.',
+        'Ships of an order form one squadron at each port (and join up at the zone you send them to); regiments form one army in each province. Pause, resume or cancel at any time: cancelling stops what has not started (nothing was paid for it); what is on the slipways or in training continues.',
+      ],
+      links: [['military', 'Open Military']],
+    },
+    {
+      id: 'skill',
+      title: 'AI skill',
+      icon: 'settings',
+      group: 'Utility',
+      lead: 'AI skill changes only how rival realms decide. Every realm has the same rules, dice, income, production, replacement and combat; the optional income assistance is the only bonus, and it is disclosed.',
+      points: [
+        h('span', null, h('b', null, 'Easy: '), difficultyEffects('easy').join(' ')),
+        h('span', null, h('b', null, 'Normal (recommended): '), difficultyEffects('normal').join(' ')),
+        h('span', null, h('b', null, 'Hard: '), difficultyEffects('hard').join(' ')),
+        'Rival armies grow as their economies allow (a share of income, three quarters of their reserve of men, their food): a realm that builds up is answered by its neighbours, who arm when a bordering realm grows much stronger than they are. Coalitions form only against a realm that has alarmed others by its conquests, whoever leads it.',
+      ],
     },
     {
       id: 'batches',
