@@ -208,6 +208,26 @@ The escalating costs and the soft development cap stop provinces from all becomi
 equally optimal. They also keep crowns useful late in the game: the AI's treasuries now
 stay in the hundreds to low thousands rather than piling up.
 
+**Province batches** (`batch.ts`, format 8). Provinces are selected together: Ctrl/Cmd+click
+or Ctrl/Cmd+drag on the map, or the Select tool on touch. One project, or one regiment type,
+is then previewed for all of them with a running budget. Each province shows what it would
+get (railway 1 → 2, a regiment) or why not:
+
+- not ours;
+- at its maximum level;
+- a project already under way;
+- no construction slot left;
+- not enough crowns, materiel, men or a resource left after the provinces before it.
+
+The shared pools are spent once, in a disclosed order: as selected, highest development
+first, or cheapest first. Recruitment counts per province (at most 10 each) or as a total
+spread over the provinces one at a time, and shows what is already training.
+
+Confirming sends one command (`batchBuild`, `batchRecruit`) carrying exactly the previewed
+provinces. Each province is checked again as it is queued, so a change since the preview
+is caught and nothing is overspent. The result lists every province. A request just sent
+cannot be sent again, double clicks included. Selection gestures never queue anything.
+
 ## Movement (`movement.ts`)
 
 Each week an army gains movement points: its slowest regiment's speed (infantry and engineers
@@ -752,6 +772,142 @@ Armies, fleets and air wings are found, selected, inspected and ordered the same
   card (stand down, on station, call off a drop, halt) or replaced by another; the selection
   stays where it was.
 
+**Several at once** (format 8):
+
+- Shift+click or Shift+drag selects forces of ours (armies, fleets, wings).
+- Ctrl/Cmd+click or Ctrl/Cmd+drag selects provinces.
+- **X** is the Select tool. It selects forces, then provinces, with a switch on its banner; on touch it is the check-mark button.
+- The Military ledger (**U**) has check boxes, Select all and Select idle.
+
+A force selection can march together, become a new operation, or join an open operation's
+card.
+
+**Forces shown** (`ui/map/visibility.ts`) changes only what is drawn, never what is known.
+There is no fog of war. One rule drives the map markers, the province and sea-zone lists,
+box selection and the counts:
+
+- **All** shows every realm's forces.
+- **Mine + enemies** shows ours and every force of a realm at war with us, anywhere.
+- **Relevant** shows ours and the forces in our wars: allies by a setting, and only near the selected force or operation when there is one. It never shows a neutral realm.
+
+The set is the same at every zoom. Fleets are grouped by zone and realm at a distance. The
+count of what a view hides is shown under it.
+
+## Operations: delegated command (`src/sim/ops/`)
+
+An operation is a standing objective given to forces of ours. Each week it gives the
+routine orders through `applyCommand`, under the same rules, costs and timing as the
+player's own orders. Its orders are not logged as player commands, and they never take a
+unit under direct command.
+
+**Workflow:**
+
+1. Select forces.
+2. Click New operation.
+3. Choose the objective and the area on the map.
+4. Read the preview: a dry run of the first week's orders, drawn on the map with forecasts, risks and what stands in the way.
+5. Choose the posture and the limits.
+6. Activate, or save to start later.
+7. Monitor, change, pause, add forces, release them, take one over, or cancel.
+
+| Objective | Area | What the planner does |
+|---|---|---|
+| Conquer | provinces | Takes the enemy-held provinces of the area (at most 24 targets at a time), defends its own base, our land next to the area, and the airfields and ports it uses |
+| Advance | a province | Takes the corridor of enemy land on the route to it |
+| Hold | provinces | Holds posts in and near the area; liberates what is lost |
+| Keep the seas | sea zones | Fleets patrol, intercept enemy ships in the zones and escort our loaded ships |
+| Landing | a beach | Gathers the troops and transports at a port with an escort, sails, lands, then takes the area like a conquest |
+
+**Posture** sets how far the operation will go:
+
+| Posture | Strength needed (× defenders) | Forecasts accepted | Wait after a failed attack | Withdraws from (× its strength) |
+|---|---|---|---|---|
+| Cautious | 1.5 | victory | 12 weeks | 1.2 |
+| Balanced | 1.2 | victory, uncertain | 8 weeks | 1.6 |
+| Aggressive | 0.95 | victory, uncertain | 4 weeks | 2.2 |
+
+The settings are:
+
+- priority;
+- a reserve share (15%), committed to battles a forecast with the reserve says can be won, or freely;
+- a readiness limit (45%), below which armies recover;
+- a supply limit: no attack beyond our supply lines, except where our troops already stand or on a beachhead;
+- leave to reorganise;
+- leave to rebase aircraft;
+- an airborne mandate (off, once or repeat) with a loss limit;
+- whether a member returns after an order of ours is carried out;
+- what to do when complete (hold, regroup, return, await).
+
+**The ground planner** (`ops/ground.ts`) is shared by player operations and the AI's war
+planning (`ai/operational.ts`), each with its own policy. Each week it plans in this order:
+
+1. Recovery. Tired, depleted or unsupplied armies fall back to rest, unless they are besieging.
+2. Small armies join the nearest larger one and merge.
+3. The reserve is held back.
+4. Targets are ranked: defence, liberation, then attack. Ranking is by value, with commitment to the current target (against churn) and distance.
+5. The force each target needs is set. It comes from the defenders, the forts and the enemy troops next to the target.
+6. Targets recently lost are skipped: an attack that failed is not repeated for the posture's wait, and after that only with more strength.
+7. Targets beyond supply are skipped.
+8. Task forces are assembled from the nearest fit armies.
+9. With leave, detachments split off for weakly held targets.
+10. Forces concentrate and merge before a strike.
+11. The forecast gate decides whether to attack.
+12. The reserve is committed.
+13. Idle armies cover posts, or wait before a blocked target.
+14. Idle armies standing together regroup.
+
+Marches go around provinces holding enemy armies (a detour waypoint) or stop and say why.
+Nothing teleports and nothing is captured instantly. Armies march, fight, besiege and occupy
+by the ordinary rules, with no bonus.
+
+**Splitting and regrouping.** Only whole regiments move, so men, experience, equipment and
+regiment ids are conserved. The limits are:
+
+- at least 2 regiments per detachment (3 for the AI);
+- at most 6 live detachments per operation;
+- a wait before an army reorganises again;
+- **Keep together** on an army's card protects a formation;
+- an operation without leave to reorganise never splits or merges.
+
+**Navy, air and airborne** (`ops/forces.ts`):
+
+- **Fleets** go to port below 50% hull and return at 90%. They shell the coast where the operation's armies fight, keep carriers on station, blockade, raid, intercept in the operation's zones, and patrol and escort.
+- **Wings** rest below 35% readiness or 30% strength, and fly again at 70% readiness. Fighters keep the sky over the main efforts, and ground attack and bombers support and strike there. A wing out of range moves only with leave to rebase, to an airfield with room. Without leave, the operation asks.
+- **Airborne drops** need the mandate. They land inside the area, within the loss limit, near our armies that can relieve them within two marches. They are flown only by the operation's own transports, one drop a week. "Once" ends the mandate after the drop.
+- **Landings** check the threat next to the beach (limit by posture: 0.6, 1, 1.5) and forecast the landing before they sail. They report missing transports or room.
+
+**Authority and override.** An operation may only issue movement and employment orders to
+its own members: march, stop, split, merge, fleet duties and sailing, embarking, air
+missions, rebasing, and airborne drops. An allowlist (`OP_ORDERS`) refuses anything else.
+It never:
+
+- declares war, makes peace, or signs or breaks a treaty;
+- changes a policy or research;
+- buys, builds, recruits or disbands anything;
+- enters a neutral realm.
+
+Any order the player gives a member takes that member under direct command at once
+(`opHold`). The operation then leaves it alone until it is resumed, or, if set, until the
+order is carried out.
+
+- **Pausing** stops new orders, and members keep their last ones.
+- **Cancelling** hands every member back with its last orders.
+- **Releasing** detaches members.
+- **Assigning** a member to another operation moves it there. A unit belongs to at most one operation, and the membership is stored on the unit.
+
+**Completion and problems.**
+
+- An operation is **complete** when its area is ours or its objective is reached. It then follows its completion rule.
+- **Peace** ends a conquest, since nothing is left at war.
+- **Routine events** go to the operation's log (at most 40 entries).
+- **Notifications** are raised only for decisions, once per problem, each with the actions that answer it: no forces left, every member under direct command, attacks failing, a target blocked, aircraft out of range, or a landing that cannot sail.
+
+**Limits:**
+
+- 12 operations a realm;
+- an area of 250 provinces or 30 sea zones;
+- operations are planned one per week slice, so a large one never holds a frame.
+
 ## Wars and peace (`war.ts`)
 
 - **War goals:**
@@ -1014,7 +1170,7 @@ not implemented, and this is stated in the Help ledger.
 | Layer | When | Decides |
 |---|---|---|
 | Strategic (`strategic.ts`) | monthly, staggered | goal and victory path (once a year it pursues the path it is closest to among its temperament's and the two material paths — condition progress + half its timer, leaning to its temperament's path; only diplomatic temperaments pursue diplomatic leadership); army size target from income, reserve and supply (a larger share when threatened or at war); research by branch weights and situation; national focus (when none is under way: the temperament's branch weight × how well the focus's tags fit — war, threat, coast, shortages, frontier load, victory path — preferring the national branch and earlier rows); construction by value per crown; envoys and treaties (mutual acceptance required; envoys also toward smaller realms it could draw into its sphere and, on the diplomatic path, toward partners that count toward leadership whose opinion sits within 10 of the bar); guarantees (once a year, of a smaller neighbour threatened by a realm it fears), loans (once a year, from a treasury above 4× income, to a realm in debt or one it wants in its sphere) and trade blocs (join a bloc whose leader it trades with, or found one with its best trade partner; leaders invite partners); coalition wars; peace (as war leader, a settlement for its side by contribution, or the counter-offer it would get; an ally on the winning side leaves the spoils to the settlement; white peace or concessions when losing or tired); war (see below; never while holding the conditions of a diplomatic or economic victory, or while that timer is paused just short of them) |
-| Operational (`operational.ts`) | weekly (every 2 weeks on Easy) | peace: garrisons for restless frontier, gathering and merging at a rally point; war: objectives (defend, liberate, attack), strength-based assignment of armies, staging and merging before attacks, forecast checks, withdrawal from superior enemies, recovery of battered armies |
+| Operational (`operational.ts`) | weekly (every 2 weeks on Easy) | peace: garrisons for restless frontier, gathering and merging at a rally point; war: objectives (defend, liberate, attack) planned by the ground planner the player's operations use (`ops/ground.ts`, see Operations) with its own policy — commitment to targets, a memory of failed attacks, task forces sized to the opposition, staging and merging before attacks, forecast checks by difficulty, a reserve by personality, bounded detachments, regrouping of small armies, routes around enemy stacks, withdrawal and recovery |
 | Execution | inside both | recruitment toward the target composition at safe sites; issuing and re-issuing orders; recovering from rejected orders |
 
 **Deciding on war.** The AI scores each bordering realm as value × (strength ratio / required ratio − 1) × aggression.
@@ -1030,6 +1186,20 @@ not implemented, and this is stated in the Help ledger.
   carved up by the neighbours they had left open.
 - *Second fronts:* an AI already at war and at 25+ war exhaustion refuses an ally's call to a
   new front (breaking the alliance, as a player would).
+
+**War planning** (format 8). The AI plans its armies with the same ground planner as the
+player's operations. Its policy:
+
+- a reserve by personality: defensive 20%, expansionist 5%, opportunist 10%, others 15%, none on Easy;
+- detachments of at least 3 regiments, at most 3 at a time;
+- a wait after a failed attack: 10 weeks on Hard, 8 on Normal, 4 on Easy.
+
+Attack objectives get a seeded ±5% variation in value, so realms are less predictable
+without breaking replays. Failed attacks, target changes and targets left alone are written
+to the decision trace. Measured over 40 weeks and four seeds on two maps, failed attacks
+repeated within 8 weeks fell from 11 and 7 to 1 and 0, and target churn fell (Aldmere: 1.3
+to 0.3 per army-month), with fewer men lost on both sides
+(`reports/qol/verification.md`).
 
 **Several fronts.** In war, armies without an objective no longer all gather at one rally
 point. For each enemy the AI picks a front post (the border province best placed to face
@@ -1152,14 +1322,16 @@ default and disclosed in the setup screen and the game menu.
   noise) lives only in the UI. A test forbids `Math.random` and wall-clock time in `src/sim`.
 - **Reproducibility:** the same seed, settings and command sequence reproduce identical states.
   Tests assert this, and that a game saved mid-war continues exactly like the original.
-- **Save format 7** (`src/sim/save.ts`): versioned and checksummed JSON of the complete state,
+- **Save format 8** (`src/sim/save.ts`): versioned and checksummed JSON of the complete state,
   including movement progress, battles, queues, treaties, events, stockpiles, factories,
   fleets (with troops aboard and last week's report), ports, slipways, air wings (base or
   carrier, mission, sea target, readiness, last week's report), airfields, national focus,
   influence, guarantees, loans, trade blocs, reparations, army limits, war contributions and
   AI commitments; format 7 adds the war dead missing from each reserve, fleet orders,
   anti-aircraft batteries, airborne operations under way, wings' service records, and the
-  AI's memory of peace offers and treaty answers. (Stage C extended format 3 rather than starting a new one: a format-3 save
+  AI's memory of peace offers and treaty answers; format 8 adds operations (objective, area,
+  settings, tasks, planner memory, log, statistics), each unit's membership and direct-command
+  flag, protected formations, and the AI's memory of failed attacks and reorganisations. (Stage C extended format 3 rather than starting a new one: a format-3 save
   written before fleets existed loads with empty navies and air arms, starting ports from the
   map, and a notice.)
 - **Saves keep their map.** The state records the map's fingerprint: its id, content revision and
@@ -1188,7 +1360,9 @@ default and disclosed in the setup screen and the game menu.
   forces stay as they were; no war dead are charged retroactively), fleets are on station with
   no order, there are no batteries and no drops under way, and the AI's offer memory starts
   empty; population now reads in people and commerce follows the partners' economies from the
-  next month (`tests/format7.test.ts`). The notice says all of this. A save that cannot
+  next month (`tests/format7.test.ts`). Format 7 becomes format 8 (operations): there are no
+  operations and no unit belongs to one, and the AI's memory of failed attacks starts
+  empty. The notice says all of this. A save that cannot
   be converted (for example an embedded map that no longer validates) is refused with the
   reason, stays listed, and can still be exported from the load screen. The tests convert a
   save from the first release (`tests/fixtures/reach-save-main-c29aea6.json`) and two format-2

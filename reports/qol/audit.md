@@ -51,6 +51,9 @@ hint ("hides neutral armies at a distance") describes none of them.
 | Europe 1936 (Ger+Ita vs Pol+Rom+Fra) | 25 of 66 (38%) | 11 | 25–48% | 0.09–0.20 | 0 in every seed |
 | Aldmere (two strongest neighbours) | 35 of 81 (43%) | 7 | 0% | **1.24–1.37** | 1–3 |
 
+(First version of `tools/war-ai.ts`, which counted idle armies in peace as well. The
+before/after comparison in [verification.md](verification.md) re-ran `main` with the final tool.)
+
 Code causes (`ai/operational.ts`): objectives are re-ranked from scratch every
 week with only a 1.3× bonus for committed ones (churn); no memory of failed
 attacks, so the same province is attacked again at once; no reserve; peace-time

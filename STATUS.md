@@ -1,11 +1,65 @@
 # Status
 
-Last updated at the **Military Control, Combined Warfare, National Scale and Adaptive AI
-update** (save format 7, map format 3). It follows the Naval, Air and Combined Warfare update,
-the performance update and the 1936 maps, and before them the Atlas & Strategy Refinement
-update and Stages A–F of the strategic depth expansion. This update is a draft pull request
-that has not been merged or published. The sections after this one are kept for their
-evidence; where a later change altered a fact, it is corrected in place.
+Last updated at the **Quality of Life and Operational Command update** (save format 8, map
+format 3). It follows the Military Control, Combined Warfare, National Scale and Adaptive AI
+update, the Naval, Air and Combined Warfare update, the performance update and the 1936 maps,
+and before them the Atlas & Strategy Refinement update and Stages A–F of the strategic depth
+expansion. This update is a draft pull request that has not been merged or published. The
+sections after this one are kept for their evidence; where a later change altered a fact, it is
+corrected in place.
+
+## Quality of Life and Operational Command update
+
+The brief asked for:
+
+- an audit of the control burden;
+- a clear workflow to give large forces objectives and let routine operations proceed;
+- ground auto-conquest that really fights;
+- sensible splitting and regrouping;
+- naval and air delegation;
+- coordination across the branches, including airborne operations under a mandate;
+- immediate manual override;
+- understandable reports;
+- a more coherent opposing AI at war;
+- correct unit-view filters;
+- province multi-selection with batch building and recruiting;
+- bounded performance and safe saves;
+- verification in real large-force play.
+
+| Requirement | Status | What was built | Evidence |
+|---|---|---|---|
+| Audit first | ✅ | Control burden counted in the browser on `main`, the three filter defects reproduced, the wartime AI measured | [reports/qol/audit.md](reports/qol/audit.md), [reports/qol/before/](reports/qol/before/) |
+| Operational workflow | ✅ | Shift-click, box or roster selection → New operation → objective and area on the map → preview (first orders drawn, forecasts, risks, obstacles) → posture and limits → Activate → card and log; pause, change, add, release, take over, cancel. Mouse, keyboard (X, U, Esc) and touch | `tools/qol-audit.ts`, `tools/qol-gestures.ts`; How to Play "Operations" |
+| Objectives | ✅ | Conquer an area, advance to a province, hold an area, keep sea zones, a landing. The settings are posture, priority, reserve share and commitment, readiness and supply limits, leave to reorganise and to rebase, airborne mandate and loss limit, and the completion rule | DESIGN "Operations"; `tests/operations*.test.ts` (34) |
+| Ground automation | ✅ | One planner shared with the AI. Forces march, fight and besiege by the ordinary rules; there is no shortcut or bonus. The planner allocates by need, keeps reserves, waits after a failed attack, routes around enemy stacks, recovers worn armies and explains what blocks it. It never declares war, makes peace or enters neutral land | demo: 10 provinces including Warsaw from one order; tests |
+| Splitting and regrouping | ✅ | Whole regiments only, at least 2 per detachment, at most 6 per operation. Men and regiment ids are conserved. Leave to reorganise, and "Keep together" per army. Idle armies regroup | tests (5) |
+| Naval and air delegation | ✅ | Repair cycles, bombardment, carriers, blockade, intercept, patrol and escort. Wings rest, keep the sky, support and strike. Rebasing only with leave; an operation never takes forces that are not assigned to it | tests (8) |
+| Coordination and airborne | ✅ | Air support over the main efforts and shelling where our armies fight. Landings gather, sail, check the beach and land. Drops only under the mandate (once or repeat), within the loss limit, with the operation's own transports | tests; demo: one drop, a landing at Caen |
+| Manual override | ✅ | Any order to a member takes it under direct command at once, shown on its card, in the operation's list and in the Military ledger. It returns on Resume, or by itself after the order if set. An allowlist limits operations to movement and employment of their own forces | tests; gesture check in the browser |
+| Understandable automation | ✅ | Each operation keeps a log and a task for every member. A notification is raised only for a decision, once per problem, with the actions that answer it | browser screenshots |
+| Opposing wartime AI | ✅ | It uses the same planner, with a policy by personality and difficulty, a memory of failed attacks, seeded variation and decision traces | `tools/war-ai.ts`: repeated failed attacks 11 → 1 (Europe) and 7 → 0 (Aldmere); churn 1.3 → 0.3 per army-month on Aldmere |
+| Unit-view filters | ✅ | One rule for markers, lists, selection and counts at every zoom. "Mine + enemies" shows enemies again; "Relevant" no longer shows neutrals; "All" keeps foreign fleets and wings at a distance | browser census before/after; `tests/unit-view.test.ts` (7) |
+| Province batches | ✅ | Ctrl/Cmd+click or drag selection. Build or recruit previews with a running budget in a disclosed order, per province or in total. Each province is checked again when queued. Repeated and double clicks send once | 10 provinces: 15 → 11 inputs (build), 20 → 13 (recruit); 32 regiments in 4 inputs; `tests/batch.test.ts` (7) |
+| Performance | ✅ | Operations are planned one per week slice. Frames match `main` with three large operations active | [reports/qol/perf/](reports/qol/perf/) |
+| Saves | ✅ | Format 8, with a format-7 migration and a notice. Active, paused and held operations and reorganised forces continue identically after a load | tests; demo save at week 13 |
+
+### Evidence
+
+| Kind | Result |
+|---|---|
+| Tests | 376 passing in 33 files: operations 21, operations with fleets, wings and airborne 13, batches 7, unit views 7, AI at war 5, and the earlier suites |
+| Browser check | `npm run verify:web`, headless Chromium: 97 of 97 at the site root, the project subpath, the unpacked release ZIP and in an iframe |
+| 100-regiment demonstration | Europe 1936 as Germany, 110 regiments, 3 fleets and 8 wings, 26 weeks. The player gave 29 inputs instead of 183; German losses were 11.8k instead of 30.3k; 12 provinces were taken instead of 16; 0 invariant failures ([reports/qol/verification.md](reports/qol/verification.md)) |
+| Frame times | p50 / p99 16.7 / 33.3 ms on `main`, on the branch, and with operations active; click to frame 3–6 ms |
+| External players | **None.** No one but me has played this update. |
+
+### Known gaps
+
+- **Untested browsers and hardware.** Headless Chromium only, with emulated touch.
+- **Beachheads are fragile.** The Caen landing was pushed off its beach twice by counterattacks. The operation tries again, but it does not ferry reinforcements by itself.
+- **Delegation trades tempo for losses.** In the demonstration it took 12 provinces where a greedy manual script took 16, and inflicted fewer enemy losses.
+- **Ships and wings are not regrouped.** Operations use fleets and wing groups as they are formed; they do not move ships between fleets.
+- **The AI's lost-attack share rose** (Europe 38% → 52%, Aldmere 43% → 65%). It makes fewer attacks overall, very few of them repeats, and loses fewer men.
 
 ## Military Control, Combined Warfare, National Scale and Adaptive AI update
 
