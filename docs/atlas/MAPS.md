@@ -238,7 +238,7 @@ Before development, factories and builders were reckoned on land
 (`progression-*-unscaled.json`, measured with the code of that time), revision 2 grew
 +70%/+66% on Europe 1914, +77%/+79% on Europe 1936 and +108%/+107% on the World.
 
-Development now grows within one to nine points of revision 1 over eight years. The World
+Development now grows at most nine points more than on revision 1 over eight years. The World
 grows most (+84%/+82% against +76%/+73%), while its realms build a tenth fewer factories.
 Income at year 8 is within 2–7%, and wars are about as many. No realm runs away: the three
 largest hold the same share of development as on revision 1, a little less on Europe.
