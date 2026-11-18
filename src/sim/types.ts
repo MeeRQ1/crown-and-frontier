@@ -909,6 +909,8 @@ export interface AIState {
   reorganized?: Record<ArmyId, number>;
   /** desired regiment count set by the strategic layer */
   armyTarget: number;
+  /** the standing army the realm began with (regiments): what it keeps at peace when nothing around it calls for more */
+  baseArmy?: number;
   /** province where idle forces gather */
   rally: ProvinceId | null;
   lastPeaceTry: Record<string, number>;

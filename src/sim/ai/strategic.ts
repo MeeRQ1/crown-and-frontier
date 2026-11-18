@@ -72,7 +72,8 @@ function pers(sim: Sim, nid: NationId): PersonalityDef {
   return PERSONALITIES[sim.state.nations[nid].ai.personality];
 }
 
-function regimentCount(sim: Sim, nid: NationId): number {
+/** Regiments a realm has, in the field and in training. */
+export function regimentCount(sim: Sim, nid: NationId): number {
   let r = 0;
   for (const a of armiesOf(sim, nid)) r += a.regiments.length;
   for (const pid of sim.world.provIds) for (const o of sim.state.provinces[pid].recruits) if (o.nation === nid) r++;
@@ -104,6 +105,58 @@ function threatOf(sim: Sim, nid: NationId): NationId | null {
 
 // ───────────────────────────── Budget ───────────────────────────────────────
 
+/**
+ * The standing army a realm at peace keeps against what is around it: the most threatening
+ * neighbour's army at a share by its intent (claims on our land, open hostility or a realm we
+ * mean to take: 0.9; a pact or good relations: 0.3; otherwise 0.6, which deters an attack
+ * needing half as many again), and 0.15 of the others'. Every share is below one, so realms
+ * watching each other settle near the armies they began with instead of arming without end.
+ */
+export function peaceNeed(sim: Sim, nid: NationId): { need: number; from: NationId | null } {
+  let main = 0;
+  let rest = 0;
+  let from: NationId | null = null;
+  const goal = sim.state.nations[nid].ai.goal;
+  for (const o of aliveNations(sim)) {
+    if (o === nid || hasTreaty(sim, 'alliance', o, nid) || !borders(sim, nid, o)) continue;
+    const op = opinion(sim, o, nid);
+    let w = claimsOn(sim, o, nid).length || op < -25 ? 0.9 : hasTreaty(sim, 'nap', o, nid) || op >= 25 ? 0.3 : 0.6;
+    if (goal.kind === 'expand' && goal.target === o) w = Math.max(w, 0.9);
+    const v = regimentCount(sim, o) * w;
+    if (v > main) {
+      rest += main;
+      main = v;
+      from = o;
+    } else rest += v;
+  }
+  return { need: main + rest * 0.15, from };
+}
+
+/**
+ * The army a realm needs, whatever its treasury allows beyond it: at peace, the army it began
+ * with or what its neighbours' armies call for (an army that grows with every crown at peace is
+ * a race nobody asked for); at war, also what the enemy side fields, with a margin (a colonial
+ * war is not fought with a great war's army); threatened, also the threat's army.
+ */
+export function armyNeed(sim: Sim, nid: NationId, threat: NationId | null = isThreatened(sim, nid)): { needed: number; neededFor: string } {
+  const n = sim.state.nations[nid];
+  const base = (n.ai.baseArmy ??= Math.max(3, regimentCount(sim, nid)));
+  const peace = peaceNeed(sim, nid);
+  let needed = Math.max(base, Math.ceil(peace.need));
+  let neededFor = peace.need > base ? `what ${nationName(sim, peace.from!)}'s army calls for` : 'the standing army we began with';
+  const foes = new Set<NationId>();
+  for (const w of warsOf(sim, nid)) for (const o of w.attackers.includes(nid) ? w.defenders : w.attackers) foes.add(o);
+  if (foes.size) {
+    const fielded = Math.ceil([...foes].reduce((s, o) => s + regimentCount(sim, o), 0) * 1.3);
+    if (fielded > needed) (needed = fielded), (neededFor = 'the enemy side in our wars');
+  }
+  if (threat) {
+    const t = regimentCount(sim, threat);
+    if (t > needed) (needed = t), (neededFor = `${nationName(sim, threat)}'s army`);
+  }
+  return { needed, neededFor };
+}
+
 function planBudget(sim: Sim, nid: NationId): void {
   const st = sim.state;
   const n = st.nations[nid];
@@ -119,11 +172,23 @@ function planBudget(sim: Sim, nid: NationId): void {
   const supplyProd = Object.values(n.lastMonth.suppliesIn).reduce((a, b) => a + b, 0);
   const supplyCap = (supplyProd * 1.15) / AVG_SUPPLY;
   let target = Math.floor(Math.min(goldCap, mpCap, supplyCap));
+  const { needed, neededFor } = armyNeed(sim, nid, threat);
+  const cap = rivalLeader(sim, nid) ? Infinity : needed;
+  const capped = target > cap;
+  if (capped) target = cap;
   if (n.treasury < 0) target = Math.min(target, regimentCount(sim, nid) - 1);
   target = Math.max(3, target);
   if (Math.abs(target - n.ai.armyTarget) >= Math.max(2, n.ai.armyTarget * 0.15)) {
     // a marked change, with the binding limit, for the decision log
-    const bound = n.treasury < 0 ? 'debt' : goldCap <= mpCap && goldCap <= supplyCap ? `crowns (${Math.round(share * 100)}% of ${gross.toFixed(0)} a month)` : mpCap <= supplyCap ? 'men (three quarters of the reserve)' : 'supplies';
+    const bound = n.treasury < 0
+      ? 'debt'
+      : capped
+        ? `need: ${neededFor}`
+        : goldCap <= mpCap && goldCap <= supplyCap
+          ? `crowns (${Math.round(share * 100)}% of ${gross.toFixed(0)} a month)`
+          : mpCap <= supplyCap
+            ? 'men (three quarters of the reserve)'
+            : 'supplies';
     diag(sim, nid, 'strategic', `Army target ${n.ai.armyTarget} → ${target} regiments, limited by ${bound}`, [
       `Crowns allow ${Math.floor(goldCap)}, men ${Math.floor(mpCap)}, supplies ${Math.floor(supplyCap)}`,
       war ? 'At war' : threat ? `Threatened by ${nationName(sim, threat)}` : 'At peace',
