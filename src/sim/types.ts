@@ -541,6 +541,8 @@ export interface Army {
   reserved?: boolean;
   /** occupation work in hand from the last undefended province it took on a redrawn map (siege progress beyond 100, and when): spent at its next one */
   carry?: { progress: number; tick: number } | null;
+  /** the week a player's army ran out of supply (it is told once, until supplied again) */
+  starving?: number;
 }
 
 /** An airborne operation: the army, at an airfield, is flown to a province and dropped there. */
@@ -1390,4 +1392,13 @@ export type Command =
 /** A command issued by a realm (everything except the campaign-level ones). */
 export type RealmCommand = Exclude<Command, { type: 'continueCampaign' }>;
 
-export type CommandResult = { ok: true; message?: string; /** per-item outcome of a batch */ details?: string[] } | { ok: false; reason: string };
+export type CommandResult =
+  | {
+      ok: true;
+      message?: string;
+      /** per-item outcome of a batch */
+      details?: string[];
+      /** done, but worth a second look: the order leaves upkeep above income */
+      warning?: string;
+    }
+  | { ok: false; reason: string };

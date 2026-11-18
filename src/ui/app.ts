@@ -906,6 +906,8 @@ export class App {
       this.sound.play('alert');
     } else {
       if (r.message && !quiet) this.toast(r.message, 'good');
+      // done, but the realm will spend more than it earns: said even when the order is quiet
+      if (r.warning) this.toast(r.warning, 'urgent');
       this.sound.play('click');
       this.afterCommandNotes();
     }

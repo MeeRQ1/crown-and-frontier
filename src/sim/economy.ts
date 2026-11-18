@@ -37,7 +37,7 @@
 
 import { cabinetSalaries } from './cabinet';
 import { airFuel, airUpkeep, bombingLoss } from './air';
-import { C, RESOURCE_INFO, STRATEGIC, TERRAIN, UNITS } from './config';
+import { C, RESOURCE_INFO, SHIPS, STRATEGIC, TERRAIN, UNITS, WINGS } from './config';
 import { armiesOfNation, memoGeo, memoize, memoWeek, ownedBy } from './index';
 import { nationMods, type Mods } from './modifiers';
 import { fleetFuel, fleetUpkeep, provinceBlockaded, tradeOpen } from './naval';
@@ -464,6 +464,41 @@ export function regimentUpkeep(sim: Sim, nid: NationId, type: UnitType, men: num
   return UNITS[type].upkeep * (0.5 + 0.5 * (men / C.regimentSize)) * Math.max(0.2, 1 + nationMods(sim, nid).upkeep);
 }
 
+/** The upkeep a realm has ordered but does not pay yet: regiments in training, ships on the slipways, wings in training (crowns a month). */
+export function committedUpkeep(sim: Sim, nid: NationId): number {
+  const st = sim.state;
+  const mods = nationMods(sim, nid);
+  let u = 0;
+  for (const pid of sim.world.provIds) {
+    const p = st.provinces[pid];
+    for (const r of p.recruits) if (r.nation === nid) u += regimentUpkeep(sim, nid, r.unit, C.regimentSize);
+    for (const s of p.dock) if (s.nation === nid) u += SHIPS[s.ship].upkeep;
+    for (const w of p.hangar) if (w.nation === nid) u += WINGS[w.wing].upkeep * Math.max(0.2, 1 + mods.airUpkeep);
+  }
+  return u;
+}
+
+/**
+ * Where a realm's money is heading: this month's net (as the ledger would settle it now),
+ * less the upkeep of what it has ordered and not yet received; and how many months of that
+ * the treasury lasts (Infinity if it does not fall).
+ */
+export function treasuryOutlook(sim: Sim, nid: NationId): { net: number; committed: number; monthsLeft: number } {
+  const n = sim.state.nations[nid];
+  const committed = committedUpkeep(sim, nid);
+  const net = computeLedger(sim, nid).net - committed;
+  return { net, committed, monthsLeft: net >= 0 ? Infinity : Math.max(0, n.treasury) / -net };
+}
+
+/** The largest monthly expenses, for a warning ("army upkeep 120, fleet upkeep 40"). */
+export function largestExpenses(l: MonthlyLedger, n = 3): string {
+  return Object.entries(l.expenses)
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, n)
+    .map(([k, v]) => `${k.toLowerCase()} ${Math.round(v)}`)
+    .join(', ');
+}
+
 export function researchFundingCost(gross: number, level: 0 | 1 | 2 | 3): number {
   return gross * C.economy.fundingCost[level];
 }
@@ -714,6 +749,12 @@ export function* monthlyEconomySteps(sim: Sim): Generator<void, void, void> {
     // loans: what was paid this month comes off the debt
     for (const l of st.loans) if (l.to === nid) l.remaining = Math.max(0, l.remaining - loanInstalment(sim, l));
     const stage = debtStage(sim, nid);
+    // still in funds but falling: the player is told when three months or less are left
+    if (stage === 0 && n.isPlayer && ledger.net < 0) {
+      const left = n.treasury / -ledger.net;
+      if (left <= 3 && left + 1 > 3)
+        notify(sim, nid, 'urgent', 'debt', `The treasury falls by ${Math.round(-ledger.net)} crowns a month (${largestExpenses(ledger)}): at this rate it is empty in about ${Math.max(1, Math.round(left))} month${Math.max(1, Math.round(left)) === 1 ? '' : 's'}. Debt then costs interest, and bankruptcy follows at three months' income owed. Disband regiments or ships, recall envoys or lower research funding.`);
+    }
     if (stage === 3) bankrupt(sim, nid);
     else if (stage > prevStage) {
       if (stage === 1) notify(sim, nid, 'urgent', 'debt', 'The treasury is in debt. Interest accrues at 2% a month; new projects, recruitment and imports need positive funds.');
@@ -771,15 +812,21 @@ export function bankrupt(sim: Sim, nid: NationId): void {
   let total = 0;
   for (const a of armies) total += a.regiments.length;
   let desert = Math.floor(total / 5);
+  const gone: string[] = [];
   for (const a of armies) {
     a.morale *= 0.5;
+    let left = 0;
     while (desert > 0 && a.regiments.length > 1) {
       const r = a.regiments.pop()!;
       n.stats.menLost += r.men;
       desert--;
+      left++;
     }
+    if (left) gone.push(`${a.name} ${left}`);
   }
-  notify(sim, nid, 'urgent', 'bankrupt', 'BANKRUPTCY! Debts are repudiated: construction halted, regiments deserted, morale halved and income reduced by 25% for two years.');
+  const left = Math.floor(total / 5) - desert;
+  const deserted = gone.length ? ` Unpaid, ${left} regiment${left === 1 ? '' : 's'} deserted (${gone.join(', ')}).` : '';
+  notify(sim, nid, 'urgent', 'bankrupt', `BANKRUPTCY! Debts are repudiated and construction halted.${deserted} Morale is halved and income reduced by 25% for two years.`);
 }
 
 export function populationGrowth(sim: Sim): void {

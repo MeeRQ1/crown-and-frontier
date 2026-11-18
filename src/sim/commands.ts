@@ -78,6 +78,7 @@ import { cancelContract, cancelContractProblem, cleanTerms, contractProblem, off
 import { serialize } from './save';
 import { nationName, notify, provName, type Sim } from './state';
 import { hostileArmiesAt } from './ai/common';
+import { treasuryOutlook } from './economy';
 import type { Command, CommandResult, NationId, Proposal, ProvinceId } from './types';
 import { answerCallToArms, applyPeace, declareWar, declareWarProblem, evaluatePeace, goalOptions, peaceProblem } from './war';
 
@@ -362,12 +363,33 @@ export function applyCommand(sim: Sim, cmd: Command, opts: ApplyOptions = {}): C
   const player = cmd.type === 'continueCampaign' || sim.state.nations[cmd.nation].isPlayer;
   // a player's order to a member of an operation takes it under direct command first
   if (player && !opts.auto && cmd.type !== 'continueCampaign') takeUnderDirectCommand(sim, cmd);
+  // an order that adds a monthly cost: what the treasury does once it is paid for
+  const before = player && !opts.auto && cmd.type !== 'continueCampaign' && RECURRING.has(cmd.type) ? treasuryOutlook(sim, cmd.nation).net : null;
   const r = execute(sim, cmd, !!opts.auto);
+  if (before !== null && r.ok && cmd.type !== 'continueCampaign') {
+    const w = upkeepWarning(sim, cmd.nation, before);
+    if (w) (r as { warning?: string }).warning = w;
+  }
   if (opts.auto && r.ok) commandStats.auto++;
   // derived values shown to the player (air cover, sea control…) are recomputed after
   // each player order; replays apply the same commands, so they see the same thing
   if (player && r.ok) nextMemoEpoch();
   return r;
+}
+
+/** Orders that add a cost every month (upkeep, salaries, funding, purchases). */
+const RECURRING = new Set<Command['type']>(['recruit', 'batchRecruit', 'buildShip', 'buildWing', 'orderProduction', 'productionState', 'envoy', 'funding', 'offerContract', 'build', 'batchBuild', 'recruitCommander', 'cabinet', 'loan']);
+
+/** A warning when an order leaves the realm spending more than it earns each month. */
+function upkeepWarning(sim: Sim, nid: NationId, before: number): string | null {
+  const after = treasuryOutlook(sim, nid);
+  if (after.net >= 0 || after.net > before - 0.5) return null;
+  const fall = Math.round(-after.net);
+  const months = Number.isFinite(after.monthsLeft) ? Math.floor(after.monthsLeft) : null;
+  const when = months === null ? '' : months < 1 ? ': the treasury is empty within the month' : `: the treasury is empty in about ${months} month${months === 1 ? '' : 's'}`;
+  return before >= 0
+    ? `Upkeep will exceed income: the treasury falls by about ${fall} crowns a month once everything ordered is ready${when}. Debt then costs interest, and bankruptcy follows at three months' income owed.`
+    : `The treasury already falls each month; this order adds about ${Math.round(before - after.net)} crowns (${fall} a month once everything ordered is ready${when}).`;
 }
 
 function execute(sim: Sim, cmd: Command, auto = false): CommandResult {
