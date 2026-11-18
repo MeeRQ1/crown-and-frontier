@@ -2,7 +2,7 @@
 // single-source path search, threat estimates.
 
 import { applyCommand } from '../commands';
-import { armiesIn, memoize } from '../index';
+import { armiesIn, memoize, widthOf } from '../index';
 import { CostHeap } from '../heap';
 import { armyStrength } from '../military';
 import { canEnter, moveCost, stepClosed } from '../movement';
@@ -163,8 +163,7 @@ export function projectedThreat(sim: Sim, nid: NationId, pid: ProvinceId, adjWei
  */
 export function looseThreat(sim: Sim, nid: NationId, pid: ProvinceId, steps = 3.5): number {
   return memoize(sim, 'looseThreat', `${nid}|${pid}|${steps}`, () => {
-    const land = sim.world.prov[pid].land;
-    const width = land === undefined ? 1 : Math.sqrt(land);
+    const width = widthOf(sim.world, pid);
     let s = 0;
     for (const a of hostileField(sim, nid)) {
       const h = sim.world.hop(a.location, pid);

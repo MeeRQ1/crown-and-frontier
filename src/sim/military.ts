@@ -365,6 +365,8 @@ export function* weeklyArmyCareSteps(sim: Sim): Generator<void, void, void> {
   const st = sim.state;
   const ids = Object.keys(st.armies).sort();
   let done = 0;
+  // the player's armies that ran out of supply this week (told once, together, with why)
+  const starving: Army[] = [];
   for (const id of ids) {
     if (++done % 16 === 0) yield;
     const a = st.armies[id];
@@ -387,8 +389,13 @@ export function* weeklyArmyCareSteps(sim: Sim): Generator<void, void, void> {
     }
     if (a.battle) continue;
     const status = supplyStatus(a.supply);
+    if (status !== 'unsupplied' && a.starving !== undefined) delete a.starving;
     if (status === 'unsupplied') {
       const rate = C.supply.attrition * Math.max(0.1, 1 + mods.attrition + commanderMod(sim, a.id, 'attrition'));
+      if (n.isPlayer && a.starving === undefined) {
+        a.starving = st.tick;
+        starving.push(a);
+      }
       let lost = 0;
       for (const r of a.regiments) {
         const l = Math.round(r.men * rate);
@@ -420,6 +427,24 @@ export function* weeklyArmyCareSteps(sim: Sim): Generator<void, void, void> {
       if (status === 'supplied' && friendlyGround) reinforce(sim, a);
     }
     if (a.morale > mm) a.morale = mm;
+  }
+  if (starving.length) {
+    const nid = starving[0].nation;
+    const live = starving.filter((a) => st.armies[a.id]);
+    if (live.length) {
+      const first = live[0];
+      const why = supplyAt(sim, nid, first.location, 0, true);
+      const pct = Math.round(C.supply.attrition * 100);
+      const who = live.map((a) => `${a.name} (${provName(sim, a.location)})`).join(', ');
+      notify(
+        sim,
+        nid,
+        'urgent',
+        'attrition',
+        `Out of supply, losing about ${pct}% of their men a week until supplied again: ${who}.${why.reasons[0] ? ` ${why.reasons[0]}` : ''}${why.remedies[0] ? ` ${why.remedies[0]}` : ''}`,
+        { army: first.id, province: first.location },
+      );
+    }
   }
 }
 

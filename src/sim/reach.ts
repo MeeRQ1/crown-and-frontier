@@ -3,8 +3,8 @@
 // Distances are counted in steps on one graph of provinces and sea zones: a
 // province to a neighbouring province (a strait counts), a coastal province to a
 // zone on its coast, and a zone to a neighbouring zone are each one step (on a
-// redrawn map, a step between provinces counts the ground it covers, stepLength,
-// so a range reaches as far as before; distances are kept to a tenth). Aircraft
+// redrawn map, a step counts the ground or sea it covers, the mean of the widths of
+// its two ends, so a range reaches as far as before; distances are kept to a tenth). Aircraft
 // range is measured on it from an airfield (a province) or from a carrier (its
 // zone), so a wing at Durazzo reaches Bari across the Adriatic in two steps. The
 // graph is static per map: distances from a node are computed once and cached.
@@ -16,7 +16,7 @@
 
 import { SHIPS, WINGS } from './config';
 import { CostHeap } from './heap';
-import { stepLength } from './index';
+import { coastStep, redrawn, stepLength, zoneStep } from './index';
 import { nationMods } from './modifiers';
 import { hasAccess, isFriendly, type Sim } from './state';
 import type { NationId, ProvinceId, ZoneId } from './types';
@@ -44,14 +44,6 @@ function distancesFrom(world: World, from: Place): Map<string, number> {
   return d;
 }
 
-const redrawnMemo = new WeakMap<World, boolean>();
-/** Does any province record its land (a map redrawn more finely)? */
-function redrawn(world: World): boolean {
-  let r = redrawnMemo.get(world);
-  if (r === undefined) redrawnMemo.set(world, (r = world.provIds.some((p) => world.prov[p].land !== undefined)));
-  return r;
-}
-
 /** Every step counts one (breadth-first). */
 function stepsFrom(world: World, k: string): Map<string, number> {
   const d = new Map([[k, 0]]);
@@ -72,7 +64,7 @@ function stepsFrom(world: World, k: string): Map<string, number> {
   return d;
 }
 
-/** A step between provinces counts the ground it covers (cheapest first). */
+/** A step counts the ground or sea it covers (cheapest first). */
 function weightedFrom(world: World, k: string): Map<string, number> {
   const dist = new Map<string, number>([[k, 0]]);
   const open = new CostHeap();
@@ -90,10 +82,10 @@ function weightedFrom(world: World, k: string): Map<string, number> {
     };
     if (n[0] === 'p') {
       for (const q of world.prov[id].neighbors) relax(`p:${q}`, stepLength(world, id, q));
-      for (const z of world.provZones[id] ?? []) relax(`z:${z}`, 1);
+      for (const z of world.provZones[id] ?? []) relax(`z:${z}`, coastStep(world, id, z));
     } else {
-      for (const z of world.zones[id]?.neighbors ?? []) relax(`z:${z}`, 1);
-      for (const q of world.zones[id]?.coasts ?? []) relax(`p:${q}`, 1);
+      for (const z of world.zones[id]?.neighbors ?? []) relax(`z:${z}`, zoneStep(world, id, z));
+      for (const q of world.zones[id]?.coasts ?? []) relax(`p:${q}`, coastStep(world, q, id));
     }
   }
   // to a tenth, so a range of 3 reaches what lies 3 steps away however the sum was rounded

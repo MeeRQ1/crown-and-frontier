@@ -101,6 +101,13 @@ export interface ProvinceDef {
    * counted on it, so dividing land never makes it cheaper to grow (default 1).
    */
   land?: number;
+  /**
+   * How wide the province is, in provinces of the map's previous revision (a redrawn map,
+   * revision 3: the square root of its area over that of the old provinces it lies on).
+   * A step between two provinces counts the mean of their widths, so the same ground is
+   * crossed in the same time however finely it is drawn (default: √land).
+   */
+  width?: number;
 }
 
 /** A sea zone: the node fleets move between (map format 3). */
@@ -113,6 +120,8 @@ export interface SeaZoneDef {
   coasts: ProvinceId[];
   /** straits whose crossing this zone commands */
   straits?: Array<[ProvinceId, ProvinceId]>;
+  /** how wide the zone is, in zones of the map's previous revision (ProvinceDef.width; default 1) */
+  width?: number;
 }
 
 export interface RegionDef {
@@ -530,6 +539,10 @@ export interface Army {
   keep?: boolean;
   /** reserved for the player's direct command (format 9): Auto-conquer never takes it */
   reserved?: boolean;
+  /** occupation work in hand from the last undefended province it took on a redrawn map (siege progress beyond 100, and when): spent at its next one */
+  carry?: { progress: number; tick: number } | null;
+  /** the week a player's army ran out of supply (it is told once, until supplied again) */
+  starving?: number;
 }
 
 /** An airborne operation: the army, at an airfield, is flown to a province and dropped there. */
@@ -898,6 +911,8 @@ export interface AIState {
   reorganized?: Record<ArmyId, number>;
   /** desired regiment count set by the strategic layer */
   armyTarget: number;
+  /** the standing army the realm began with (regiments): what it keeps at peace when nothing around it calls for more */
+  baseArmy?: number;
   /** province where idle forces gather */
   rally: ProvinceId | null;
   lastPeaceTry: Record<string, number>;
@@ -1377,4 +1392,13 @@ export type Command =
 /** A command issued by a realm (everything except the campaign-level ones). */
 export type RealmCommand = Exclude<Command, { type: 'continueCampaign' }>;
 
-export type CommandResult = { ok: true; message?: string; /** per-item outcome of a batch */ details?: string[] } | { ok: false; reason: string };
+export type CommandResult =
+  | {
+      ok: true;
+      message?: string;
+      /** per-item outcome of a batch */
+      details?: string[];
+      /** done, but worth a second look: the order leaves upkeep above income */
+      warning?: string;
+    }
+  | { ok: false; reason: string };

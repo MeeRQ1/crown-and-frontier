@@ -16,7 +16,7 @@
 // A realm beyond capacity is overextended: slower integration and more unrest.
 
 import { C } from './config';
-import { armiesIn, landHeld, landOf, ownedBy } from './index';
+import { armiesIn, groundFrom, landHeld, landOf, ownedBy, redrawn } from './index';
 import { nationMods } from './modifiers';
 import { chance } from './rng';
 import { clamp, months, notify, provName, type Sim } from './state';
@@ -77,9 +77,9 @@ export function integrationRate(sim: Sim, pid: ProvinceId, admin?: Admin): Integ
   if (p.claims.includes(nid)) mul('Rightful claim', 1 + C.integration.claimBonus);
   if (garrisoned(sim, pid)) mul('Garrisoned', 1 + C.integration.garrisonBonus);
   const cap = st.nations[nid].capital;
-  const hop = cap ? sim.world.hop(cap, pid) : undefined;
-  const land = sim.world.prov[pid].land;
-  const hops = hop === undefined ? 10 : land === undefined ? hop : Math.round(hop * Math.sqrt(land) * 10) / 10;
+  // on a redrawn map, the ground between them (in steps of the previous revision)
+  const ground = !cap ? undefined : redrawn(sim.world) ? groundFrom(sim.world, cap).get(pid) : sim.world.hop(cap, pid);
+  const hops = ground === undefined ? 10 : Math.round(ground * 10) / 10;
   mul(`${hops} step${hops === 1 ? '' : 's'} from the capital`, Math.max(C.integration.distanceFloor, 1 - C.integration.distancePenalty * hops));
   mul('Realm modifiers', Math.max(0.1, 1 + nationMods(sim, nid).integration));
   mul(`Unrest ${Math.round(p.unrest)}`, 1 - p.unrest / 200);

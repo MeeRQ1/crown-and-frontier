@@ -158,7 +158,7 @@ export function provinceBatchCard(app: App): HTMLElement[] {
     if (ui.last?.key === key) return;
     const r = app.do(cmd, true);
     if (!r.ok) return;
-    ui.last = { key, message: r.message ?? 'Done.', details: r.details ?? [] };
+    ui.last = { key, message: r.message ?? 'Done.', details: [...(r.warning ? [r.warning] : []), ...(r.details ?? [])] };
     app.toast(r.message ?? 'Done.', 'good');
     app.refresh();
   }

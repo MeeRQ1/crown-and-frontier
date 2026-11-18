@@ -8,6 +8,7 @@
 // treaty change advances. Every key also includes the week, so nothing can
 // outlive a tick.
 
+import { CostHeap } from './heap';
 import type { Army, NationId, ProvinceId, TreatyType, World } from './types';
 import type { Sim } from './state';
 
@@ -103,16 +104,81 @@ export function landOf(sim: Sim, pid: ProvinceId): number {
 }
 
 /**
+ * How wide a province is, in provinces of its map's previous revision: measured on its
+ * own ground (ProvinceDef.width), else the square root of the land it holds; 1 on maps
+ * never redrawn.
+ */
+export function widthOf(world: World, pid: ProvinceId): number {
+  const d = world.prov[pid];
+  return d.width ?? (d.land === undefined ? 1 : Math.sqrt(d.land));
+}
+
+/**
  * The ground a step between two neighbouring provinces covers, in steps of the map's
- * previous revision: the mean of their widths (√land). Movement, supply and range are
- * counted in it, so a map drawn more finely is crossed in the same time and reached
- * as far as before. 1 on maps never redrawn.
+ * previous revision: the mean of their widths. Movement, supply and range are counted
+ * in it, so a map drawn more finely is crossed in the same time and reached as far as
+ * before. 1 on maps never redrawn.
  */
 export function stepLength(world: World, a: ProvinceId, b: ProvinceId): number {
-  const la = world.prov[a].land;
-  const lb = world.prov[b].land;
-  if (la === undefined && lb === undefined) return 1;
-  return (Math.sqrt(la ?? 1) + Math.sqrt(lb ?? 1)) / 2;
+  return (widthOf(world, a) + widthOf(world, b)) / 2;
+}
+
+/** How wide a sea zone is, in zones of its map's previous revision (SeaZoneDef.width; 1 on maps never redrawn). */
+export function zoneWidth(world: World, z: string): number {
+  return world.zones[z]?.width ?? 1;
+}
+
+/** The sea a fleet crosses between two neighbouring zones, in zones of the map's previous revision (1 on maps never redrawn). */
+export function zoneStep(world: World, a: string, b: string): number {
+  return (zoneWidth(world, a) + zoneWidth(world, b)) / 2;
+}
+
+/** The ground between a coastal province and a zone on its coast: the mean of their widths (1 on maps never redrawn). */
+export function coastStep(world: World, pid: ProvinceId, z: string): number {
+  return (widthOf(world, pid) + zoneWidth(world, z)) / 2;
+}
+
+const redrawnMemo = new WeakMap<World, boolean>();
+
+/** Was the map redrawn more finely (provinces or zones that record their land or width)? Steps count one each on any other. */
+export function redrawn(world: World): boolean {
+  let r = redrawnMemo.get(world);
+  if (r === undefined) {
+    r = world.provIds.some((p) => world.prov[p].land !== undefined || world.prov[p].width !== undefined) || world.zoneIds.some((z) => world.zones[z].width !== undefined);
+    redrawnMemo.set(world, r);
+  }
+  return r;
+}
+
+const groundMemo = new WeakMap<World, Map<ProvinceId, Map<ProvinceId, number>>>();
+
+/**
+ * The ground from a province to every other over land (straits included), counted in
+ * steps of the map's previous revision (stepLength; plain steps on a map never redrawn).
+ * Cached per map: the graph does not change.
+ */
+export function groundFrom(world: World, from: ProvinceId): Map<ProvinceId, number> {
+  let perWorld = groundMemo.get(world);
+  if (!perWorld) groundMemo.set(world, (perWorld = new Map()));
+  let d = perWorld.get(from);
+  if (d) return d;
+  d = new Map([[from, 0]]);
+  const open = new CostHeap();
+  open.push(0, from);
+  while (open.size) {
+    const c = open.peekCost();
+    const p = open.pop();
+    if (c > d.get(p)!) continue;
+    for (const q of world.prov[p].neighbors) {
+      const n = c + stepLength(world, p, q);
+      if (n < (d.get(q) ?? Infinity)) {
+        d.set(q, n);
+        open.push(n, q);
+      }
+    }
+  }
+  perWorld.set(from, d);
+  return d;
 }
 
 /** The land a realm holds, in those provinces (to a tenth, so a redrawn realm counts exactly what it held). */

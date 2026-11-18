@@ -210,6 +210,7 @@ export function createGame(opts: NewGameOptions = {}): Sim {
     const foot = Math.max(1, regs - horse - guns - sappers);
     const units: UnitType[] = [...Array(foot).fill('infantry'), ...Array(horse).fill('cavalry'), ...Array(guns).fill('artillery'), ...Array(sappers).fill('engineers')];
     const regiments: Regiment[] = units.map((u) => newRegiment(sim, u));
+    n.ai.baseArmy = regiments.length;
     const cap = def.capital;
     if (regiments.length >= 6) {
       // a second, smaller army guards the most valuable other fortified or border province

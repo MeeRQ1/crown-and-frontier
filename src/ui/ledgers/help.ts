@@ -87,6 +87,7 @@ function articles(): Article[] {
         `Research funding costs ${C.economy.fundingCost.map((v) => pct(v)).join(' / ')} of gross income for minimal, standard, generous and lavish research.`,
         `A treasury below zero is debt and pays ${pct(C.economy.interestRate)} interest a month. Debt beyond ${C.economy.creditMonths} months of income is bankruptcy: debts are repudiated, construction halts, regiments desert, morale is halved and income falls by 25% for ${C.economy.bankruptcyMonths / 12} years.`,
         'The Runway figure says how many months the treasury lasts at the current deficit.',
+        'You are warned before it comes to that: an order that leaves upkeep above income (regiments, ships and wings count once ordered), a treasury that will be empty within three months, and an army that runs out of supply and starts losing men, each said once with what to do. A bankruptcy names the armies whose regiments deserted.',
       ],
       links: [['realm', 'Open Realm & Budget']],
     },

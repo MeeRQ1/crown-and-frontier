@@ -8,6 +8,7 @@ import { C, RESOURCE_INFO, TERRAIN, UNITS, UNIT_TYPES } from '../../sim/config';
 import { checkCommand } from '../../sim/commands';
 import { averageFigures, battleReasons, forecastBattle } from '../../sim/combat';
 import { activeProjects, buildProblem, buildSlots, devLimit, devMax, factoryMax, landOf, PROJECT_LABELS, projectCost, type ProjectCost } from '../../sim/construction';
+import { widthOf } from '../../sim/index';
 import { fabricateCost, fabricateMonths, fabricateProblem } from '../../sim/diplomacy';
 import { integrationFactor, provinceCrowns, provinceDeposit, provinceSupplies } from '../../sim/economy';
 import { integrationRate, unrestTarget } from '../../sim/integration';
@@ -174,7 +175,11 @@ function provinceCard(app: App, pid: ProvinceId): HTMLElement[] {
     section(
       'Ground',
       // on a redrawn map a smaller province is a shorter step: its march cost counts the ground (stepLength)
-      row('Terrain', `${terr.label}: march cost ${landOf(sim, pid) === 1 ? terr.move : `${fmt(terr.move * Math.sqrt(landOf(sim, pid)), 1)} (a smaller province, a shorter step)`}, defenders +${Math.round(terr.defense * 100)}%, frontage ${terr.frontage}`),
+      (() => {
+        const w = widthOf(sim.world, pid);
+        const move = Math.abs(w - 1) < 0.005 ? `${terr.move}` : `${fmt(terr.move * w, 1)} (${w < 1 ? 'a smaller province than the old ones here, a shorter step' : 'a larger province than the old ones here, a longer step'})`;
+        return row('Terrain', `${terr.label}: march cost ${move}, defenders +${Math.round(terr.defense * 100)}%, frontage ${terr.frontage}`);
+      })(),
       row('Railway · fort', `${p.infra}/${C.construction.infraMax} · ${p.fort}/${C.construction.fortMax}`),
       (() => {
         const res = sim.world.prov[pid].resource;

@@ -16,7 +16,7 @@
 
 import { C, TERRAIN } from './config';
 import { CostHeap } from './heap';
-import { armiesIn, geoRev } from './index';
+import { armiesIn, geoRev, widthOf } from './index';
 import { nationMods } from './modifiers';
 import { fleetEpoch, fleetsIn, straitBlocked, zoneBalance } from './naval';
 import { isFriendly, type Sim } from './state';
@@ -76,7 +76,7 @@ function stepCost(sim: Sim, pid: ProvinceId): number {
   if (def.terrain === 'mountains' || def.terrain === 'marsh') c += 0.5;
   if (sim.state.provinces[pid].infra >= RAIL_STEP) c -= 0.5;
   c = Math.max(0.5, c);
-  return def.land === undefined ? c : c * Math.sqrt(def.land);
+  return c * widthOf(sim.world, pid);
 }
 
 const sourcesMemo = new WeakMap<object, { tick: number; geo: number; fleets: number; key: string }>();

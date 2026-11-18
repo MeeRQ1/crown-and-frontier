@@ -269,6 +269,7 @@ export function normalizeMapPackage(raw: unknown): { pkg: MapPackage; errors: Ma
     if (po.factories !== undefined) p.factories = r.int(po.factories, 'Factories', 0, 5, pid);
     if (version >= 3 && po.port !== undefined) p.port = r.int(po.port, 'Port', 0, 3, pid);
     if (po.land !== undefined) p.land = r.num(po.land, 'Land', 0.05, 20, pid);
+    if (po.width !== undefined) p.width = r.num(po.width, 'Width', 0.1, 5, pid);
     pkg.provinces.push(p);
   }
   for (const x of r.arr(o.straits ?? [], 'Straits', 2000)) {
@@ -296,6 +297,7 @@ export function normalizeMapPackage(raw: unknown): { pkg: MapPackage; errors: Ma
         neighbors: r.arr(zo.neighbors ?? [], 'Sea zone neighbours', 64).map((n) => r.id(n, 'Neighbouring sea zone', zid)),
         coasts: r.arr(zo.coasts ?? [], 'Coasts', 400).map((c) => r.id(c, 'Coastal province', zid)),
       };
+      if (zo.width !== undefined) z.width = r.num(zo.width, 'Sea zone width', 0.1, 5, zid);
       if (zo.straits !== undefined) {
         z.straits = [];
         for (const s of r.arr(zo.straits, 'Straits commanded', 200)) {

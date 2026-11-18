@@ -23,7 +23,7 @@ import { applyCommand } from '../commands';
 import { armyStrength } from '../military';
 import { armiesOf, atWar, enemiesOf, isFriendly, menOf, nationName, notify, provName, type Sim } from '../state';
 import type { AirWing, Army, Command, CommandResult, Fleet, NationId, Operation, OperationKind, OperationSettings, OpPosture, OpStrategy, ProvinceId, RealmCommand, ZoneId } from '../types';
-import { projectedThreat, reachFrom } from '../ai/common';
+import { hostileArmiesAt, projectedThreat, reachFrom } from '../ai/common';
 import { fleetCapacity, pathToCoast, portsOf } from '../naval';
 import { SHIPS } from '../config';
 import { areaTargets, planGround, recordFailures, restingPlace, type GroundOutcome, type GroundPolicy, type GroundTarget } from './ground';
@@ -594,6 +594,10 @@ export function opTargets(sim: Sim, op: Operation, armies: Army[], margin: numbe
   for (const f of Object.values(st.fleets)) if (f.op === op.id && f.home) guard.add(f.home);
   // ours next to the area (or our bases) under attack, and ours the enemy has already taken there
   for (const t of areaTargets(sim, nid, guard, margin)) if (t.kind === 'defend' || t.kind === 'liberate') all.push(t);
+  // and our land anywhere that an enemy army has entered: a second enemy marching on our capital
+  // while the operation's armies are away is met, not left to walk in
+  const entered = sim.world.provIds.filter((p) => !inArea.has(p) && !guard.has(p) && st.provinces[p].owner === nid && hostileArmiesAt(sim, nid, p).length > 0);
+  for (const t of areaTargets(sim, nid, entered, margin)) if (t.kind === 'defend') all.push(t);
   if (all.length <= 24) return { targets: all, posts: [] };
   const near = (pid: ProvinceId) => {
     let d = 99;
