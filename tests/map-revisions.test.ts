@@ -26,7 +26,7 @@ const strip = (s: string) => s.replace(/"savedAt":"[^"]+"/, '');
 
 describe('campaigns begun before the maps were redrawn', () => {
   it('a revision-1 save needs its revision; without it the save is refused with the reason, never loaded onto the new provinces', () => {
-    expect(mapFingerprint('europe').revision).toBe(2);
+    expect(mapFingerprint('europe').revision).toBe(3);
     expect(needsLegacyMap(EUROPE_R1)).toBe(true);
     expect(() => readSave(EUROPE_R1)).toThrow(/revision 1 of .*different provinces or realms/);
   });

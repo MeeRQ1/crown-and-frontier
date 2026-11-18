@@ -101,6 +101,13 @@ export interface ProvinceDef {
    * counted on it, so dividing land never makes it cheaper to grow (default 1).
    */
   land?: number;
+  /**
+   * How wide the province is, in provinces of the map's previous revision (a redrawn map,
+   * revision 3: the square root of its area over that of the old provinces it lies on).
+   * A step between two provinces counts the mean of their widths, so the same ground is
+   * crossed in the same time however finely it is drawn (default: √land).
+   */
+  width?: number;
 }
 
 /** A sea zone: the node fleets move between (map format 3). */
@@ -113,6 +120,8 @@ export interface SeaZoneDef {
   coasts: ProvinceId[];
   /** straits whose crossing this zone commands */
   straits?: Array<[ProvinceId, ProvinceId]>;
+  /** how wide the zone is, in zones of the map's previous revision (ProvinceDef.width; default 1) */
+  width?: number;
 }
 
 export interface RegionDef {
@@ -530,6 +539,8 @@ export interface Army {
   keep?: boolean;
   /** reserved for the player's direct command (format 9): Auto-conquer never takes it */
   reserved?: boolean;
+  /** occupation work in hand from the last undefended province it took on a redrawn map (siege progress beyond 100, and when): spent at its next one */
+  carry?: { progress: number; tick: number } | null;
 }
 
 /** An airborne operation: the army, at an airfield, is flown to a province and dropped there. */

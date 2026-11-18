@@ -389,6 +389,8 @@ export function mergeProvinces(pkg: MapPackage, keep: string, gone: string): Edi
   K.dev = Math.min(devCap(K.terrain), Math.max(K.dev, G.dev));
   K.pop = Math.min(10000, K.pop + G.pop);
   if (K.land !== undefined || G.land !== undefined) K.land = Math.min(20, Math.round(((K.land ?? 1) + (G.land ?? 1)) * 1000) / 1000);
+  // the merged ground: areas add, so widths add in their squares
+  if (K.width !== undefined || G.width !== undefined) K.width = Math.min(5, Math.round(Math.hypot(K.width ?? 1, G.width ?? 1) * 100) / 100);
   K.fort = Math.max(K.fort, G.fort);
   K.infra = Math.max(K.infra, G.infra);
   if (G.port || K.port) K.port = Math.max(K.port ?? 0, G.port ?? 0);

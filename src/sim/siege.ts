@@ -2,7 +2,9 @@
 //
 // Winning a battle does not take a province. An army standing (not fighting,
 // not retreating) in a province whose controller it is at war with besieges it:
-//   no fort: 100 progress in 2 weeks
+//   no fort: 100 progress in 2 weeks (on a redrawn map, 2 weeks for the ground of an old
+//            province: a province of 0.7 of it in 1.4; what a week gives beyond the 100
+//            goes with the besiegers to the next undefended province they invest)
 //   fort L : 100 progress in 10*L weeks, requires >= 2*L regiments present
 //   x (1 + 0.25 per artillery regiment, max 6) x (1 + 0.5 per engineer regiment, max 2)
 //   x (1 + siege tech) x 0.5 if unsupplied
@@ -13,15 +15,27 @@
 import { C } from './config';
 import { poolCap } from './economy';
 import { cancelRecruits } from './military';
-import { armiesIn } from './index';
+import { armiesIn, redrawn, widthOf } from './index';
 import { nationMods } from './modifiers';
 import { rehomeFleets, siegeGuns } from './naval';
 import { atWar, bump, isFriendly, nationName, notify, provName, type Sim } from './state';
 import { supplyStatus } from './supply';
-import type { Army, NationId, ProvinceId } from './types';
+import type { Army, ArmyId, NationId, ProvinceId } from './types';
+
+/** Weeks within which an army's leftover occupation work counts at its next undefended province. */
+export const CARRY_WEEKS = 4;
+
+/** The ground of an undefended province to occupy, in old provinces (a redrawn map; 1 on any other). */
+export function occupationGround(sim: Sim, pid: ProvinceId): number {
+  if (!redrawn(sim.world)) return 1;
+  const w = widthOf(sim.world, pid);
+  return Math.min(2.5, Math.max(0.25, w * w));
+}
 
 export interface SiegeInfo {
   nation: NationId;
+  /** the besieging armies (the lead realm's side) */
+  armies: ArmyId[];
   regiments: number;
   required: number;
   weeklyRate: number;
@@ -48,8 +62,10 @@ export function siegeInfo(sim: Sim, pid: ProvinceId, battleAt?: Set<ProvinceId>)
   const guns = team.reduce((s, a) => s + a.regiments.filter((r) => r.type === 'artillery').length, 0);
   const required = Math.max(1, C.siege.minRegimentsPerLevel * p.fort);
   const notes: string[] = [];
-  let rate = p.fort > 0 ? 100 / (C.siege.fortWeeksPerLevel * p.fort) : 100 / C.siege.noFortWeeks;
+  const ground = p.fort > 0 ? 1 : occupationGround(sim, pid);
+  let rate = p.fort > 0 ? 100 / (C.siege.fortWeeksPerLevel * p.fort) : 100 / (C.siege.noFortWeeks * ground);
   if (p.fort > 0) notes.push(`Fort level ${p.fort}: ${C.siege.fortWeeksPerLevel * p.fort} weeks base`);
+  else if (Math.abs(ground - 1) >= 0.05) notes.push(`${ground < 1 ? 'A smaller' : 'A larger'} province than the old ones here (${Math.round(ground * 100)}% of their ground): ${+(C.siege.noFortWeeks * ground).toFixed(1)} weeks base`);
   const sappers = Math.min(C.siege.engineerMax, team.reduce((s, a) => s + a.regiments.filter((r) => r.type === 'engineers').length, 0));
   if (sappers > 0) {
     rate *= 1 + C.siege.engineerBonus * sappers;
@@ -83,7 +99,22 @@ export function siegeInfo(sim: Sim, pid: ProvinceId, battleAt?: Set<ProvinceId>)
     notes.push('Liberating friendly land ×2');
   }
   if (regiments < required) notes.push(`Needs ${required} regiments to invest the fort (have ${regiments})`);
-  return { nation: lead, regiments, required, weeklyRate: regiments >= required ? rate : 0, liberation, notes };
+  return { nation: lead, armies: team.map((a) => a.id), regiments, required, weeklyRate: regiments >= required ? rate : 0, liberation, notes };
+}
+
+/**
+ * The occupation work the besiegers bring from the last undefended province they took (the
+ * most any of them has, taken within CARRY_WEEKS); it is spent here.
+ */
+function carriedWork(sim: Sim, info: SiegeInfo): number {
+  let best = 0;
+  for (const id of info.armies) {
+    const a = sim.state.armies[id];
+    if (!a.carry) continue;
+    if (sim.state.tick - a.carry.tick <= CARRY_WEEKS) best = Math.max(best, a.carry.progress);
+    a.carry = null;
+  }
+  return best;
 }
 
 export function setController(sim: Sim, pid: ProvinceId, ctrl: NationId | null): void {
@@ -118,9 +149,14 @@ export function weeklySieges(sim: Sim): void {
       if (p.siege && !battleAt.has(pid)) p.siege = null;
       continue;
     }
-    if (!p.siege || p.siege.nation !== info.nation) p.siege = { nation: info.nation, progress: 0 };
-    p.siege.progress = Math.min(100, p.siege.progress + info.weeklyRate);
+    if (!p.siege || p.siege.nation !== info.nation) p.siege = { nation: info.nation, progress: p.fort > 0 ? 0 : carriedWork(sim, info) };
+    const raw = p.siege.progress + info.weeklyRate;
+    p.siege.progress = Math.min(100, raw);
     if (p.siege.progress >= 100) {
+      // on a redrawn map, the week's work beyond the 100 goes on with the besiegers
+      if (p.fort === 0 && raw > 100 && redrawn(sim.world)) {
+        for (const id of info.armies) st.armies[id].carry = { progress: Math.min(100, raw - 100), tick: st.tick };
+      }
       const prev = p.controller;
       const newCtrl = info.liberation && p.owner ? p.owner : info.nation;
       setController(sim, pid, newCtrl);

@@ -36,13 +36,14 @@ import { airControl, mergeAir, outrangedThisWeek, portBombed, relocateAir, repor
 import { C, SHIPS, SHIP_TYPES } from './config';
 import { warDead } from './economy';
 import { noteOpLoss } from './ops/losses';
-import { memoGeo, memoize, ownedBy, touchArmies } from './index';
+import { CostHeap } from './heap';
+import { memoGeo, memoize, ownedBy, redrawn, touchArmies, zoneStep } from './index';
 import { armyCap } from './influence';
 import { nationMods } from './modifiers';
 import { range } from './rng';
 import { orderShip } from './production';
 import { addContribution, atWar, borders, isFriendly, nationName, notify, provName, type Sim } from './state';
-import type { Army, BattleReport, Fleet, FleetDuty, FleetDutyKind, FleetId, NationId, ProvinceId, Ship, ShipType, StrategicResource, ZoneId } from './types';
+import type { Army, BattleReport, Fleet, FleetDuty, FleetDutyKind, FleetId, NationId, ProvinceId, Ship, ShipType, StrategicResource, World, ZoneId } from './types';
 import { edgeKey } from './world';
 
 // ───────────────────────────── Lookups ──────────────────────────────────────
@@ -372,25 +373,72 @@ export function weeklyShipyards(sim: Sim): void {
 
 // ───────────────────────────── Routes ───────────────────────────────────────
 
-/** Shortest route between sea zones (breadth-first, neighbours in id order); null if unconnected. */
-export function zonePath(sim: Sim, from: ZoneId, to: ZoneId): ZoneId[] | null {
-  if (from === to) return [];
-  const prev = new Map<ZoneId, ZoneId>([[from, from]]);
-  const q = [from];
-  for (let i = 0; i < q.length; i++) {
-    const c = q[i];
-    for (const nb of [...(sim.world.zones[c]?.neighbors ?? [])].sort()) {
-      if (prev.has(nb)) continue;
-      prev.set(nb, c);
-      if (nb === to) {
-        const path = [to];
-        for (let x = c; x !== from; x = prev.get(x)!) path.unshift(x);
-        return path;
+const treeCache = new WeakMap<World, Map<ZoneId, Map<ZoneId, ZoneId>>>();
+
+/**
+ * The routes from a zone to every zone it connects to, as each zone's previous zone. On a
+ * map never redrawn every zone is one step (breadth-first, neighbours in id order); on a
+ * redrawn map a step counts the sea it covers (zoneStep; cheapest first, ties by id).
+ * Cached per map: the zones do not change.
+ */
+function routeTree(world: World, from: ZoneId): Map<ZoneId, ZoneId> {
+  let perWorld = treeCache.get(world);
+  if (!perWorld) treeCache.set(world, (perWorld = new Map()));
+  let prev = perWorld.get(from);
+  if (prev) return prev;
+  prev = new Map<ZoneId, ZoneId>([[from, from]]);
+  if (!redrawn(world)) {
+    const q = [from];
+    for (let i = 0; i < q.length; i++) {
+      const c = q[i];
+      for (const nb of [...(world.zones[c]?.neighbors ?? [])].sort()) {
+        if (prev.has(nb)) continue;
+        prev.set(nb, c);
+        q.push(nb);
       }
-      q.push(nb);
+    }
+  } else {
+    const dist = new Map<ZoneId, number>([[from, 0]]);
+    const open = new CostHeap();
+    open.push(0, from);
+    while (open.size) {
+      const c = open.peekCost();
+      const z = open.pop();
+      if (c > dist.get(z)!) continue;
+      for (const nb of world.zones[z]?.neighbors ?? []) {
+        const n = c + zoneStep(world, z, nb);
+        const was = dist.get(nb);
+        if (was !== undefined && (n > was + 1e-9 || (Math.abs(n - was) <= 1e-9 && prev.get(nb)! <= z))) continue;
+        dist.set(nb, n);
+        prev.set(nb, z);
+        open.push(n, nb);
+      }
     }
   }
-  return null;
+  perWorld.set(from, prev);
+  return prev;
+}
+
+/** Shortest route between sea zones (fewest zones; on a redrawn map, the least sea); null if unconnected. */
+export function zonePath(sim: Sim, from: ZoneId, to: ZoneId): ZoneId[] | null {
+  if (from === to) return [];
+  const prev = routeTree(sim.world, from);
+  if (!prev.has(to)) return null;
+  const path = [to];
+  for (let x = prev.get(to)!; x !== from; x = prev.get(x)!) path.unshift(x);
+  return path;
+}
+
+/** The sea a route from `from` covers, in zones of the map's previous revision (its zones, on a map never redrawn). */
+export function seaLength(sim: Sim, from: ZoneId, path: readonly ZoneId[]): number {
+  if (!redrawn(sim.world)) return path.length;
+  let s = 0;
+  let at = from;
+  for (const z of path) {
+    s += zoneStep(sim.world, at, z);
+    at = z;
+  }
+  return s;
 }
 
 /** Route to the nearest zone on a province's coast. */
@@ -398,16 +446,19 @@ export function pathToCoast(sim: Sim, from: ZoneId, pid: ProvinceId): ZoneId[] |
   const targets = sim.world.provZones[pid] ?? [];
   if (targets.includes(from)) return [];
   let best: ZoneId[] | null = null;
+  let bestLen = Infinity;
   for (const z of targets) {
     const p = zonePath(sim, from, z);
-    if (p && (!best || p.length < best.length)) best = p;
+    if (!p) continue;
+    const len = seaLength(sim, from, p);
+    if (len < bestLen) (best = p), (bestLen = len);
   }
   return best;
 }
 
-/** Weeks for a fleet to sail a route. */
+/** Weeks for a fleet to sail a route (from where it is). */
 export function fleetEta(sim: Sim, f: Fleet, path: ZoneId[]): number {
-  return Math.ceil(Math.max(0, path.length - f.progress) / Math.max(0.1, fleetSpeed(sim, f)));
+  return Math.ceil(Math.max(0, seaLength(sim, f.zone, path) - f.progress) / Math.max(0.1, fleetSpeed(sim, f)));
 }
 
 // ───────────────────────────── Sea control ──────────────────────────────────
@@ -715,8 +766,11 @@ function moveFleets(sim: Sim): void {
     const f = st.fleets[id];
     if (!f || !f.path.length) continue;
     f.progress += fleetSpeed(sim, f);
-    while (f.progress >= 1 && f.path.length) {
-      f.progress -= 1;
+    // each zone costs the sea it covers (one on a map never redrawn)
+    while (f.path.length) {
+      const cost = zoneStep(sim.world, f.zone, f.path[0]);
+      if (f.progress < cost) break;
+      f.progress -= cost;
       f.zone = f.path.shift()!;
       touchFleets(sim);
       // enemy warships here stop us: battle this week

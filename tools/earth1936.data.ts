@@ -606,7 +606,7 @@ export function earth1936Def(): RealMapDef {
   return {
     id: 'earth-1936',
     // 2 (format 9): denser provinces, most of all in Europe and around the Mediterranean
-    revision: 2,
+    revision: 3,
     // every realm keeps revision 1's development, population, forts, factories and deposits over its new
     // provinces; each province records the land it holds, on which development and factories
     // are priced and builders counted

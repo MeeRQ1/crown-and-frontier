@@ -1350,7 +1350,7 @@ export function europeDef(): RealMapDef {
   return {
     id: 'europe',
     // 2 (format 9): denser provinces (8,800 km² instead of 12,500) and more cities as fixed provinces
-    revision: 2,
+    revision: 3,
     // every realm keeps revision 1's development, population, forts, factories and deposits over its new
     // provinces; each province records the land it holds, on which development and factories
     // are priced and builders counted

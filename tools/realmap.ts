@@ -21,7 +21,7 @@
 import { execFileSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
-import { MAP_FORMAT, MAP_FORMAT_VERSION, sizeFor, type MapLabelDef, type MapMeta, type MapPackage, type StartTreaty } from '../src/maps/format';
+import { MAP_FORMAT, MAP_FORMAT_VERSION, sizeFor, type MapGeometryData, type MapLabelDef, type MapMeta, type MapPackage, type StartTreaty } from '../src/maps/format';
 import { previewSvg, type Pt } from '../src/maps/gen/core';
 import { slug } from '../src/maps/gen/names';
 import { components, outline, placeDeposits, type Climate, type Grid } from '../src/maps/gen/procedural';
@@ -34,6 +34,7 @@ import { createGame, defaultFactories } from '../src/sim/game';
 import { RESEARCH_PACE_MONTHS, researchPace } from '../src/sim/progression';
 import type { NationDef, RegionDef, ResourceKind, Terrain } from '../src/sim/types';
 import { registerMapScenario, unregisterScenario } from '../src/sim/world';
+import { carryRailways, fixStraits, measureWidths, spread, type Measured } from './mapwidths';
 
 export const NE_VERSION = 'v5.1.2';
 const CACHE = '.cache/naturalearth';
@@ -1303,10 +1304,25 @@ function conserveRealms(pkg: MapPackage, refPath: string, log: (l: string) => vo
   const sorted = [...lands].sort((a, b) => a - b);
   const median = sorted[Math.floor(sorted.length / 2)] ?? 1;
   log(`conserved: development ${devBefore} → ${devAfter}, population ${popBefore} → ${popAfter} (the previous revision's totals); land a province ${sorted[0]}–${sorted.at(-1)}, median ${median}`);
+  // the ground each province and sea zone covers, measured against the previous revision,
+  // and that revision's railways on the same ground (tools/mapwidths.ts)
+  const refGeometry = JSON.parse(readFileSync(refPath.replace(/\.scenario\.json$/, '.map.json'), 'utf8')) as MapGeometryData;
+  const measured = measureWidths(pkg, { ...(ref as unknown as Measured), geometry: refGeometry });
+  const areas = Object.fromEntries(Object.entries(pkg.geometry.centers).map(([k, c]) => [k, c.area]));
+  const rails = carryRailways(pkg.provinces, measured.railways, areas);
+  for (const p of pkg.provinces) {
+    p.width = measured.provinces[p.id];
+    p.infra = rails[p.id];
+  }
+  for (const z of pkg.seaZones) if (measured.zones[z.id] !== undefined) z.width = measured.zones[z.id];
+  for (const l of fixStraits(pkg)) log(l);
+  const widths = Object.values(measured.provinces);
   return [
     'Generated before this step: development ' + devBefore + ', population ' + popBefore + '; kept: development ' + devAfter + ', population ' + popAfter + '.',
     '',
     `Each province records the land it holds, in provinces of the previous revision (its realm's old count over its new one; ${sorted[0]}–${sorted.at(-1)}, median ${median}). Development and factories are priced, the terrain's limit reached and builders counted on it, so dividing land does not make it cheaper to grow.`,
+    '',
+    `Each province and sea zone also records its width, measured against the previous revision's provinces and zones on the same ground (province widths ${spread(widths)}): a step counts the mean of the widths of its two ends, so the same ground takes as long to cross. Railways are the previous revision's on the same ground.`,
     '', '| Realm | Provinces | Land a province | Development | Population | Forts | Factories | Deposits |', '|---|---|---|---|---|---|---|---|', ...lines].join('\n');
 }
 
