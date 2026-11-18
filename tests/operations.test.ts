@@ -103,9 +103,11 @@ describe('auto-conquest', () => {
     weeks(sim, 6);
     expect(Object.values(sim.state.battles).length + sim.state.reports.filter((r) => r.province === 'g20').length).toBe(0);
     expect(op.issue?.code).toBe('blocked');
-    // the army stands back from the far stronger enemy next door, and says why nothing happens
+    // the army stands back from the far stronger enemy next door (it falls back, then waits out of
+    // its reach rather than next to it), and says why nothing happens
     expect(op.issue?.text).toMatch(/Cannot make progress.*G20/);
-    expect(Object.values(op.tasks).some((t) => t.kind === 'recover' && /falls back/.test(t.note))).toBe(true);
+    expect(sim.world.prov.g20.neighbors).not.toContain(sim.state.armies[a.id].location);
+    expect(op.tasks[a.id].note).toMatch(/falls back|needs strength/);
     expect(sim.state.notifications.some((n) => n.kind === 'operation' && n.priority === 'urgent')).toBe(true);
   });
 
@@ -420,5 +422,53 @@ describe('the limits of delegation', () => {
     weeks(sim, 1);
     expect(op.tasks[a.id].kind).toBe('defend');
     expect(op.tasks[a.id].target).toBe('g11');
+  });
+
+  it('a conquest meets a second enemy army that enters our land anywhere, not only next to its area', () => {
+    const sim = gridGame();
+    war(sim);
+    const a = addArmy(sim, 'a', 'g11', { infantry: 8 });
+    const op = create(sim, ['g31'], [a.id], { reserve: 0, reorganize: false });
+    // g00, at the far side of our land, is nowhere near the area (g31)
+    addArmy(sim, 'b', 'g00', { infantry: 3 });
+    weeks(sim, 1);
+    expect(op.tasks[a.id].kind).toBe('defend');
+    expect(op.tasks[a.id].target).toBe('g00');
+  });
+
+  it('the reserve goes to defend our land an enemy army has entered when the free armies cannot', () => {
+    const sim = gridGame();
+    war(sim);
+    const a = addArmy(sim, 'a', 'g10', { infantry: 2 });
+    const b = addArmy(sim, 'a', 'g01', { infantry: 3 });
+    const op = create(sim, ['g20', 'g21'], [a.id, b.id], { reserve: 0.4, commitReserve: 'battles', reorganize: false });
+    weeks(sim, 1);
+    expect(op.tasks[b.id]?.kind).toBe('reserve');
+    // an enemy force walks into g03, more than the free army can meet: the reserve meets it
+    addArmy(sim, 'b', 'g03', { infantry: 4 });
+    weeks(sim, 1);
+    expect(op.tasks[b.id]?.kind).toBe('defend');
+    expect(op.tasks[b.id]?.target).toBe('g03');
+    expect(op.log.some((l) => /Reserve .* sent to defend G03/.test(l.text))).toBe(true);
+  });
+});
+
+describe('gathering to strike', () => {
+  it('an army too weak to wait alone next to the enemy waits on its way until the strongest is at the gathering point', () => {
+    const sim = gridGame();
+    war(sim);
+    // the enemy holds g20 in strength: the strike needs both armies
+    addArmy(sim, 'b', 'g20', { infantry: 13 });
+    const lead = addArmy(sim, 'a', 'g01', { infantry: 12 });
+    const weak = addArmy(sim, 'a', 'g03', { infantry: 3 });
+    const op = create(sim, ['g20'], [lead.id, weak.id], { reserve: 0, reorganize: false, posture: 'aggressive' });
+    weeks(sim, 1);
+    const [tl, tw] = [op.tasks[lead.id], op.tasks[weak.id]];
+    expect([tl.kind, tw.kind]).toEqual(['stage', 'stage']);
+    // the gathering point is next to the enemy; the weak army does not go there before the lead
+    expect(sim.world.prov.g20.neighbors).toContain(tl.target);
+    expect(sim.world.prov.g20.neighbors).not.toContain(tw.target);
+    expect(sim.world.prov.g20.neighbors).not.toContain(sim.state.armies[weak.id].location);
+    expect(tw.note).toMatch(/gathering/);
   });
 });

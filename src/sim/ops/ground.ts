@@ -8,7 +8,8 @@
 //     is a limit) or threatened by a much stronger enemy fall back to rest; an
 //     army besieging an unthreatened province keeps at it.
 //  2. Reserve: a share of the strength is held back at the base, committed to
-//     battles our armies are losing, or (if allowed) to targets nothing else covers.
+//     battles our armies are losing, to our land an enemy army has entered that
+//     nothing else covers, or (if allowed) to targets nothing else covers.
 //  3. Targets in priority order (defend, liberate, hold, attack by value), with
 //     commitment: an army keeps its target until it is taken, lost or hopeless
 //     (of each kind, a task force that still suffices keeps the target it marches
@@ -18,15 +19,19 @@
 //     an attack is not made.
 //  4. Concentration: a task force of several armies gathers at the last province
 //     before the target, merges (when allowed) and strikes together; a forecast
-//     the posture does not accept holds it at the staging province.
+//     the posture does not accept holds it at the staging province. The strongest
+//     gathers first: an army too weak to stand there alone (enemy troops able to be
+//     there within the week) waits on its way until the strongest is there.
 //  5. Failure memory: a lost attack bars that target for the posture's wait, and
 //     after that only a stronger force tries again.
 //  6. Detachments (when allowed, bounded): a task force with spare regiments
 //     sends a detachment of at least the minimum size to an undefended target
 //     nothing else covers, sized to stand against the enemy next door and an
-//     enemy field army loose within a few marches (or not sent); idle armies
+//     enemy field army loose within a few marches (or not sent), and never
+//     leaving the rest too weak for the enemy next to its own target; idle armies
 //     standing together merge again.
-//  7. Armies with nothing to do cover the front posts, else gather at the base.
+//  7. Armies with nothing to do cover the front posts, else gather at the base or
+//     wait before a target they cannot take yet (where they can stand).
 
 import { C } from '../config';
 import { forecastBattle, type Forecast } from '../combat';
@@ -337,6 +342,19 @@ export function planGround(sim: Sim, armies: Army[], targets: GroundTarget[], ct
     return pick;
   };
 
+  // where an army may stand to wait or gather: no enemy troops there, and none stronger than it
+  // able to be there within the week (a force caught alone while it waits for the others is
+  // beaten in detail)
+  const standable = (a: Army, p: ProvinceId) => hostileArmiesAt(sim, nid, p).length === 0 && projectedThreat(sim, nid, p, 0.7) <= str(a) * 0.8;
+  /** The last province on the way from `from` to `dest` (`dest` itself first) where all of `arms` can stand; `from` if none on the way. */
+  const safeStaging = (arms: Army[], from: ProvinceId, dest: ProvinceId): ProvinceId => {
+    const ok = (p: ProvinceId) => arms.every((a) => standable(a, p));
+    if (ok(dest)) return dest;
+    const path = pathVia(reachFrom(sim, nid, from), from, dest) ?? [];
+    for (let i = path.length - 2; i >= 0; i--) if (ok(path[i])) return path[i];
+    return from;
+  };
+
   // ── 1. recovery ──
   const avail = armies.filter((a) => st.armies[a.id] && !a.battle && !a.retreating && !a.embarked && !a.drop);
   const fit: Army[] = [];
@@ -471,7 +489,7 @@ export function planGround(sim: Sim, armies: Army[], targets: GroundTarget[], ct
   const score = (t: GroundTarget) => t.value * (committed.has(t.pid) ? 1.5 : 1) - Math.min(20, near.get(t.pid) ?? 20);
   const ranked = [...targets].sort((a, b) => RANK[a.kind] - RANK[b.kind] || score(b) - score(a) || (a.pid < b.pid ? -1 : 1));
   const assigned = new Set<ArmyId>();
-  const groups: Array<{ t: GroundTarget; group: Army[]; have: number }> = [];
+  const groups: Array<{ t: GroundTarget; group: Army[]; have: number; need: number }> = [];
   const pool = () => fit.filter((a) => !assigned.has(a.id) && !reserve.has(a.id));
   const done = new Set<ProvinceId>();
   /** Plans one target: `own` only with the armies already marching on it, and only if they still suffice. */
@@ -531,7 +549,7 @@ export function planGround(sim: Sim, armies: Army[], targets: GroundTarget[], ct
       }
     }
     for (const a of group) assigned.add(a.id);
-    groups.push({ t, group, have });
+    groups.push({ t, group, have, need });
   };
   // commitment: within each kind, a task force that still suffices keeps the objective it marches
   // on (until it is taken, lost or out of reach) before the other objectives of that kind take
@@ -556,7 +574,9 @@ export function planGround(sim: Sim, armies: Army[], targets: GroundTarget[], ct
       // the task force with the most to spare within reach
       let best: { g: (typeof groups)[number]; a: Army; spare: number } | null = null;
       for (const g of groups) {
-        const spareStr = g.have - g.t.need;
+        // what it needs where it is going (the enemy next to its own target counted): a detachment
+        // never leaves the rest too weak to stand there
+        const spareStr = g.have - g.need;
         for (const a of g.group) {
           if (a.keep || recently(a.id) || a.regiments.length < pol.minDetach * 2 || hostileCtrl(a.location)) continue;
           const d = reachFrom(sim, nid, a.location).dist[t.pid];
@@ -593,7 +613,7 @@ export function planGround(sim: Sim, armies: Army[], targets: GroundTarget[], ct
       out.blocked = out.blocked.filter((b) => b.pid !== t.pid);
       ctx.note(`${best.a.name} detached ${det.regiments.length} regiments (${det.name}) to take ${provName(sim, t.pid)}, which no other army covers.`);
       assigned.add(det.id);
-      groups.push({ t, group: [det], have: str(det) });
+      groups.push({ t, group: [det], have: str(det), need: Math.max(t.need, nearby * 0.6) });
     }
   }
 
@@ -609,6 +629,8 @@ export function planGround(sim: Sim, armies: Army[], targets: GroundTarget[], ct
     // gather in land we hold where we can (supplied, reinforced, no siege to sit through)
     let staging = leadPath.length <= 1 ? lead.location : leadPath[leadPath.length - 2];
     if (hostileCtrl(staging) && leadPath.length >= 3 && !hostileCtrl(leadPath[leadPath.length - 3])) staging = leadPath[leadPath.length - 3];
+    // the strongest gathers first: an army too weak to stand there alone waits on its way until it is there
+    const leadThere = lead.location === staging && !lead.path.length;
     const attackKind: OpTaskKind = t.kind === 'defend' ? 'defend' : t.hostile.length ? 'attack' : 'occupy';
     // gathered: at the staging province or beside the target (spread as the provinces can feed them), not moving
     const beside = new Set(sim.world.prov[t.pid].neighbors);
@@ -670,7 +692,9 @@ export function planGround(sim: Sim, armies: Army[], targets: GroundTarget[], ct
     for (const a of arm) {
       mem.assigned[a.id] = { target: t.pid, since: mem.assigned[a.id]?.target === t.pid ? mem.assigned[a.id].since : st.tick, kind: t.kind };
       if (pol.coordinate && arm.length > 1 && !together) {
-        const spot = place(a, staging, t.pid);
+        let spot = place(a, staging, t.pid);
+        // too weak to stand there alone before the lead comes: it waits on its way, where it can
+        if (a !== lead && !leadThere && a.location !== spot && !standable(a, spot)) spot = place(a, safeStaging([a], a.location, spot), t.pid);
         give(a, task(sim, 'stage', spot, `gathering ${spot === staging ? 'at' : 'beside'} ${provName(sim, spot)} with ${arm.length - 1} other arm${arm.length === 2 ? 'y' : 'ies'} to strike ${provName(sim, t.pid)} together`, prevTasks[a.id]));
         moveTo(a, spot);
         continue;
@@ -738,6 +762,23 @@ export function planGround(sim: Sim, armies: Army[], targets: GroundTarget[], ct
         break;
       }
     }
+    // our land an enemy army has entered that nothing else covers: what a reserve is for (the
+    // nearest first; it goes if it can make a stand there)
+    if (!sent && pol.commitReserve !== 'never') {
+      const open = out.blocked
+        .map((b) => targets.find((x) => x.pid === b.pid && x.kind === 'defend' && (b.why === 'no army free' || b.why.startsWith('needs strength'))))
+        .filter((x): x is GroundTarget => !!x && r.dist[x.pid] !== undefined && r.dist[x.pid] <= pol.maxCost)
+        .sort((x, y) => r.dist[x.pid] - r.dist[y.pid] || (x.pid < y.pid ? -1 : 1));
+      const t = open.find((x) => str(a) >= x.need * 0.5);
+      if (t) {
+        give(a, task(sim, 'defend', t.pid, `reserve sent to defend ${provName(sim, t.pid)} (enemy strength ${sumStrength(sim, t.hostile).toFixed(1)}), which nothing else covers`, prevTasks[a.id]));
+        if (prevTasks[a.id]?.target !== t.pid) ctx.note(`Reserve ${a.name} sent to defend ${provName(sim, t.pid)}.`);
+        moveTo(a, t.pid);
+        mem.assigned[a.id] = { target: t.pid, since: st.tick, kind: 'defend' };
+        out.blocked = out.blocked.filter((b) => b.pid !== t.pid);
+        sent = true;
+      }
+    }
     if (!sent && pol.commitReserve === 'freely') {
       const open = out.blocked.find((b) => b.why === 'no army free' || b.why.startsWith('needs strength'));
       const t = open && targets.find((x) => x.pid === open.pid);
@@ -787,7 +828,7 @@ export function planGround(sim: Sim, armies: Army[], targets: GroundTarget[], ct
     if (wait) {
       const path = pathVia(r, a.location, wait.b.pid) ?? [];
       const stop = path.length >= 2 ? path[path.length - 2] : a.location;
-      const safeStop = place(a, hostileCtrl(stop) ? a.location : stop, wait.b.pid);
+      const safeStop = place(a, safeStaging([a], a.location, hostileCtrl(stop) ? a.location : stop), wait.b.pid);
       give(a, task(sim, 'wait', safeStop, `waiting before ${provName(sim, wait.b.pid)}: ${wait.b.why}`, prevTasks[a.id]));
       moveTo(a, safeStop);
       continue;
